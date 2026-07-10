@@ -4,6 +4,7 @@ import { BusinessProvider } from './context/BusinessContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
+import SyncStatus from './pages/SyncStatus'
 import PagePlaceholder from './components/PagePlaceholder'
 
 function Protected({ children }) {
@@ -89,14 +90,7 @@ export default function App() {
                   </PagePlaceholder>
                 }
               />
-              <Route
-                path="/sync"
-                element={
-                  <PagePlaceholder title="Sync Status" phase="2">
-                    Per-source health for Zoho, FollowUpBoss, and both Outlook accounts.
-                  </PagePlaceholder>
-                }
-              />
+              <Route path="/sync" element={<SyncStatus />} />
               <Route
                 path="/settings"
                 element={

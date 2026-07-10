@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.DS_Store
+
+# Local Netlify folder
+.netlify
+
+# Supabase CLI local link state
+supabase/.temp

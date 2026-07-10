@@ -41,6 +41,15 @@ With no `.env` file the app runs in **demo mode**: no login required, a banner n
 ## Project layout
 
 ```
+supabase/
+  migrations/0001_init.sql   Normalized schema + read-only RLS
+  functions/
+    _shared/db.ts            Service-role client + sync_log helper
+    _shared/fub.ts            FollowUpBoss API client + field mapping
+    fub-sync/                 Scheduled sync (pipelines/stages, people, deals)
+    fub-webhook/               Near-real-time webhook receiver
+docs/
+  phase2-fub-setup.md        Secrets, deploy, cron, webhook registration
 src/
   index.css              Design tokens (both brand palettes) + Tailwind
   main.jsx               Entry
@@ -58,6 +67,7 @@ src/
   pages/
     Login.jsx            Email/password sign-in
     Overview.jsx         Phase 1 shell version (placeholder rows)
+    SyncStatus.jsx       Live per-source sync health (Phase 2)
 ```
 
 ## How the color system works
@@ -69,7 +79,11 @@ src/
 
 ## Phase roadmap (from the build spec)
 
-- **Phase 2 — next:** sync layer. FollowUpBoss first, then Zoho, then Microsoft Graph x2. Supabase schema, cron polling (15 min) + webhooks, Sync Status screen.
+- **Phase 2 — done (FollowUpBoss):** Supabase schema (`supabase/migrations/0001_init.sql`),
+  scheduled sync + webhook Edge Functions (`supabase/functions/fub-sync`,
+  `supabase/functions/fub-webhook`), and a live Sync Status screen at `/sync`.
+  Setup steps: `docs/phase2-fub-setup.md`. Zoho (MPG) and the two Outlook
+  calendars follow the same pattern next.
 - Phase 3: real Overview (KPI cards, workbench, alert banner) from synced data.
 - Phase 4: MPG and Bayway pipeline boards.
 - Phase 5: merged calendar.
