@@ -37,29 +37,33 @@ export default function Overview() {
     if (isDemoMode) return
     setLoading(true)
     setError(null)
-    const [pipeline, contactCount, sync] = await Promise.all([
-      supabase
-        .from('v_active_pipeline')
-        .select('id, name, email, phone, last_touch_at, stage'),
-      supabase.from('contacts').select('id', { count: 'exact', head: true }),
-      supabase
-        .from('sync_log')
-        .select('ran_at, status, message')
-        .eq('source', 'fub')
-        .order('ran_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ])
-    const err = pipeline.error || contactCount.error || sync.error
-    if (err) {
-      setError(err.message)
+    try {
+      const [pipeline, contactCount, sync] = await Promise.all([
+        supabase
+          .from('v_active_pipeline')
+          .select('id, business_id, name, email, phone, last_touch_at, stage'),
+        supabase.from('contacts').select('id', { count: 'exact', head: true }),
+        supabase
+          .from('sync_log')
+          .select('ran_at, status, message')
+          .eq('source', 'fub')
+          .order('ran_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ])
+      const err = pipeline.error || contactCount.error || sync.error
+      if (err) {
+        setError(err.message)
+        return
+      }
+      setRows(pipeline.data || [])
+      setTotalContacts(contactCount.count || 0)
+      setLatestSync(sync.data)
+    } catch (e) {
+      setError(String(e?.message || e))
+    } finally {
       setLoading(false)
-      return
     }
-    setRows(pipeline.data || [])
-    setTotalContacts(contactCount.count || 0)
-    setLatestSync(sync.data)
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -70,7 +74,7 @@ export default function Overview() {
   if (biz === 'mpg') return <MpgPlaceholder />
 
   const kpis = buildKpis(rows, totalContacts)
-  const alert = deriveAlert({ latestSync, rows })
+  const alert = !loading && !error ? deriveAlert({ latestSync, rows }) : null
   const workbench = sortByAttention(rows)
 
   return (
@@ -82,18 +86,6 @@ export default function Overview() {
           : 'Here is what is happening across MPG and Bayway today.'}
       </p>
 
-      {alert && (
-        <div
-          className={`mt-4 rounded-lg border px-3 py-2 text-xs ${
-            alert.level === 'red'
-              ? 'border-red-900/60 bg-red-950/40 text-red-300'
-              : 'border-[rgba(232,180,95,.4)] bg-[rgba(232,180,95,.1)] text-[#e8b45f]'
-          }`}
-        >
-          {alert.text}
-        </div>
-      )}
-
       {error && (
         <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
           {error}
@@ -104,6 +96,18 @@ export default function Overview() {
 
       {!loading && !error && (
         <>
+          {alert && (
+            <div
+              className={`mt-4 rounded-lg border px-3 py-2 text-xs ${
+                alert.level === 'red'
+                  ? 'border-red-900/60 bg-red-950/40 text-red-300'
+                  : 'border-[rgba(232,180,95,.4)] bg-[rgba(232,180,95,.1)] text-[#e8b45f]'
+              }`}
+            >
+              {alert.text}
+            </div>
+          )}
+
           <div className="mt-6 grid grid-cols-2 gap-3.5 xl:grid-cols-4">
             <Kpi label="Active loans" value={kpis.activeLoans} />
             {kpis.stageCards.map((c) => (
@@ -140,12 +144,12 @@ export default function Overview() {
                 >
                   <span
                     className="absolute bottom-2 left-0 top-2 w-[3px] rounded-sm"
-                    style={{ background: 'var(--bay)' }}
+                    style={{ background: r.business_id === 'mpg' ? 'var(--mpg)' : 'var(--bay)' }}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13.5px] font-semibold">{r.name || '(no name)'}</div>
                     <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted">
-                      <BizBadge biz="bay" />
+                      <BizBadge biz={r.business_id} />
                       {r.phone || r.email || 'no contact info'}
                     </div>
                   </div>
