@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
 import SyncStatus from './pages/SyncStatus'
+import Pipeline from './pages/Pipeline'
 import PagePlaceholder from './components/PagePlaceholder'
 
 function Protected({ children }) {
@@ -50,14 +51,7 @@ export default function App() {
                   </PagePlaceholder>
                 }
               />
-              <Route
-                path="/mpg/pipeline"
-                element={
-                  <PagePlaceholder title="Pipeline" biz="mpg" phase="4">
-                    Kanban board driven by Zoho deal stages.
-                  </PagePlaceholder>
-                }
-              />
+              <Route path="/mpg/pipeline" element={<Pipeline biz="mpg" />} />
               <Route
                 path="/mpg/activity"
                 element={<PagePlaceholder title="Activity" biz="mpg" phase="6" />}
@@ -70,14 +64,7 @@ export default function App() {
                   </PagePlaceholder>
                 }
               />
-              <Route
-                path="/bayway/pipeline"
-                element={
-                  <PagePlaceholder title="Pipeline" biz="bay" phase="4">
-                    Kanban board driven by FollowUpBoss stages.
-                  </PagePlaceholder>
-                }
-              />
+              <Route path="/bayway/pipeline" element={<Pipeline biz="bay" />} />
               <Route
                 path="/bayway/activity"
                 element={<PagePlaceholder title="Activity" biz="bay" phase="6" />}
