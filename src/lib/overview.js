@@ -1,0 +1,77 @@
+// Pure helpers for the Overview (Command Center) screen.
+// No React, no I/O — everything here is unit-testable.
+// Spec: docs/superpowers/specs/2026-07-09-phase3-overview-design.md
+
+export const NEW_LEAD = 'New Lead'
+export const STALE_TOUCH_DAYS = 7
+export const SYNC_STALE_MINUTES = 45
+
+const DAY_MS = 86_400_000
+
+export function daysSince(iso, now = Date.now()) {
+  if (!iso) return null
+  return Math.floor((now - new Date(iso).getTime()) / DAY_MS)
+}
+
+export function lastTouchLabel(iso, now = Date.now()) {
+  const d = daysSince(iso, now)
+  if (d === null) return '—'
+  if (d < 1) return 'today'
+  return `${d}d ago`
+}
+
+// Unknown touch first (assume it needs attention most), then oldest to newest.
+export function sortByAttention(rows) {
+  return [...rows].sort((a, b) => {
+    if (!a.last_touch_at && !b.last_touch_at) return 0
+    if (!a.last_touch_at) return -1
+    if (!b.last_touch_at) return 1
+    return new Date(a.last_touch_at) - new Date(b.last_touch_at)
+  })
+}
+
+// rows: v_active_pipeline rows. totalContacts: count of the contacts table.
+export function buildKpis(rows, totalContacts) {
+  const counts = new Map()
+  for (const r of rows) counts.set(r.stage, (counts.get(r.stage) || 0) + 1)
+  const stageCards = [...counts.entries()]
+    .filter(([stage]) => stage !== NEW_LEAD)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 2)
+    .map(([label, count]) => ({ label, count }))
+  return {
+    activeLoans: rows.filter((r) => r.stage !== NEW_LEAD).length,
+    stageCards,
+    newLeads: counts.get(NEW_LEAD) || 0,
+    nurture: Math.max(0, totalContacts - rows.length),
+  }
+}
+
+// latestSync: newest sync_log row for source 'fub' (or null if none).
+// Returns { level: 'red'|'amber', text } or null. Red wins over amber.
+export function deriveAlert({ latestSync, rows, now = Date.now() }) {
+  if (!latestSync) {
+    return { level: 'red', text: 'FollowUpBoss has never synced — check the Sync Status screen.' }
+  }
+  if (latestSync.status === 'error') {
+    return { level: 'red', text: `FollowUpBoss sync failed: ${latestSync.message || 'unknown error'}` }
+  }
+  const ageMin = Math.floor((now - new Date(latestSync.ran_at).getTime()) / 60_000)
+  if (ageMin > SYNC_STALE_MINUTES) {
+    return {
+      level: 'red',
+      text: `FollowUpBoss last synced ${ageMin} minutes ago — the 15-minute schedule may be stuck.`,
+    }
+  }
+  const stale = rows.filter((r) => {
+    const d = daysSince(r.last_touch_at, now)
+    return d !== null && d >= STALE_TOUCH_DAYS
+  }).length
+  if (stale > 0) {
+    return {
+      level: 'amber',
+      text: `${stale} active loan${stale === 1 ? '' : 's'} ${stale === 1 ? 'has' : 'have'} had no touch in ${STALE_TOUCH_DAYS}+ days.`,
+    }
+  }
+  return null
+}
