@@ -8,3 +8,6 @@ dist
 
 # Supabase CLI local link state
 supabase/.temp
+
+# Brainstorming companion sessions
+.superpowers
