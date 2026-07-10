@@ -33,13 +33,19 @@ Consequence: the Overview is built on **people and stages**, not deals. Deal-bas
 
 | Card | Value today | Source |
 |---|---|---|
-| Active loans | 25 | count of view rows with an imported-stage tag |
+| Active loans | 25 | view rows with a stage other than `New Lead` |
 | Pre-Approved | 15 | view rows with stage `Pre-Approved` |
 | Waiting on Docs | 10 | view rows with stage `Waiting on Docs` |
-| New leads | 23 | view rows with stage `New Lead` |
+| New leads | 0 | view rows with stage `New Lead` |
 
-Below the row, a footnote line: "799 in nurture · MPG connects with Zoho in a later phase."
-(Nurture count queried live, not hardcoded.)
+**Data correction (found during planning):** all 23 `Lead`-stage people also carry
+imported-stage tags, so the tag rule claims them and `New Lead` counts 0 today. That is
+correct behavior: the card counts *genuinely new* FUB leads (stage `Lead`, no import
+tag), which is exactly what future incoming leads will look like. 2 tagged people are
+in `Nurture` stage, so the pipeline union is 25.
+
+Below the row, a footnote line: "797 in nurture · MPG connects with Zoho in a later phase."
+Nurture pool = total contacts (822) − pipeline rows (25) = 797, computed live, not hardcoded.
 
 Note: stage-name KPI cards (Pre-Approved / Waiting on Docs) render from whatever stages the
 view returns, so new imported-stage tags appear without code changes; the two named cards
@@ -108,7 +114,7 @@ The app (`Overview.jsx`) issues four reads: the view, the nurture count, the lat
 
 1. `npm run build` passes.
 2. Run against the live database in the preview browser; confirm on-screen numbers
-   match direct database counts exactly (25 / 15 / 10 / 23 / 799 as of design date).
+   match direct database counts exactly (25 / 15 / 10 / 0 / 797 as of design date).
 3. Business filter: MPG shows placeholder; All/Bayway show live data.
 4. Demo mode (env vars absent) renders without errors.
 5. Screenshot shared as proof.
