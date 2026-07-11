@@ -41,8 +41,9 @@ export default function Overview() {
       const [pipeline, contactCount, sync] = await Promise.all([
         supabase
           .from('v_active_pipeline')
-          .select('id, business_id, name, email, phone, last_touch_at, stage'),
-        supabase.from('contacts').select('id', { count: 'exact', head: true }),
+          .select('id, business_id, name, email, phone, last_touch_at, stage')
+          .eq('business_id', 'bay'),
+        supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
         supabase
           .from('sync_log')
           .select('ran_at, status, message')
