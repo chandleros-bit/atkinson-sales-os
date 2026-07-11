@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Overview from './pages/Overview'
 import SyncStatus from './pages/SyncStatus'
 import Pipeline from './pages/Pipeline'
+import Contacts from './pages/Contacts'
 import PagePlaceholder from './components/PagePlaceholder'
 
 function Protected({ children }) {
@@ -56,27 +57,13 @@ export default function App() {
                 path="/mpg/activity"
                 element={<PagePlaceholder title="Activity" biz="mpg" phase="6" />}
               />
-              <Route
-                path="/mpg/contacts"
-                element={
-                  <PagePlaceholder title="Contacts" biz="mpg" phase="6">
-                    Read-only table synced from Zoho CRM.
-                  </PagePlaceholder>
-                }
-              />
+              <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />
               <Route path="/bayway/pipeline" element={<Pipeline biz="bay" />} />
               <Route
                 path="/bayway/activity"
                 element={<PagePlaceholder title="Activity" biz="bay" phase="6" />}
               />
-              <Route
-                path="/bayway/contacts"
-                element={
-                  <PagePlaceholder title="Contacts" biz="bay" phase="6">
-                    Read-only table synced from FollowUpBoss.
-                  </PagePlaceholder>
-                }
-              />
+              <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />
               <Route path="/sync" element={<SyncStatus />} />
               <Route
                 path="/settings"
