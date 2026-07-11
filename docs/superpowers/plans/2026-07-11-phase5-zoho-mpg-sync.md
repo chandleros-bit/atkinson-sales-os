@@ -12,6 +12,8 @@
 
 **Repo:** `C:\Users\Chandler\.claude\projects\atkinson-sales-os-phase1` (Bash `/c/Users/Chandler/.claude/projects/atkinson-sales-os-phase1`). Linked Supabase `cnmipfxwqnbtkohfixkf`. Git author must remain `chandleros-bit <chandler.dashboard@gmail.com>` — never override; push only in the final task.
 
+**Real-data recon (2026-07-11, via the live Zoho connector):** the org is **Media Payments Group**, **US data center** (so the default `.com` hosts are correct — no region override needed). The account is nearly empty today: **Leads 3, Contacts 0, Deals 0** — the MPG pipeline lives on **Leads** (`Lead_Status`), not Deals. Real Deal `Stage` `forecast_type` values are `"Open"` / `"Closed Won"` / `"Closed Lost"` (title-case with a space — the mapper must match these, NOT `closed_won`). There is **no dollar deal-amount field** (MPG uses `Residual_Split` %, `Proposed_Pricing` text); the referral partner is the `Software_Referral` field (labeled "Partner Name"). The mappers below reflect these real fields. The sync still pulls Leads+Contacts+Deals (empty modules return 204 → harmless) so it "grows with you" as MPG's Zoho fills in.
+
 **Reused (do not modify):** `_shared/db.ts` (`serviceClient()`, `logSync(db, source, status, records_upserted, message?)`). `SyncStatus.jsx` already defines the `zoho` source row. Migration `0002` is the cron template. Public anon key (safe to commit, used only for the cron gateway):
 `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNubWlwZnh3cW5idGtvaGZpeGtmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2Mzc5NjYsImV4cCI6MjA5OTIxMzk2Nn0.tcOKs7O5gGAT2HsfiKKwI90TQ-CYVXSMB4yL9RvuxJU`
 
@@ -70,8 +72,9 @@ describe('getCredentials', () => {
 })
 
 describe('mapStage', () => {
-  it('marks won/lost from forecast_type and keeps display_value as external_id', () => {
-    expect(mapStage({ display_value: 'Closed Won', forecast_type: 'closed_won' }, 3)).toEqual({
+  it('marks won/lost from the real Zoho forecast_type and keeps display_value as external_id', () => {
+    // Real MPG Zoho forecast_type values are title-case with a space.
+    expect(mapStage({ display_value: 'Closed Won', forecast_type: 'Closed Won' }, 3)).toEqual({
       business_id: 'mpg',
       name: 'Closed Won',
       sort_order: 3,
@@ -79,8 +82,8 @@ describe('mapStage', () => {
       is_lost: false,
       external_id: 'Closed Won',
     })
-    expect(mapStage({ display_value: 'Lost', forecast_type: 'closed_lost' }, 0).is_lost).toBe(true)
-    const open = mapStage({ display_value: 'Proposal', forecast_type: 'open' }, 1)
+    expect(mapStage({ display_value: 'Closed-Lost to Competition', forecast_type: 'Closed Lost' }, 8).is_lost).toBe(true)
+    const open = mapStage({ display_value: 'Qualification', forecast_type: 'Open' }, 1)
     expect(open.is_won).toBe(false)
     expect(open.is_lost).toBe(false)
   })
@@ -136,7 +139,7 @@ describe('mapContact', () => {
 describe('mapDeal', () => {
   const contactIdByExternal = new Map([['101', 'uuid-contact']])
   const stageIndex = new Map([['Proposal', { id: 'uuid-stage', status: 'open' }]])
-  it('resolves contact_id and stage_id/status, maps Amount to value', () => {
+  it('resolves contact_id and stage_id/status, maps Amount and Software_Referral', () => {
     const row = mapDeal(
       {
         id: '303',
@@ -145,6 +148,7 @@ describe('mapDeal', () => {
         Stage: 'Proposal',
         Closing_Date: '2026-08-01',
         Contact_Name: { id: '101' },
+        Software_Referral: 'ISO Partner X',
       },
       contactIdByExternal,
       stageIndex,
@@ -158,6 +162,7 @@ describe('mapDeal', () => {
       status: 'open',
       name: 'Acme merchant',
       value: 1250,
+      referral_partner: 'ISO Partner X',
       expected_close: '2026-08-01',
     })
   })
@@ -276,13 +281,15 @@ export async function fetchDeals(apiHost, accessToken, sinceIso) {
 // --- Mapping: Zoho shape -> our normalized tables (business_id 'mpg') --------
 
 export function mapStage(stage, sortOrder) {
+  // Real MPG Zoho forecast_type values: 'Open' | 'Closed Won' | 'Closed Lost'
+  // (title-case, space). Match on substring so casing/spacing variants are safe.
   const ft = (stage.forecast_type || '').toLowerCase()
   return {
     business_id: 'mpg',
     name: stage.display_value,
     sort_order: sortOrder,
-    is_won: ft === 'closed_won',
-    is_lost: ft === 'closed_lost',
+    is_won: ft.includes('won'),
+    is_lost: ft.includes('lost'),
     // Zoho deals reference a stage by its display value, so that is our join key.
     external_id: String(stage.display_value),
   }
@@ -320,12 +327,13 @@ export function mapDeal(deal, contactIdByExternal, stageIndex) {
     contact_id: (contactExt && contactIdByExternal.get(contactExt)) || null,
     stage_id: st ? st.id : null,
     name: deal.Deal_Name || null,
-    // TODO verify: MPG monthly residual may be a Zoho custom field, not Amount.
+    // MPG Deals have no dollar amount field today (they use Residual_Split %,
+    // Proposed_Pricing text). Amount maps through if ever populated, else null.
     value: deal.Amount ?? null,
-    secondary_value: null, // TODO: processing volume custom field
+    secondary_value: null, // no processing-volume field in MPG Zoho
     expected_close: deal.Closing_Date || null,
-    segment_tag: null, // TODO: Displacement/Greenfield custom field or tag
-    referral_partner: null,
+    segment_tag: null, // MPG Zoho has no Displacement/Greenfield segment field
+    referral_partner: deal.Software_Referral || null, // Zoho "Partner Name" field
     next_action_at: null,
     stage_entered_at: null,
     status: st ? st.status : 'open',
@@ -704,22 +712,23 @@ select count(*) from deals where source_crm = 'zoho';
 select name, is_won, is_lost from stages where business_id = 'mpg' order by sort_order;
 ```
 
-## Known unknowns — verify against your real Zoho data
+## Field mapping — checked against your real Zoho (2026-07-11)
 
-`supabase/functions/_shared/zoho.ts` is written from Zoho's documented API shape.
-Check these on the first real sync (the sync logs the raw error to
-`sync_log.message`, so the Sync Status screen shows exactly what to adjust):
+`supabase/functions/_shared/zoho.ts` mappings were built against your live
+**Media Payments Group** org (US data center — the default `.com` hosts are
+correct; skip the `ZOHO_*_HOST` secrets). Current state: **3 Leads, 0 Contacts,
+0 Deals** — the pipeline lives on **Leads** (`Lead_Status`). What this means:
 
-- **Custom fields** — monthly residual (currently mapped from `Amount`), processing
-  volume, and segment (Displacement/Greenfield) are almost certainly Zoho custom
-  fields. Find their API names (Zoho → Setup → Developer Space → APIs, or the
-  field's API name in the layout) and update `mapDeal()`.
-- **Leads vs Contacts vs Deals** — the sync pulls all three. If MPG only uses one
-  or two of those modules, the empty fetches are harmless, but confirm where your
-  pipeline actually lives.
-- **Stage join** — deals reference a stage by its display value; if your Deal
-  layout uses multiple pipelines with duplicate stage names, stage matching may
-  need a pipeline qualifier.
+- **Deals value** — your MPG Deals have no dollar amount field (you use
+  `Residual_Split` %, `Proposed_Pricing` text), so `deals.value` stays null until
+  you populate a numeric field. `referral_partner` maps from `Software_Referral`
+  ("Partner Name"). Revisit these when the MPG-screens phase needs dollar figures.
+- **Stage won/lost** — read reliably from the Deal Stage's `forecast_type`
+  (`Open` / `Closed Won` / `Closed Lost`). No guessing needed.
+- **As MPG grows** — the sync pulls Leads + Contacts + Deals every run; empty
+  modules are harmless. New leads/contacts/deals flow in automatically. If you
+  later track pipeline in a custom module instead, tell the developer to add it.
+- Any genuine surprise still logs to `sync_log.message`, visible on Sync Status.
 
 ## Zoho webhook (near-real-time) — later
 
