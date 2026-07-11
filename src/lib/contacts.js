@@ -11,7 +11,7 @@ export function filterContacts(rows, { query, stageFilter }) {
     if (stageFilter === 'active' && r.stage === NURTURE) return false
     if (stageFilter === 'nurture' && r.stage !== NURTURE) return false
     if (!q) return true
-    const hay = `${r.name || ''} ${r.email || ''} ${r.phone || ''}`.toLowerCase()
+    const hay = `${r.name || ''} ${r.company || ''} ${r.email || ''} ${r.phone || ''}`.toLowerCase()
     return hay.includes(q)
   })
 }

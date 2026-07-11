@@ -20,6 +20,13 @@ describe('filterContacts', () => {
     expect(filterContacts(rows, { query: 'bob@y', stageFilter: 'all' }).map((x) => x.id)).toEqual([2])
     expect(filterContacts(rows, { query: '555-9999', stageFilter: 'all' }).map((x) => x.id)).toEqual([3])
   })
+  it('matches company substrings', () => {
+    const withCo = [
+      { id: 10, name: 'Zed', email: null, phone: '000', stage: 'Open', company: 'Craft Pita Mediterranean', last_touch_at: null },
+      { id: 11, name: 'Yan', email: null, phone: '111', stage: 'Open', company: 'Smash City Burgers', last_touch_at: null },
+    ]
+    expect(filterContacts(withCo, { query: 'craft pita', stageFilter: 'all' }).map((x) => x.id)).toEqual([10])
+  })
   it('trims and lowercases the query', () => {
     expect(filterContacts(rows, { query: '  CAROL ', stageFilter: 'all' }).map((x) => x.id)).toEqual([3])
   })
