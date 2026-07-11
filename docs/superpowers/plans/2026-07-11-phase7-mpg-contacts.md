@@ -1,0 +1,495 @@
+# Phase 7 — MPG Contacts Screen Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Render an MPG contacts table at `/mpg/contacts` (Name, Company, Status, Contact, Last touch) by generalizing the existing `Contacts.jsx` into one config-driven component serving both Bayway and MPG — with Bayway behavior unchanged.
+
+**Architecture:** A new `v_mpg_contacts` view (migration `0007`). `Contacts.jsx` becomes config-driven: a `CONFIGS[biz]` picks the data source, columns, filter chips, and stage-pill style; a `COLUMNS` registry renders each column's header/cell. `filterContacts` gains company to its search haystack. No route change (`/mpg/contacts` already renders `<Contacts biz="mpg" />`).
+
+**Tech Stack:** React 18 + Vite, Tailwind, @supabase/supabase-js 2, vitest, Supabase CLI.
+
+**Spec:** `docs/superpowers/specs/2026-07-11-phase7-mpg-contacts-design.md`
+
+**Repo:** `C:\Users\Chandler\.claude\projects\atkinson-sales-os-phase1` (Bash `/c/Users/Chandler/.claude/projects/atkinson-sales-os-phase1`). Linked Supabase `cnmipfxwqnbtkohfixkf`. Git author `chandleros-bit <chandler.dashboard@gmail.com>` — never override; push only in the final task.
+
+**Reused (do not modify):** `src/lib/overview.js` (`lastTouchLabel`), `src/lib/supabase.js`. Tokens: `bg-panel`, `bg-panel2`, `bg-hoverbg`, `border-line`, `border-line2`, `text-muted`, `text-dim`, `rounded-card`, `.num`; vars `--bay`, `--bay-soft`, `--bay-gold`, `--mpg`, `--mpg-soft`, `--dim`.
+
+**Bayway must stay behaviorally identical:** columns Name · Stage · Contact · Last touch; All/Active/Nurture chips; enriched pills (green / gold "Waiting on Docs" / muted Nurture); default sort last-touch desc; 50/page.
+
+---
+
+### Task 1: Migration `0007_mpg_contacts_view.sql`
+
+**Files:**
+- Create: `supabase/migrations/0007_mpg_contacts_view.sql`
+
+- [ ] **Step 1: Write the migration**
+
+```sql
+-- Phase 7: MPG contacts view — all MPG (Zoho) contacts with the merchant
+-- company name and the raw Zoho lead status as 'stage'. security_invoker = on
+-- keeps the app's read-only RLS in force. One row per MPG contact.
+
+create or replace view public.v_mpg_contacts
+with (security_invoker = on) as
+select
+  c.id,
+  c.name,
+  c.company,
+  c.email,
+  c.phone,
+  c.last_touch_at,
+  coalesce(c.person_stage, '—') as stage
+from contacts c
+where c.business_id = 'mpg';
+```
+
+- [ ] **Step 2: Push**
+
+Run: `yes | supabase db push --linked`
+Expected: "Applying migration 0007_mpg_contacts_view.sql... Finished supabase db push."
+
+- [ ] **Step 3: Verify (service role) — 3 rows with company + stage**
+
+```bash
+SR=$(supabase projects api-keys --project-ref cnmipfxwqnbtkohfixkf | python -c "import sys,json;d=json.load(sys.stdin);print(next(k['api_key'] for k in d['keys'] if k.get('id')=='service_role'))")
+curl -s "https://cnmipfxwqnbtkohfixkf.supabase.co/rest/v1/v_mpg_contacts?select=name,company,stage" -H "apikey: $SR" -H "Authorization: Bearer $SR"
+```
+
+Expected: 3 rows (Chef Rasi / Craft Pita…, Owner ? / Barnaby's Cafe, Allah ? / Smash City Burgers), each with `stage: "Open"`. (Counts may differ if MPG data changed; shape must hold: MPG contacts with company + stage.)
+
+- [ ] **Step 4: Confirm RLS (anon cannot read)**
+
+```bash
+ANON=$(supabase projects api-keys --project-ref cnmipfxwqnbtkohfixkf | python -c "import sys,json;d=json.load(sys.stdin);print(next(k['api_key'] for k in d['keys'] if k.get('id')=='anon'))")
+curl -s "https://cnmipfxwqnbtkohfixkf.supabase.co/rest/v1/v_mpg_contacts?select=id&limit=1" -H "apikey: $ANON" -H "Authorization: Bearer $ANON"
+```
+
+Expected: `[]`. If rows return, STOP and report.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add supabase/migrations/0007_mpg_contacts_view.sql
+git commit -m "Phase 7: v_mpg_contacts view (MPG contacts with company + Zoho status)"
+```
+
+---
+
+### Task 2: `filterContacts` searches company (TDD)
+
+**Files:**
+- Modify: `src/lib/contacts.js` (the `filterContacts` haystack)
+- Modify: `src/lib/contacts.test.js` (add a company-search test)
+
+- [ ] **Step 1: Add the failing test**
+
+In `src/lib/contacts.test.js`, inside `describe('filterContacts', () => {`, add this test (e.g. right after the `'matches email and phone substrings'` test):
+
+```js
+  it('matches company substrings', () => {
+    const withCo = [
+      { id: 10, name: 'Zed', email: null, phone: '000', stage: 'Open', company: 'Craft Pita Mediterranean', last_touch_at: null },
+      { id: 11, name: 'Yan', email: null, phone: '111', stage: 'Open', company: 'Smash City Burgers', last_touch_at: null },
+    ]
+    expect(filterContacts(withCo, { query: 'craft pita', stageFilter: 'all' }).map((x) => x.id)).toEqual([10])
+  })
+```
+
+- [ ] **Step 2: Run it — verify it fails**
+
+Run: `npx vitest run src/lib/contacts.test.js -t "matches company"`
+Expected: FAIL — company is not in the search haystack yet.
+
+- [ ] **Step 3: Update `filterContacts`**
+
+In `src/lib/contacts.js`, change the haystack line inside `filterContacts` from:
+
+```js
+    const hay = `${r.name || ''} ${r.email || ''} ${r.phone || ''}`.toLowerCase()
+```
+
+to:
+
+```js
+    const hay = `${r.name || ''} ${r.company || ''} ${r.email || ''} ${r.phone || ''}`.toLowerCase()
+```
+
+- [ ] **Step 4: Run the full suite**
+
+Run: `npm test`
+Expected: all pass, including the new company test and all pre-existing tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/lib/contacts.js src/lib/contacts.test.js
+git commit -m "Phase 7: filterContacts also searches company"
+```
+
+---
+
+### Task 3: Generalize `src/pages/Contacts.jsx` (config-driven)
+
+**Files:**
+- Modify: `src/pages/Contacts.jsx` (full replacement below)
+
+Replace the whole file. The `bay` config reproduces the current Bayway table exactly; `mpg`
+adds the Company column, uses Zoho status pills, and drops the filter chips.
+
+- [ ] **Step 1: Replace the file contents**
+
+`src/pages/Contacts.jsx`:
+
+```jsx
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react'
+import { supabase, isDemoMode } from '../lib/supabase'
+import { lastTouchLabel } from '../lib/overview'
+import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
+
+const PER_PAGE = 50
+
+function bayStagePill(stage) {
+  if (stage === NURTURE) return { background: 'transparent', color: 'var(--dim)' }
+  if (stage === 'Waiting on Docs') return { background: 'rgba(232,180,95,.14)', color: 'var(--bay-gold)' }
+  return { background: 'var(--bay-soft)', color: 'var(--bay)' }
+}
+
+function mpgStagePill(stage) {
+  if (!stage || stage === '—') return { background: 'transparent', color: 'var(--dim)' }
+  return { background: 'var(--mpg-soft)', color: 'var(--mpg)' }
+}
+
+const BAY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'nurture', label: 'Nurture' },
+]
+
+const CONFIGS = {
+  bay: {
+    label: 'BAYWAY',
+    accent: 'bay',
+    source: 'v_bayway_contacts',
+    columns: ['name', 'stage', 'contact', 'last_touch'],
+    stageHeader: 'Stage',
+    filters: BAY_FILTERS,
+    stagePill: bayStagePill,
+    demoRows: [
+      { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Pre-Approved', last_touch_at: null },
+      { id: 'd2', name: 'Nguyen · Refi', email: 'nguyen@example.com', phone: '(281) 555-0195', stage: NURTURE, last_touch_at: null },
+    ],
+  },
+  mpg: {
+    label: 'MPG',
+    accent: 'mpg',
+    source: 'v_mpg_contacts',
+    columns: ['name', 'company', 'stage', 'contact', 'last_touch'],
+    stageHeader: 'Status',
+    filters: [],
+    stagePill: mpgStagePill,
+    demoRows: [
+      { id: 'd1', name: 'Chef Rasi', company: 'Craft Pita', email: null, phone: '(832) 804-9056', stage: 'Open', last_touch_at: null },
+      { id: 'd2', name: 'Owner ?', company: 'Barnaby’s Cafe', email: 'x@example.com', phone: '(832) 831-8296', stage: 'Open', last_touch_at: null },
+    ],
+  },
+}
+
+// Column registry — header thClass and cell width classes are kept in sync.
+const COLUMNS = {
+  name: {
+    header: () => 'Name',
+    thClass: 'flex-1 text-left',
+    sortKey: 'name',
+    cell: (r) => (
+      <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">{r.name || '(no name)'}</div>
+    ),
+  },
+  company: {
+    header: () => 'Company',
+    thClass: 'w-40 text-left',
+    sortKey: 'company',
+    cell: (r) => <div className="w-40 truncate text-[12.5px] text-muted">{r.company || '—'}</div>,
+  },
+  stage: {
+    header: (config) => config.stageHeader,
+    thClass: 'w-32 text-left',
+    sortKey: 'stage',
+    cell: (r, config) => (
+      <div className="w-32">
+        <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={config.stagePill(r.stage)}>
+          {r.stage || '—'}
+        </span>
+      </div>
+    ),
+  },
+  contact: {
+    header: () => 'Contact',
+    thClass: 'w-40 text-left',
+    sortKey: null,
+    cell: (r) => (
+      <div className="w-40 truncate text-[11.5px] text-muted">{r.phone || r.email || 'no contact info'}</div>
+    ),
+  },
+  last_touch: {
+    header: () => 'Last touch',
+    thClass: 'w-24 text-right',
+    sortKey: 'last_touch_at',
+    cell: (r) => (
+      <div className="w-24 text-right text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
+    ),
+  },
+}
+
+function BizHeader({ config, note }) {
+  return (
+    <div className="flex items-center gap-3">
+      <h2 className="text-[26px] font-bold tracking-tight">Contacts</h2>
+      <span
+        className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
+        style={{ color: `var(--${config.accent})`, background: `var(--${config.accent}-soft)` }}
+      >
+        {config.label}
+      </span>
+      {note}
+    </div>
+  )
+}
+
+export default function Contacts({ biz }) {
+  const config = CONFIGS[biz] || CONFIGS.bay
+
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(!isDemoMode)
+  const [error, setError] = useState(null)
+  const [query, setQuery] = useState('')
+  const [stageFilter, setStageFilter] = useState('all')
+  const [sortKey, setSortKey] = useState('last_touch_at')
+  const [sortDir, setSortDir] = useState('desc')
+  const [page, setPage] = useState(1)
+
+  const load = useCallback(async () => {
+    if (isDemoMode) return
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: err } = await supabase.from(config.source).select('*')
+      if (err) {
+        setError(err.message)
+        return
+      }
+      setRows(data || [])
+    } catch (e) {
+      setError(String(e?.message || e))
+    } finally {
+      setLoading(false)
+    }
+  }, [config.source])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const sourceRows = isDemoMode ? config.demoRows : rows
+  const filtered = useMemo(
+    () => sortContacts(filterContacts(sourceRows, { query, stageFilter }), { key: sortKey, dir: sortDir }),
+    [sourceRows, query, stageFilter, sortKey, sortDir],
+  )
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  const safePage = Math.min(page, pageCount)
+  const pageRows = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE)
+
+  const setSort = (key) => {
+    if (!key) return
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir(key === 'last_touch_at' ? 'desc' : 'asc')
+    }
+    setPage(1)
+  }
+  const onQuery = (v) => {
+    setQuery(v)
+    setPage(1)
+  }
+  const onFilter = (k) => {
+    setStageFilter(k)
+    setPage(1)
+  }
+
+  const arrow = (key) => (key === sortKey ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '')
+
+  return (
+    <div>
+      <BizHeader
+        config={config}
+        note={
+          !loading &&
+          !error && (
+            <span className="num text-[12px] text-muted">
+              {sourceRows.length} contacts · showing {filtered.length}
+            </span>
+          )
+        }
+      />
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <input
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Search name, company, email, or phone…"
+          className="w-64 rounded-lg border border-line bg-panel2 px-3 py-1.5 text-[13px] outline-none placeholder:text-dim focus:border-line2"
+        />
+        {config.filters.length > 0 && (
+          <div className="flex gap-1">
+            {config.filters.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => onFilter(f.key)}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+                  stageFilter === f.key ? 'bg-hoverbg text-white' : 'text-muted hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading && <div className="mt-6 text-sm text-muted">Loading contacts…</div>}
+
+      {!loading && !error && (
+        <div className="mt-4 overflow-hidden rounded-card border border-line bg-panel">
+          <div className="flex items-center gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-dim">
+            {config.columns.map((colKey) => {
+              const col = COLUMNS[colKey]
+              return col.sortKey ? (
+                <button
+                  key={colKey}
+                  onClick={() => setSort(col.sortKey)}
+                  className={`${col.thClass} hover:text-white`}
+                >
+                  {col.header(config)}
+                  {arrow(col.sortKey)}
+                </button>
+              ) : (
+                <div key={colKey} className={col.thClass}>
+                  {col.header(config)}
+                </div>
+              )
+            })}
+          </div>
+
+          {pageRows.length === 0 && (
+            <div className="px-6 py-8 text-center text-sm text-muted">No contacts match.</div>
+          )}
+
+          {pageRows.map((r) => (
+            <div
+              key={r.id}
+              className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-hoverbg"
+            >
+              {config.columns.map((colKey) => (
+                <Fragment key={colKey}>{COLUMNS[colKey].cell(r, config)}</Fragment>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && pageCount > 1 && (
+        <div className="mt-3 flex items-center justify-end gap-3 text-xs text-muted">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="rounded-lg border border-line px-2.5 py-1 disabled:opacity-40"
+          >
+            Prev
+          </button>
+          <span className="num">
+            Page {safePage} / {pageCount}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            disabled={safePage >= pageCount}
+            className="rounded-lg border border-line px-2.5 py-1 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+- [ ] **Step 2: Test and build**
+
+Run: `npm test`
+Expected: all tests pass (logic unchanged; page has no unit tests).
+
+Run: `npm run build`
+Expected: exits 0.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/pages/Contacts.jsx
+git commit -m "Phase 7: config-driven Contacts (Bayway + MPG from one component)"
+```
+
+---
+
+### Task 4: Live verification and deploy
+
+**Files:** none — verification and push only.
+
+Dev server on 5199 (start the `atkinson-sales-os` preview config if needed; sign-in required —
+ask Chandler to sign in if the login screen shows, never enter his password).
+
+- [ ] **Step 1: Verify the MPG contacts table**
+
+Navigate the connected browser to `http://localhost:5199/mpg/contacts`. Confirm:
+- Header "Contacts · MPG · 3 contacts · showing 3".
+- Columns: Name · Company · Status · Contact · Last touch. Company shows the merchant names
+  (Craft Pita…, Barnaby's Cafe, Smash City Burgers); Status shows "Open" in an MPG-blue pill.
+- **No** All/Active/Nurture chips.
+- Type part of a company name (e.g. "smash") in search → the list narrows to that row.
+- `read_console_messages` (errors) — none.
+
+- [ ] **Step 2: Bayway regression check (critical)**
+
+Navigate to `http://localhost:5199/bayway/contacts`. Confirm it is UNCHANGED:
+- "826 contacts · showing 826"; columns Name · Stage · Contact · Last touch (no Company).
+- All/Active/Nurture chips present; Active → ~29; enriched pills (Pre-Approved green,
+  Waiting on Docs gold, Nurture muted); default sort last-touch desc; "Page 1 / 17".
+- No console errors.
+
+- [ ] **Step 3: Screenshot proof**
+
+Screenshot the MPG contacts table (and optionally the Bayway one) and share.
+
+- [ ] **Step 4: Push (deploys via Netlify)**
+
+```bash
+cd /c/Users/Chandler/.claude/projects/atkinson-sales-os-phase1
+git log origin/main..HEAD --format='%an <%ae>' | sort -u   # only chandleros-bit
+git push origin main
+```
+
+Expected: push succeeds; Netlify auto-builds.
+
+---
+
+## Out of scope (do not add)
+
+- Editing / writes; per-contact detail pages; MPG Overview/Pipeline screens
+- Zoho-status filter chips; CSV export
+- Do not modify `Login.jsx`, the Edge Functions, `overview.js`, `pipeline.js`, or migrations 0001–0006
