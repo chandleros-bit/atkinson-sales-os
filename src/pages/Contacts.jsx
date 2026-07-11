@@ -1,47 +1,120 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { lastTouchLabel } from '../lib/overview'
 import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
 
 const PER_PAGE = 50
 
-function BizHeader({ biz, note }) {
-  const isMpg = biz === 'mpg'
+function bayStagePill(stage) {
+  if (stage === NURTURE) return { background: 'transparent', color: 'var(--dim)' }
+  if (stage === 'Waiting on Docs') return { background: 'rgba(232,180,95,.14)', color: 'var(--bay-gold)' }
+  return { background: 'var(--bay-soft)', color: 'var(--bay)' }
+}
+
+function mpgStagePill(stage) {
+  if (!stage || stage === '—') return { background: 'transparent', color: 'var(--dim)' }
+  return { background: 'var(--mpg-soft)', color: 'var(--mpg)' }
+}
+
+const BAY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'nurture', label: 'Nurture' },
+]
+
+const CONFIGS = {
+  bay: {
+    label: 'BAYWAY',
+    accent: 'bay',
+    source: 'v_bayway_contacts',
+    columns: ['name', 'stage', 'contact', 'last_touch'],
+    stageHeader: 'Stage',
+    filters: BAY_FILTERS,
+    stagePill: bayStagePill,
+    demoRows: [
+      { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Pre-Approved', last_touch_at: null },
+      { id: 'd2', name: 'Nguyen · Refi', email: 'nguyen@example.com', phone: '(281) 555-0195', stage: NURTURE, last_touch_at: null },
+    ],
+  },
+  mpg: {
+    label: 'MPG',
+    accent: 'mpg',
+    source: 'v_mpg_contacts',
+    columns: ['name', 'company', 'stage', 'contact', 'last_touch'],
+    stageHeader: 'Status',
+    filters: [],
+    stagePill: mpgStagePill,
+    demoRows: [
+      { id: 'd1', name: 'Chef Rasi', company: 'Craft Pita', email: null, phone: '(832) 804-9056', stage: 'Open', last_touch_at: null },
+      { id: 'd2', name: 'Owner ?', company: 'Barnaby’s Cafe', email: 'x@example.com', phone: '(832) 831-8296', stage: 'Open', last_touch_at: null },
+    ],
+  },
+}
+
+// Column registry — header thClass and cell width classes are kept in sync.
+const COLUMNS = {
+  name: {
+    header: () => 'Name',
+    thClass: 'flex-1 text-left',
+    sortKey: 'name',
+    cell: (r) => (
+      <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">{r.name || '(no name)'}</div>
+    ),
+  },
+  company: {
+    header: () => 'Company',
+    thClass: 'w-40 text-left',
+    sortKey: 'company',
+    cell: (r) => <div className="w-40 truncate text-[12.5px] text-muted">{r.company || '—'}</div>,
+  },
+  stage: {
+    header: (config) => config.stageHeader,
+    thClass: 'w-32 text-left',
+    sortKey: 'stage',
+    cell: (r, config) => (
+      <div className="w-32">
+        <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={config.stagePill(r.stage)}>
+          {r.stage || '—'}
+        </span>
+      </div>
+    ),
+  },
+  contact: {
+    header: () => 'Contact',
+    thClass: 'w-40 text-left',
+    sortKey: null,
+    cell: (r) => (
+      <div className="w-40 truncate text-[11.5px] text-muted">{r.phone || r.email || 'no contact info'}</div>
+    ),
+  },
+  last_touch: {
+    header: () => 'Last touch',
+    thClass: 'w-24 text-right',
+    sortKey: 'last_touch_at',
+    cell: (r) => (
+      <div className="w-24 text-right text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
+    ),
+  },
+}
+
+function BizHeader({ config, note }) {
   return (
     <div className="flex items-center gap-3">
       <h2 className="text-[26px] font-bold tracking-tight">Contacts</h2>
       <span
         className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
-        style={{
-          color: isMpg ? 'var(--mpg)' : 'var(--bay)',
-          background: isMpg ? 'var(--mpg-soft)' : 'var(--bay-soft)',
-        }}
+        style={{ color: `var(--${config.accent})`, background: `var(--${config.accent}-soft)` }}
       >
-        {isMpg ? 'MPG' : 'BAYWAY'}
+        {config.label}
       </span>
       {note}
     </div>
   )
 }
 
-function stagePillStyle(stage) {
-  if (stage === NURTURE) return { background: 'transparent', color: 'var(--dim)' }
-  if (stage === 'Waiting on Docs') return { background: 'rgba(232,180,95,.14)', color: 'var(--bay-gold)' }
-  return { background: 'var(--bay-soft)', color: 'var(--bay)' }
-}
-
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'nurture', label: 'Nurture' },
-]
-
-const demoRows = [
-  { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Pre-Approved', last_touch_at: null },
-  { id: 'd2', name: 'Nguyen · Refi', email: 'nguyen@example.com', phone: '(281) 555-0195', stage: NURTURE, last_touch_at: null },
-]
-
 export default function Contacts({ biz }) {
+  const config = CONFIGS[biz] || CONFIGS.bay
+
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
@@ -52,13 +125,11 @@ export default function Contacts({ biz }) {
   const [page, setPage] = useState(1)
 
   const load = useCallback(async () => {
-    if (isDemoMode || biz !== 'bay') return
+    if (isDemoMode) return
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase
-        .from('v_bayway_contacts')
-        .select('id, name, email, phone, last_touch_at, stage')
+      const { data, error: err } = await supabase.from(config.source).select('*')
       if (err) {
         setError(err.message)
         return
@@ -69,13 +140,13 @@ export default function Contacts({ biz }) {
     } finally {
       setLoading(false)
     }
-  }, [biz])
+  }, [config.source])
 
   useEffect(() => {
     load()
   }, [load])
 
-  const sourceRows = isDemoMode ? demoRows : rows
+  const sourceRows = isDemoMode ? config.demoRows : rows
   const filtered = useMemo(
     () => sortContacts(filterContacts(sourceRows, { query, stageFilter }), { key: sortKey, dir: sortDir }),
     [sourceRows, query, stageFilter, sortKey, sortDir],
@@ -85,6 +156,7 @@ export default function Contacts({ biz }) {
   const pageRows = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE)
 
   const setSort = (key) => {
+    if (!key) return
     if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     else {
       setSortKey(key)
@@ -101,23 +173,12 @@ export default function Contacts({ biz }) {
     setPage(1)
   }
 
-  if (biz === 'mpg') {
-    return (
-      <div>
-        <BizHeader biz="mpg" />
-        <div className="mt-5 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
-          Zoho CRM connects in an upcoming phase — MPG contacts will appear here.
-        </div>
-      </div>
-    )
-  }
-
   const arrow = (key) => (key === sortKey ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '')
 
   return (
     <div>
       <BizHeader
-        biz="bay"
+        config={config}
         note={
           !loading &&
           !error && (
@@ -132,22 +193,24 @@ export default function Contacts({ biz }) {
         <input
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          placeholder="Search name, email, or phone…"
+          placeholder="Search name, company, email, or phone…"
           className="w-64 rounded-lg border border-line bg-panel2 px-3 py-1.5 text-[13px] outline-none placeholder:text-dim focus:border-line2"
         />
-        <div className="flex gap-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => onFilter(f.key)}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-                stageFilter === f.key ? 'bg-hoverbg text-white' : 'text-muted hover:text-white'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        {config.filters.length > 0 && (
+          <div className="flex gap-1">
+            {config.filters.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => onFilter(f.key)}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+                  stageFilter === f.key ? 'bg-hoverbg text-white' : 'text-muted hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -161,16 +224,23 @@ export default function Contacts({ biz }) {
       {!loading && !error && (
         <div className="mt-4 overflow-hidden rounded-card border border-line bg-panel">
           <div className="flex items-center gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-dim">
-            <button onClick={() => setSort('name')} className="flex-1 text-left hover:text-white">
-              Name{arrow('name')}
-            </button>
-            <button onClick={() => setSort('stage')} className="w-32 text-left hover:text-white">
-              Stage{arrow('stage')}
-            </button>
-            <div className="w-40">Contact</div>
-            <button onClick={() => setSort('last_touch_at')} className="w-24 text-right hover:text-white">
-              Last touch{arrow('last_touch_at')}
-            </button>
+            {config.columns.map((colKey) => {
+              const col = COLUMNS[colKey]
+              return col.sortKey ? (
+                <button
+                  key={colKey}
+                  onClick={() => setSort(col.sortKey)}
+                  className={`${col.thClass} hover:text-white`}
+                >
+                  {col.header(config)}
+                  {arrow(col.sortKey)}
+                </button>
+              ) : (
+                <div key={colKey} className={col.thClass}>
+                  {col.header(config)}
+                </div>
+              )
+            })}
           </div>
 
           {pageRows.length === 0 && (
@@ -178,17 +248,13 @@ export default function Contacts({ biz }) {
           )}
 
           {pageRows.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-hoverbg">
-              <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">{r.name || '(no name)'}</div>
-              <div className="w-32">
-                <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={stagePillStyle(r.stage)}>
-                  {r.stage}
-                </span>
-              </div>
-              <div className="w-40 truncate text-[11.5px] text-muted">
-                {r.phone || r.email || 'no contact info'}
-              </div>
-              <div className="w-24 text-right text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
+            <div
+              key={r.id}
+              className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-hoverbg"
+            >
+              {config.columns.map((colKey) => (
+                <Fragment key={colKey}>{COLUMNS[colKey].cell(r, config)}</Fragment>
+              ))}
             </div>
           ))}
         </div>
