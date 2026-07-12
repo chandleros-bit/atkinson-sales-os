@@ -29,7 +29,17 @@ supabase secrets set OUTLOOK_BAYWAY_ICS_URL="https://outlook.office365.com/owa/c
 
 ## 3. Trigger a sync and check
 
-The function is deployed and runs every 15 minutes. Trigger one now:
+The function is deployed and runs every 15 minutes, so you don't strictly need to trigger it —
+but to sync immediately:
+
+**Windows / PowerShell** (use `curl.exe`, not `curl` — in PowerShell `curl` is an alias for
+`Invoke-WebRequest`, which rejects the `-X`/`-H` flags):
+
+```powershell
+curl.exe -X POST https://cnmipfxwqnbtkohfixkf.supabase.co/functions/v1/outlook-sync -H "Authorization: Bearer YOUR_ANON_KEY"
+```
+
+**macOS / Linux / Git Bash:**
 
 ```bash
 curl -X POST https://cnmipfxwqnbtkohfixkf.supabase.co/functions/v1/outlook-sync \
