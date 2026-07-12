@@ -7,6 +7,7 @@ import Overview from './pages/Overview'
 import SyncStatus from './pages/SyncStatus'
 import Pipeline from './pages/Pipeline'
 import Contacts from './pages/Contacts'
+import Calendar from './pages/Calendar'
 import PagePlaceholder from './components/PagePlaceholder'
 
 function Protected({ children }) {
@@ -36,14 +37,7 @@ export default function App() {
               }
             >
               <Route path="/" element={<Overview />} />
-              <Route
-                path="/calendar"
-                element={
-                  <PagePlaceholder title="Calendar" phase="5">
-                    Merged view of both Outlook accounts, events colored by source.
-                  </PagePlaceholder>
-                }
-              />
+              <Route path="/calendar" element={<Calendar />} />
               <Route
                 path="/reports"
                 element={
