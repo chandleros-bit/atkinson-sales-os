@@ -47,6 +47,27 @@ export function buildKpis(rows, totalContacts) {
   }
 }
 
+// Combined "All" command-center KPIs: one figure per business plus the total.
+// bayRows: v_active_pipeline rows (business_id 'bay'). mpgRows: v_mpg_contacts
+// leads. bayContacts / mpgContacts: total contact counts per book. Every MPG
+// lead counts as in-pipeline (the MPG book lives on leads today, 0 deals).
+export function buildCombinedKpis(bayRows, mpgRows, bayContacts, mpgContacts, now = Date.now()) {
+  const isStale = (r) => {
+    const d = daysSince(r.last_touch_at, now)
+    return d === null || d >= STALE_TOUCH_DAYS
+  }
+  const split = (mpg, bay) => ({ mpg, bay, total: mpg + bay })
+  return {
+    pipeline: split(mpgRows.length, bayRows.length),
+    attention: split(mpgRows.filter(isStale).length, bayRows.filter(isStale).length),
+    contacts: split(mpgContacts, bayContacts),
+    nurture: split(
+      Math.max(0, mpgContacts - mpgRows.length),
+      Math.max(0, bayContacts - bayRows.length),
+    ),
+  }
+}
+
 // latestSync: newest sync_log row for source 'fub' (or null if none).
 // Returns { level: 'red'|'amber', text } or null. Red wins over amber.
 export function deriveAlert({ latestSync, rows, now = Date.now() }) {

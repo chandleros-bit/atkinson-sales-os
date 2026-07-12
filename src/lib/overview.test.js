@@ -4,6 +4,7 @@ import {
   lastTouchLabel,
   sortByAttention,
   buildKpis,
+  buildCombinedKpis,
   deriveAlert,
 } from './overview'
 
@@ -78,6 +79,37 @@ describe('buildKpis', () => {
   })
   it('never returns negative nurture', () => {
     expect(buildKpis(rows, 2).nurture).toBe(0)
+  })
+})
+
+describe('buildCombinedKpis', () => {
+  const bayRows = [
+    { stage: 'Pre-Approved', last_touch_at: daysAgo(1) },
+    { stage: 'New Lead', last_touch_at: daysAgo(9) }, // stale
+    { stage: 'Waiting on Docs', last_touch_at: null }, // stale (unknown)
+  ]
+  const mpgRows = [
+    { stage: 'Open', last_touch_at: daysAgo(2) },
+    { stage: 'Open', last_touch_at: daysAgo(10) }, // stale
+  ]
+
+  it('splits pipeline counts per business with a total', () => {
+    const k = buildCombinedKpis(bayRows, mpgRows, 826, 3, NOW)
+    expect(k.pipeline).toEqual({ mpg: 2, bay: 3, total: 5 })
+  })
+  it('counts stale/untouched rows as needing attention', () => {
+    const k = buildCombinedKpis(bayRows, mpgRows, 826, 3, NOW)
+    expect(k.attention).toEqual({ mpg: 1, bay: 2, total: 3 })
+  })
+  it('reports the whole book under contacts', () => {
+    const k = buildCombinedKpis(bayRows, mpgRows, 826, 3, NOW)
+    expect(k.contacts).toEqual({ mpg: 3, bay: 826, total: 829 })
+  })
+  it('derives nurture as contacts minus pipeline, never negative', () => {
+    const k = buildCombinedKpis(bayRows, mpgRows, 826, 3, NOW)
+    expect(k.nurture).toEqual({ mpg: 1, bay: 823, total: 824 })
+    const empty = buildCombinedKpis([], [], 0, 0, NOW)
+    expect(empty.nurture).toEqual({ mpg: 0, bay: 0, total: 0 })
   })
 })
 
