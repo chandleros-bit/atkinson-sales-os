@@ -34,7 +34,7 @@ export default function Overview() {
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    if (isDemoMode) return
+    if (isDemoMode || biz === 'mpg') return
     setLoading(true)
     setError(null)
     try {
@@ -72,7 +72,7 @@ export default function Overview() {
   }, [load])
 
   if (isDemoMode) return <DemoOverview />
-  if (biz === 'mpg') return <MpgPlaceholder />
+  if (biz === 'mpg') return <MpgOverview />
 
   const kpis = buildKpis(rows, totalContacts)
   const alert = !loading && !error ? deriveAlert({ latestSync, rows }) : null
@@ -178,24 +178,147 @@ export default function Overview() {
   )
 }
 
-function MpgPlaceholder() {
+// MPG view — merchant services, sourced from Zoho leads (v_mpg_contacts).
+// Thin by design: the MPG book is 3 open leads and 0 deals today, so the
+// pipeline lives on leads. Merchant-first: the company is the opportunity.
+function MpgOverview() {
+  const [leads, setLeads] = useState([])
+  const [deals, setDeals] = useState(0)
+  const [loading, setLoading] = useState(!isDemoMode)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (isDemoMode) return
+    let alive = true
+    ;(async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const [leadRes, dealRes] = await Promise.all([
+          supabase
+            .from('v_mpg_contacts')
+            .select('id, name, company, email, phone, last_touch_at, stage'),
+          supabase
+            .from('deals')
+            .select('id', { count: 'exact', head: true })
+            .eq('business_id', 'mpg'),
+        ])
+        if (!alive) return
+        const err = leadRes.error || dealRes.error
+        if (err) {
+          setError(err.message)
+          return
+        }
+        setLeads(leadRes.data || [])
+        setDeals(dealRes.count || 0)
+      } catch (e) {
+        if (alive) setError(String(e?.message || e))
+      } finally {
+        if (alive) setLoading(false)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const stageCounts = [...leads.reduce((m, l) => {
+    const s = l.stage || '—'
+    return m.set(s, (m.get(s) || 0) + 1)
+  }, new Map())].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  const workbench = sortByAttention(leads)
+
   return (
     <div>
       <h2 className="text-[28px] font-bold tracking-tight">{greeting()}, Chandler</h2>
       <p className="mt-1 text-sm text-muted">MPG view — merchant services only.</p>
-      <div className="mt-6 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
-        Zoho CRM connects in an upcoming phase — MPG data will appear here.
-      </div>
+
+      {error && (
+        <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading && <div className="mt-6 text-sm text-muted">Loading MPG leads…</div>}
+
+      {!loading && !error && (
+        <>
+          <div className="mt-6 grid grid-cols-2 gap-3.5 xl:grid-cols-4">
+            <Kpi label="Leads" value={leads.length} mpg />
+            {stageCounts.slice(0, 2).map(([label, count]) => (
+              <Kpi key={label} label={label} value={count} mpg accent />
+            ))}
+            <Kpi label="Open deals" value={deals} />
+          </div>
+          <p className="mt-2.5 text-[11.5px] text-dim">
+            MPG pipeline is lead-stage today — deals appear here once opened in Zoho.
+          </p>
+
+          <div className="mt-5 rounded-card border border-line bg-panel">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3.5">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <span className="h-[7px] w-[7px] rounded-full" style={{ background: 'var(--mpg)' }} />
+                Needs Attention
+                <span className="num text-[11px] font-medium text-muted">{workbench.length}</span>
+              </div>
+              <span className="text-xs text-dim">Sorted by longest since last touch</span>
+            </div>
+            {workbench.length === 0 && (
+              <div className="px-6 py-8 text-center text-sm text-muted">
+                No MPG leads yet — add them in Zoho CRM.
+              </div>
+            )}
+            {workbench.map((r) => {
+              const d = daysSince(r.last_touch_at)
+              const stale = d === null || d >= STALE_TOUCH_DAYS
+              return (
+                <div
+                  key={r.id}
+                  className="relative flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg"
+                >
+                  <span
+                    className="absolute bottom-2 left-0 top-2 w-[3px] rounded-sm"
+                    style={{ background: 'var(--mpg)' }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-semibold">
+                      {r.company || r.name || '(no name)'}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted">
+                      <BizBadge biz="mpg" />
+                      {r.name || r.phone || r.email || 'no contact info'}
+                    </div>
+                  </div>
+                  <span
+                    className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    style={{ background: 'var(--mpg-soft)', color: 'var(--mpg)' }}
+                  >
+                    {r.stage || '—'}
+                  </span>
+                  <span
+                    className={`w-20 whitespace-nowrap text-right text-[11.5px] ${
+                      stale ? 'font-semibold' : 'text-muted'
+                    }`}
+                    style={stale ? { color: 'var(--bay-gold)' } : undefined}
+                  >
+                    {lastTouchLabel(r.last_touch_at)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
-function Kpi({ label, value, accent }) {
+function Kpi({ label, value, accent, mpg }) {
   return (
     <div className="rounded-card border border-line bg-panel p-4">
       <div
         className="num text-[30px] font-bold leading-none tracking-tight"
-        style={accent ? { color: 'var(--bay)' } : undefined}
+        style={accent ? { color: mpg ? 'var(--mpg)' : 'var(--bay)' } : undefined}
       >
         {value}
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
-import { buildColumns } from '../lib/pipeline'
+import { buildColumns, MPG_LEAD_FLOW } from '../lib/pipeline'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -24,18 +24,22 @@ function BizHeader({ biz, note }) {
   )
 }
 
-function Card({ r, lost }) {
+function Card({ r, lost, biz }) {
   const d = daysSince(r.last_touch_at)
   const stale = d === null || d >= STALE_TOUCH_DAYS
+  const accent = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
+  // MPG cards are merchant-first (the company is the deal); Bayway is person-first.
+  const headline = biz === 'mpg' ? r.company || r.name : r.name
+  const sub = biz === 'mpg' ? r.name || r.phone || r.email : r.phone || r.email
   return (
     <div className="relative rounded-lg border border-line bg-panel2 px-3 py-2.5 pl-3.5">
       <span
         className="absolute bottom-2 left-0 top-2 w-[3px] rounded-sm"
-        style={{ background: lost ? 'var(--dim)' : 'var(--bay)' }}
+        style={{ background: lost ? 'var(--dim)' : accent }}
       />
-      <div className="truncate text-[13px] font-semibold">{r.name || '(no name)'}</div>
+      <div className="truncate text-[13px] font-semibold">{headline || '(no name)'}</div>
       <div className="mt-0.5 truncate text-[11.5px] text-muted">
-        {r.phone || r.email || 'no contact info'}
+        {sub || 'no contact info'}
       </div>
       <div
         className={`mt-1 text-[11px] ${stale ? 'font-semibold' : 'text-dim'}`}
@@ -47,7 +51,7 @@ function Card({ r, lost }) {
   )
 }
 
-function Column({ col }) {
+function Column({ col, biz }) {
   return (
     <div className="w-[280px] flex-none rounded-card border border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
@@ -58,18 +62,18 @@ function Column({ col }) {
       </div>
       <div className="flex flex-col gap-2 p-2.5">
         {col.cards.map((r) => (
-          <Card key={r.id} r={r} lost={col.isLost} />
+          <Card key={r.id} r={r} lost={col.isLost} biz={biz} />
         ))}
       </div>
     </div>
   )
 }
 
-function Board({ columns }) {
+function Board({ columns, biz }) {
   return (
     <div className="mt-5 flex gap-3.5 overflow-x-auto pb-2">
       {columns.map((col) => (
-        <Column key={col.stage} col={col} />
+        <Column key={col.stage} col={col} biz={biz} />
       ))}
     </div>
   )
@@ -81,20 +85,40 @@ const demoRows = [
   { id: 'd3', stage: 'Pre-Approved', name: 'Okafor · Purchase', phone: '(832) 555-0110', last_touch_at: null },
 ]
 
+// Per-business query + presentation config. MPG reads Zoho leads through
+// v_mpg_contacts (0 deals today — the pipeline lives on leads); Bayway reads
+// the FUB-derived v_active_pipeline. flowOrder curates the column order.
+const PIPELINE = {
+  bay: {
+    view: 'v_active_pipeline',
+    columns: 'id, business_id, name, email, phone, last_touch_at, stage',
+    flowOrder: undefined, // default LOAN_FLOW_ORDER
+    countLabel: 'active',
+    empty: 'No active loans — add stages in FollowUpBoss.',
+  },
+  mpg: {
+    view: 'v_mpg_contacts',
+    columns: 'id, name, company, email, phone, last_touch_at, stage',
+    flowOrder: MPG_LEAD_FLOW,
+    countLabel: 'leads',
+    empty: 'No MPG leads yet — add them in Zoho CRM.',
+  },
+}
+
 export default function Pipeline({ biz }) {
+  const cfg = PIPELINE[biz] || PIPELINE.bay
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    if (isDemoMode || biz !== 'bay') return
+    if (isDemoMode) return
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase
-        .from('v_active_pipeline')
-        .select('id, business_id, name, email, phone, last_touch_at, stage')
-        .eq('business_id', 'bay')
+      let q = supabase.from(cfg.view).select(cfg.columns)
+      if (biz === 'bay') q = q.eq('business_id', 'bay')
+      const { data, error: err } = await q
       if (err) {
         setError(err.message)
         return
@@ -105,39 +129,34 @@ export default function Pipeline({ biz }) {
     } finally {
       setLoading(false)
     }
-  }, [biz])
+  }, [biz, cfg.view, cfg.columns])
 
   useEffect(() => {
     load()
   }, [load])
 
-  if (biz === 'mpg') {
-    return (
-      <div>
-        <BizHeader biz="mpg" />
-        <div className="mt-5 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
-          Zoho CRM connects in an upcoming phase — the MPG pipeline will appear here.
-        </div>
-      </div>
-    )
-  }
-
-  if (isDemoMode) {
+  if (isDemoMode && biz !== 'mpg') {
     return (
       <div>
         <BizHeader biz="bay" note={<span className="text-xs text-dim">demo</span>} />
-        <Board columns={buildColumns(demoRows)} />
+        <Board columns={buildColumns(demoRows)} biz="bay" />
       </div>
     )
   }
 
-  const columns = buildColumns(rows)
+  const columns = buildColumns(rows, cfg.flowOrder)
 
   return (
     <div>
       <BizHeader
-        biz="bay"
-        note={!loading && !error && <span className="num text-[12px] text-muted">{rows.length} active</span>}
+        biz={biz}
+        note={
+          !loading && !error && (
+            <span className="num text-[12px] text-muted">
+              {rows.length} {cfg.countLabel}
+            </span>
+          )
+        }
       />
 
       {error && (
@@ -150,11 +169,11 @@ export default function Pipeline({ biz }) {
 
       {!loading && !error && rows.length === 0 && (
         <div className="mt-6 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
-          No active loans — add stages in FollowUpBoss.
+          {cfg.empty}
         </div>
       )}
 
-      {!loading && !error && rows.length > 0 && <Board columns={columns} />}
+      {!loading && !error && rows.length > 0 && <Board columns={columns} biz={biz} />}
     </div>
   )
 }
