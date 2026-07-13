@@ -24,9 +24,8 @@ async function fubListActivity(path, listKeys, sinceIso) {
     return []
   }
   while (true) {
-    const params = sinceIso
-      ? { limit, offset, sort: 'updated', updatedAfter: sinceIso }
-      : { limit, offset }
+    const params = { limit, offset, sort: 'updated' }
+    if (sinceIso) params.updatedAfter = sinceIso
     const json = await fubGet(path, params)
     const page = pick(json)
     if (page.length === 0) break

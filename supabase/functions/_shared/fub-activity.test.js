@@ -13,6 +13,10 @@ describe('occurredAt', () => {
   it('returns null when nothing matches', () => {
     expect(occurredAt({}, 'note')).toBe(null)
   })
+  it('prefers created then falls back to sent for text and email', () => {
+    expect(occurredAt({ created: 'c', sent: 's' }, 'text')).toBe('c')
+    expect(occurredAt({ sent: 's' }, 'email')).toBe('s')
+  })
 })
 
 describe('snippet', () => {
@@ -50,5 +54,9 @@ describe('mapActivity', () => {
   it('leaves contact_id null when personId is unknown or missing', () => {
     expect(mapActivity({ id: 9, personId: 999, created: 'x' }, 'note', contactIdByExternal).contact_id).toBe(null)
     expect(mapActivity({ id: 9, created: 'x' }, 'note', contactIdByExternal).contact_id).toBe(null)
+  })
+  it('resolves contact_id from a nested person object', () => {
+    const row = mapActivity({ id: 10, person: { id: 501 }, created: 'x' }, 'note', contactIdByExternal)
+    expect(row.contact_id).toBe('uuid-contact')
   })
 })
