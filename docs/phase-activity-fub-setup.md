@@ -12,9 +12,10 @@ supabase functions deploy fub-activity-sync --no-verify-jwt --project-ref cnmipf
 
 ## 2. Apply the migrations
 
-Apply `0009_bayway_activity_view.sql` (the view) and
-`0010_schedule_fub_activity_sync.sql` (the 15-min cron) via your usual
-migration path (`supabase db push`, or paste into the SQL editor).
+Apply `0009_bayway_activity_view.sql` (the view),
+`0010_schedule_fub_activity_sync.sql` (the 15-min cron), and
+`0011_activities_feed_index.sql` (the feed index) via your usual migration
+path (`supabase db push`, or paste into the SQL editor).
 
 ## 3. Trigger a first run manually (PowerShell-safe)
 
