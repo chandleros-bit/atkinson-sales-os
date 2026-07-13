@@ -110,6 +110,13 @@ of 2026-07-13:
   Overview merging both books into one dispatcher-based `Overview.jsx`
   (`DemoOverview`/`MpgOverview`/`BayOverview`/`AllOverview`) with shared KPI/
   attention-list components.
+- **Phase 11 — done (committed, backend awaiting deploy):** Bayway Activity
+  feed — a day-grouped timeline of calls/texts/emails/notes/appointments with
+  type-filter chips and "Load older" pagination. New `fub-activity-sync`
+  function + `v_bayway_activity` view + `Activity.jsx` screen at
+  `/bayway/activity` (`src/lib/activity.js` helpers). Deploy/verify:
+  `docs/phase-activity-fub-setup.md`. MPG activity (Zoho) remains a future
+  phase; `/mpg/activity` stays a placeholder.
 
 ### Not yet built
 
@@ -121,8 +128,8 @@ of 2026-07-13:
 - **Deals sync** (FUB + Zoho → `deals` table, currently empty) — not started.
   Biggest visible gap vs. the original mockup: unlocks the dollar KPI row
   (Active deals $, Pipeline value, Closed-this-month).
-- **Activity** screens — blocked; the `activities` table is empty and needs a
-  FUB/Zoho activity sync built first.
+- **MPG (Zoho) activity** — the Bayway activity feed shipped in Phase 11; the
+  MPG side still needs a Zoho activity sync before `/mpg/activity` can light up.
 - **Targets and polish** (original Phase 7 scope) — not started.
 
 Locked scope for v1: read-only, CRM + calendar sources only, dark theme, single Super Admin user.
