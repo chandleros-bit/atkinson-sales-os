@@ -19,4 +19,4 @@ from activities a
 left join contacts c on c.id = a.contact_id
 where a.business_id = 'bay'
   and a.type in ('call', 'text', 'email', 'note', 'appointment')
-order by a.occurred_at desc nulls last;
+order by a.occurred_at desc nulls last, a.id desc;

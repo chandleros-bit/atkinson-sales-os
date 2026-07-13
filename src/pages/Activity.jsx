@@ -48,6 +48,7 @@ export default function Activity({ biz }) {
         .from(config.source)
         .select('*')
         .order('occurred_at', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false })
         .range(offset, offset + PER_PAGE - 1)
       if (err) throw new Error(err.message)
       return data || []
@@ -75,6 +76,7 @@ export default function Activity({ biz }) {
   }, [load])
 
   const loadOlder = async () => {
+    if (loadingMore) return
     setLoadingMore(true)
     try {
       const page = await fetchPage(rows.length)
@@ -127,13 +129,21 @@ export default function Activity({ biz }) {
 
       {loading && <div className="mt-6 text-sm text-muted">Loading activity…</div>}
 
-      {!loading && !error && total === 0 && (
+      {!loading && !error && sourceRows.length === 0 && (
         <div className="mt-6 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
           No activity yet — connect the FollowUpBoss activity sync (see docs/phase-activity-fub-setup.md).
         </div>
       )}
 
-      {!loading && !error && total > 0 && (
+      {!loading && sourceRows.length > 0 && total === 0 && (
+        <div className="mt-6 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
+          {typeFilter === 'all'
+            ? 'No activity in the loaded range.'
+            : `No ${TYPE_CHIPS.find((c) => c.key === typeFilter)?.label.toLowerCase()} in the loaded range.`}
+        </div>
+      )}
+
+      {!loading && total > 0 && (
         <div className="mt-5 space-y-5">
           {groups.map((g) => (
             <div key={g.dayKey}>
@@ -161,7 +171,7 @@ export default function Activity({ biz }) {
         </div>
       )}
 
-      {!loading && !error && !isDemoMode && hasMore && (
+      {!loading && !isDemoMode && hasMore && (
         <div className="mt-4 flex justify-center">
           <button
             onClick={loadOlder}
