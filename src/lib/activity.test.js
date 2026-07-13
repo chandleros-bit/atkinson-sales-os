@@ -37,11 +37,24 @@ describe('groupByDay', () => {
   it('skips rows with no occurred_at', () => {
     expect(groupByDay([{ id: 1, occurred_at: null }], now)).toEqual([])
   })
+  it('does not mutate the input array', () => {
+    const rows = [
+      { id: 1, occurred_at: '2026-07-12T10:00:00' },
+      { id: 2, occurred_at: '2026-07-13T08:00:00' },
+    ]
+    const copy = [...rows]
+    groupByDay(rows, now)
+    expect(rows).toEqual(copy)
+  })
 })
 
 describe('timeOfDay', () => {
   it('formats 12-hour time with an a/p suffix', () => {
     expect(timeOfDay('2026-07-13T09:05:00')).toBe('9:05a')
     expect(timeOfDay('2026-07-13T16:30:00')).toBe('4:30p')
+  })
+  it('handles midnight and noon boundaries', () => {
+    expect(timeOfDay('2026-07-13T00:00:00')).toBe('12:00a')
+    expect(timeOfDay('2026-07-13T12:00:00')).toBe('12:00p')
   })
 })
