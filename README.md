@@ -79,15 +79,50 @@ src/
 
 ## Phase roadmap (from the build spec)
 
+Delivered work expanded past the original 7-phase outline as MPG (Zoho) and
+Bayway (FollowUpBoss) turned out to need separate, parallel tracks. Status as
+of 2026-07-13:
+
 - **Phase 2 — done (FollowUpBoss):** Supabase schema (`supabase/migrations/0001_init.sql`),
   scheduled sync + webhook Edge Functions (`supabase/functions/fub-sync`,
-  `supabase/functions/fub-webhook`), and a live Sync Status screen at `/sync`.
-  Setup steps: `docs/phase2-fub-setup.md`. Zoho (MPG) and the two Outlook
-  calendars follow the same pattern next.
-- Phase 3: real Overview (KPI cards, workbench, alert banner) from synced data.
-- Phase 4: MPG and Bayway pipeline boards.
-- Phase 5: merged calendar.
-- Phase 6: contacts, activity, reports.
-- Phase 7: targets and polish.
+  `supabase/functions/fub-webhook`), live Sync Status screen at `/sync`. Setup:
+  `docs/phase2-fub-setup.md`. **Live**, syncing every 15 min (~826 Bayway contacts).
+- **Phase 3 — done:** Bayway "Command Center" Overview (`v_active_pipeline` view,
+  `src/lib/overview.js`) from synced data.
+- **Phase 4 — done:** Bayway pipeline board (`Pipeline.jsx`, loan-flow columns
+  New Lead → Attempted → App Sent → Waiting on Docs → Pre-Approved, lost rightmost).
+- **Phase 5 — deployed, awaiting secrets:** Zoho (MPG) sync backend (`zoho-sync`
+  function, `_shared/zoho.ts`, cron). Setup: `docs/phase5-zoho-setup.md`. Code is
+  live but automated runs are off until `ZOHO_CLIENT_ID/SECRET/REFRESH_TOKEN` are
+  set; MPG's 3 Zoho leads were synced manually in the meantime.
+- **Phase 6 — done:** Bayway Contacts screen (`v_bayway_contacts`, `Contacts.jsx`;
+  search, All/Active/Nurture filters, sort, pagination).
+- **Phase 7 — done:** MPG Contacts, generalized `Contacts.jsx` into a
+  config-driven `CONFIGS[biz]`/`COLUMNS` registry shared by both businesses
+  (`v_mpg_contacts` view).
+- **Phase 8 — done, live:** Merged calendar — Outlook ICS sync (`outlook-sync`
+  function, recurrence expansion, cron) feeding a day-grouped agenda at
+  `/calendar`. Setup: `docs/phase8-outlook-setup.md`.
+- **Phase 9 — done, pushed, not yet visually verified live:** MPG Overview +
+  Pipeline, reusing the Phase 3/4 components via a data-driven config
+  (`PIPELINE[biz]`, `MPG_LEAD_FLOW`). MPG reality: 3 open Zoho leads, 0 deals.
+- **Phase 10 — done, pushed, not yet visually verified live:** Combined `All`
+  Overview merging both books into one dispatcher-based `Overview.jsx`
+  (`DemoOverview`/`MpgOverview`/`BayOverview`/`AllOverview`) with shared KPI/
+  attention-list components.
+
+### Not yet built
+
+- **Reports** — not started. No time dimension exists yet (contacts have no
+  `created_at`; `deals`/`metrics_daily` are empty), so this has to ship as a
+  snapshot/state-of-the-book screen (stage distribution, active-vs-nurture,
+  last-touch recency), not a trends/revenue-timeline view. No chart library
+  installed yet.
+- **Deals sync** (FUB + Zoho → `deals` table, currently empty) — not started.
+  Biggest visible gap vs. the original mockup: unlocks the dollar KPI row
+  (Active deals $, Pipeline value, Closed-this-month).
+- **Activity** screens — blocked; the `activities` table is empty and needs a
+  FUB/Zoho activity sync built first.
+- **Targets and polish** (original Phase 7 scope) — not started.
 
 Locked scope for v1: read-only, CRM + calendar sources only, dark theme, single Super Admin user.
