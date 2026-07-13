@@ -16,7 +16,7 @@ function authHeader() {
   return 'Basic ' + btoa(`${key}:`)
 }
 
-async function fubGet(path, params = {}) {
+export async function fubGet(path, params = {}) {
   const url = new URL(FUB_BASE + path)
   Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, String(v)))
   const res = await fetch(url, {
