@@ -8,6 +8,7 @@ import SyncStatus from './pages/SyncStatus'
 import Pipeline from './pages/Pipeline'
 import Contacts from './pages/Contacts'
 import Calendar from './pages/Calendar'
+import Activity from './pages/Activity'
 import PagePlaceholder from './components/PagePlaceholder'
 
 function Protected({ children }) {
@@ -53,10 +54,7 @@ export default function App() {
               />
               <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />
               <Route path="/bayway/pipeline" element={<Pipeline biz="bay" />} />
-              <Route
-                path="/bayway/activity"
-                element={<PagePlaceholder title="Activity" biz="bay" phase="6" />}
-              />
+              <Route path="/bayway/activity" element={<Activity biz="bay" />} />
               <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />
               <Route path="/sync" element={<SyncStatus />} />
               <Route
