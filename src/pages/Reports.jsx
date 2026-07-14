@@ -89,7 +89,7 @@ function LogToday({ biz, values, todayCalls, onSave, saving }) {
               onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
               className="mt-1 w-full rounded-md border border-line2 bg-panel2 px-2 py-1.5 text-sm text-white"
             />
-            {m.key === 'calls' && (
+            {m.key === 'calls' && biz === 'bay' && (
               <span className="mt-1 block text-[10.5px] text-dim">
                 FUB logged {todayCalls} today
               </span>
@@ -153,6 +153,7 @@ export default function Reports() {
         const pad = (n) => String(n).padStart(2, '0')
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
       })()
+      const todayStartIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
       const [deals, active, bayContacts, mpgContacts, week, month, series, settings, todayCalls] = await Promise.all([
         supabase.from('deals').select('status, value, expected_close, business_id'),
         supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay'),
@@ -164,7 +165,7 @@ export default function Reports() {
         supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
         supabase.from('activities')
           .select('id', { count: 'exact', head: true })
-          .eq('business_id', 'bay').eq('type', 'call').gte('occurred_at', todayKey()),
+          .eq('business_id', 'bay').eq('type', 'call').gte('occurred_at', todayStartIso),
       ])
       const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error ||
         month.error || series.error || settings.error || todayCalls.error
@@ -256,6 +257,7 @@ export default function Reports() {
       )}
       {!loading && !error && !isDemoMode && data && tab === 'daily' && (
         <LogToday
+          key={biz}
           biz={biz}
           values={computeValues('daily', biz, data)}
           todayCalls={data.todayCalls}
