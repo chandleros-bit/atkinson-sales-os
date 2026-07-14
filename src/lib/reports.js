@@ -72,3 +72,36 @@ export function resolveTargets(defaults, savedValue) {
   const saved = savedValue && typeof savedValue === 'object' ? savedValue : {}
   return { ...defaults, ...saved }
 }
+
+export function pace(value, target) {
+  if (value == null || target == null || target <= 0) return 'none'
+  return value >= target ? 'on' : 'behind'
+}
+
+export function formatValue(value, unit) {
+  if (value == null) return '—'
+  if (unit === 'currency') return '$' + Math.round(value).toLocaleString('en-US')
+  if (unit === 'minutes') return `${value}m`
+  return String(value)
+}
+
+// metric: a METRICS entry. value: number | null. target: number | undefined.
+export function metricCardView(metric, value, target) {
+  const t = target ?? null
+  const pct = value != null && t > 0 ? Math.min(100, Math.round((value / t) * 100)) : 0
+  return {
+    key: metric.key,
+    label: metric.label,
+    source: metric.source,
+    unit: metric.unit,
+    valueText: formatValue(value, metric.unit),
+    targetText: t != null ? formatValue(t, metric.unit) : '—',
+    pct,
+    pace: pace(value, t),
+  }
+}
+
+// metrics: METRICS subset. values: { [key]: number|null }. targets: { [key]: number }.
+export function buildTabModel(metrics, values, targets = {}) {
+  return metrics.map((m) => metricCardView(m, values[m.key] ?? null, targets[m.key]))
+}
