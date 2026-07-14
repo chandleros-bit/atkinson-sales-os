@@ -105,3 +105,29 @@ export function metricCardView(metric, value, target) {
 export function buildTabModel(metrics, values, targets = {}) {
   return metrics.map((m) => metricCardView(m, values[m.key] ?? null, targets[m.key]))
 }
+
+// Most-recent Monday (local), as a YYYY-MM-DD key matching metrics_daily.date.
+export function weekStart(now = Date.now()) {
+  const d = new Date(now)
+  d.setHours(0, 0, 0, 0)
+  const sinceMonday = (d.getDay() + 6) % 7 // Sun=0 -> 6, Mon=1 -> 0, ...
+  d.setDate(d.getDate() - sinceMonday)
+  return dayKey(d.toISOString())
+}
+
+// { from, to } as YYYY-MM-DD keys: 1st of this month .. 1st of next month.
+export function monthWindow(now = Date.now()) {
+  const d = new Date(now)
+  const pad = (n) => String(n).padStart(2, '0')
+  const from = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`
+  const n = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+  const to = `${n.getFullYear()}-${pad(n.getMonth() + 1)}-01`
+  return { from, to }
+}
+
+// rows: metrics_daily rows ({ metric_key, value }). -> { [metric_key]: sum }.
+export function rollupMetrics(rows) {
+  const out = {}
+  for (const r of rows) out[r.metric_key] = (out[r.metric_key] || 0) + Number(r.value || 0)
+  return out
+}
