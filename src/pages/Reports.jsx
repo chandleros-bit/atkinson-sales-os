@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
-  weekStart, monthWindow, rollupMetrics,
+  weekStart, monthWindow, rollupMetrics, dailySeries,
   sumWon, countWon, deriveStageCounts,
 } from '../lib/reports'
 
@@ -18,6 +18,12 @@ const PACE_STYLE = {
   on: { color: 'var(--bay)', bar: 'var(--bay)' },
   behind: { color: 'var(--bay-gold)', bar: 'var(--bay-gold)' },
   none: { color: 'var(--muted)', bar: 'var(--line2)' },
+}
+
+function todayKey() {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function MetricCard({ card }) {
@@ -59,6 +65,73 @@ function CardGrid({ cards }) {
   )
 }
 
+function LogToday({ biz, values, todayCalls, onSave, saving }) {
+  const metrics = metricsForTab('daily', biz).filter((m) => m.source === 'manual')
+  const [draft, setDraft] = useState({})
+  if (biz === 'all') {
+    return (
+      <div className="mt-6 rounded-card border border-line bg-panel p-4 text-sm text-muted">
+        Pick <b className="text-white">MPG</b> or <b className="text-white">Bayway</b> in the sidebar to log today’s activity.
+      </div>
+    )
+  }
+  return (
+    <div className="mt-6 rounded-card border border-line bg-panel p-4">
+      <div className="mb-3 text-sm font-semibold">Log today</div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {metrics.map((m) => (
+          <label key={m.key} className="text-xs text-muted">
+            {m.label}
+            <input
+              type="number"
+              min="0"
+              defaultValue={values[m.key] ?? ''}
+              onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
+              className="mt-1 w-full rounded-md border border-line2 bg-panel2 px-2 py-1.5 text-sm text-white"
+            />
+            {m.key === 'calls' && (
+              <span className="mt-1 block text-[10.5px] text-dim">
+                FUB logged {todayCalls} today
+              </span>
+            )}
+          </label>
+        ))}
+      </div>
+      <button
+        disabled={saving}
+        onClick={() => onSave(draft)}
+        className="mt-3 rounded-md bg-white px-3 py-1.5 text-[13px] font-semibold text-[#07120b] disabled:opacity-50"
+      >
+        {saving ? 'Saving…' : 'Save today'}
+      </button>
+    </div>
+  )
+}
+
+function TrendStrip({ series }) {
+  const max = Math.max(1, ...series)
+  const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+  const start = new Date(); start.setDate(start.getDate() - 6)
+  return (
+    <div className="mt-6 rounded-card border border-line bg-panel p-4">
+      <div className="mb-3 text-xs font-semibold text-muted">Calls · last 7 days</div>
+      <div className="flex items-end gap-2" style={{ height: 64 }}>
+        {series.map((v, i) => {
+          const d = new Date(start); d.setDate(start.getDate() + i)
+          return (
+            <div key={i} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex w-full flex-1 items-end">
+                <div className="w-full rounded-sm" style={{ height: `${(v / max) * 100}%`, minHeight: 2, background: 'var(--bay)' }} />
+              </div>
+              <span className="num text-[10px] text-dim">{DOW[d.getDay()]}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function Reports() {
   const { biz } = useBusiness()
   const [tab, setTab] = useState('daily')
@@ -66,44 +139,71 @@ export default function Reports() {
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(async () => {
     if (isDemoMode) return
-    let alive = true
-    ;(async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const wk = weekStart()
-        const { from } = monthWindow()
-        const [deals, active, bayContacts, mpgContacts, week, month, settings] = await Promise.all([
-          supabase.from('deals').select('status, value, expected_close, business_id'),
-          supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay'),
-          supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
-          supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'mpg'),
-          supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', wk),
-          supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', from),
-          supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
-        ])
-        if (!alive) return
-        const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error || month.error || settings.error
-        if (err) { setError(err.message); return }
-        setData({
-          deals: deals.data || [],
-          activeRows: active.data || [],
-          bayContacts: bayContacts.count || 0,
-          mpgContacts: mpgContacts.count || 0,
-          week: week.data || [],
-          month: month.data || [],
-          targets: resolveTargets(DEFAULT_TARGETS, settings.data?.value),
-        })
-      } catch (e) {
-        if (alive) setError(String(e?.message || e))
-      } finally {
-        if (alive) setLoading(false)
-      }
-    })()
-    return () => { alive = false }
+    setLoading(true)
+    setError(null)
+    try {
+      const wk = weekStart()
+      const { from } = monthWindow()
+      const sevenAgo = (() => {
+        const d = new Date(); d.setDate(d.getDate() - 6)
+        const pad = (n) => String(n).padStart(2, '0')
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      })()
+      const [deals, active, bayContacts, mpgContacts, week, month, series, settings, todayCalls] = await Promise.all([
+        supabase.from('deals').select('status, value, expected_close, business_id'),
+        supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay'),
+        supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
+        supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'mpg'),
+        supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', wk),
+        supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', from),
+        supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', sevenAgo),
+        supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
+        supabase.from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('business_id', 'bay').eq('type', 'call').gte('occurred_at', todayKey()),
+      ])
+      const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error ||
+        month.error || series.error || settings.error || todayCalls.error
+      if (err) { setError(err.message); return }
+      setData({
+        deals: deals.data || [],
+        activeRows: active.data || [],
+        bayContacts: bayContacts.count || 0,
+        mpgContacts: mpgContacts.count || 0,
+        week: week.data || [],
+        month: month.data || [],
+        series: series.data || [],
+        savedTargets: settings.data?.value || {},
+        targets: resolveTargets(DEFAULT_TARGETS, settings.data?.value),
+        todayCalls: todayCalls.count || 0,
+      })
+    } catch (e) {
+      setError(String(e?.message || e))
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function saveToday(draft) {
+    const entries = Object.entries(draft).filter(([, v]) => v !== '' && v != null)
+    if (entries.length === 0 || biz === 'all') return
+    setSaving(true)
+    const rows = entries.map(([metric_key, v]) => ({
+      business_id: biz, date: todayKey(), metric_key, value: Number(v),
+    }))
+    const { error: upErr } = await supabase
+      .from('metrics_daily')
+      .upsert(rows, { onConflict: 'business_id,date,metric_key' })
+    setSaving(false)
+    if (upErr) { setError(upErr.message); return }
+    await load()
+  }
 
   const cards = useMemo(() => {
     if (!data) return []
@@ -146,6 +246,23 @@ export default function Reports() {
       )}
       {loading && <div className="mt-6 text-sm text-muted">Loading scoreboard…</div>}
       {!loading && !error && !isDemoMode && <CardGrid cards={cards} />}
+      {!loading && !error && !isDemoMode && data && tab === 'daily' && (
+        <TrendStrip
+          series={dailySeries(
+            biz === 'all' ? data.series : data.series.filter((r) => r.business_id === biz),
+            'calls', todayKey(), 7,
+          )}
+        />
+      )}
+      {!loading && !error && !isDemoMode && data && tab === 'daily' && (
+        <LogToday
+          biz={biz}
+          values={computeValues('daily', biz, data)}
+          todayCalls={data.todayCalls}
+          onSave={saveToday}
+          saving={saving}
+        />
+      )}
     </div>
   )
 }
@@ -155,7 +272,8 @@ export default function Reports() {
 function computeValues(tab, biz, data) {
   const bizFilter = (rows) => (biz === 'all' ? rows : rows.filter((r) => r.business_id === biz))
   if (tab === 'daily') {
-    return rollupMetrics(bizFilter(data.week))
+    const today = data.series.filter((r) => r.date === todayKey())
+    return rollupMetrics(bizFilter(today))
   }
   if (tab === 'weekly') {
     return rollupMetrics(bizFilter(data.week))
