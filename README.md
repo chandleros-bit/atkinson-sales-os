@@ -110,13 +110,15 @@ of 2026-07-13:
   Overview merging both books into one dispatcher-based `Overview.jsx`
   (`DemoOverview`/`MpgOverview`/`BayOverview`/`AllOverview`) with shared KPI/
   attention-list components.
-- **Phase 11 — done (committed, backend awaiting deploy):** Bayway Activity
-  feed — a day-grouped timeline of calls/texts/emails/notes/appointments with
-  type-filter chips and "Load older" pagination. New `fub-activity-sync`
-  function + `v_bayway_activity` view + `Activity.jsx` screen at
-  `/bayway/activity` (`src/lib/activity.js` helpers). Deploy/verify:
-  `docs/phase-activity-fub-setup.md`. MPG activity (Zoho) remains a future
-  phase; `/mpg/activity` stays a placeholder.
+- **Phase 11 — done, deployed, live:** Bayway Activity feed — a day-grouped
+  timeline with type-filter chips and "Load older" pagination. New
+  `fub-activity-sync` function + `v_bayway_activity` view + `Activity.jsx`
+  screen at `/bayway/activity` (`src/lib/activity.js` helpers). Setup:
+  `docs/phase-activity-fub-setup.md`. The feed covers **calls, notes, and
+  appointments** — FollowUpBoss's API won't list texts or emails account-wide
+  (both require a per-contact query), so those are deferred; the sync skips any
+  unavailable endpoint rather than failing. MPG activity (Zoho) remains a
+  future phase; `/mpg/activity` stays a placeholder.
 
 ### Not yet built
 

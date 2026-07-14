@@ -45,13 +45,15 @@ On the first live run, confirm against your account and adjust if needed:
 - **Contact link:** activities resolve their contact via `personId`. If your
   payloads nest it differently, extend `mapActivity`'s `personId` lookup.
 
-### Emails may be unavailable
+### Texts and emails are omitted (confirmed on the live account)
 
-FollowUpBoss's public API exposure of **sent emails** is less certain than the
-other four types. `fetchEmails()` deliberately swallows an endpoint error and
-returns `[]`, so the rest of the sync still succeeds and the feed simply omits
-emails. If you want emails and they're missing, check `sync_log.message` and
-the FUB API docs for the correct endpoint, then update `fetchEmails()`.
+FollowUpBoss will not list `/textMessages` or `/emails` account-wide — both
+return `400` demanding a per-person filter (`personId`/`threadId`/etc.). The
+sync fetches each type in its own try/catch, so these two are **skipped** (with
+the reason recorded in `sync_log.message` under `skipped ...`) while
+`/calls`, `/notes`, and `/appointments` — which do list globally — flow into
+the feed. Adding texts/emails later means either per-contact fetching or a
+FollowUpBoss webhook; it's deliberately out of the current scope.
 
 ## Notes
 
