@@ -39,17 +39,29 @@ Deno.serve(async () => {
       .maybeSingle()
     const since = lastOk?.ran_at || new Date(Date.now() - NINETY_DAYS_MS).toISOString()
 
-    const byType = [
-      ['call', await fetchCalls(since)],
-      ['text', await fetchTexts(since)],
-      ['email', await fetchEmails(since)],
-      ['note', await fetchNotes(since)],
-      ['appointment', await fetchAppointments(since)],
+    // Each activity type is fetched independently so one endpoint's failure
+    // can't abort the rest. Some FUB list endpoints can't be listed globally
+    // (e.g. /textMessages requires a personId filter and 400s otherwise) — we
+    // skip those and record which ones in the sync_log message.
+    const fetchers = [
+      ['call', fetchCalls],
+      ['text', fetchTexts],
+      ['email', fetchEmails],
+      ['note', fetchNotes],
+      ['appointment', fetchAppointments],
     ]
 
     const rows = []
-    for (const [type, records] of byType) {
-      for (const rec of records) rows.push(mapActivity(rec, type, contactIdByExternal))
+    const counts = []
+    const skipped = []
+    for (const [type, fetchFn] of fetchers) {
+      try {
+        const records = await fetchFn(since)
+        for (const rec of records) rows.push(mapActivity(rec, type, contactIdByExternal))
+        counts.push(`${type}:${records.length}`)
+      } catch (e) {
+        skipped.push(`${type} (${String(e?.message || e).slice(0, 100)})`)
+      }
     }
 
     if (rows.length) {
@@ -60,8 +72,15 @@ Deno.serve(async () => {
       upserted += rows.length
     }
 
-    await logSync(db, 'fub-activity', 'ok', upserted)
-    return new Response(JSON.stringify({ ok: true, upserted }), {
+    // Only a total wipeout (every endpoint failed) is an error; a partial run
+    // still succeeds. The message keeps per-type counts + skips for diagnosis.
+    const summary = [counts.join(' '), skipped.length ? `skipped ${skipped.join('; ')}` : '']
+      .filter(Boolean)
+      .join(' | ')
+    const allFailed = skipped.length === fetchers.length
+    await logSync(db, 'fub-activity', allFailed ? 'error' : 'ok', upserted, summary || null)
+    return new Response(JSON.stringify({ ok: !allFailed, upserted, counts, skipped }), {
+      status: allFailed ? 500 : 200,
       headers: { 'content-type': 'application/json' },
     })
   } catch (err) {

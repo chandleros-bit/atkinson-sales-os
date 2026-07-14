@@ -41,16 +41,7 @@ export const fetchTexts = (since) => fubListActivity('/textMessages', ['textMess
 export const fetchNotes = (since) => fubListActivity('/notes', ['notes'], since)
 export const fetchAppointments = (since) => fubListActivity('/appointments', ['appointments'], since)
 
-// FUB's public exposure of sent emails is less certain than the others.
-// Degrade gracefully: if the endpoint 404s or errors, return [] so the rest of
-// the sync still succeeds. Revisit once verified against the live account.
-export async function fetchEmails(since) {
-  try {
-    return await fubListActivity('/emails', ['emails', 'emailEvents'], since)
-  } catch (_err) {
-    return []
-  }
-}
+export const fetchEmails = (since) => fubListActivity('/emails', ['emails', 'emailEvents'], since)
 
 // --- Pure mapping helpers (unit-tested) ------------------------------------
 
