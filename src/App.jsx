@@ -9,6 +9,7 @@ import Pipeline from './pages/Pipeline'
 import Contacts from './pages/Contacts'
 import Calendar from './pages/Calendar'
 import Activity from './pages/Activity'
+import Reports from './pages/Reports'
 import PagePlaceholder from './components/PagePlaceholder'
 
 function Protected({ children }) {
@@ -39,14 +40,7 @@ export default function App() {
             >
               <Route path="/" element={<Overview />} />
               <Route path="/calendar" element={<Calendar />} />
-              <Route
-                path="/reports"
-                element={
-                  <PagePlaceholder title="Reports" phase="6">
-                    Per-business trends plus the combined revenue timeline.
-                  </PagePlaceholder>
-                }
-              />
+              <Route path="/reports" element={<Reports />} />
               <Route path="/mpg/pipeline" element={<Pipeline biz="mpg" />} />
               <Route
                 path="/mpg/activity"
