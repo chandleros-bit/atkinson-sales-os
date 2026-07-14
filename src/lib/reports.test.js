@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics, sumWon, countWon, pipelineValue, deriveStageCounts, dailySeries, inWindow } from './reports'
+import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics, sumWon, countWon, pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor } from './reports'
 
 describe('METRICS registry', () => {
   it('every metric has a default target', () => {
@@ -185,5 +185,21 @@ describe('inWindow boundaries', () => {
   })
   it('handles a full ISO timestamp by taking the date part', () => {
     expect(inWindow('2026-07-15T23:30:00.000Z', '2026-07-01', '2026-08-01')).toBe(true)
+  })
+})
+
+describe('periodDateFor', () => {
+  // Wednesday 2026-07-15T12:00 local
+  const NOW_P = new Date(2026, 6, 15, 12, 0, 0).getTime()
+
+  it('writes daily entries to today', () => {
+    expect(periodDateFor('daily', NOW_P)).toBe('2026-07-15')
+  })
+  it('writes weekly entries to the week Monday', () => {
+    expect(periodDateFor('weekly', NOW_P)).toBe('2026-07-13')
+  })
+  it('writes monthly and revenue entries to the 1st of the month', () => {
+    expect(periodDateFor('monthly', NOW_P)).toBe('2026-07-01')
+    expect(periodDateFor('revenue', NOW_P)).toBe('2026-07-01')
   })
 })

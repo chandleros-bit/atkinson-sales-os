@@ -185,3 +185,13 @@ export function dailySeries(rows, metricKey, endKey, days = 7) {
   }
   return out
 }
+
+// The metrics_daily.date a tab's manual entry writes to. Rows land on the
+// period's first day so the existing gte(weekStart)/gte(monthStart) rollups
+// pick them up unchanged. daily -> today, weekly -> Monday, monthly/revenue
+// -> the 1st.
+export function periodDateFor(tab, now = Date.now()) {
+  if (tab === 'daily') return dayKey(new Date(now).toISOString())
+  if (tab === 'weekly') return weekStart(now)
+  return monthWindow(now).from
+}
