@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel } from './reports'
+import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics } from './reports'
 
 describe('METRICS registry', () => {
   it('every metric has a default target', () => {
@@ -84,5 +84,45 @@ describe('buildTabModel', () => {
     expect(cards[0].valueText).toBe('50')
     expect(cards[0].targetText).toBe('80')
     expect(cards[0].pace).toBe('behind')
+  })
+})
+
+describe('weekStart', () => {
+  // Fixed clock: Wednesday 2026-07-15T12:00:00 local.
+  const NOW = new Date(2026, 6, 15, 12, 0, 0).getTime()
+
+  it('returns the most-recent Monday as a YYYY-MM-DD key', () => {
+    expect(weekStart(NOW)).toBe('2026-07-13') // Monday of that week
+  })
+  it('returns the same day when now is a Monday', () => {
+    const mon = new Date(2026, 6, 13, 9, 0, 0).getTime()
+    expect(weekStart(mon)).toBe('2026-07-13')
+  })
+})
+
+describe('monthWindow', () => {
+  // Fixed clock: Wednesday 2026-07-15T12:00:00 local.
+  const NOW = new Date(2026, 6, 15, 12, 0, 0).getTime()
+
+  it('spans the 1st of this month to the 1st of next', () => {
+    expect(monthWindow(NOW)).toEqual({ from: '2026-07-01', to: '2026-08-01' })
+  })
+  it('rolls the year over in December', () => {
+    const dec = new Date(2026, 11, 20, 12, 0, 0).getTime()
+    expect(monthWindow(dec)).toEqual({ from: '2026-12-01', to: '2027-01-01' })
+  })
+})
+
+describe('rollupMetrics', () => {
+  it('sums value per metric_key, coercing strings', () => {
+    const rows = [
+      { metric_key: 'calls', value: 30 },
+      { metric_key: 'calls', value: '20' },
+      { metric_key: 'followups', value: 5 },
+    ]
+    expect(rollupMetrics(rows)).toEqual({ calls: 50, followups: 5 })
+  })
+  it('returns an empty object for no rows', () => {
+    expect(rollupMetrics([])).toEqual({})
   })
 })
