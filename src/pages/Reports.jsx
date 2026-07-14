@@ -75,21 +75,23 @@ export default function Reports() {
       try {
         const wk = weekStart()
         const { from } = monthWindow()
-        const [deals, active, contacts, week, month, settings] = await Promise.all([
+        const [deals, active, bayContacts, mpgContacts, week, month, settings] = await Promise.all([
           supabase.from('deals').select('status, value, expected_close, business_id'),
-          supabase.from('v_active_pipeline').select('stage, business_id'),
-          supabase.from('contacts').select('id, business_id', { count: 'exact', head: false }),
+          supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay'),
+          supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
+          supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'mpg'),
           supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', wk),
           supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', from),
           supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
         ])
         if (!alive) return
-        const err = deals.error || active.error || contacts.error || week.error || month.error || settings.error
+        const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error || month.error || settings.error
         if (err) { setError(err.message); return }
         setData({
           deals: deals.data || [],
           activeRows: active.data || [],
-          contacts: contacts.data || [],
+          bayContacts: bayContacts.count || 0,
+          mpgContacts: mpgContacts.count || 0,
           week: week.data || [],
           month: month.data || [],
           targets: resolveTargets(DEFAULT_TARGETS, settings.data?.value),
@@ -116,10 +118,12 @@ export default function Reports() {
         Your scoreboard against the Atkinson KPI targets. Live where data is wired; manual otherwise.
       </p>
 
-      <div className="mt-5 flex gap-1 border-b border-line">
+      <div role="tablist" className="mt-5 flex gap-1 border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${
               tab === t.key ? 'border-white font-semibold text-white' : 'border-transparent text-muted hover:text-white'
@@ -160,15 +164,18 @@ function computeValues(tab, biz, data) {
     const manual = rollupMetrics(bizFilter(data.month))
     const bayDeals = data.deals.filter((d) => d.business_id === 'bay')
     const win = monthWindow()
-    const bayActive = data.activeRows.filter((r) => r.business_id === 'bay')
-    const stageCounts = deriveStageCounts(bayActive, ['App Sent', 'Pre-Approved'])
+    const stageCounts = deriveStageCounts(data.activeRows, ['App Sent', 'Pre-Approved'])
+    const dbTotal =
+      biz === 'all' ? data.bayContacts + data.mpgContacts
+      : biz === 'bay' ? data.bayContacts
+      : data.mpgContacts
     return {
       ...manual,
       pre_approvals: stageCounts['Pre-Approved'],
       applications: stageCounts['App Sent'],
       loans_closed: countWon(bayDeals, win),
       loan_volume: sumWon(bayDeals, win),
-      db_total: bizFilter(data.contacts).length,
+      db_total: dbTotal,
     }
   }
   // revenue
