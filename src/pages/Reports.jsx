@@ -4,7 +4,7 @@ import { useBusiness } from '../context/BusinessContext'
 import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
-  sumWon, countWon, deriveStageCounts, pipelineValue,
+  sumWon, countWon, deriveStageCounts, pipelineValue, periodDateFor,
 } from '../lib/reports'
 
 const TABS = [
@@ -74,19 +74,24 @@ function CardGrid({ cards }) {
   )
 }
 
-function LogToday({ biz, values, todayCalls, onSave, saving }) {
-  const metrics = metricsForTab('daily', biz).filter((m) => m.source === 'manual')
+const PERIOD_LABEL = {
+  daily: 'today', weekly: 'this week', monthly: 'this month', revenue: 'this month',
+}
+
+function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
+  const metrics = metricsForTab(tab, biz).filter((m) => m.source === 'manual')
   const [draft, setDraft] = useState({})
+  if (metrics.length === 0) return null
   if (biz === 'all') {
     return (
       <div className="mt-6 rounded-card border border-line bg-panel p-4 text-sm text-muted">
-        Pick <b className="text-white">MPG</b> or <b className="text-white">Bayway</b> in the sidebar to log today’s activity.
+        Pick <b className="text-white">MPG</b> or <b className="text-white">Bayway</b> in the sidebar to log {PERIOD_LABEL[tab]}’s numbers.
       </div>
     )
   }
   return (
     <div className="mt-6 rounded-card border border-line bg-panel p-4">
-      <div className="mb-3 text-sm font-semibold">Log today</div>
+      <div className="mb-3 text-sm font-semibold">Log {PERIOD_LABEL[tab]}</div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {metrics.map((m) => (
           <label key={m.key} className="text-xs text-muted">
@@ -111,7 +116,7 @@ function LogToday({ biz, values, todayCalls, onSave, saving }) {
         onClick={() => onSave(draft)}
         className="mt-3 rounded-md bg-white px-3 py-1.5 text-[13px] font-semibold text-[#07120b] disabled:opacity-50"
       >
-        {saving ? 'Saving…' : 'Save today'}
+        {saving ? 'Saving…' : 'Save'}
       </button>
     </div>
   )
@@ -238,12 +243,13 @@ export default function Reports() {
 
   useEffect(() => { load() }, [load])
 
-  async function saveToday(draft) {
+  async function saveMetrics(draft) {
     const entries = Object.entries(draft).filter(([, v]) => v !== '' && v != null)
     if (entries.length === 0 || biz === 'all') return
     setSaving(true)
+    const date = periodDateFor(tab)
     const rows = entries.map(([metric_key, v]) => ({
-      business_id: biz, date: todayKey(), metric_key, value: Number(v),
+      business_id: biz, date, metric_key, value: Number(v),
     }))
     const { error: upErr } = await supabase
       .from('metrics_daily')
@@ -327,13 +333,14 @@ export default function Reports() {
           )}
         />
       )}
-      {!loading && !error && !isDemoMode && data && tab === 'daily' && (
-        <LogToday
-          key={biz}
+      {!loading && !error && !isDemoMode && data && (
+        <LogMetrics
+          key={`${tab}-${biz}`}
+          tab={tab}
           biz={biz}
-          values={computeValues('daily', biz, data)}
+          values={computeValues(tab, biz, data)}
           todayCalls={data.todayCalls}
-          onSave={saveToday}
+          onSave={saveMetrics}
           saving={saving}
         />
       )}
