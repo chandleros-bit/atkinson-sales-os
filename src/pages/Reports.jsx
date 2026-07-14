@@ -132,6 +132,43 @@ function TrendStrip({ series }) {
   )
 }
 
+function EditTargets({ tab, biz, targets, onClose, onSave, saving }) {
+  const metrics = metricsForTab(tab, biz)
+  const [draft, setDraft] = useState(() =>
+    Object.fromEntries(metrics.map((m) => [m.key, targets[m.key] ?? ''])),
+  )
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-card border border-line bg-panel2 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 text-sm font-semibold">Edit targets — {tab}</div>
+        <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+          {metrics.map((m) => (
+            <label key={m.key} className="flex items-center justify-between gap-3 text-xs text-muted">
+              {m.label}
+              <input
+                type="number" min="0"
+                value={draft[m.key]}
+                onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
+                className="w-28 rounded-md border border-line2 bg-panel px-2 py-1 text-sm text-white"
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-md border border-line2 px-3 py-1.5 text-[13px] text-muted">Cancel</button>
+          <button
+            disabled={saving}
+            onClick={() => onSave(draft)}
+            className="rounded-md bg-white px-3 py-1.5 text-[13px] font-semibold text-[#07120b] disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save targets'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Reports() {
   const { biz } = useBusiness()
   const [tab, setTab] = useState('daily')
@@ -140,6 +177,7 @@ export default function Reports() {
   const [error, setError] = useState(null)
 
   const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const load = useCallback(async () => {
     if (isDemoMode) return
@@ -206,6 +244,21 @@ export default function Reports() {
     await load()
   }
 
+  async function saveTargets(draft) {
+    setSaving(true)
+    const clean = Object.fromEntries(
+      Object.entries(draft).filter(([, v]) => v !== '' && v != null).map(([k, v]) => [k, Number(v)]),
+    )
+    const merged = { ...(data.savedTargets || {}), ...clean }
+    const { error: upErr } = await supabase
+      .from('settings')
+      .upsert({ key: 'metric_targets', value: merged }, { onConflict: 'key' })
+    setSaving(false)
+    if (upErr) { setError(upErr.message); return }
+    setEditing(false)
+    await load()
+  }
+
   const cards = useMemo(() => {
     if (!data) return []
     const values = computeValues(tab, biz, data)
@@ -219,20 +272,30 @@ export default function Reports() {
         Your scoreboard against the Atkinson KPI targets. Live where data is wired; manual otherwise.
       </p>
 
-      <div role="tablist" className="mt-5 flex gap-1 border-b border-line">
-        {TABS.map((t) => (
+      <div className="mt-5 flex items-end justify-between border-b border-line">
+        <div role="tablist" className="flex gap-1">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${
+                tab === t.key ? 'border-white font-semibold text-white' : 'border-transparent text-muted hover:text-white'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {!isDemoMode && (
           <button
-            key={t.key}
-            role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => setTab(t.key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${
-              tab === t.key ? 'border-white font-semibold text-white' : 'border-transparent text-muted hover:text-white'
-            }`}
+            onClick={() => setEditing(true)}
+            className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-[11.5px] text-muted hover:text-white"
           >
-            {t.label}
+            Edit targets
           </button>
-        ))}
+        )}
       </div>
 
       {error && (
@@ -262,6 +325,16 @@ export default function Reports() {
           values={computeValues('daily', biz, data)}
           todayCalls={data.todayCalls}
           onSave={saveToday}
+          saving={saving}
+        />
+      )}
+      {editing && data && (
+        <EditTargets
+          tab={tab}
+          biz={biz}
+          targets={data.targets}
+          onClose={() => setEditing(false)}
+          onSave={saveTargets}
           saving={saving}
         />
       )}
