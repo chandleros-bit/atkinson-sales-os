@@ -4,7 +4,7 @@ import { useBusiness } from '../context/BusinessContext'
 import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
-  sumWon, countWon, deriveStageCounts,
+  sumWon, countWon, deriveStageCounts, pipelineValue,
 } from '../lib/reports'
 
 const TABS = [
@@ -24,6 +24,15 @@ function todayKey() {
   const d = new Date()
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// Returns null (renders as "—", pace "none") rather than NaN/Infinity when the
+// denominator is missing — an unknown average must not read as $0.
+function safeDiv(numerator, denominator) {
+  const n = Number(numerator || 0)
+  const d = Number(denominator || 0)
+  if (!d) return null
+  return n / d
 }
 
 function MetricCard({ card }) {
@@ -351,7 +360,12 @@ function computeValues(tab, biz, data) {
     return rollupMetrics(bizFilter(today))
   }
   if (tab === 'weekly') {
-    return rollupMetrics(bizFilter(data.week))
+    const manual = rollupMetrics(bizFilter(data.week))
+    return {
+      ...manual,
+      weekly_conversations:
+        Number(manual.realtor_convos || 0) + Number(manual.bizowner_convos || 0),
+    }
   }
   if (tab === 'monthly') {
     const manual = rollupMetrics(bizFilter(data.month))
@@ -368,6 +382,7 @@ function computeValues(tab, biz, data) {
       applications: stageCounts['App Sent'],
       loans_closed: countWon(bayDeals, win),
       loan_volume: sumWon(bayDeals, win),
+      pipeline_value: pipelineValue(bayDeals),
       db_total: dbTotal,
     }
   }
@@ -376,10 +391,14 @@ function computeValues(tab, biz, data) {
   const bayDeals = data.deals.filter((d) => d.business_id === 'bay')
   const win = monthWindow()
   const combined = Number(manual.rev_gross_commission || 0) + Number(manual.rev_monthly_residual || 0)
+  const closings = countWon(bayDeals, win)
   return {
     ...manual,
-    rev_closings: countWon(bayDeals, win),
+    rev_closings: closings,
     rev_loan_volume: sumWon(bayDeals, win),
     rev_combined_income: combined,
+    rev_avg_per_closing: safeDiv(manual.rev_gross_commission, closings),
+    rev_avg_residual: safeDiv(manual.rev_monthly_residual, manual.rev_active_merchants),
+    rev_annualized: combined * 12,
   }
 }
