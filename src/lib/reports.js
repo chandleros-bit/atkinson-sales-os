@@ -21,12 +21,14 @@ export const METRICS = [
   { key: 'new_referral_partners',label: 'New referral partners',       tab: 'weekly', biz: 'both',source: 'manual', unit: 'count' },
   { key: 'merchant_proposals',   label: 'Merchant proposals',          tab: 'weekly', biz: 'mpg', source: 'manual', unit: 'count' },
   { key: 'mortgage_consults',    label: 'Mortgage consultations',      tab: 'weekly', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'weekly_conversations', label: 'Meaningful conversations',    tab: 'weekly', biz: 'both', source: 'derived', unit: 'count' },
   // ---- Monthly: pipeline + database -------------------------------------
   { key: 'realtor_meetings',   label: 'Realtor meetings',      tab: 'monthly', biz: 'bay', source: 'manual',  unit: 'count' },
   { key: 'pre_approvals',      label: 'In pre-approval (now)', tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
   { key: 'applications',       label: 'In application (now)',  tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
   { key: 'loans_closed',       label: 'Loans closed (MTD)',    tab: 'monthly', biz: 'bay', source: 'live',    unit: 'count' },
   { key: 'loan_volume',        label: 'Loan volume (MTD)',     tab: 'monthly', biz: 'bay', source: 'live',    unit: 'currency' },
+  { key: 'pipeline_value',     label: 'Pipeline value (open)', tab: 'monthly', biz: 'bay', source: 'live',    unit: 'currency' },
   { key: 'businesses_contacted',label: 'Businesses contacted', tab: 'monthly', biz: 'mpg', source: 'manual', unit: 'count' },
   { key: 'owner_conversations',label: 'Owner conversations',   tab: 'monthly', biz: 'mpg', source: 'manual',  unit: 'count' },
   { key: 'merchant_proposals_delivered', label: 'Proposals delivered', tab: 'monthly', biz: 'mpg', source: 'manual', unit: 'count' },
@@ -44,6 +46,10 @@ export const METRICS = [
   { key: 'rev_active_merchants',label: 'Active merchants',      tab: 'revenue', biz: 'mpg', source: 'manual',  unit: 'count' },
   { key: 'rev_monthly_residual',label: 'Monthly residual',      tab: 'revenue', biz: 'mpg', source: 'manual',  unit: 'currency' },
   { key: 'rev_combined_income', label: 'Combined monthly income',tab: 'revenue',biz: 'both',source: 'derived', unit: 'currency' },
+  { key: 'rev_processing_volume', label: 'Processing volume',      tab: 'revenue', biz: 'mpg', source: 'manual',  unit: 'currency' },
+  { key: 'rev_avg_per_closing',   label: 'Avg income / closing',   tab: 'revenue', biz: 'bay', source: 'derived', unit: 'currency' },
+  { key: 'rev_avg_residual',      label: 'Avg residual / account', tab: 'revenue', biz: 'mpg', source: 'derived', unit: 'currency' },
+  { key: 'rev_annualized',        label: 'Annualized income',      tab: 'revenue', biz: 'both',source: 'derived', unit: 'currency' },
 ]
 
 // Defaults straight from the doc. Editable at runtime via settings.metric_targets.
@@ -53,13 +59,15 @@ export const DEFAULT_TARGETS = {
   realtor_convos: 50, bizowner_convos: 50, past_client_touches: 25,
   new_referral_partners: 10, merchant_proposals: 5, mortgage_consults: 5,
   realtor_meetings: 10, pre_approvals: 20, applications: 15, loans_closed: 5,
-  loan_volume: 2_000_000, businesses_contacted: 1000, owner_conversations: 200,
+  loan_volume: 2_000_000, pipeline_value: 2_000_000, businesses_contacted: 1000, owner_conversations: 200,
   merchant_proposals_delivered: 20, new_merchant_accounts: 5, new_residual: 1000,
   db_total: 5000, db_realtors: 500, db_past_clients: 1000,
   db_business_owners: 2000, db_prospects: 1500,
+  weekly_conversations: 100,
   rev_closings: 5, rev_loan_volume: 2_000_000, rev_gross_commission: 17_500,
   rev_active_merchants: 100, rev_monthly_residual: 10_000,
-  rev_combined_income: 27_500,
+  rev_combined_income: 27_500, rev_processing_volume: 1_000_000,
+  rev_avg_per_closing: 3_500, rev_avg_residual: 100, rev_annualized: 330_000,
 }
 
 export function metricsForTab(tab, biz) {
