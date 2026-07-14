@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics } from './reports'
+import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics, sumWon, countWon, pipelineValue, deriveStageCounts, dailySeries } from './reports'
 
 describe('METRICS registry', () => {
   it('every metric has a default target', () => {
@@ -124,5 +124,55 @@ describe('rollupMetrics', () => {
   })
   it('returns an empty object for no rows', () => {
     expect(rollupMetrics([])).toEqual({})
+  })
+})
+
+describe('sumWon / countWon', () => {
+  const WIN = { from: '2026-07-01', to: '2026-08-01' }
+  const deals = [
+    { status: 'won',  value: 300000, expected_close: '2026-07-05' },
+    { status: 'won',  value: 250000, expected_close: '2026-07-20' },
+    { status: 'won',  value: 999999, expected_close: '2026-06-30' }, // out of window
+    { status: 'open', value: 400000, expected_close: null },
+    { status: 'lost', value: 100000, expected_close: '2026-07-10' },
+  ]
+
+  it('sums won deal value within the window', () => {
+    expect(sumWon(deals, WIN)).toBe(550000)
+    expect(countWon(deals, WIN)).toBe(2)
+  })
+})
+
+describe('pipelineValue', () => {
+  it('sums open deal value only', () => {
+    const deals = [
+      { status: 'won',  value: 300000, expected_close: '2026-07-05' },
+      { status: 'won',  value: 250000, expected_close: '2026-07-20' },
+      { status: 'won',  value: 999999, expected_close: '2026-06-30' },
+      { status: 'open', value: 400000, expected_close: null },
+      { status: 'lost', value: 100000, expected_close: '2026-07-10' },
+    ]
+    expect(pipelineValue(deals)).toBe(400000)
+  })
+})
+
+describe('deriveStageCounts', () => {
+  it('counts rows per named stage, zero-filling absent stages', () => {
+    const rows = [{ stage: 'App Sent' }, { stage: 'App Sent' }, { stage: 'New Lead' }]
+    expect(deriveStageCounts(rows, ['App Sent', 'Pre-Approved'])).toEqual({
+      'App Sent': 2,
+      'Pre-Approved': 0,
+    })
+  })
+})
+
+describe('dailySeries', () => {
+  it('returns `days` daily sums ending at endKey, oldest first, zero-filling gaps', () => {
+    const rows = [
+      { date: '2026-07-15', metric_key: 'calls', value: 12 },
+      { date: '2026-07-13', metric_key: 'calls', value: 5 },
+      { date: '2026-07-13', metric_key: 'followups', value: 9 }, // other key ignored
+    ]
+    expect(dailySeries(rows, 'calls', '2026-07-15', 3)).toEqual([5, 0, 12])
   })
 })

@@ -131,3 +131,55 @@ export function rollupMetrics(rows) {
   for (const r of rows) out[r.metric_key] = (out[r.metric_key] || 0) + Number(r.value || 0)
   return out
 }
+
+// dateStr: an ISO date/timestamp. from/to: YYYY-MM-DD keys. [from, to).
+export function inWindow(dateStr, from, to) {
+  if (!dateStr) return false
+  const k = dayKey(new Date(dateStr).toISOString())
+  return k >= from && k < to
+}
+
+export function sumWon(deals, { from, to }) {
+  return deals
+    .filter((d) => d.status === 'won' && inWindow(d.expected_close, from, to))
+    .reduce((s, d) => s + Number(d.value || 0), 0)
+}
+
+export function countWon(deals, { from, to }) {
+  return deals.filter((d) => d.status === 'won' && inWindow(d.expected_close, from, to)).length
+}
+
+export function pipelineValue(deals) {
+  return deals.filter((d) => d.status === 'open').reduce((s, d) => s + Number(d.value || 0), 0)
+}
+
+// rows: objects with a .stage string. stageNames: array of stages to count.
+export function deriveStageCounts(rows, stageNames) {
+  const out = {}
+  for (const name of stageNames) out[name] = 0
+  for (const r of rows) {
+    if (r.stage && Object.prototype.hasOwnProperty.call(out, r.stage)) out[r.stage] += 1
+  }
+  return out
+}
+
+// rows: metrics_daily rows ({ date, metric_key, value }), already biz-filtered.
+// Returns `days` daily sums for metricKey, oldest first, ending at endKey
+// (YYYY-MM-DD). Days with no matching row are 0. Powers the Daily trend strip.
+export function dailySeries(rows, metricKey, endKey, days = 7) {
+  const byDate = {}
+  for (const r of rows) {
+    if (r.metric_key !== metricKey) continue
+    byDate[r.date] = (byDate[r.date] || 0) + Number(r.value || 0)
+  }
+  const end = new Date(endKey + 'T00:00:00')
+  const pad = (n) => String(n).padStart(2, '0')
+  const out = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(end)
+    d.setDate(d.getDate() - i)
+    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    out.push(byDate[key] || 0)
+  }
+  return out
+}
