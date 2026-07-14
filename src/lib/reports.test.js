@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics, sumWon, countWon, pipelineValue, deriveStageCounts, dailySeries } from './reports'
+import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics, sumWon, countWon, pipelineValue, deriveStageCounts, dailySeries, inWindow } from './reports'
 
 describe('METRICS registry', () => {
   it('every metric has a default target', () => {
@@ -174,5 +174,16 @@ describe('dailySeries', () => {
       { date: '2026-07-13', metric_key: 'followups', value: 9 }, // other key ignored
     ]
     expect(dailySeries(rows, 'calls', '2026-07-15', 3)).toEqual([5, 0, 12])
+  })
+})
+
+describe('inWindow boundaries', () => {
+  it('includes the from day, excludes the to day, and rejects null', () => {
+    expect(inWindow('2026-07-01', '2026-07-01', '2026-08-01')).toBe(true)
+    expect(inWindow('2026-08-01', '2026-07-01', '2026-08-01')).toBe(false)
+    expect(inWindow(null, '2026-07-01', '2026-08-01')).toBe(false)
+  })
+  it('handles a full ISO timestamp by taking the date part', () => {
+    expect(inWindow('2026-07-15T23:30:00.000Z', '2026-07-01', '2026-08-01')).toBe(true)
   })
 })

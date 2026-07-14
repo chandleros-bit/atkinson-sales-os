@@ -132,10 +132,12 @@ export function rollupMetrics(rows) {
   return out
 }
 
-// dateStr: an ISO date/timestamp. from/to: YYYY-MM-DD keys. [from, to).
+// dateStr: a 'YYYY-MM-DD' (or ISO) date. from/to: YYYY-MM-DD keys. [from, to).
+// Compare as strings: expected_close is a bare DATE column, so round-tripping
+// through Date()/toISOString() would shift it a day in negative-UTC-offset zones.
 export function inWindow(dateStr, from, to) {
   if (!dateStr) return false
-  const k = dayKey(new Date(dateStr).toISOString())
+  const k = String(dateStr).slice(0, 10)
   return k >= from && k < to
 }
 
