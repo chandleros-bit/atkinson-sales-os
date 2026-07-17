@@ -12,7 +12,7 @@ import { fubGet } from './fub.ts'
 
 // Paginate a FUB activity list endpoint. `listKeys` are candidate top-level
 // array keys (FUB casing varies by resource); the first present wins.
-async function fubListActivity(path, listKeys, sinceIso) {
+async function fubListActivity(path, listKeys, sinceIso, extraParams = {}) {
   const limit = 100
   let offset = 0
   const items = []
@@ -24,7 +24,7 @@ async function fubListActivity(path, listKeys, sinceIso) {
     return []
   }
   while (true) {
-    const params = { limit, offset, sort: 'updated' }
+    const params = { limit, offset, sort: 'updated', ...extraParams }
     if (sinceIso) params.updatedAfter = sinceIso
     const json = await fubGet(path, params)
     const page = pick(json)
@@ -42,6 +42,13 @@ export const fetchNotes = (since) => fubListActivity('/notes', ['notes'], since)
 export const fetchAppointments = (since) => fubListActivity('/appointments', ['appointments'], since)
 
 export const fetchEmails = (since) => fubListActivity('/emails', ['emails', 'emailEvents'], since)
+
+// Emails don't list account-wide (FUB 400s without a person filter), so they
+// are fetched per contact by personId. VERIFY on first run: confirm the list
+// key ('emails') and that `personId` is the accepted filter param for /emails.
+// See docs/phase-priority-leads-setup.md.
+export const fetchEmailsForContact = (personId, since) =>
+  fubListActivity('/emails', ['emails', 'emailEvents'], since, { personId })
 
 // --- Pure mapping helpers (unit-tested) ------------------------------------
 

@@ -7,9 +7,9 @@ import { serviceClient, logSync } from '../_shared/db.ts'
 import {
   fetchCalls,
   fetchTexts,
-  fetchEmails,
   fetchNotes,
   fetchAppointments,
+  fetchEmailsForContact,
   mapActivity,
 } from '../_shared/fub-activity.ts'
 
@@ -46,7 +46,6 @@ Deno.serve(async () => {
     const fetchers = [
       ['call', fetchCalls],
       ['text', fetchTexts],
-      ['email', fetchEmails],
       ['note', fetchNotes],
       ['appointment', fetchAppointments],
     ]
@@ -64,6 +63,33 @@ Deno.serve(async () => {
       }
     }
 
+    // Per-contact email pass. /emails won't list account-wide, so fetch by
+    // personId — but only for contacts touched since `since`. A new email bumps
+    // the contact's lastActivity, so the recently-touched set is exactly the
+    // one that can have new email, keeping this from being one call per contact
+    // in the whole book every run.
+    try {
+      const { data: recentContacts } = await db
+        .from('contacts')
+        .select('id, external_id')
+        .eq('business_id', 'bay')
+        .eq('source_crm', 'fub')
+        .gte('last_touch_at', since)
+      let emailCount = 0
+      for (const c of recentContacts || []) {
+        const emails = await fetchEmailsForContact(c.external_id, since)
+        for (const rec of emails) {
+          const row = mapActivity(rec, 'email', contactIdByExternal)
+          if (!row.contact_id) row.contact_id = c.id // we fetched by this person
+          rows.push(row)
+        }
+        emailCount += emails.length
+      }
+      counts.push(`email:${emailCount}`)
+    } catch (e) {
+      skipped.push(`email (${String(e?.message || e).slice(0, 100)})`)
+    }
+
     if (rows.length) {
       const { error } = await db
         .from('activities')
@@ -77,7 +103,9 @@ Deno.serve(async () => {
     const summary = [counts.join(' '), skipped.length ? `skipped ${skipped.join('; ')}` : '']
       .filter(Boolean)
       .join(' | ')
-    const allFailed = skipped.length === fetchers.length
+    // Error only on a total wipeout — nothing at all was fetched successfully
+    // (counts gets an entry for every type that returned, including email).
+    const allFailed = counts.length === 0
     await logSync(db, 'fub-activity', allFailed ? 'error' : 'ok', upserted, summary || null)
     return new Response(JSON.stringify({ ok: !allFailed, upserted, counts, skipped }), {
       status: allFailed ? 500 : 200,

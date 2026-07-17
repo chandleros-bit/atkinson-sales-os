@@ -123,6 +123,7 @@ export default function Sidebar() {
         <div>
           <GroupLabel color="var(--bay)">BAYWAY</GroupLabel>
           <Item to="/bayway/pipeline" icon="▤" badge="—" badgeBiz="bay">Pipeline</Item>
+          <Item to="/bayway/priority-leads" icon="◆">Priority Leads</Item>
           <Item to="/bayway/activity" icon="◷">Activity</Item>
           <Item to="/bayway/contacts" icon="◵">Contacts · FUB</Item>
         </div>

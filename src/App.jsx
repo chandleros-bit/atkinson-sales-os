@@ -9,6 +9,7 @@ import Pipeline from './pages/Pipeline'
 import Contacts from './pages/Contacts'
 import Calendar from './pages/Calendar'
 import Activity from './pages/Activity'
+import PriorityLeads from './pages/PriorityLeads'
 import Reports from './pages/Reports'
 import PagePlaceholder from './components/PagePlaceholder'
 
@@ -48,6 +49,7 @@ export default function App() {
               />
               <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />
               <Route path="/bayway/pipeline" element={<Pipeline biz="bay" />} />
+              <Route path="/bayway/priority-leads" element={<PriorityLeads />} />
               <Route path="/bayway/activity" element={<Activity biz="bay" />} />
               <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />
               <Route path="/sync" element={<SyncStatus />} />
