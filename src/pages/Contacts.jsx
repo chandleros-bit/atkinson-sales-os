@@ -32,8 +32,8 @@ const CONFIGS = {
     filters: BAY_FILTERS,
     stagePill: bayStagePill,
     demoRows: [
-      { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Pre-Approved', last_touch_at: null },
-      { id: 'd2', name: 'Nguyen · Refi', email: 'nguyen@example.com', phone: '(281) 555-0195', stage: NURTURE, last_touch_at: null },
+      { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Pre-Approved', last_touch_at: null, crm_profile_url: '#' },
+      { id: 'd2', name: 'Nguyen · Refi', email: 'nguyen@example.com', phone: '(281) 555-0195', stage: NURTURE, last_touch_at: null, crm_profile_url: '#' },
     ],
   },
   mpg: {
@@ -45,8 +45,8 @@ const CONFIGS = {
     filters: [],
     stagePill: mpgStagePill,
     demoRows: [
-      { id: 'd1', name: 'Chef Rasi', company: 'Craft Pita', email: null, phone: '(832) 804-9056', stage: 'Open', last_touch_at: null },
-      { id: 'd2', name: 'Owner ?', company: 'Barnaby’s Cafe', email: 'x@example.com', phone: '(832) 831-8296', stage: 'Open', last_touch_at: null },
+      { id: 'd1', name: 'Chef Rasi', company: 'Craft Pita', email: null, phone: '(832) 804-9056', stage: 'Open', last_touch_at: null, crm_profile_url: '#' },
+      { id: 'd2', name: 'Owner ?', company: 'Barnaby’s Cafe', email: 'x@example.com', phone: '(832) 831-8296', stage: 'Open', last_touch_at: null, crm_profile_url: '#' },
     ],
   },
 }
@@ -58,7 +58,21 @@ const COLUMNS = {
     thClass: 'flex-1 text-left',
     sortKey: 'name',
     cell: (r) => (
-      <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">{r.name || '(no name)'}</div>
+      <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+        {r.crm_profile_url ? (
+          <a
+            href={r.crm_profile_url}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:underline"
+            title="Open in CRM"
+          >
+            {r.name || '(no name)'}
+          </a>
+        ) : (
+          r.name || '(no name)'
+        )}
+      </div>
     ),
   },
   company: {
