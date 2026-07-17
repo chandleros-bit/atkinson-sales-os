@@ -9,6 +9,8 @@ import {
   sortByAttention,
   lastTouchLabel,
   daysSince,
+  isHot,
+  isMpgOpen,
   STALE_TOUCH_DAYS,
 } from '../lib/overview'
 
@@ -176,6 +178,7 @@ function AttentionCard({ rows, dotClass, dotStyle, empty }) {
 
 function AllOverview() {
   const [bayRows, setBayRows] = useState([])
+  const [bayHotRows, setBayHotRows] = useState([])
   const [mpgRows, setMpgRows] = useState([])
   const [bayContacts, setBayContacts] = useState(0)
   const [mpgContacts, setMpgContacts] = useState(0)
@@ -190,10 +193,14 @@ function AllOverview() {
       setLoading(true)
       setError(null)
       try {
-        const [bayPipe, mpgLeads, bayCount, mpgCount, sync] = await Promise.all([
+        const [bayPipe, bayTagged, mpgLeads, bayCount, mpgCount, sync] = await Promise.all([
           supabase
             .from('v_active_pipeline')
             .select('id, business_id, name, email, phone, last_touch_at, stage')
+            .eq('business_id', 'bay'),
+          supabase
+            .from('contacts')
+            .select('id, name, email, phone, last_touch_at, tags:raw->tags')
             .eq('business_id', 'bay'),
           supabase
             .from('v_mpg_contacts')
@@ -209,12 +216,15 @@ function AllOverview() {
             .maybeSingle(),
         ])
         if (!alive) return
-        const err = bayPipe.error || mpgLeads.error || bayCount.error || mpgCount.error || sync.error
+        const err =
+          bayPipe.error || bayTagged.error || mpgLeads.error || bayCount.error || mpgCount.error || sync.error
         if (err) {
           setError(err.message)
           return
         }
-        setBayRows(bayPipe.data || [])
+        const bay = bayPipe.data || []
+        setBayRows(bay)
+        setBayHotRows(buildBayHotRows(bayTagged.data, bay))
         setMpgRows((mpgLeads.data || []).map((r) => ({ ...r, business_id: 'mpg' })))
         setBayContacts(bayCount.count || 0)
         setMpgContacts(mpgCount.count || 0)
@@ -231,8 +241,10 @@ function AllOverview() {
   }, [])
 
   const kpis = buildCombinedKpis(bayRows, mpgRows, bayContacts, mpgContacts)
-  const merged = sortByAttention([...bayRows, ...mpgRows])
-  const alert = !loading && !error ? deriveAlert({ latestSync, rows: merged }) : null
+  const mpgOpen = mpgRows.filter((r) => isMpgOpen(r.stage))
+  const attention = { mpg: mpgOpen.length, bay: bayHotRows.length, total: mpgOpen.length + bayHotRows.length }
+  const merged = sortByAttention([...bayHotRows, ...mpgOpen])
+  const alert = !loading && !error ? deriveAlert({ latestSync, rows: bayRows }) : null
 
   return (
     <div>
@@ -249,8 +261,8 @@ function AllOverview() {
             <SplitKpi label="In pipeline" split={kpis.pipeline} />
             <SplitKpi
               label="Needs attention"
-              split={kpis.attention}
-              totalColor={kpis.attention.total > 0 ? 'var(--bay-gold)' : undefined}
+              split={attention}
+              totalColor={attention.total > 0 ? 'var(--bay-gold)' : undefined}
             />
             <SplitKpi label="Contacts" split={kpis.contacts} />
             <SplitKpi label="In nurture" split={kpis.nurture} />
@@ -259,7 +271,7 @@ function AllOverview() {
           <AttentionCard
             rows={merged}
             dotClass="grad-dual"
-            empty="Nothing needs attention right now."
+            empty="No HOT Bayway or open MPG contacts right now."
           />
         </>
       )}
@@ -267,10 +279,21 @@ function AllOverview() {
   )
 }
 
+// Bayway HOT rows for Needs Attention: every Bayway contact tagged HOT (any
+// stage, incl. nurture). taggedRows carry raw.tags; pipelineRows supply the
+// loan stage for the pill, defaulting to 'Nurture' when the contact has none.
+function buildBayHotRows(taggedRows, pipelineRows) {
+  const stageById = new Map((pipelineRows || []).map((r) => [r.id, r.stage]))
+  return (taggedRows || [])
+    .filter((c) => isHot(c.tags))
+    .map((c) => ({ ...c, business_id: 'bay', stage: stageById.get(c.id) || 'Nurture' }))
+}
+
 // ---- Bayway view (mortgage only) --------------------------------------------
 
 function BayOverview() {
   const [rows, setRows] = useState([])
+  const [hotRows, setHotRows] = useState([])
   const [totalContacts, setTotalContacts] = useState(0)
   const [latestSync, setLatestSync] = useState(null)
   const [loading, setLoading] = useState(!isDemoMode)
@@ -283,10 +306,14 @@ function BayOverview() {
       setLoading(true)
       setError(null)
       try {
-        const [pipeline, contactCount, sync] = await Promise.all([
+        const [pipeline, tagged, contactCount, sync] = await Promise.all([
           supabase
             .from('v_active_pipeline')
             .select('id, business_id, name, email, phone, last_touch_at, stage')
+            .eq('business_id', 'bay'),
+          supabase
+            .from('contacts')
+            .select('id, name, email, phone, last_touch_at, tags:raw->tags')
             .eq('business_id', 'bay'),
           supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
           supabase
@@ -298,12 +325,14 @@ function BayOverview() {
             .maybeSingle(),
         ])
         if (!alive) return
-        const err = pipeline.error || contactCount.error || sync.error
+        const err = pipeline.error || tagged.error || contactCount.error || sync.error
         if (err) {
           setError(err.message)
           return
         }
-        setRows(pipeline.data || [])
+        const pipe = pipeline.data || []
+        setRows(pipe)
+        setHotRows(buildBayHotRows(tagged.data, pipe))
         setTotalContacts(contactCount.count || 0)
         setLatestSync(sync.data)
       } catch (e) {
@@ -319,7 +348,7 @@ function BayOverview() {
 
   const kpis = buildKpis(rows, totalContacts)
   const alert = !loading && !error ? deriveAlert({ latestSync, rows }) : null
-  const workbench = sortByAttention(rows)
+  const workbench = sortByAttention(hotRows)
 
   return (
     <div>
@@ -346,7 +375,7 @@ function BayOverview() {
           <AttentionCard
             rows={workbench}
             dotStyle={{ background: 'var(--bay)' }}
-            empty="No active loans — add stages in FollowUpBoss."
+            empty="No HOT-tagged contacts — tag a lead HOT in FollowUpBoss."
           />
         </>
       )}
@@ -403,7 +432,7 @@ function MpgOverview() {
     const s = l.stage || '—'
     return m.set(s, (m.get(s) || 0) + 1)
   }, new Map())].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-  const workbench = sortByAttention(leads)
+  const workbench = sortByAttention(leads.filter((l) => isMpgOpen(l.stage)))
 
   return (
     <div>
@@ -428,7 +457,7 @@ function MpgOverview() {
           <AttentionCard
             rows={workbench}
             dotStyle={{ background: 'var(--mpg)' }}
-            empty="No MPG leads yet — add them in Zoho CRM."
+            empty="No open MPG leads — set a lead to Open in Zoho CRM."
           />
         </>
       )}
