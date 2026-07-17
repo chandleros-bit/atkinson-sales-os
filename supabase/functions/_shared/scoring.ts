@@ -24,7 +24,9 @@ export const WEIGHTS = {
   callDurationCapMinutes: 10,
   // Flat additive bonus when the contact carries the FUB `HOT` tag. Not
   // recency-scaled — a manual HOT flag stays meaningful even if quiet lately.
-  hotTagBonus: 25,
+  // Sized so a bare HOT lead (no logged activity) still shows a mid score bar,
+  // since on this account the HOT tag is the primary intent signal, not calls.
+  hotTagBonus: 40,
   // Raw score that maps to a full 100 on the UI bar. Tuning knob for spread.
   scoreMax: 90,
 }
@@ -100,16 +102,26 @@ export function scoreContact(activities, { hasHotTag = false, now = Date.now() }
   return { score, lastActivityAt, activityCount }
 }
 
-// Precedence: never_contacted -> hot -> active -> warm.
-//  - never_contacted: strictly zero activity rows (locked decision).
-//  - hot: high score AND recent activity.
-//  - active: currently in an open pipeline stage, regardless of score.
-//  - warm: everyone else who has been contacted at all.
-export function assignTier({ score, lastActivityAt, activityCount, inOpenPipeline = false, now = Date.now() }) {
-  if (!activityCount) return 'never_contacted'
+// Precedence: hot -> active -> warm -> never_contacted.
+// This account logs almost no FUB activity, so intent signals (the manual HOT
+// tag and pipeline stage) rank ABOVE activity volume — otherwise a HOT or
+// in-pipeline lead with no logged call would wrongly read as "never contacted".
+//  - hot: carries the HOT tag, OR high score AND recent activity.
+//  - active: currently in an open pipeline stage.
+//  - warm: has any logged activity but isn't hot/active.
+//  - never_contacted: no HOT tag, not in pipeline, and zero activity rows.
+export function assignTier({
+  score,
+  lastActivityAt,
+  activityCount,
+  inOpenPipeline = false,
+  hasHotTag = false,
+  now = Date.now(),
+}) {
   const days = daysSince(lastActivityAt, now)
   const recentEnough = days !== null && days <= TIER_THRESHOLDS.hotMaxRecencyDays
-  if (score >= TIER_THRESHOLDS.hotMinScore && recentEnough) return 'hot'
+  if (hasHotTag || (score >= TIER_THRESHOLDS.hotMinScore && recentEnough)) return 'hot'
   if (inOpenPipeline) return 'active'
-  return 'warm'
+  if (activityCount > 0) return 'warm'
+  return 'never_contacted'
 }

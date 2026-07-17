@@ -64,23 +64,29 @@ describe('scoreContact', () => {
 })
 
 describe('assignTier', () => {
-  it('never_contacted only when zero activity', () => {
+  it('never_contacted only with no HOT tag, no pipeline, and zero activity', () => {
     expect(assignTier({ score: 0, lastActivityAt: null, activityCount: 0, now: NOW })).toBe('never_contacted')
   })
 
-  it('hot needs high score AND recent activity', () => {
+  it('HOT tag forces hot even with zero logged activity', () => {
+    expect(
+      assignTier({ score: 40, lastActivityAt: null, activityCount: 0, hasHotTag: true, now: NOW }),
+    ).toBe('hot')
+  })
+
+  it('hot also via high score AND recent activity (no tag needed)', () => {
     expect(assignTier({ score: 85, lastActivityAt: daysAgo(2), activityCount: 5, now: NOW })).toBe('hot')
-    // high score but stale -> not hot
+    // high score but stale, no tag -> not hot
     expect(assignTier({ score: 85, lastActivityAt: daysAgo(40), activityCount: 5, now: NOW })).toBe('warm')
   })
 
-  it('active when in an open pipeline stage and not hot', () => {
+  it('active when in an open pipeline stage and not hot — even with zero activity', () => {
     expect(
-      assignTier({ score: 40, lastActivityAt: daysAgo(30), activityCount: 3, inOpenPipeline: true, now: NOW }),
+      assignTier({ score: 0, lastActivityAt: null, activityCount: 0, inOpenPipeline: true, now: NOW }),
     ).toBe('active')
   })
 
-  it('warm is the fallback for contacted-but-not-hot-not-active', () => {
+  it('warm for contacted-but-not-hot-not-active', () => {
     expect(assignTier({ score: 30, lastActivityAt: daysAgo(20), activityCount: 2, now: NOW })).toBe('warm')
   })
 })

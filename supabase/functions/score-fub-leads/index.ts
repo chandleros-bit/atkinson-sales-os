@@ -75,6 +75,7 @@ Deno.serve(async () => {
         lastActivityAt,
         activityCount,
         inOpenPipeline: inOpenPipeline.has(c.id),
+        hasHotTag,
       })
       tierCounts[tier] += 1
       // Include the identity columns so the upsert's INSERT branch is valid;

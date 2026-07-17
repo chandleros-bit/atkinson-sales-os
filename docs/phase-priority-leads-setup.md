@@ -57,12 +57,31 @@ against your account and adjust in `_shared/fub-activity.ts` if needed:
 
 All weights and tier thresholds are constants at the top of
 `supabase/functions/_shared/scoring.ts` (`WEIGHTS`, `TIER_THRESHOLDS`). Tune and
-redeploy `score-fub-leads` — no other code changes needed. Tier rules:
+redeploy `score-fub-leads` — no other code changes needed. Tier precedence
+(hot → active → warm → never_contacted) — because this FUB account logs almost
+no activity, intent signals rank above activity volume:
 
-- `never_contacted` — strictly zero activity rows in the 6-month window.
-- `hot` — score ≥ `hotMinScore` **and** last activity within `hotMaxRecencyDays`.
+- `hot` — carries the `HOT` tag, **or** score ≥ `hotMinScore` and last activity
+  within `hotMaxRecencyDays`.
 - `active` — currently in a derived pipeline stage (`v_active_pipeline`).
-- `warm` — everyone else who has been contacted.
+- `warm` — has any logged activity but isn't hot/active.
+- `never_contacted` — no HOT tag, not in pipeline, and zero activity rows.
+
+### One-time activity backfill
+
+`fub-activity-sync` normally syncs incrementally. To pull history for the
+globally-listable types (calls/notes/appointments) in one pass, POST a `since`:
+
+```powershell
+curl.exe -X POST "https://cnmipfxwqnbtkohfixkf.supabase.co/functions/v1/fub-activity-sync" -H "Authorization: Bearer <ANON_KEY>" -H "Content-Type: application/json" -d '{"since":"2026-01-17T00:00:00Z"}'
+```
+
+The response `counts` show exactly how much FUB returns. (Confirmed on this
+account: ~17 activity rows in 6 months — FUB is not where this team logs calls,
+so `never_contacted` is large and the HOT tag / pipeline carry the panel. The
+email pass stays incremental even during a backfill, to avoid one `/emails`
+call per contact across the whole book in a single invocation.) Re-run
+`score-fub-leads` afterward to fold new activity into the tiers.
 
 ## Notes / schedule
 

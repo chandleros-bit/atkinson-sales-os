@@ -15,9 +15,25 @@ import {
 
 const NINETY_DAYS_MS = 90 * 86_400_000
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   const db = serviceClient()
   let upserted = 0
+
+  // Optional one-time backfill: POST { "since": "2026-01-17T00:00:00Z" } (or
+  // ?since=...) widens the window for the globally-listable types so history
+  // can be pulled in one pass. Absent => normal incremental behavior. The email
+  // pass intentionally ignores this (it stays incremental) to avoid one /emails
+  // call per contact across the whole book in a single invocation.
+  let overrideSince = null
+  try {
+    overrideSince = new URL(req.url).searchParams.get('since')
+    if (!overrideSince && req.method === 'POST') {
+      const body = await req.json().catch(() => ({}))
+      overrideSince = body?.since || null
+    }
+  } catch {
+    // no request/body — run incrementally
+  }
 
   try {
     // FUB person id -> our contacts.id, so activities resolve their contact.
@@ -38,6 +54,8 @@ Deno.serve(async () => {
       .limit(1)
       .maybeSingle()
     const since = lastOk?.ran_at || new Date(Date.now() - NINETY_DAYS_MS).toISOString()
+    // Global (listable) types honor a backfill override; email pass keeps `since`.
+    const globalSince = overrideSince || since
 
     // Each activity type is fetched independently so one endpoint's failure
     // can't abort the rest. Some FUB list endpoints can't be listed globally
@@ -55,7 +73,7 @@ Deno.serve(async () => {
     const skipped = []
     for (const [type, fetchFn] of fetchers) {
       try {
-        const records = await fetchFn(since)
+        const records = await fetchFn(globalSince)
         for (const rec of records) rows.push(mapActivity(rec, type, contactIdByExternal))
         counts.push(`${type}:${records.length}`)
       } catch (e) {
@@ -100,7 +118,11 @@ Deno.serve(async () => {
 
     // Only a total wipeout (every endpoint failed) is an error; a partial run
     // still succeeds. The message keeps per-type counts + skips for diagnosis.
-    const summary = [counts.join(' '), skipped.length ? `skipped ${skipped.join('; ')}` : '']
+    const summary = [
+      overrideSince ? `backfill since ${overrideSince}` : '',
+      counts.join(' '),
+      skipped.length ? `skipped ${skipped.join('; ')}` : '',
+    ]
       .filter(Boolean)
       .join(' | ')
     // Error only on a total wipeout — nothing at all was fetched successfully
