@@ -37,38 +37,55 @@ Still in the Self Client:
 3. Time duration: 10 minutes. Scope Description: anything. Click **Create**, pick
    your CRM portal, **Create** again. Copy the **grant token** (code) shown.
 4. Exchange the grant token for a refresh token (run this within 10 minutes;
-   replace the three values):
+   replace the three values). This is a Self Client, so there is **no**
+   `redirect_uri`.
 
-   ```bash
-   curl -s -X POST "https://accounts.zoho.com/oauth/v2/token" \
-     -d "grant_type=authorization_code" \
-     -d "client_id=YOUR_CLIENT_ID" \
-     -d "client_secret=YOUR_CLIENT_SECRET" \
-     -d "code=YOUR_GRANT_TOKEN"
+   PowerShell:
+
+   ```powershell
+   $body = @{
+       grant_type    = "authorization_code"
+       client_id     = "YOUR_CLIENT_ID"
+       client_secret = "YOUR_CLIENT_SECRET"
+       code          = "YOUR_GRANT_TOKEN"
+   }
+   $resp = Invoke-RestMethod -Method Post -Uri "https://accounts.zoho.com/oauth/v2/token" -Body $body
+   $resp.refresh_token
    ```
 
-   The response includes `"refresh_token": "1000...."`. Copy it — it does not
+   That prints the `refresh_token` (starts with `1000.`). Copy it — it does not
    expire unless you revoke it.
+
+   > Don't paste a bash `curl ... \` command into PowerShell: `curl` there is an
+   > alias for `Invoke-WebRequest` and the `\` line-continuations fail. If you
+   > prefer curl, use `curl.exe` on a single line.
 
 ## 3. Set the function secrets
 
-```bash
+```powershell
 supabase secrets set ZOHO_CLIENT_ID=your_client_id
 supabase secrets set ZOHO_CLIENT_SECRET=your_client_secret
 supabase secrets set ZOHO_REFRESH_TOKEN=your_refresh_token
 ```
+
+(These `supabase` lines run the same in PowerShell and bash.)
 
 (You're on the US `.com` data center, so no host secrets are needed. If that ever
 changes, also set `ZOHO_ACCOUNTS_HOST` / `ZOHO_API_HOST` to your region.)
 
 ## 4. Trigger a sync and check Sync Status
 
-The function runs every 15 min on its own; trigger one now:
+The function runs every 15 min on its own; trigger one now.
 
-```bash
-curl -X POST https://cnmipfxwqnbtkohfixkf.supabase.co/functions/v1/zoho-sync \
-  -H "Authorization: Bearer YOUR_ANON_KEY"
+PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri "https://cnmipfxwqnbtkohfixkf.supabase.co/functions/v1/zoho-sync" `
+  -Headers @{ Authorization = "Bearer YOUR_ANON_KEY" }
 ```
+
+(Or with real curl on one line: `curl.exe -X POST "https://cnmipfxwqnbtkohfixkf.supabase.co/functions/v1/zoho-sync" -H "Authorization: Bearer YOUR_ANON_KEY"`)
 
 (`YOUR_ANON_KEY` = Supabase → Project Settings → API → anon public.)
 
