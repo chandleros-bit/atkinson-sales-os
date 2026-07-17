@@ -8,6 +8,18 @@ export const SYNC_STALE_MINUTES = 45
 
 const DAY_MS = 86_400_000
 
+// Bayway "Needs Attention" surfaces contacts tagged HOT in FollowUpBoss. Tags
+// live in contacts.raw.tags (a string array); match "hot" case-insensitively.
+export function isHot(tags) {
+  return Array.isArray(tags) && tags.some((t) => String(t).trim().toLowerCase() === 'hot')
+}
+
+// MPG "Needs Attention" surfaces leads whose Zoho Lead_Status (our stage) is
+// Open. Matched case-insensitively so a casing change in Zoho stays safe.
+export function isMpgOpen(stage) {
+  return String(stage || '').trim().toLowerCase() === 'open'
+}
+
 export function daysSince(iso, now = Date.now()) {
   if (!iso) return null
   return Math.floor((now - new Date(iso).getTime()) / DAY_MS)

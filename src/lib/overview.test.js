@@ -6,6 +6,8 @@ import {
   buildKpis,
   buildCombinedKpis,
   deriveAlert,
+  isHot,
+  isMpgOpen,
 } from './overview'
 
 // Fixed clock: 2026-07-09T12:00:00Z
@@ -52,6 +54,37 @@ describe('sortByAttention', () => {
     ]
     sortByAttention(rows)
     expect(rows[0].id).toBe('a')
+  })
+})
+
+describe('isHot', () => {
+  it('matches a HOT tag regardless of case or padding', () => {
+    expect(isHot(['HOT'])).toBe(true)
+    expect(isHot(['Buyer', 'hot'])).toBe(true)
+    expect(isHot([' Hot '])).toBe(true)
+  })
+  it('does not match tags that merely contain "hot"', () => {
+    expect(isHot(['Hot Lead'])).toBe(false)
+    expect(isHot(['Hotlist'])).toBe(false)
+  })
+  it('is false for missing or non-array tags', () => {
+    expect(isHot(null)).toBe(false)
+    expect(isHot(undefined)).toBe(false)
+    expect(isHot('hot')).toBe(false)
+    expect(isHot([])).toBe(false)
+  })
+})
+
+describe('isMpgOpen', () => {
+  it('matches the Open status case-insensitively', () => {
+    expect(isMpgOpen('Open')).toBe(true)
+    expect(isMpgOpen('open')).toBe(true)
+    expect(isMpgOpen(' Open ')).toBe(true)
+  })
+  it('is false for any other status', () => {
+    expect(isMpgOpen('Contacted')).toBe(false)
+    expect(isMpgOpen('—')).toBe(false)
+    expect(isMpgOpen(null)).toBe(false)
   })
 })
 
