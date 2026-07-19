@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import BizBadge from '../components/BizBadge'
+import CalendarRail from '../components/CalendarRail'
 import {
   buildKpis,
   buildCombinedKpis,
@@ -273,6 +274,7 @@ function AllOverview() {
             dotClass="grad-dual"
             empty="No HOT Bayway or open MPG contacts right now."
           />
+          <CalendarRail />
         </>
       )}
     </div>
@@ -377,6 +379,7 @@ function BayOverview() {
             dotStyle={{ background: 'var(--bay)' }}
             empty="No HOT-tagged contacts — tag a lead HOT in FollowUpBoss."
           />
+          <CalendarRail />
         </>
       )}
     </div>
@@ -459,6 +462,7 @@ function MpgOverview() {
             dotStyle={{ background: 'var(--mpg)' }}
             empty="No open MPG leads — set a lead to Open in Zoho CRM."
           />
+          <CalendarRail />
         </>
       )}
     </div>
@@ -533,6 +537,7 @@ function DemoOverview() {
           </div>
         ))}
       </div>
+      <CalendarRail />
     </div>
   )
 }
