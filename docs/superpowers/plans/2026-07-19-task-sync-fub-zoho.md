@@ -446,7 +446,12 @@ Deno.serve(async () => {
     const since = lastOk?.ran_at || null
 
     const records = since ? await fetchTasksUpdatedSince(since) : await fetchOpenTasks()
-    let rows = records.map((rec) => mapTask(rec, contactIdByExternal, dealIdByExternal))
+    // An id-less record would map to external_id "undefined" and two of them
+    // would collide on unique (source_crm, external_id), silently overwriting
+    // each other. Drop them and count them instead.
+    const identified = records.filter((rec) => rec.id != null)
+    const skippedNoId = records.length - identified.length
+    let rows = identified.map((rec) => mapTask(rec, contactIdByExternal, dealIdByExternal))
     // Defensive: if FUB ignores the isCompleted filter on the first run, drop
     // completed rows here rather than importing history.
     if (!since) rows = rows.filter((r) => !r.is_completed)
@@ -457,7 +462,13 @@ Deno.serve(async () => {
       upserted += rows.length
     }
 
-    const summary = `${since ? 'incremental' : 'first run (open only)'} | fetched:${records.length} upserted:${upserted}`
+    const summary = [
+      since ? 'incremental' : 'first run (open only)',
+      `fetched:${records.length} upserted:${upserted}`,
+      skippedNoId ? `skipped ${skippedNoId} with no id` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ')
     await logSync(db, 'fub-tasks', 'ok', upserted, summary)
     return new Response(JSON.stringify({ ok: true, upserted, fetched: records.length }), {
       status: 200,
@@ -737,7 +748,11 @@ Deno.serve(async () => {
     const since = lastOk?.ran_at || null
 
     const records = await fetchTasks(apiHost, accessToken, since)
-    let rows = records.map((rec) => mapTask(rec, contactIdByExternal, dealIdByExternal))
+    // Same guard as fub-task-sync: an id-less record would map to external_id
+    // "undefined" and collide on unique (source_crm, external_id).
+    const identified = records.filter((rec) => rec.id != null)
+    const skippedNoId = records.length - identified.length
+    let rows = identified.map((rec) => mapTask(rec, contactIdByExternal, dealIdByExternal))
     // Zoho's list endpoint has no status filter, so the first run drops
     // completed tasks here rather than importing the whole history.
     if (!since) rows = rows.filter((r) => !r.is_completed)
@@ -748,7 +763,13 @@ Deno.serve(async () => {
       upserted += rows.length
     }
 
-    const summary = `${since ? 'incremental' : 'first run (open only)'} | fetched:${records.length} upserted:${upserted}`
+    const summary = [
+      since ? 'incremental' : 'first run (open only)',
+      `fetched:${records.length} upserted:${upserted}`,
+      skippedNoId ? `skipped ${skippedNoId} with no id` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ')
     await logSync(db, 'zoho-tasks', 'ok', upserted, summary)
     return new Response(JSON.stringify({ ok: true, upserted, fetched: records.length }), {
       status: 200,
