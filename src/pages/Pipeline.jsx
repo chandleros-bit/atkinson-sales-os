@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
 import { buildColumns, MPG_LEAD_FLOW } from '../lib/pipeline'
+import CrmLink from '../components/CrmLink'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -37,7 +38,9 @@ function Card({ r, lost, biz }) {
         className="absolute bottom-2 left-0 top-2 w-[3px] rounded-sm"
         style={{ background: lost ? 'var(--dim)' : accent }}
       />
-      <div className="truncate text-[13px] font-semibold">{headline || '(no name)'}</div>
+      <CrmLink url={r.crm_profile_url} className="block truncate text-[13px] font-semibold">
+        {headline || '(no name)'}
+      </CrmLink>
       <div className="mt-0.5 truncate text-[11.5px] text-muted">
         {sub || 'no contact info'}
       </div>
@@ -80,9 +83,9 @@ function Board({ columns, biz }) {
 }
 
 const demoRows = [
-  { id: 'd1', stage: 'Waiting on Docs', name: 'Ramirez · Purchase', phone: '(713) 555-0142', last_touch_at: null },
-  { id: 'd2', stage: 'Pre-Approved', name: 'Nguyen · Refi', phone: '(281) 555-0195', last_touch_at: null },
-  { id: 'd3', stage: 'Pre-Approved', name: 'Okafor · Purchase', phone: '(832) 555-0110', last_touch_at: null },
+  { id: 'd1', stage: 'Waiting on Docs', name: 'Ramirez · Purchase', phone: '(713) 555-0142', last_touch_at: null, crm_profile_url: '#' },
+  { id: 'd2', stage: 'Pre-Approved', name: 'Nguyen · Refi', phone: '(281) 555-0195', last_touch_at: null, crm_profile_url: '#' },
+  { id: 'd3', stage: 'Pre-Approved', name: 'Okafor · Purchase', phone: '(832) 555-0110', last_touch_at: null, crm_profile_url: '#' },
 ]
 
 // Per-business query + presentation config. MPG reads Zoho leads through
@@ -91,14 +94,14 @@ const demoRows = [
 const PIPELINE = {
   bay: {
     view: 'v_active_pipeline',
-    columns: 'id, business_id, name, email, phone, last_touch_at, stage',
+    columns: 'id, business_id, name, email, phone, last_touch_at, stage, crm_profile_url',
     flowOrder: undefined, // default LOAN_FLOW_ORDER
     countLabel: 'active',
     empty: 'No active loans — add stages in FollowUpBoss.',
   },
   mpg: {
     view: 'v_mpg_contacts',
-    columns: 'id, name, company, email, phone, last_touch_at, stage',
+    columns: 'id, name, company, email, phone, last_touch_at, stage, crm_profile_url',
     flowOrder: MPG_LEAD_FLOW,
     countLabel: 'leads',
     empty: 'No MPG leads yet — add them in Zoho CRM.',
