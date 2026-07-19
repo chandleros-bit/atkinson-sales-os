@@ -5,6 +5,7 @@
 import { dayKey } from './calendar'
 
 // Matches the outlook-sync pg_cron cadence (migration 0008: every 15 min).
+// Distinct from overview.js SYNC_STALE_MINUTES (45) — that guards FollowUpBoss, this Outlook.
 export const SYNC_INTERVAL_MS = 15 * 60 * 1000
 
 // Today's events only, all-day first, then ascending by start time.

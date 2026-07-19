@@ -46,6 +46,10 @@ describe('isSyncStale', () => {
     expect(isSyncStale(nowMs - 40 * 60 * 1000, nowMs)).toBe(true)
   })
 
+  it('stays fresh between due and stale (25 min)', () => {
+    expect(isSyncStale(nowMs - 25 * 60 * 1000, nowMs)).toBe(false)
+  })
+
   it('exposes the 15-minute interval', () => {
     expect(SYNC_INTERVAL_MS).toBe(15 * 60 * 1000)
   })
