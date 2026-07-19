@@ -548,12 +548,20 @@ import { describe, it, expect } from 'vitest'
 import { mapTask, zohoTaskIsCompleted } from './zoho-tasks.ts'
 
 describe('zohoTaskIsCompleted', () => {
-  it('is true only for the Completed status', () => {
+  it('is true for the stock Completed status, case-insensitively', () => {
     expect(zohoTaskIsCompleted({ Status: 'Completed' })).toBe(true)
     expect(zohoTaskIsCompleted({ Status: 'completed' })).toBe(true)
+    expect(zohoTaskIsCompleted({ Status: ' Completed ' })).toBe(true)
+  })
+  it('also accepts common renames of the done state', () => {
+    expect(zohoTaskIsCompleted({ Status: 'Closed' })).toBe(true)
+    expect(zohoTaskIsCompleted({ Status: 'Done' })).toBe(true)
+  })
+  it('is false for every open state', () => {
     expect(zohoTaskIsCompleted({ Status: 'Not Started' })).toBe(false)
     expect(zohoTaskIsCompleted({ Status: 'In Progress' })).toBe(false)
     expect(zohoTaskIsCompleted({ Status: 'Deferred' })).toBe(false)
+    expect(zohoTaskIsCompleted({ Status: 'Waiting on someone else' })).toBe(false)
   })
   it('defaults to false with no Status', () => {
     expect(zohoTaskIsCompleted({})).toBe(false)
@@ -621,6 +629,17 @@ describe('mapTask', () => {
     expect(row.contact_id).toBe(null)
     expect(row.deal_id).toBe(null)
     expect(row.due_at).toBe(null)
+    expect(row.owner).toBe(null)
+    expect(typeof row.updated_at).toBe('string')
+  })
+
+  it('falls back to Owner.full_name when name is absent', () => {
+    const row = mapTask({ id: '6', Owner: { full_name: 'Chandler Atkinson' } }, contacts, deals)
+    expect(row.owner).toBe('Chandler Atkinson')
+  })
+
+  it('tolerates a Who_Id with no id', () => {
+    expect(mapTask({ id: '7', Who_Id: {} }, contacts, deals).contact_id).toBe(null)
   })
 })
 ```
@@ -681,8 +700,15 @@ export async function fetchTasks(apiHost, accessToken, sinceIso) {
 
 // --- Pure mapping helpers (unit-tested) ------------------------------------
 
+// Unlike Deals' Stage — which carries a structural `forecast_type` flag —
+// Tasks' Status is just an org-renamable picklist display value. If it says
+// done and we miss it, the task never leaves the board (v_tasks filters on
+// is_completed), so match the common done-ish values rather than only Zoho's
+// stock 'Completed'. Verify the org's actual picklist on first live run.
+const DONE_STATUSES = new Set(['completed', 'closed', 'done'])
+
 export function zohoTaskIsCompleted(rec) {
-  return String(rec.Status || '').toLowerCase() === 'completed'
+  return DONE_STATUSES.has(String(rec.Status || '').trim().toLowerCase())
 }
 
 // contactIdByExternal: Map<zoho contact id (string), our contacts.id (uuid)>
@@ -940,6 +966,7 @@ import { describe, it, expect } from 'vitest'
 import {
   BUCKETS,
   bucketByDue,
+  dueDayKey,
   dueLabel,
   dueTimeOfDay,
   normalizePriority,
@@ -967,9 +994,33 @@ describe('dueTimeOfDay', () => {
     expect(dueTimeOfDay('2026-07-19T09:05:00')).toBe('9:05a')
     expect(dueTimeOfDay('2026-07-19T14:30:00')).toBe('2:30p')
   })
-  it('returns an em dash for a null or midnight (date-only) due date', () => {
+  it('returns an em dash for a null due date', () => {
     expect(dueTimeOfDay(null)).toBe('—')
-    expect(dueTimeOfDay('2026-07-19T00:00:00')).toBe('—')
+  })
+  it('returns an em dash for a date-only due date stored as midnight UTC', () => {
+    expect(dueTimeOfDay('2026-07-19T00:00:00Z')).toBe('—')
+    expect(dueTimeOfDay('2026-07-19T00:00:00+00:00')).toBe('—')
+  })
+})
+
+// The bug this guards: both CRMs send date-only due dates, Postgres stores
+// them as midnight UTC, and reading that locally lands on the previous evening
+// anywhere west of Greenwich — shifting every task a day early.
+describe('date-only due dates', () => {
+  it('keys a midnight-UTC due date to its own calendar date', () => {
+    expect(dueDayKey('2026-07-21T00:00:00Z')).toBe('2026-07-21')
+  })
+  it('keys a real instant in local time', () => {
+    expect(dueDayKey('2026-07-21T14:30:00')).toBe('2026-07-21')
+  })
+  it('buckets a date-only task due today as Today, not Overdue', () => {
+    const rows = [{ id: 'x', due_at: '2026-07-19T00:00:00Z' }]
+    const by = bucketByDue(rows, now)
+    expect(by.find((b) => b.key === 'today').rows.map((r) => r.id)).toEqual(['x'])
+    expect(by.find((b) => b.key === 'overdue').rows).toHaveLength(0)
+  })
+  it('labels a date-only task due tomorrow as Tomorrow', () => {
+    expect(dueLabel('2026-07-20T00:00:00Z', now)).toBe('Tomorrow')
   })
 })
 
@@ -1133,9 +1184,31 @@ export function filterByPriority(rows, key) {
   return rows.filter((r) => normalizePriority(r.priority) === key)
 }
 
+// Both CRMs send date-only due dates (FUB `dueDate`, Zoho `Due_Date`), which
+// Postgres anchors at 00:00Z when storing them in a timestamptz. Read locally,
+// midnight UTC is the PREVIOUS evening anywhere west of Greenwich — every task
+// would bucket a day early. A due_at sitting exactly on midnight UTC therefore
+// means "this calendar date", not an instant, and must be read in UTC.
+// A task genuinely due at midnight UTC is indistinguishable and gets treated
+// as date-only; neither CRM sets that deliberately, so the trade is worth it.
+export function isDateOnly(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return false
+  return d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0
+}
+
+// dayKey for a due date: UTC for date-only values, local for real instants.
+export function dueDayKey(iso) {
+  if (!isDateOnly(iso)) return dayKey(iso)
+  const d = new Date(iso)
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${mm}-${dd}`
+}
+
 export function dueLabel(iso, now = Date.now()) {
   if (!iso) return 'No due date'
-  const key = dayKey(iso)
+  const key = dueDayKey(iso)
   const todayKey = dayKey(new Date(now).toISOString())
   const tmr = new Date(now)
   tmr.setDate(tmr.getDate() + 1)
@@ -1148,14 +1221,15 @@ export function dueLabel(iso, now = Date.now()) {
   return `${DAYS[d.getDay()]} · ${MONTHS[d.getMonth()]} ${d.getDate()}`
 }
 
-// Midnight means "date only" in both CRMs — showing "12:00a" would be a lie.
+// A date-only due date has no time of day — showing the clock that midnight
+// UTC happens to land on locally ("7:00p") would be inventing information.
 export function dueTimeOfDay(iso) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
+  if (isDateOnly(iso)) return '—'
   const m = d.getMinutes()
   const h24 = d.getHours()
-  if (h24 === 0 && m === 0) return '—'
   const ap = h24 >= 12 ? 'p' : 'a'
   const h = h24 % 12 || 12
   return `${h}:${String(m).padStart(2, '0')}${ap}`
@@ -1179,7 +1253,7 @@ export function bucketByDue(rows, now = Date.now()) {
       byKey.get('none').rows.push(r)
       continue
     }
-    const key = dayKey(r.due_at)
+    const key = dueDayKey(r.due_at)
     if (key < todayKey) byKey.get('overdue').rows.push(r)
     else if (key === todayKey) byKey.get('today').rows.push(r)
     else if (key === tomorrowKey) byKey.get('tomorrow').rows.push(r)
@@ -1197,7 +1271,7 @@ export function bucketByDue(rows, now = Date.now()) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- tasks`
-Expected: PASS, 16 tests (the `-- tasks` filter also re-runs `fub-tasks` and `zoho-tasks`; those must stay green too).
+Expected: PASS, 21 tests in `src/lib/tasks.test.js`. (The `-- tasks` filter also re-runs `fub-tasks` and `zoho-tasks`; those must stay green too.)
 
 - [ ] **Step 5: Commit**
 
@@ -1591,8 +1665,15 @@ vendor's documented shape. Confirm against the live payloads and adjust:
 
 **Zoho `Tasks`**
 - **Module API name:** `Tasks` (used as the `zohoList` module path).
-- **Done status:** `zohoTaskIsCompleted` treats `Status === 'Completed'`
-  (case-insensitive) as done. Confirm your org's picklist uses that value.
+- **Done status:** `zohoTaskIsCompleted` treats `completed` / `closed` / `done`
+  (case-insensitive) as done. Unlike Deals' `Stage`, Tasks' `Status` carries no
+  structural flag — it is just a renamable picklist — so if this org uses some
+  other word for done, add it, or completed tasks will never leave the board.
+- **`Task_Type`:** the mapper reads `Task_Type`, falling back to `Category`.
+  Neither is guaranteed to be a real field on this org's Tasks module. Confirm
+  with `GET /crm/v2/settings/fields?module=Tasks` (the same trick
+  `fetchDealStages` uses for Deals) — if `task_type` comes back null for every
+  row, that's this. It is display-only, so a wrong name degrades gracefully.
 - **`Due_Date` format:** stored straight into a `timestamptz`. If Zoho returns
   a bare `YYYY-MM-DD`, Postgres reads it as local midnight — which is exactly
   what the screen's day-granularity bucketing expects.
