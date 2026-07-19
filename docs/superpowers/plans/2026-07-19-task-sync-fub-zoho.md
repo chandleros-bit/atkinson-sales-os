@@ -1674,9 +1674,13 @@ vendor's documented shape. Confirm against the live payloads and adjust:
   with `GET /crm/v2/settings/fields?module=Tasks` (the same trick
   `fetchDealStages` uses for Deals) — if `task_type` comes back null for every
   row, that's this. It is display-only, so a wrong name degrades gracefully.
-- **`Due_Date` format:** stored straight into a `timestamptz`. If Zoho returns
-  a bare `YYYY-MM-DD`, Postgres reads it as local midnight — which is exactly
-  what the screen's day-granularity bucketing expects.
+- **`Due_Date` format:** stored straight into a `timestamptz`. Zoho returns a
+  bare `YYYY-MM-DD`, and Postgres anchors that at midnight **UTC** (the
+  database session's timezone), not local midnight. Read locally that is the
+  previous evening anywhere west of Greenwich, so the screen must not bucket it
+  with local getters — `dueDayKey` in `src/lib/tasks.js` detects midnight-UTC
+  values and reads them in UTC. If Zoho tasks ever start showing up one day
+  early, that is the code path to look at first.
 - **`Who_Id` / `What_Id`:** contact and deal resolution. `What_Id` is
   polymorphic; the mapper trusts `$se_module === 'Deals'` when present.
 
