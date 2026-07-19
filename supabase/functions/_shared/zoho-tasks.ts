@@ -16,8 +16,15 @@ export async function fetchTasks(apiHost, accessToken, sinceIso) {
 
 // --- Pure mapping helpers (unit-tested) ------------------------------------
 
+// Unlike Deals' Stage — which carries a structural `forecast_type` flag —
+// Tasks' Status is just an org-renamable picklist display value. If it says
+// done and we miss it, the task never leaves the board (v_tasks filters on
+// is_completed), so match the common done-ish values rather than only Zoho's
+// stock 'Completed'. Verify the org's actual picklist on first live run.
+const DONE_STATUSES = new Set(['completed', 'closed', 'done'])
+
 export function zohoTaskIsCompleted(rec) {
-  return String(rec.Status || '').toLowerCase() === 'completed'
+  return DONE_STATUSES.has(String(rec.Status || '').trim().toLowerCase())
 }
 
 // contactIdByExternal: Map<zoho contact id (string), our contacts.id (uuid)>
