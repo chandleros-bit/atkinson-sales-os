@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { TYPE_META, TYPE_CHIPS, filterByType, groupByDay, timeOfDay } from '../lib/activity'
+import CrmLink from '../components/CrmLink'
 
 const PER_PAGE = 150
 
@@ -12,10 +13,10 @@ const ACTIVITY = {
     source: 'v_bayway_activity',
     copy: 'Bayway activity — calls, texts, emails, notes, and appointments from FollowUpBoss.',
     demoRows: [
-      { id: 'd1', type: 'call', occurred_at: new Date(Date.now() - 2 * 3600000).toISOString(), contact_name: 'Marcus Ramirez', snippet: 'Left VM re: rate lock, retry PM', owner: 'You' },
-      { id: 'd2', type: 'text', occurred_at: new Date(Date.now() - 3 * 3600000).toISOString(), contact_name: 'Dana Whitfield', snippet: '“Got the paystubs, thanks!”', owner: 'You' },
-      { id: 'd3', type: 'email', occurred_at: new Date(Date.now() - 4 * 3600000).toISOString(), contact_name: 'Priya Nair', snippet: 'Sent pre-approval letter', owner: 'You' },
-      { id: 'd4', type: 'appointment', occurred_at: new Date(Date.now() - 26 * 3600000).toISOString(), contact_name: 'Kevin Osei', snippet: 'Signing @ Title Co.', owner: 'You' },
+      { id: 'd1', type: 'call', occurred_at: new Date(Date.now() - 2 * 3600000).toISOString(), contact_name: 'Marcus Ramirez', snippet: 'Left VM re: rate lock, retry PM', owner: 'You', crm_profile_url: '#' },
+      { id: 'd2', type: 'text', occurred_at: new Date(Date.now() - 3 * 3600000).toISOString(), contact_name: 'Dana Whitfield', snippet: '“Got the paystubs, thanks!”', owner: 'You', crm_profile_url: '#' },
+      { id: 'd3', type: 'email', occurred_at: new Date(Date.now() - 4 * 3600000).toISOString(), contact_name: 'Priya Nair', snippet: 'Sent pre-approval letter', owner: 'You', crm_profile_url: '#' },
+      { id: 'd4', type: 'appointment', occurred_at: new Date(Date.now() - 26 * 3600000).toISOString(), contact_name: 'Kevin Osei', snippet: 'Signing @ Title Co.', owner: 'You', crm_profile_url: '#' },
     ],
   },
 }
@@ -157,7 +158,7 @@ export default function Activity({ biz }) {
                     <TypeTag type={r.type} />
                     <div className="num w-14 flex-none text-[12px] text-muted">{timeOfDay(r.occurred_at)}</div>
                     <div className="w-40 flex-none truncate text-[13px] font-semibold">
-                      {r.contact_name || '(unknown)'}
+                      <CrmLink url={r.crm_profile_url}>{r.contact_name || '(unknown)'}</CrmLink>
                     </div>
                     <div className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{r.snippet || '—'}</div>
                     {r.owner && (

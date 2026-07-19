@@ -3,6 +3,8 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import BizBadge from '../components/BizBadge'
 import CalendarRail from '../components/CalendarRail'
+import CrmLink from '../components/CrmLink'
+import { crmProfileUrl } from '../lib/crm'
 import {
   buildKpis,
   buildCombinedKpis,
@@ -129,7 +131,9 @@ function AttentionRow({ r }) {
         style={{ background: isMpg ? 'var(--mpg)' : 'var(--bay)' }}
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-semibold">{headline}</div>
+        <CrmLink url={r.crm_profile_url} className="block truncate text-[13.5px] font-semibold">
+          {headline}
+        </CrmLink>
         <div className="mt-0.5 flex items-center gap-2 text-[11.5px] text-muted">
           <BizBadge biz={r.business_id} />
           {sub}
@@ -201,11 +205,11 @@ function AllOverview() {
             .eq('business_id', 'bay'),
           supabase
             .from('contacts')
-            .select('id, name, email, phone, last_touch_at, tags:raw->tags')
+            .select('id, name, email, phone, last_touch_at, external_id, tags:raw->tags')
             .eq('business_id', 'bay'),
           supabase
             .from('v_mpg_contacts')
-            .select('id, name, company, email, phone, last_touch_at, stage'),
+            .select('id, name, company, email, phone, last_touch_at, stage, crm_profile_url'),
           supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
           supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'mpg'),
           supabase
@@ -288,7 +292,13 @@ function buildBayHotRows(taggedRows, pipelineRows) {
   const stageById = new Map((pipelineRows || []).map((r) => [r.id, r.stage]))
   return (taggedRows || [])
     .filter((c) => isHot(c.tags))
-    .map((c) => ({ ...c, business_id: 'bay', stage: stageById.get(c.id) || 'Nurture' }))
+    .map((c) => ({
+      ...c,
+      business_id: 'bay',
+      stage: stageById.get(c.id) || 'Nurture',
+      // Rows come off the contacts table (not a view), so build the FUB link here.
+      crm_profile_url: crmProfileUrl('bay', c.external_id),
+    }))
 }
 
 // ---- Bayway view (mortgage only) --------------------------------------------
@@ -315,7 +325,7 @@ function BayOverview() {
             .eq('business_id', 'bay'),
           supabase
             .from('contacts')
-            .select('id, name, email, phone, last_touch_at, tags:raw->tags')
+            .select('id, name, email, phone, last_touch_at, external_id, tags:raw->tags')
             .eq('business_id', 'bay'),
           supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
           supabase
@@ -406,7 +416,7 @@ function MpgOverview() {
         const [leadRes, dealRes] = await Promise.all([
           supabase
             .from('v_mpg_contacts')
-            .select('id, name, company, email, phone, last_touch_at, stage'),
+            .select('id, name, company, email, phone, last_touch_at, stage, crm_profile_url'),
           supabase
             .from('deals')
             .select('id', { count: 'exact', head: true })
