@@ -39,7 +39,7 @@ export async function getAccessToken() {
   return { accessToken: json.access_token, apiHost: c.apiHost }
 }
 
-async function zohoGet(apiHost, accessToken, path, params = {}, sinceIso) {
+export async function zohoGet(apiHost, accessToken, path, params = {}, sinceIso) {
   const url = new URL(`${apiHost}/crm/v2/${path}`)
   Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, String(v)))
   const headers = { Authorization: `Zoho-oauthtoken ${accessToken}` }
@@ -55,7 +55,7 @@ async function zohoGet(apiHost, accessToken, path, params = {}, sinceIso) {
 }
 
 // Paginate a Zoho module list. Zoho uses page/per_page(<=200) + info.more_records.
-async function zohoList(apiHost, accessToken, module, sinceIso) {
+export async function zohoList(apiHost, accessToken, module, sinceIso) {
   const perPage = 200
   let page = 1
   const items = []
