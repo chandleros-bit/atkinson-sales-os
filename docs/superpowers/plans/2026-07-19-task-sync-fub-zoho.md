@@ -1726,7 +1726,15 @@ The screen shows open tasks only, and nothing is ever deleted:
   and visible on Sync Status exactly like `zoho-sync`. MPG tasks appear the
   moment Zoho is switched on. See §4b — the secrets are probably already set.
 - Both jobs run every 15 minutes (`fub-task-sync-15min`,
-  `zoho-task-sync-15min`).
+  `zoho-task-sync-15min`). That makes **six** jobs firing on the same
+  quarter-hour tick — FollowUpBoss now gets three concurrent callers
+  (`fub-sync`, `fub-activity-sync`, `fub-task-sync`) and Zoho two. Well inside
+  both vendors' rate limits at this volume, but it is where to look first if
+  either CRM starts throttling.
+- A task synced in the same tick that its contact is first created can land
+  with a null `contact_id`, because the id map is snapshotted before the fetch.
+  It self-heals on the next cycle — the upsert is keyed on
+  `(source_crm, external_id)`.
 ````
 
 - [ ] **Step 2: Commit**
