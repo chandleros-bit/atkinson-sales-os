@@ -741,7 +741,7 @@ export function mapTask(rec, contactIdByExternal, dealIdByExternal) {
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `npm test -- zoho-tasks`
-Expected: PASS, 7 tests.
+Expected: PASS, 11 tests.
 
 - [ ] **Step 6: Run the full suite (the `zoho.ts` edit touches a live sync)**
 
