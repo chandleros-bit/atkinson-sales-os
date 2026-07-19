@@ -1684,6 +1684,28 @@ vendor's documented shape. Confirm against the live payloads and adjust:
 - **`Who_Id` / `What_Id`:** contact and deal resolution. `What_Id` is
   polymorphic; the mapper trusts `$se_module === 'Deals'` when present.
 
+## 4b. Confirm the Zoho secret state before deploying (do this first)
+
+The source design doc assumed `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` /
+`ZOHO_REFRESH_TOKEN` were still unset, but the MPG Zoho sync went live on
+2026-07-17, which implies they are set — and function secrets are project-wide.
+Check before deploying, because the two cases behave very differently:
+
+- **Secrets unset:** `zoho-task-sync` logs one "credentials not set" error row
+  per run and does nothing else. Harmless.
+- **Secrets set (likely):** the function runs for real on its first cron tick.
+  Zoho's module list has no server-side status filter, so **the first run
+  paginates the org's entire Task history** (200/page) and discards completed
+  rows client-side — unlike the FUB side, which bounds its first fetch with
+  `isCompleted=false`. At MPG's volume this is expected to be fine, but watch
+  that first run: if it errors with a 401 mid-pagination the access token
+  expired before the fetch finished, and nothing is upserted — the run wasted
+  itself and the next tick starts over. If that happens, the fix is to bound
+  the first fetch (a dated `If-Modified-Since`) rather than retrying blindly.
+
+Check the deployed sources on Sync Status, or run
+`supabase secrets list --project-ref cnmipfxwqnbtkohfixkf`.
+
 ## 5. How completion propagates
 
 The screen shows open tasks only, and nothing is ever deleted:
@@ -1699,10 +1721,10 @@ The screen shows open tasks only, and nothing is ever deleted:
 ## Notes
 
 - Read-only: the functions only GET from FUB/Zoho and write to our own tables.
-- Until `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` are set,
+- If `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` are unset,
   `zoho-task-sync` logs a "credentials not set" error row every run — expected,
   and visible on Sync Status exactly like `zoho-sync`. MPG tasks appear the
-  moment Zoho is switched on.
+  moment Zoho is switched on. See §4b — the secrets are probably already set.
 - Both jobs run every 15 minutes (`fub-task-sync-15min`,
   `zoho-task-sync-15min`).
 ````
@@ -1719,8 +1741,9 @@ git commit -m "docs: add task sync setup and first-run verification guide"
 Run the deploy commands and migrations from the doc above, then trigger the two
 manual runs. Report back:
 - the `fub-tasks` row on Sync Status (ok / error, count, message);
-- the `zoho-tasks` row (expected: error, "Zoho credentials not set…" until the
-  secrets land);
+- the `zoho-tasks` row — "credentials not set" if the Zoho secrets are still
+  unset, otherwise a real first run (see §4b: that first run is unbounded by
+  status, so note how long it took and whether it 401'd part-way);
 - whether `/tasks` renders live FUB rows.
 
 If the FUB run errors, read `sync_log.message` and apply the §4 checklist above
