@@ -18,10 +18,16 @@ import { fubGet } from './fub.ts'
 
 // Paginate the FUB /tasks list endpoint. `listKeys` are candidate top-level
 // array keys (FUB casing varies by resource); the first present wins.
+// A server that ignores `offset` and keeps returning a full page would spin
+// this loop until the Edge Function's wall clock kills it, with nothing in
+// sync_log to explain why. Cap the pages instead.
+const MAX_PAGES = 100
+
 async function fubListTasks(sinceIso, extraParams = {}) {
   const listKeys = ['tasks']
   const limit = 100
   let offset = 0
+  let pages = 0
   const items = []
   const pick = (json) => {
     for (const k of listKeys) {
@@ -38,6 +44,9 @@ async function fubListTasks(sinceIso, extraParams = {}) {
     if (page.length === 0) break
     items.push(...page)
     if (page.length < limit) break
+    if (++pages >= MAX_PAGES) {
+      throw new Error(`FUB /tasks exceeded ${MAX_PAGES} pages — pagination may not be advancing`)
+    }
     offset += limit
   }
   return items
