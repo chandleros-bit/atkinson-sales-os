@@ -142,7 +142,13 @@ select
   t.contact_id,
   c.name             as contact_name,
   c.company          as company,
-  c.crm_profile_url  as crm_profile_url,
+  -- crm_profile_url is NOT a column on `contacts` — it is always computed
+  -- per-business from external_id (see 0015/0016). `tasks` spans both books,
+  -- so this reuses v_active_pipeline's case-per-business pattern verbatim.
+  case c.business_id
+    when 'bay' then 'https://baywayhtx.followupboss.com/2/people/view/' || c.external_id
+    when 'mpg' then 'https://crm.zoho.com/crm/tab/Leads/' || c.external_id
+  end                as crm_profile_url,
   t.deal_id,
   d.name             as deal_name
 from tasks t
@@ -152,15 +158,15 @@ where t.is_completed = false
 order by t.due_at asc nulls last, t.id asc;
 ```
 
-- [ ] **Step 2: Verify the column exists that the join relies on**
+- [ ] **Step 2: Verify the CRM-link expression matches its precedent**
 
 Run:
 
 ```bash
-grep -n "crm_profile_url" supabase/migrations/0015_contacts_crm_profile_url.sql
+grep -n -A3 "case c.business_id" supabase/migrations/0016_crm_links_everywhere.sql
 ```
 
-Expected: at least one hit adding `crm_profile_url` to `contacts`. If it is missing, stop — the view will not compile against the live DB.
+Expected: the same two `when 'bay' … when 'mpg' …` URL prefixes used above. Despite its filename, `0015_contacts_crm_profile_url.sql` adds **no column** to `contacts` — it defines views that compute the URL. Selecting `c.crm_profile_url` off `contacts` would fail with `column c.crm_profile_url does not exist`.
 
 - [ ] **Step 3: Commit**
 
