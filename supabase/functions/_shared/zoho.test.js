@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { getCredentials, mapStage, mapContact, mapDeal } from './zoho.ts'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { getCredentials, mapStage, mapContact, mapDeal, zohoList } from './zoho.ts'
 
 const fakeGet = (obj) => (k) => obj[k]
 
@@ -139,5 +139,37 @@ describe('mapDeal', () => {
     expect(row.stage_id).toBe(null)
     expect(row.status).toBe('open')
     expect(row.value).toBe(null)
+  })
+})
+
+describe('zohoList pagination cap', () => {
+  const realFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = realFetch
+  })
+
+  const jsonResponse = (body) => ({ ok: true, status: 200, json: async () => body })
+
+  it('throws naming the module after MAX_PAGES pages when more_records never turns false', async () => {
+    const fullPage = Array.from({ length: 200 }, (_, i) => ({ id: String(i) }))
+    globalThis.fetch = vi.fn(async () => jsonResponse({ data: fullPage, info: { more_records: true } }))
+
+    await expect(zohoList('https://api.example', 'token', 'Leads', null)).rejects.toThrow(
+      /Zoho Leads exceeded 100 pages — pagination may not be advancing/,
+    )
+    // Proves the loop actually stopped rather than spinning forever.
+    expect(globalThis.fetch).toHaveBeenCalledTimes(100)
+  })
+
+  it('returns all items concatenated across pages and does not throw when more_records goes false', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: '1' }, { id: '2' }], info: { more_records: true } }))
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: '3' }], info: { more_records: false } }))
+
+    const items = await zohoList('https://api.example', 'token', 'Contacts', null)
+    expect(items).toEqual([{ id: '1' }, { id: '2' }, { id: '3' }])
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2)
   })
 })

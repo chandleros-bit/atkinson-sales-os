@@ -11,6 +11,7 @@ import Calendar from './pages/Calendar'
 import Activity from './pages/Activity'
 import PriorityLeads from './pages/PriorityLeads'
 import Reports from './pages/Reports'
+import Tasks from './pages/Tasks'
 import PagePlaceholder from './components/PagePlaceholder'
 
 function Protected({ children }) {
@@ -42,6 +43,7 @@ export default function App() {
               <Route path="/" element={<Overview />} />
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/tasks" element={<Tasks />} />
               <Route path="/mpg/pipeline" element={<Pipeline biz="mpg" />} />
               <Route
                 path="/mpg/activity"
