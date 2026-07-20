@@ -987,6 +987,9 @@ describe('dueLabel', () => {
   it('handles a null due date', () => {
     expect(dueLabel(null, now)).toBe('No due date')
   })
+  it('handles an unparseable due date without rendering NaN', () => {
+    expect(dueLabel('not-a-date', now)).toBe('No due date')
+  })
 })
 
 describe('dueTimeOfDay', () => {
@@ -1032,6 +1035,13 @@ describe('normalizePriority', () => {
     expect(normalizePriority('Medium')).toBe('normal')
     expect(normalizePriority('Low')).toBe('low')
     expect(normalizePriority('Lowest')).toBe('low')
+  })
+  it('folds urgent to high', () => {
+    expect(normalizePriority('urgent')).toBe('high')
+  })
+  it('tolerates surrounding whitespace', () => {
+    expect(normalizePriority('  High  ')).toBe('high')
+    expect(normalizePriority('Normal\n')).toBe('normal')
   })
   it('returns null for missing or unknown values', () => {
     expect(normalizePriority(null)).toBe(null)
@@ -1172,7 +1182,7 @@ export const PRIORITY_CHIPS = [
 // FUB and Zoho use different picklists (Zoho: Highest/High/Normal/Low/Lowest;
 // FUB often none at all). Fold them into three keys, null when unknown.
 export function normalizePriority(p) {
-  const v = String(p || '').toLowerCase()
+  const v = String(p || '').trim().toLowerCase()
   if (v === 'high' || v === 'highest' || v === 'urgent') return 'high'
   if (v === 'normal' || v === 'medium') return 'normal'
   if (v === 'low' || v === 'lowest') return 'low'
@@ -1208,6 +1218,9 @@ export function dueDayKey(iso) {
 
 export function dueLabel(iso, now = Date.now()) {
   if (!iso) return 'No due date'
+  // Same guard as dueTimeOfDay — an unparseable value must not render as
+  // "undefined · undefined NaN".
+  if (Number.isNaN(new Date(iso).getTime())) return 'No due date'
   const key = dueDayKey(iso)
   const todayKey = dayKey(new Date(now).toISOString())
   const tmr = new Date(now)
@@ -1298,6 +1311,7 @@ import {
   PRIORITY_META,
   PRIORITY_CHIPS,
   bucketByDue,
+  dueLabel,
   dueTimeOfDay,
   filterByPriority,
   normalizePriority,
@@ -1329,6 +1343,18 @@ function BizTag({ business_id }) {
     >
       {mpg ? 'MPG' : 'BAYWAY'}
     </span>
+  )
+}
+
+// Overdue and Upcoming span many days, so a bare time is ambiguous there — two
+// rows both reading "9:00a" could be a week apart. Those buckets show the day;
+// Today and Tomorrow already have it in the section header, so they show time.
+function DueCell({ bucketKey, due_at }) {
+  const spansDays = bucketKey === 'overdue' || bucketKey === 'upcoming'
+  return (
+    <div className="num w-24 flex-none text-[12px] text-muted">
+      {spansDays ? dueLabel(due_at) : dueTimeOfDay(due_at)}
+    </div>
   )
 }
 
@@ -1466,7 +1492,7 @@ export default function Tasks() {
               </div>
               <div
                 className="overflow-hidden rounded-card border bg-panel"
-                style={{ borderColor: g.key === 'overdue' ? BUCKET_META.overdue.border : 'var(--line)' }}
+                style={{ borderColor: BUCKET_META[g.key].border }}
               >
                 {g.rows.map((r) => (
                   <div
@@ -1474,9 +1500,7 @@ export default function Tasks() {
                     className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg"
                   >
                     <BizTag business_id={r.business_id} />
-                    <div className="num w-14 flex-none text-[12px] text-muted">
-                      {dueTimeOfDay(r.due_at)}
-                    </div>
+                    <DueCell bucketKey={g.key} due_at={r.due_at} />
                     <PriorityTag priority={r.priority} />
                     <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">
                       {r.title || '(untitled task)'}
