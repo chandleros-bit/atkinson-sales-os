@@ -5,7 +5,9 @@ const SOURCE_LABELS = {
   fub: { label: 'FollowUpBoss (Bayway)', biz: 'bay' },
   'fub-webhook': { label: 'FollowUpBoss webhook (Bayway)', biz: 'bay' },
   'fub-activity': { label: 'FollowUpBoss activity (Bayway)', biz: 'bay' },
+  'fub-tasks': { label: 'FollowUpBoss tasks (Bayway)', biz: 'bay' },
   zoho: { label: 'Zoho CRM (MPG)', biz: 'mpg' },
+  'zoho-tasks': { label: 'Zoho tasks (MPG)', biz: 'mpg' },
   'outlook-mpg': { label: 'Outlook — MPG', biz: 'mpg' },
   'outlook-bayway': { label: 'Outlook — Bayway', biz: 'bay' },
 }

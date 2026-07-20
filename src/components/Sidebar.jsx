@@ -110,6 +110,7 @@ export default function Sidebar() {
           <GroupLabel>OVERVIEW</GroupLabel>
           <Item to="/" icon="▤">Overview</Item>
           <Item to="/calendar" icon="▦">Calendar</Item>
+          <Item to="/tasks" icon="✓">Tasks</Item>
           <Item to="/reports" icon="▢">Reports</Item>
         </div>
 

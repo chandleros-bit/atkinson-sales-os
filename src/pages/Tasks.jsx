@@ -170,7 +170,11 @@ export default function Tasks() {
 
       {!loading && sourceRows.length > 0 && total === 0 && (
         <div className="mt-6 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
-          No open tasks match the current filters.
+          {/* Filters apply to the loaded window, so "nothing here" can mean
+              "nothing yet" when more pages remain — say which. */}
+          {hasMore
+            ? 'No open tasks match the current filters in the loaded range — try Load more.'
+            : 'No open tasks match the current filters.'}
         </div>
       )}
 
