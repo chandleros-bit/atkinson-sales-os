@@ -73,17 +73,20 @@ vendor's documented shape. Confirm against the live payloads and adjust:
 - **`Who_Id` / `What_Id`:** contact and deal resolution. `What_Id` is
   polymorphic; the mapper trusts `$se_module === 'Deals'` when present.
 
-## 4b. Confirm the Zoho secret state before deploying (do this first)
+## 4b. The Zoho secrets ARE set — `zoho-task-sync` goes live immediately
 
-The source design doc assumed `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` /
-`ZOHO_REFRESH_TOKEN` were still unset, but the MPG Zoho sync went live on
-2026-07-17, which implies they are set — and function secrets are project-wide.
-Check before deploying, because the two cases behave very differently:
+Verified 2026-07-19 with `supabase secrets list --project-ref cnmipfxwqnbtkohfixkf`:
+`ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, and `ZOHO_REFRESH_TOKEN` are all
+present, set 2026-07-17 when the MPG Zoho sync went live. Function secrets are
+project-wide, so `zoho-task-sync` inherits them the moment it deploys.
 
-- **Secrets unset:** `zoho-task-sync` logs one "credentials not set" error row
-  per run and does nothing else. Harmless.
-- **Secrets set (likely):** the function runs for real on its first cron tick.
-  Zoho's module list has no server-side status filter, so **the first run
+(The source design doc said these were still unset. That was stale — it is why
+the earlier drafts of this doc hedged. There is no "credentials not set" phase:
+this function syncs for real on its first cron tick.)
+
+What that means for the first run:
+
+- Zoho's module list has no server-side status filter, so **the first run
   paginates the org's entire Task history** (200/page) and discards completed
   rows client-side — unlike the FUB side, which bounds its first fetch with
   `isCompleted=false`. At MPG's volume this is expected to be fine, but watch
@@ -92,8 +95,8 @@ Check before deploying, because the two cases behave very differently:
   itself and the next tick starts over. If that happens, the fix is to bound
   the first fetch (a dated `If-Modified-Since`) rather than retrying blindly.
 
-Check the deployed sources on Sync Status, or run
-`supabase secrets list --project-ref cnmipfxwqnbtkohfixkf`.
+Re-check any time with `supabase secrets list --project-ref cnmipfxwqnbtkohfixkf`
+(it prints names and digests, never plaintext values).
 
 ## 5. How completion propagates
 
@@ -110,10 +113,8 @@ The screen shows open tasks only, and nothing is ever deleted:
 ## Notes
 
 - Read-only: the functions only GET from FUB/Zoho and write to our own tables.
-- If `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` are unset,
-  `zoho-task-sync` logs a "credentials not set" error row every run — expected,
-  and visible on Sync Status exactly like `zoho-sync`. MPG tasks appear the
-  moment Zoho is switched on. See §4b — the secrets are probably already set.
+- The Zoho secrets are set (verified 2026-07-19), so MPG tasks start flowing on
+  the first tick — there is no "credentials not set" waiting period. See §4b.
 - Both jobs run every 15 minutes (`fub-task-sync-15min`,
   `zoho-task-sync-15min`). That makes **six** jobs firing on the same
   quarter-hour tick — FollowUpBoss now gets three concurrent callers

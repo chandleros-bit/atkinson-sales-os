@@ -1712,7 +1712,7 @@ vendor's documented shape. Confirm against the live payloads and adjust:
 - **`Who_Id` / `What_Id`:** contact and deal resolution. `What_Id` is
   polymorphic; the mapper trusts `$se_module === 'Deals'` when present.
 
-## 4b. Confirm the Zoho secret state before deploying (do this first)
+## 4b. The Zoho secrets ARE set (verified 2026-07-19)
 
 The source design doc assumed `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` /
 `ZOHO_REFRESH_TOKEN` were still unset, but the MPG Zoho sync went live on
@@ -1752,7 +1752,7 @@ The screen shows open tasks only, and nothing is ever deleted:
 - If `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` are unset,
   `zoho-task-sync` logs a "credentials not set" error row every run — expected,
   and visible on Sync Status exactly like `zoho-sync`. MPG tasks appear the
-  moment Zoho is switched on. See §4b — the secrets are probably already set.
+  moment Zoho is switched on. RESOLVED: the secrets are set — see §4b.
 - Both jobs run every 15 minutes (`fub-task-sync-15min`,
   `zoho-task-sync-15min`). That makes **six** jobs firing on the same
   quarter-hour tick — FollowUpBoss now gets three concurrent callers
@@ -1777,9 +1777,9 @@ git commit -m "docs: add task sync setup and first-run verification guide"
 Run the deploy commands and migrations from the doc above, then trigger the two
 manual runs. Report back:
 - the `fub-tasks` row on Sync Status (ok / error, count, message);
-- the `zoho-tasks` row — "credentials not set" if the Zoho secrets are still
-  unset, otherwise a real first run (see §4b: that first run is unbounded by
-  status, so note how long it took and whether it 401'd part-way);
+- the `zoho-tasks` row — a real first run, since the secrets are set (see
+  §4b: that first run is unbounded by status, so note how long it took and
+  whether it 401'd part-way);
 - whether `/tasks` renders live FUB rows.
 
 If the FUB run errors, read `sync_log.message` and apply the §4 checklist above
