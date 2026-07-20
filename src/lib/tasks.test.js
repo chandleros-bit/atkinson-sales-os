@@ -23,6 +23,9 @@ describe('dueLabel', () => {
   it('handles a null due date', () => {
     expect(dueLabel(null, now)).toBe('No due date')
   })
+  it('handles an unparseable due date without rendering NaN', () => {
+    expect(dueLabel('not-a-date', now)).toBe('No due date')
+  })
 })
 
 describe('dueTimeOfDay', () => {
@@ -68,6 +71,13 @@ describe('normalizePriority', () => {
     expect(normalizePriority('Medium')).toBe('normal')
     expect(normalizePriority('Low')).toBe('low')
     expect(normalizePriority('Lowest')).toBe('low')
+  })
+  it('folds urgent to high', () => {
+    expect(normalizePriority('urgent')).toBe('high')
+  })
+  it('tolerates surrounding whitespace', () => {
+    expect(normalizePriority('  High  ')).toBe('high')
+    expect(normalizePriority('Normal\n')).toBe('normal')
   })
   it('returns null for missing or unknown values', () => {
     expect(normalizePriority(null)).toBe(null)

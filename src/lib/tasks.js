@@ -41,7 +41,7 @@ export const PRIORITY_CHIPS = [
 // FUB and Zoho use different picklists (Zoho: Highest/High/Normal/Low/Lowest;
 // FUB often none at all). Fold them into three keys, null when unknown.
 export function normalizePriority(p) {
-  const v = String(p || '').toLowerCase()
+  const v = String(p || '').trim().toLowerCase()
   if (v === 'high' || v === 'highest' || v === 'urgent') return 'high'
   if (v === 'normal' || v === 'medium') return 'normal'
   if (v === 'low' || v === 'lowest') return 'low'
@@ -77,6 +77,9 @@ export function dueDayKey(iso) {
 
 export function dueLabel(iso, now = Date.now()) {
   if (!iso) return 'No due date'
+  // Same guard as dueTimeOfDay — an unparseable value must not render as
+  // "undefined · undefined NaN".
+  if (Number.isNaN(new Date(iso).getTime())) return 'No due date'
   const key = dueDayKey(iso)
   const todayKey = dayKey(new Date(now).toISOString())
   const tmr = new Date(now)
