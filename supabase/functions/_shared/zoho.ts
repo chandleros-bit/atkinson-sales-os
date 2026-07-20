@@ -55,15 +55,26 @@ export async function zohoGet(apiHost, accessToken, path, params = {}, sinceIso)
 }
 
 // Paginate a Zoho module list. Zoho uses page/per_page(<=200) + info.more_records.
+// A response that keeps saying more_records: true without actually advancing —
+// a malformed payload, or an API quirk — would spin this loop until the Edge
+// Function's wall clock kills it, with nothing in sync_log to explain why.
+// Cap the pages instead. At 200/page that's a 20,000-record ceiling per module
+// per invocation, comfortably above this org's real volume.
+const MAX_PAGES = 100
+
 export async function zohoList(apiHost, accessToken, module, sinceIso) {
   const perPage = 200
   let page = 1
+  let pages = 0
   const items = []
   while (true) {
     const json = await zohoGet(apiHost, accessToken, module, { page, per_page: perPage }, sinceIso)
     const rows = json.data || []
     items.push(...rows)
     if (!json.info || !json.info.more_records) break
+    if (++pages >= MAX_PAGES) {
+      throw new Error(`Zoho ${module} exceeded ${MAX_PAGES} pages — pagination may not be advancing`)
+    }
     page += 1
   }
   return items
