@@ -1271,7 +1271,7 @@ export function bucketByDue(rows, now = Date.now()) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- tasks`
-Expected: PASS, 21 tests in `src/lib/tasks.test.js`. (The `-- tasks` filter also re-runs `fub-tasks` and `zoho-tasks`; those must stay green too.)
+Expected: PASS, 22 tests in `src/lib/tasks.test.js`. (The `-- tasks` filter also re-runs `fub-tasks` and `zoho-tasks`; those must stay green too.)
 
 - [ ] **Step 5: Commit**
 
