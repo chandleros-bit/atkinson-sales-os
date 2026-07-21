@@ -52,6 +52,13 @@ function DocsBlock({ r }) {
         {days !== null ? ` · oldest ${days}d` : ''}
       </div>
       <div className="truncate text-[11px] text-muted">{docSummary(r.docs_outstanding)}</div>
+      {/* The assistant's own note from the sheet's Notes column — why a doc is
+          still outstanding. Only shown here, in the outstanding state: on a
+          cleared or untracked card it has nothing to explain, and the board's
+          value is scanning a column in one pass. */}
+      {r.doc_notes ? (
+        <div className="truncate text-[11px] text-dim">{r.doc_notes}</div>
+      ) : null}
     </div>
   )
 }
@@ -140,6 +147,7 @@ const demoRows = [
     last_touch_at: null, crm_profile_url: '#',
     docs_tracked: true, docs_outstanding: ['Paystubs', 'W2', 'Bank Statements'],
     docs_outstanding_count: 3, docs_oldest_requested_at: demoAge(12),
+    doc_notes: 'Employer reissuing the W2 — chasing weekly',
     last_note_snippet: 'Sending W2 tomorrow, has to dig up the 2024 one',
     last_note_at: demoAge(2),
   },
@@ -167,7 +175,7 @@ const PIPELINE = {
     columns:
       'id, business_id, name, email, phone, last_touch_at, stage, crm_profile_url, ' +
       'docs_tracked, docs_outstanding, docs_outstanding_count, docs_oldest_requested_at, ' +
-      'last_note_snippet, last_note_at',
+      'doc_notes, last_note_snippet, last_note_at',
     flowOrder: undefined, // default LOAN_FLOW_ORDER
     countLabel: 'active',
     empty: 'No active loans — add stages in FollowUpBoss.',
