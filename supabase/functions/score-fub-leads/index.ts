@@ -5,26 +5,11 @@
 // touches our own Supabase tables. Logs sync_log source 'score-fub-leads'.
 // See docs/phase-priority-leads-setup.md.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { scoreContact, assignTier, isHotTag } from '../_shared/scoring.ts'
 
 const SIX_MONTHS_MS = 182 * 86_400_000
 const SCORING_TYPES = ['call', 'note', 'appointment', 'email']
-
-// PostgREST caps a single response at 1000 rows; page through with range().
-async function fetchAll(makeQuery) {
-  const pageSize = 1000
-  let from = 0
-  const rows = []
-  while (true) {
-    const { data, error } = await makeQuery().range(from, from + pageSize - 1)
-    if (error) throw new Error(error.message)
-    rows.push(...(data || []))
-    if (!data || data.length < pageSize) break
-    from += pageSize
-  }
-  return rows
-}
 
 Deno.serve(async () => {
   const db = serviceClient()

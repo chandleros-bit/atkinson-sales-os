@@ -6,7 +6,7 @@
 // syncs cannot occur here. The hazard is the opposite one — an empty read
 // looking like success — which assertNotMassRemoval handles before any write.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { getAccessToken } from '../_shared/google-auth.ts'
 import { parseSheet } from '../_shared/sheet-docs.ts'
 import { diffTracking, diffDocs, assertNotMassRemoval } from '../_shared/sheet-docs-diff.ts'
@@ -25,8 +25,15 @@ Deno.serve(async () => {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON / DOCS_SHEET_ID not set as function secrets')
     }
 
+    let creds
+    try {
+      creds = JSON.parse(rawCreds)
+    } catch (e) {
+      throw new Error(`GOOGLE_SERVICE_ACCOUNT_JSON: not valid JSON (${e.message})`)
+    }
+
     // Auth first: a bad key must abort before we diff anything.
-    const token = await getAccessToken(JSON.parse(rawCreds))
+    const token = await getAccessToken(creds)
     const url =
       `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}` +
       `/values/${encodeURIComponent(TAB)}`
@@ -35,20 +42,34 @@ Deno.serve(async () => {
     const parsed = parseSheet(((await res.json())?.values as unknown[][]) || [])
 
     // Existing state. Fail loud on query errors: an empty map here would look
-    // like "every borrower is new" and re-stamp every aging clock.
-    const { data: trackRows, error: trackErr } = await db
-      .from('borrower_doc_tracking')
-      .select('id, fub_person_id, notes, removed_at')
-    if (trackErr) throw new Error(`tracking read: ${trackErr.message}`)
-    const existingTracking = trackRows || []
+    // like "every borrower is new" and re-stamp every aging clock. Paginated
+    // via fetchAll — this table only grows (nothing is hard-deleted) and will
+    // cross PostgREST's 1000-row cap.
+    let existingTracking
+    try {
+      existingTracking = await fetchAll(() =>
+        db.from('borrower_doc_tracking').select('id, fub_person_id, notes, removed_at'),
+      )
+    } catch (e) {
+      throw new Error(`tracking read: ${e.message}`)
+    }
 
     const activeCount = existingTracking.filter((t) => !t.removed_at).length
     assertNotMassRemoval(parsed.rows.length, activeCount)
 
-    const { data: docRows, error: docErr } = await db
-      .from('borrower_docs')
-      .select('tracking_id, doc_type, status, first_requested_at, received_at, removed_at')
-    if (docErr) throw new Error(`docs read: ${docErr.message}`)
+    // Same pagination hazard as above: a truncated read here silently drops
+    // docs from existingDocsByPerson, and diffDocs would treat them as brand
+    // new — resetting the aging clock this feature exists to show.
+    let docRows
+    try {
+      docRows = await fetchAll(() =>
+        db
+          .from('borrower_docs')
+          .select('tracking_id, doc_type, status, first_requested_at, received_at, removed_at'),
+      )
+    } catch (e) {
+      throw new Error(`docs read: ${e.message}`)
+    }
 
     const personByTrackingId = new Map(existingTracking.map((t) => [t.id, t.fub_person_id]))
     const existingDocsByPerson = new Map()
@@ -62,12 +83,16 @@ Deno.serve(async () => {
     const nowIso = new Date().toISOString()
 
     // Contact resolution. Same fail-loud rule: an empty map would upsert every
-    // borrower with contact_id null while logging ok.
-    const { data: contactRows, error: contactErr } = await db
-      .from('contacts')
-      .select('id, external_id')
-      .eq('source_crm', 'fub')
-    if (contactErr) throw new Error(`contact map: ${contactErr.message}`)
+    // borrower with contact_id null while logging ok. Paginated: ~826 FUB
+    // contacts today, closest of the four reads to tipping over the cap.
+    let contactRows
+    try {
+      contactRows = await fetchAll(() =>
+        db.from('contacts').select('id, external_id').eq('source_crm', 'fub'),
+      )
+    } catch (e) {
+      throw new Error(`contact map: ${e.message}`)
+    }
     const contactIdByExternal = new Map((contactRows || []).map((c) => [c.external_id, c.id]))
 
     // 1. Tracking rows first — doc rows need their ids.
@@ -94,11 +119,16 @@ Deno.serve(async () => {
     }
     const trackingChanges = active.length + removed.length
 
-    // 2. Re-read ids so newly inserted borrowers resolve.
-    const { data: afterRows, error: afterErr } = await db
-      .from('borrower_doc_tracking')
-      .select('id, fub_person_id')
-    if (afterErr) throw new Error(`tracking id re-read: ${afterErr.message}`)
+    // 2. Re-read ids so newly inserted borrowers resolve. Paginated: a
+    // truncated read here silently drops doc rows for overflow borrowers via
+    // the .filter(Boolean) below, with no counter and no log line — the worst
+    // of the four reads to get wrong, since nothing would flag it after.
+    let afterRows
+    try {
+      afterRows = await fetchAll(() => db.from('borrower_doc_tracking').select('id, fub_person_id'))
+    } catch (e) {
+      throw new Error(`tracking id re-read: ${e.message}`)
+    }
     const trackingIdByPerson = new Map((afterRows || []).map((t) => [t.fub_person_id, t.id]))
 
     // 3. Doc rows.
