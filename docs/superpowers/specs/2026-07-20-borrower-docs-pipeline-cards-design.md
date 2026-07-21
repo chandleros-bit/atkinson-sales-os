@@ -20,7 +20,7 @@ Reached during brainstorming, with the alternatives that were rejected and why.
 
 | Decision | Rejected alternative | Reason |
 |---|---|---|
-| Google Sheet as the feed | Arive API | Unknown whether one exists. If it does, it replaces the sheet later and this schema survives. |
+| Google Sheet as the feed | Arive API | **Confirmed 2026-07-20: Arive exposes no API and no webhooks.** There is no integration path to the LOS. |
 | Google Sheet as the feed | Parsing the Arive docs email | Needs an inbound-mail vendor or MS Graph OAuth, plus HTML parsing that breaks on template changes, plus name-based borrower matching. Strictly worse on every axis. |
 | Google Sheet as the feed | FUB multi-select custom field | Adds a second place for a human to maintain. The sheet is already maintained daily, so it adds no new labor. |
 | Service account auth | Publish-to-web CSV | Published sheets are readable by anyone with the URL and have been search-indexed. This sheet is entirely borrower PII. |
@@ -269,11 +269,28 @@ Pure functions carry the weight, consistent with prior phases.
   assistant's work.
 - **The Overview workbench (idea #1).** Separate phase, consumes this data model.
   Sequencing this first is what de-risks it.
-- **Arive API.** If it exists, it replaces the sheet as the feed and this schema
-  largely survives. Worth checking before building idea #1.
+- **Arive integration.** Not possible — no API, no webhooks (confirmed 2026-07-20).
 - MPG, per-doc notes, in-app document upload, email parsing.
+
+## Consequence: the sheet is permanent
+
+Arive offers no API and no webhooks, so there is no future migration to a "real"
+integration. The Google Sheet is the durable source of truth for document status,
+and the human maintaining it is a permanent part of the loop.
+
+That raises the stakes on two things already in this design, and they should not be
+traded away during implementation:
+
+- **The mass-removal guard.** With no second source to reconcile against, a silent
+  wipe has nothing to correct it. This is the single most important safety property
+  in the sync.
+- **Never hard-deleting.** `removed_at` everywhere means a mistaken edit in the sheet
+  stays recoverable from the database, which is now the only backstop.
+
+It also means idea #1's workbench inherits the same ceiling: its qualification view
+can only ever be as fresh and as accurate as the sheet. Worth accepting explicitly
+before that phase, rather than discovering it mid-build.
 
 ## Open questions
 
-None blocking. One worth resolving before idea #1: whether Arive exposes an API or
-webhooks.
+None.
