@@ -195,7 +195,34 @@ export interface TrackingRow {
   removed_at: string | null
 }
 
+export interface TrackingRowActive {
+  fub_person_id: string
+  notes: string
+  last_seen_at: string
+  removed_at: null
+}
+
+export interface TrackingRowRemoved {
+  fub_person_id: string
+  notes: string
+  removed_at: string
+}
+
+export interface TrackingDiff {
+  active: TrackingRowActive[]
+  removed: TrackingRowRemoved[]
+}
+
 export interface DocRow {
+  doc_type: string
+  status: 'needed' | 'received'
+  first_requested_at: string | null
+  received_at: string | null
+  removed_at: string | null
+}
+
+export interface DocRowEmitted {
+  fub_person_id: string
   doc_type: string
   status: 'needed' | 'received'
   first_requested_at: string | null
@@ -205,30 +232,33 @@ export interface DocRow {
 
 // Tracking rows to upsert: everyone in the sheet (refreshing notes + last_seen),
 // plus anyone who dropped out (stamped removed_at once, not on every run).
+// Returns separate homogeneous lists for active and removed borrowers to avoid
+// data corruption when heterogeneous objects are upserted to PostgREST, which
+// would fill missing columns with NULL.
 export function diffTracking(
   incoming: ParsedRow[],
   existing: TrackingRow[],
   nowIso: string,
-) {
+): TrackingDiff {
   const seen = new Set(incoming.map((r) => r.fub_person_id))
-  const out: Record<string, unknown>[] = incoming.map((r) => ({
+  const active: TrackingRowActive[] = incoming.map((r) => ({
     fub_person_id: r.fub_person_id,
     notes: r.notes,
     last_seen_at: nowIso,
     removed_at: null,
   }))
 
+  const removed: TrackingRowRemoved[] = []
   for (const e of existing) {
     if (seen.has(e.fub_person_id)) continue
     if (e.removed_at) continue // already gone; don't re-stamp
-    out.push({
+    removed.push({
       fub_person_id: e.fub_person_id,
       notes: e.notes,
-      last_seen_at: undefined,
       removed_at: nowIso,
     })
   }
-  return out
+  return { active, removed }
 }
 
 // Doc rows to upsert, keyed by fub_person_id — the caller resolves tracking_id
@@ -239,8 +269,9 @@ export function diffDocs(
   incoming: ParsedRow[],
   existingByPerson: Map<string, DocRow[]>,
   nowIso: string,
-) {
-  const out: Record<string, unknown>[] = []
+): DocRowEmitted[] {
+  const out: DocRowEmitted[] = []
+  const incomingPeople = new Set(incoming.map((r) => r.fub_person_id))
 
   for (const person of incoming) {
     const prior = new Map((existingByPerson.get(person.fub_person_id) || []).map((d) => [d.doc_type, d]))
@@ -290,5 +321,22 @@ export function diffDocs(
       })
     }
   }
+
+  // FIX 2: Soft-remove docs for borrowers who dropped out entirely (not in incoming).
+  for (const [personId, docs] of existingByPerson) {
+    if (incomingPeople.has(personId)) continue
+    for (const doc of docs) {
+      if (doc.removed_at) continue // already removed; don't re-stamp
+      out.push({
+        fub_person_id: personId,
+        doc_type: doc.doc_type,
+        status: doc.status,
+        first_requested_at: doc.first_requested_at,
+        received_at: doc.received_at,
+        removed_at: nowIso,
+      })
+    }
+  }
+
   return out
 }

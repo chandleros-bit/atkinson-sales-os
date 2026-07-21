@@ -159,28 +159,37 @@ const NOW = '2026-07-20T12:00:00.000Z'
 describe('diffTracking', () => {
   it('inserts a borrower who is new to the sheet', () => {
     const out = diffTracking([{ fub_person_id: '2972', notes: 'hi', docs: [] }], [], NOW)
-    expect(out).toEqual([
-      { fub_person_id: '2972', notes: 'hi', last_seen_at: NOW, removed_at: null },
-    ])
+    expect(out).toEqual({
+      active: [{ fub_person_id: '2972', notes: 'hi', last_seen_at: NOW, removed_at: null }],
+      removed: [],
+    })
   })
 
   it('clears removed_at when a borrower returns to the sheet', () => {
     const existing = [{ fub_person_id: '2972', notes: '', removed_at: '2026-07-01T00:00:00.000Z' }]
     const out = diffTracking([{ fub_person_id: '2972', notes: 'back', docs: [] }], existing, NOW)
-    expect(out[0].removed_at).toBeNull()
+    expect(out.active[0].removed_at).toBeNull()
   })
 
   it('stamps removed_at for a borrower who dropped out', () => {
     const existing = [{ fub_person_id: '3104', notes: '', removed_at: null }]
     const out = diffTracking([], existing, NOW)
-    expect(out).toEqual([
-      { fub_person_id: '3104', notes: '', last_seen_at: undefined, removed_at: NOW },
-    ])
+    expect(out).toEqual({
+      active: [],
+      removed: [{ fub_person_id: '3104', notes: '', removed_at: NOW }],
+    })
   })
 
   it('does not re-stamp a borrower who was already removed', () => {
     const existing = [{ fub_person_id: '3104', notes: '', removed_at: '2026-07-01T00:00:00.000Z' }]
-    expect(diffTracking([], existing, NOW)).toEqual([])
+    expect(diffTracking([], existing, NOW)).toEqual({ active: [], removed: [] })
+  })
+
+  it('ensures removed rows have no last_seen_at key', () => {
+    const existing = [{ fub_person_id: '3104', notes: '', removed_at: null }]
+    const out = diffTracking([], existing, NOW)
+    expect(out.removed).toHaveLength(1)
+    expect('last_seen_at' in out.removed[0]).toBe(false)
   })
 })
 
@@ -257,5 +266,50 @@ describe('diffDocs', () => {
       ['2972', [{ doc_type: 'W2', status: 'needed', first_requested_at: '2026-07-08T00:00:00.000Z', received_at: null, removed_at: null }]],
     ])
     expect(diffDocs(person([{ doc_type: 'W2', status: 'needed' }]), existing, NOW)).toEqual([])
+  })
+
+  it('soft-removes all docs when a borrower drops out', () => {
+    const existing = new Map([
+      ['2972', [
+        { doc_type: 'W2', status: 'needed', first_requested_at: '2026-07-08T00:00:00.000Z', received_at: null, removed_at: null },
+        { doc_type: 'Paystubs', status: 'received', first_requested_at: '2026-07-01T00:00:00.000Z', received_at: '2026-07-05T00:00:00.000Z', removed_at: null },
+      ]],
+    ])
+    const out = diffDocs([], existing, NOW)
+    expect(out).toHaveLength(2)
+    expect(out[0]).toEqual({
+      fub_person_id: '2972',
+      doc_type: 'W2',
+      status: 'needed',
+      first_requested_at: '2026-07-08T00:00:00.000Z',
+      received_at: null,
+      removed_at: NOW,
+    })
+    expect(out[1]).toEqual({
+      fub_person_id: '2972',
+      doc_type: 'Paystubs',
+      status: 'received',
+      first_requested_at: '2026-07-01T00:00:00.000Z',
+      received_at: '2026-07-05T00:00:00.000Z',
+      removed_at: NOW,
+    })
+  })
+
+  it('does not re-stamp docs when a borrower who dropped out is seen again', () => {
+    const existing = new Map([
+      ['2972', [
+        { doc_type: 'W2', status: 'needed', first_requested_at: '2026-07-08T00:00:00.000Z', received_at: null, removed_at: NOW },
+      ]],
+    ])
+    const out = diffDocs([], existing, NOW)
+    expect(out).toEqual([])
+  })
+
+  it('emits nothing when a doc stays received', () => {
+    const existing = new Map([
+      ['2972', [{ doc_type: 'W2', status: 'received', first_requested_at: '2026-07-01T00:00:00.000Z', received_at: '2026-07-10T00:00:00.000Z', removed_at: null }]],
+    ])
+    const out = diffDocs(person([{ doc_type: 'W2', status: 'received' }]), existing, NOW)
+    expect(out).toEqual([])
   })
 })
