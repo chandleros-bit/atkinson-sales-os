@@ -236,6 +236,22 @@ describe('diffDocs', () => {
     expect(out[0].removed_at).toBe(NOW)
   })
 
+  it('restores a soft-removed doc without resetting its original request date', () => {
+    const existing = new Map([
+      ['2972', [{ doc_type: 'W2', status: 'needed', first_requested_at: '2026-07-08T00:00:00.000Z', received_at: null, removed_at: '2026-07-15T00:00:00.000Z' }]],
+    ])
+    const out = diffDocs(person([{ doc_type: 'W2', status: 'needed' }]), existing, NOW)
+    expect(out).toHaveLength(1)
+    expect(out[0]).toEqual({
+      fub_person_id: '2972',
+      doc_type: 'W2',
+      status: 'needed',
+      first_requested_at: '2026-07-08T00:00:00.000Z',
+      received_at: null,
+      removed_at: null,
+    })
+  })
+
   it('emits nothing when nothing changed', () => {
     const existing = new Map([
       ['2972', [{ doc_type: 'W2', status: 'needed', first_requested_at: '2026-07-08T00:00:00.000Z', received_at: null, removed_at: null }]],
