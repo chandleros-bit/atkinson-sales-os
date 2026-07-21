@@ -58,6 +58,32 @@ const WINDOW_END = Date.UTC(2026, 7, 1)
 
 const byUid = (rows, uid) => rows.find((r) => r.external_id === uid)
 
+// An all-day event carries VALUE=DATE and no TZID — it is a calendar date, not
+// an instant. It must be anchored at midnight UTC, the same date-marker
+// convention Postgres uses and that calendar.js reads back.
+const ALL_DAY_ICS = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Microsoft Corporation//Outlook 16.0 MIMEDIR//EN
+BEGIN:VEVENT
+UID:allday-1
+SUMMARY:Quarterly planning
+DTSTART;VALUE=DATE:20260721
+DTEND;VALUE=DATE:20260722
+END:VEVENT
+END:VCALENDAR`
+
+describe('expandIcs all-day handling', () => {
+  it('anchors an all-day event at midnight UTC, not the host timezone', () => {
+    const rows = expandIcs(ALL_DAY_ICS, WINDOW_START, WINDOW_END)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].is_all_day).toBe(true)
+    // Host-timezone-dependent construction would give 05:00Z in Central or
+    // the PREVIOUS day in Tokyo, both of which shift the rendered date.
+    expect(rows[0].starts_at).toBe('2026-07-21T00:00:00.000Z')
+    expect(rows[0].ends_at).toBe('2026-07-22T00:00:00.000Z')
+  })
+})
+
 describe('expandIcs timezone resolution', () => {
   it('resolves a TZID against the feed’s own VTIMEZONE, not the host timezone', () => {
     const rows = expandIcs(ICS, WINDOW_START, WINDOW_END)
