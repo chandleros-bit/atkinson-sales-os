@@ -147,17 +147,16 @@ describe('buildCombinedKpis', () => {
 })
 
 describe('deriveAlert', () => {
-  const freshRows = [{ stage: 'Pre-Approved', last_touch_at: daysAgo(1) }]
   const okSync = { status: 'ok', ran_at: new Date(NOW - 10 * 60_000).toISOString(), message: null }
 
   it('is red when FUB has never synced', () => {
-    const a = deriveAlert({ latestSync: null, rows: freshRows, now: NOW })
+    const a = deriveAlert({ latestSync: null, tasks: [], now: NOW })
     expect(a.level).toBe('red')
   })
   it('is red when the latest sync errored', () => {
     const a = deriveAlert({
       latestSync: { ...okSync, status: 'error', message: 'FUB GET /people -> 401' },
-      rows: freshRows,
+      tasks: [],
       now: NOW,
     })
     expect(a.level).toBe('red')
@@ -166,39 +165,64 @@ describe('deriveAlert', () => {
   it('is red when the last ok sync is older than 45 minutes', () => {
     const a = deriveAlert({
       latestSync: { ...okSync, ran_at: new Date(NOW - 50 * 60_000).toISOString() },
-      rows: freshRows,
+      tasks: [],
       now: NOW,
     })
     expect(a.level).toBe('red')
   })
-  it('is amber when loans are stale 7+ days (sync healthy)', () => {
+  // Deliberately NOT midnight UTC: bucketByDue treats a due_at sitting exactly
+  // on midnight UTC as a date-only CRM value and reads it in UTC rather than
+  // local. These fixtures are real instants, so they bucket the same either way.
+  const OVERDUE = '2026-07-08T15:00:00.000Z'
+  const TODAY = '2026-07-09T15:00:00.000Z'
+  const TOMORROW = '2026-07-10T15:00:00.000Z'
+  const task = (due_at) => ({ id: due_at, due_at })
+
+  it('is amber counting overdue tasks', () => {
     const a = deriveAlert({
       latestSync: okSync,
-      rows: [
-        { stage: 'Pre-Approved', last_touch_at: daysAgo(9) },
-        { stage: 'Waiting on Docs', last_touch_at: daysAgo(8) },
-        { stage: 'Pre-Approved', last_touch_at: daysAgo(1) },
-      ],
+      tasks: [task(OVERDUE), task(OVERDUE), task(TOMORROW)],
       now: NOW,
     })
     expect(a.level).toBe('amber')
-    expect(a.text).toContain('2 active loans')
+    expect(a.text).toBe('2 tasks overdue')
   })
-  it('ignores null touches for the amber rule', () => {
+
+  it('is amber counting tasks due today', () => {
+    const a = deriveAlert({ latestSync: okSync, tasks: [task(TODAY)], now: NOW })
+    expect(a.level).toBe('amber')
+    expect(a.text).toBe('1 task due today')
+  })
+
+  it('reports both counts when overdue and today are present', () => {
     const a = deriveAlert({
       latestSync: okSync,
-      rows: [{ stage: 'Pre-Approved', last_touch_at: null }],
+      tasks: [task(OVERDUE), task(TODAY), task(TODAY), task(TOMORROW)],
       now: NOW,
     })
-    expect(a).toBe(null)
+    expect(a.text).toBe('1 task overdue · 2 due today')
   })
+
+  it('ignores tasks that are not yet due', () => {
+    expect(deriveAlert({ latestSync: okSync, tasks: [task(TOMORROW)], now: NOW })).toBe(null)
+  })
+
+  it('ignores tasks with no due date', () => {
+    expect(deriveAlert({ latestSync: okSync, tasks: [task(null)], now: NOW })).toBe(null)
+  })
+
   it('is null when everything is healthy', () => {
-    expect(deriveAlert({ latestSync: okSync, rows: freshRows, now: NOW })).toBe(null)
+    expect(deriveAlert({ latestSync: okSync, tasks: [], now: NOW })).toBe(null)
   })
+
+  it('tolerates a missing tasks list rather than throwing', () => {
+    expect(deriveAlert({ latestSync: okSync, now: NOW })).toBe(null)
+  })
+
   it('red takes precedence over amber', () => {
     const a = deriveAlert({
       latestSync: { ...okSync, status: 'error', message: 'boom' },
-      rows: [{ stage: 'Pre-Approved', last_touch_at: daysAgo(30) }],
+      tasks: [task(OVERDUE)],
       now: NOW,
     })
     expect(a.level).toBe('red')
