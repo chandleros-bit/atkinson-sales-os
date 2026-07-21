@@ -87,7 +87,12 @@ export async function getAccessToken(
   if (!res.ok) {
     throw new Error(`google token exchange failed: ${res.status} ${await res.text()}`)
   }
-  const json = await res.json()
+  let json
+  try {
+    json = await res.json()
+  } catch (e) {
+    throw new Error(`google token exchange failed: ${res.status} malformed JSON response`)
+  }
   if (!json.access_token) throw new Error('google token response had no access_token')
   return json.access_token
 }

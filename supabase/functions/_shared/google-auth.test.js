@@ -2,11 +2,18 @@ import { describe, it, expect } from 'vitest'
 import { base64url, buildClaims, pemToPkcs8 } from './google-auth.ts'
 
 describe('base64url', () => {
-  it('encodes without padding or url-unsafe chars', () => {
-    const out = base64url(new TextEncoder().encode('a?b>c~'))
-    expect(out).not.toContain('=')
-    expect(out).not.toContain('+')
-    expect(out).not.toContain('/')
+  it('removes padding and replaces + and / with url-safe chars', () => {
+    // [251, 255] → base64 '+_8=' → URL-safe '-_8'
+    // Tests both '+' → '-' and '_' chars, plus padding removal
+    const out = base64url(new Uint8Array([251, 255]))
+    expect(out).toBe('-_8')
+  })
+
+  it('handles full byte range 0-255', () => {
+    // [0, 1, 127, 128, 200, 255] → base64 'AAF_gMj_' → URL-safe 'AAF_gMj_'
+    // Spans full byte range from 0 to 255
+    const out = base64url(new Uint8Array([0, 1, 127, 128, 200, 255]))
+    expect(out).toBe('AAF_gMj_')
   })
 
   it('round-trips through atob after padding is restored', () => {
