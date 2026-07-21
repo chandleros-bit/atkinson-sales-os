@@ -163,7 +163,25 @@ export function diffDocs(
 // Deliberately narrow: only a TOTAL wipe aborts. A drop from 500 to 1 is
 // unusual but could be real, and blocking legitimate edits would train whoever
 // maintains the sheet to ignore the alarm.
+//
+// Defensively validate inputs: this guard's entire purpose is to catch garbage
+// data. In Task 7, previousCount comes from a live Postgres count query — a
+// failed or malformed query is realistic, and null/undefined/NaN are exactly
+// what we'd get. Garbage input must not disable the guard.
 export function assertNotMassRemoval(incomingCount: number, previousCount: number) {
+  if (!Number.isFinite(incomingCount)) {
+    throw new Error(
+      `cannot assess sheet safety: incomingCount is invalid (got ${incomingCount}). ` +
+        `The sheet read may have failed or returned malformed data.`,
+    )
+  }
+  if (!Number.isFinite(previousCount)) {
+    throw new Error(
+      `cannot assess sheet safety: previousCount is invalid (got ${previousCount}). ` +
+        `The prior count query may have failed or returned malformed data.`,
+    )
+  }
+
   if (incomingCount === 0 && previousCount > 0) {
     throw new Error(
       `refusing to apply an empty sheet: ${previousCount} borrowers are currently tracked. ` +

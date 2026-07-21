@@ -181,4 +181,29 @@ describe('assertNotMassRemoval', () => {
   it('allows a large but non-total drop — only a TOTAL wipe is suspect', () => {
     expect(() => assertNotMassRemoval(1, 500)).not.toThrow()
   })
+
+  // Defensive input validation: guard must catch garbage data, not be disabled by it
+  it('throws when incomingCount is NaN', () => {
+    expect(() => assertNotMassRemoval(NaN, 42)).toThrow(/cannot assess sheet safety.*incomingCount/i)
+  })
+
+  it('throws when incomingCount is null', () => {
+    expect(() => assertNotMassRemoval(null, 42)).toThrow(/cannot assess sheet safety.*incomingCount/i)
+  })
+
+  it('throws when incomingCount is undefined', () => {
+    expect(() => assertNotMassRemoval(undefined, 42)).toThrow(/cannot assess sheet safety.*incomingCount/i)
+  })
+
+  it('throws when previousCount is NaN', () => {
+    expect(() => assertNotMassRemoval(0, NaN)).toThrow(/cannot assess sheet safety.*previousCount/i)
+  })
+
+  it('throws when previousCount is null', () => {
+    expect(() => assertNotMassRemoval(0, null)).toThrow(/cannot assess sheet safety.*previousCount/i)
+  })
+
+  it('throws when previousCount is undefined', () => {
+    expect(() => assertNotMassRemoval(0, undefined)).toThrow(/cannot assess sheet safety.*previousCount/i)
+  })
 })
