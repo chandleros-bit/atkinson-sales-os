@@ -21,7 +21,7 @@ create table if not exists borrower_doc_tracking (
 
 create table if not exists borrower_docs (
   id                  bigserial primary key,
-  tracking_id         bigint not null references borrower_doc_tracking(id) on delete cascade,
+  tracking_id         bigint not null references borrower_doc_tracking(id) on delete restrict, -- restrict, not cascade: this schema is the only backstop against mistaken sheet edits. A deletion must fail loudly so the entire doc history is never silently lost.
   doc_type            text not null,            -- discovered from the sheet header row
   status              text not null check (status in ('needed', 'received')),
   first_requested_at  timestamptz,              -- stamped blank -> needed
@@ -56,3 +56,10 @@ end $$;
 -- The view's join key, and its outstanding-docs lateral.
 create index if not exists idx_bdt_person  on borrower_doc_tracking (fub_person_id);
 create index if not exists idx_bd_tracking on borrower_docs (tracking_id, status);
+
+-- Serves the last-note lateral in 0022: one lookup per contact on the pipeline
+-- board. The existing idx_activities_feed leads with business_id and cannot
+-- serve contact_id equality, so without this every board load scans activities.
+create index if not exists idx_activities_contact_note_feed
+  on activities (contact_id, occurred_at desc nulls last, id desc)
+  where type = 'note';

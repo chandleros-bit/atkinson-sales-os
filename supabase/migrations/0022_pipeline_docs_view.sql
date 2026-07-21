@@ -38,7 +38,7 @@ from (
     -- Presence of a tracking row IS the "tracked" signal: it distinguishes
     -- "not in the sheet" from "in the sheet, owes nothing".
     (bdt.id is not null) as docs_tracked,
-    coalesce(d.names, '{}')::text[] as docs_outstanding,
+    coalesce(d.names, '{}'::text[]) as docs_outstanding,
     coalesce(d.cnt, 0) as docs_outstanding_count,
     d.oldest as docs_oldest_requested_at,
     bdt.notes as doc_notes,
@@ -52,7 +52,7 @@ from (
   -- Oldest-requested first, so the two names the card shows are always the two
   -- that have been outstanding longest.
   left join lateral (
-    select array_agg(bd.doc_type order by bd.first_requested_at asc nulls last) as names,
+    select array_agg(bd.doc_type order by bd.first_requested_at asc nulls last, bd.doc_type asc) as names,
            count(*)::int as cnt,
            min(bd.first_requested_at) as oldest
     from borrower_docs bd
