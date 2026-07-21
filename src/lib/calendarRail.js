@@ -2,7 +2,7 @@
 // No React, no I/O. Events are stored as UTC ISO; day math is browser-local,
 // matching src/lib/calendar.js. Reuses dayKey so "today" means the same thing
 // here as on the full Calendar page.
-import { dayKey } from './calendar'
+import { dayKey, eventDayKey } from './calendar'
 
 // Matches the outlook-sync pg_cron cadence (migration 0008: every 15 min).
 // Distinct from overview.js SYNC_STALE_MINUTES (45) — that guards FollowUpBoss, this Outlook.
@@ -13,7 +13,9 @@ export const SYNC_INTERVAL_MS = 15 * 60 * 1000
 export function todayEvents(rows, now = Date.now()) {
   const today = dayKey(new Date(now).toISOString())
   return [...rows]
-    .filter((e) => e.starts_at && dayKey(e.starts_at) === today)
+    // eventDayKey, not dayKey: an all-day event is anchored at midnight UTC and
+    // would otherwise read as yesterday, dropping off the rail entirely.
+    .filter((e) => e.starts_at && eventDayKey(e) === today)
     .sort((a, b) => {
       if (!!a.is_all_day !== !!b.is_all_day) return a.is_all_day ? -1 : 1
       return new Date(a.starts_at) - new Date(b.starts_at)
