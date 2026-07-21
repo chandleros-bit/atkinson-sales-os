@@ -1,4 +1,4 @@
-import { ParsedRow, ParsedDoc } from './sheet-docs.ts'
+import { ParsedRow } from './sheet-docs.ts'
 
 export interface TrackingRow {
   fub_person_id: string
