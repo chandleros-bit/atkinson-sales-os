@@ -13,9 +13,17 @@ function startOfTodayMs() {
   return d.getTime()
 }
 
+// An all-day event is stored anchored at midnight UTC on its own date — NOT
+// local midnight. Demo data has to use the real shape, or demo mode quietly
+// stops exercising the all-day path that production actually takes.
+function allDayTodayIso() {
+  const d = new Date()
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString()
+}
+
 // Demo rows so the widget renders in demo mode (isDemoMode) without Supabase.
 const demoRows = [
-  { id: 'c1', source_account: 'outlook-mpg', title: 'Quarterly planning', starts_at: new Date(startOfTodayMs()).toISOString(), location: null, is_all_day: true },
+  { id: 'c1', source_account: 'outlook-mpg', title: 'Quarterly planning', starts_at: allDayTodayIso(), location: null, is_all_day: true },
   { id: 'c2', source_account: 'outlook-mpg', title: 'Merchant demo — Craft Pita', starts_at: new Date(startOfTodayMs() + 10.5 * 3600000).toISOString(), location: 'Zoom', is_all_day: false },
   { id: 'c3', source_account: 'outlook-bayway', title: 'Closing — Ramirez', starts_at: new Date(startOfTodayMs() + 15 * 3600000).toISOString(), location: 'Title Co.', is_all_day: false },
 ]

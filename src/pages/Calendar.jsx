@@ -11,8 +11,18 @@ function startOfTodayMs() {
   return d.getTime()
 }
 
+// An all-day event is stored anchored at midnight UTC on its own date — NOT
+// local midnight — so demo data must use that shape to exercise the same path
+// production takes.
+function allDayIsoIn(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString()
+}
+
 const demoRows = [
   { id: 'd1', source_account: 'outlook-bayway', title: 'Closing — Ramirez', starts_at: new Date(Date.now() + 3 * 3600000).toISOString(), location: 'Title Co.', is_all_day: false },
+  { id: 'd3', source_account: 'outlook-bayway', title: 'Quarterly planning', starts_at: allDayIsoIn(0), location: null, is_all_day: true },
   { id: 'd2', source_account: 'outlook-mpg', title: 'Merchant demo — Craft Pita', starts_at: new Date(Date.now() + 26 * 3600000).toISOString(), location: null, is_all_day: false },
 ]
 

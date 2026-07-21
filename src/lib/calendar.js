@@ -15,16 +15,36 @@ export function dayKey(iso) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function dayLabel(iso, now = Date.now()) {
-  const key = dayKey(iso)
+// The calendar day an event belongs to.
+//
+// A timed event is an instant: the local wall clock is what matters. An all-day
+// event is a DATE, stored anchored at midnight UTC — reading that with local
+// getters lands on the previous evening anywhere west of Greenwich, so the
+// event renders a day early and drops out of "today" entirely.
+//
+// Same hazard tasks.js documents for date-only CRM due dates, but here we have
+// an explicit is_all_day flag, so there is no need to infer it from the clock.
+export function eventDayKey(ev) {
+  if (!ev?.is_all_day) return dayKey(ev?.starts_at)
+  const d = new Date(ev.starts_at)
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  return `${d.getUTCFullYear()}-${mm}-${dd}`
+}
+
+// Takes a calendar-day key ('YYYY-MM-DD'), not an ISO instant. A key cannot be
+// misread as local-vs-UTC, which is exactly how all-day events used to shift.
+export function dayLabel(key, now = Date.now()) {
   const todayKey = dayKey(new Date(now).toISOString())
   const tmr = new Date(now)
   tmr.setDate(tmr.getDate() + 1)
   const tomorrowKey = dayKey(tmr.toISOString())
   if (key === todayKey) return 'Today'
   if (key === tomorrowKey) return 'Tomorrow'
-  const d = new Date(iso)
-  return `${DAYS[d.getDay()]} · ${MONTHS[d.getMonth()]} ${d.getDate()}`
+  // Built from the key's own parts, so formatting never re-introduces an offset.
+  const [y, m, d] = String(key).split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return `${DAYS[dt.getDay()]} · ${MONTHS[dt.getMonth()]} ${dt.getDate()}`
 }
 
 export function timeLabel(ev) {
@@ -43,9 +63,9 @@ export function groupByDay(events, now = Date.now()) {
   const byKey = new Map()
   const groups = []
   for (const ev of sorted) {
-    const key = dayKey(ev.starts_at)
+    const key = eventDayKey(ev)
     if (!byKey.has(key)) {
-      const g = { dayKey: key, label: dayLabel(ev.starts_at, now), events: [] }
+      const g = { dayKey: key, label: dayLabel(key, now), events: [] }
       byKey.set(key, g)
       groups.push(g)
     }
