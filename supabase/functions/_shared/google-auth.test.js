@@ -3,15 +3,17 @@ import { base64url, buildClaims, pemToPkcs8 } from './google-auth.ts'
 
 describe('base64url', () => {
   it('removes padding and replaces + and / with url-safe chars', () => {
-    // [251, 255] → base64 '+_8=' → URL-safe '-_8'
-    // Tests both '+' → '-' and '_' chars, plus padding removal
+    // [251, 255] → base64 '+/8=' → url-safe '-_8'
+    // Two bytes, so padding genuinely occurs. Exercises all three transforms:
+    // '+' → '-', '/' → '_', and the trailing '=' strip.
     const out = base64url(new Uint8Array([251, 255]))
     expect(out).toBe('-_8')
   })
 
   it('handles full byte range 0-255', () => {
-    // [0, 1, 127, 128, 200, 255] → base64 'AAF_gMj_' → URL-safe 'AAF_gMj_'
-    // Spans full byte range from 0 to 255
+    // [0, 1, 127, 128, 200, 255] → base64 'AAF/gMj/' → url-safe 'AAF_gMj_'
+    // Production inputs are RSA signature bytes and decoded PEM bytes, which
+    // span 0-255 — ASCII-only test input would miss the high half entirely.
     const out = base64url(new Uint8Array([0, 1, 127, 128, 200, 255]))
     expect(out).toBe('AAF_gMj_')
   })
