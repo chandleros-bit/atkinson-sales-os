@@ -29,12 +29,20 @@ export interface ParsedRow {
   docs: ParsedDoc[]
 }
 
+export interface UnrecognizedSample {
+  fub_person_id: string
+  doc_type: string
+  value: string
+}
+
 export interface ParsedSheet {
   docTypes: string[]
   rows: ParsedRow[]
   skippedNoId: number
   skippedDuplicate: number
+  skippedDuplicateHeaders: number
   unrecognizedValues: number
+  unrecognizedSamples: UnrecognizedSample[]
 }
 
 // Normalize a cell value: convert to string, trim whitespace.
@@ -78,9 +86,33 @@ export function parseSheet(values: unknown[][]): ParsedSheet {
     }
   })
 
+  // Detect and exclude duplicate doc-type headers (same normalized name).
+  // Treat ambiguous headers like ambiguous FUB IDs: drop them entirely.
+  const docColsByLower = new Map<string, { idx: number; name: string }[]>()
+  for (const col of docCols) {
+    const colLower = col.name.toLowerCase()
+    if (!docColsByLower.has(colLower)) {
+      docColsByLower.set(colLower, [])
+    }
+    docColsByLower.get(colLower)!.push(col)
+  }
+
+  let skippedDuplicateHeaders = 0
+  const validDocCols = docCols.filter((col) => {
+    const colLower = col.name.toLowerCase()
+    const duplicates = docColsByLower.get(colLower)!
+    if (duplicates.length > 1) {
+      skippedDuplicateHeaders++
+      return false
+    }
+    return true
+  })
+
   let skippedNoId = 0
   let unrecognizedValues = 0
+  const unrecognizedSamples: UnrecognizedSample[] = []
   const byId = new Map<string, ParsedRow>()
+  const idOccurrences = new Map<string, number>() // Track count of each ID
   const duplicated = new Set<string>()
 
   // Parse data rows (skip the header at index 0).
@@ -97,19 +129,31 @@ export function parseSheet(values: unknown[][]): ParsedSheet {
       continue
     }
 
-    // Check for duplicates: skip both occurrences rather than guessing which is right.
-    if (byId.has(id)) {
+    // Track occurrence count for this ID (increment before checking duplicates).
+    const currentCount = (idOccurrences.get(id) || 0) + 1
+    idOccurrences.set(id, currentCount)
+
+    // Check for duplicates: skip all occurrences rather than guessing which is right.
+    if (currentCount > 1) {
       duplicated.add(id)
       continue
     }
 
     // Pivot the wide row into a long row with one doc per doc type.
     const docs: ParsedDoc[] = []
-    for (const col of docCols) {
+    for (const col of validDocCols) {
       const st = cellStatus(row[col.idx])
       if (st === 'bad') {
         // Unrecognized cell value (not Needed, Received, or blank).
         unrecognizedValues++
+        // Capture sample for debugging (cap at 10).
+        if (unrecognizedSamples.length < 10) {
+          unrecognizedSamples.push({
+            fub_person_id: id,
+            doc_type: col.name,
+            value: norm(row[col.idx]),
+          })
+        }
         continue
       }
       if (st) {
@@ -126,20 +170,21 @@ export function parseSheet(values: unknown[][]): ParsedSheet {
     })
   }
 
-  // Remove both copies of any duplicated FUB ID. We count each occurrence, so a
-  // duplicate triplet would increment by 3 — but the spec says "skips BOTH rows",
-  // which the tests encode as exactly 2 per duplicate pair.
+  // Remove all copies of any duplicated FUB ID. Sum the actual occurrence count
+  // for each duplicated ID (so 3 copies = skipped 3, not 2).
   let skippedDuplicate = 0
   for (const id of duplicated) {
     byId.delete(id)
-    skippedDuplicate += 2
+    skippedDuplicate += idOccurrences.get(id) || 0
   }
 
   return {
-    docTypes: docCols.map((c) => c.name),
+    docTypes: validDocCols.map((c) => c.name),
     rows: [...byId.values()],
     skippedNoId,
     skippedDuplicate,
+    skippedDuplicateHeaders,
     unrecognizedValues,
+    unrecognizedSamples,
   }
 }
