@@ -1052,17 +1052,28 @@ Deno.serve(async () => {
     const contactIdByExternal = new Map((contactRows || []).map((c) => [c.external_id, c.id]))
 
     // 1. Tracking rows first — doc rows need their ids.
-    const tracking = diffTracking(parsed.rows, existingTracking, nowIso).map((t) => ({
+    //
+    // active and removed are upserted SEPARATELY and must never be merged into
+    // one call. supabase-js builds the `columns=` param from the union of keys
+    // across the batch, and PostgREST writes NULL into any column a given row
+    // lacks. Merging the two shapes would silently null `last_seen_at` for every
+    // dropped borrower — no error, no log line, just wrong data.
+    const { active, removed } = diffTracking(parsed.rows, existingTracking, nowIso)
+    const withContact = (t) => ({
       ...t,
       contact_id: contactIdByExternal.get(t.fub_person_id) ?? null,
       updated_at: nowIso,
-    }))
-    for (let i = 0; i < tracking.length; i += BATCH) {
-      const { error } = await db
-        .from('borrower_doc_tracking')
-        .upsert(tracking.slice(i, i + BATCH), { onConflict: 'fub_person_id' })
-      if (error) throw new Error(`tracking upsert: ${error.message}`)
+    })
+
+    for (const list of [active.map(withContact), removed.map(withContact)]) {
+      for (let i = 0; i < list.length; i += BATCH) {
+        const { error } = await db
+          .from('borrower_doc_tracking')
+          .upsert(list.slice(i, i + BATCH), { onConflict: 'fub_person_id' })
+        if (error) throw new Error(`tracking upsert: ${error.message}`)
+      }
     }
+    const trackingChanges = active.length + removed.length
 
     // 2. Re-read ids so newly inserted borrowers resolve.
     const { data: afterRows, error: afterErr } = await db
@@ -1089,11 +1100,21 @@ Deno.serve(async () => {
     }
 
     const unresolved = parsed.rows.filter((r) => !contactIdByExternal.has(r.fub_person_id)).length
+    // Samples name the offending cells so an operator can find a typo in a sheet
+    // of hundreds of rows; the count stays truthful past the 10-sample cap.
+    const samples = (parsed.unrecognizedSamples || [])
+      .map((s) => `${s.fub_person_id}/${s.doc_type}="${s.value}"`)
+      .join(', ')
     const summary = [
-      `borrowers:${parsed.rows.length} docChanges:${docs.length} trackingChanges:${tracking.length}`,
+      `borrowers:${parsed.rows.length} docChanges:${docs.length} trackingChanges:${trackingChanges}`,
       parsed.skippedNoId ? `skipped ${parsed.skippedNoId} with a bad FUB ID` : '',
       parsed.skippedDuplicate ? `skipped ${parsed.skippedDuplicate} duplicate-ID rows` : '',
-      parsed.unrecognizedValues ? `${parsed.unrecognizedValues} unrecognized cell values` : '',
+      parsed.skippedDuplicateHeaders
+        ? `dropped ${parsed.skippedDuplicateHeaders} ambiguous duplicate doc columns`
+        : '',
+      parsed.unrecognizedValues
+        ? `${parsed.unrecognizedValues} unrecognized cell values (${samples})`
+        : '',
       unresolved ? `${unresolved} not yet matched to a contact` : '',
     ]
       .filter(Boolean)
@@ -1629,6 +1650,20 @@ git commit -m "docs: borrower docs sheet + service account setup"
 **Gap found and closed during review:** Task 10 originally rendered the docs block on lost-column cards too. Added the `!lost` guard — outstanding paperwork on a dead loan is noise in the densest column on the board.
 
 ---
+
+## Plan corrections made during execution
+
+Recorded so this document stays trustworthy. Tasks 1–3 shipped with these deviations, all reviewed and approved.
+
+**Task 2 — three additions after code review.** `skippedDuplicate` now counts actual occurrences rather than a flat `+2` (3 copies of an id reported 2). Duplicate doc-type *header* names (two columns both called `W2`, case-insensitively) are now dropped entirely and counted in a new `skippedDuplicateHeaders` field — the same "never guess at ambiguity" stance the module already took for duplicate IDs. Without this, two conflicting entries for one `doc_type` would collide on the `unique (tracking_id, doc_type)` constraint in 0021. `unrecognizedValues` gained an `unrecognizedSamples` array (`{fub_person_id, doc_type, value}`, capped at 10) so an operator can actually locate a typo.
+
+**Task 3 — the plan contained a contradictory test.** `'preserves the original first_requested_at while a doc stays needed'` and `'emits nothing when nothing changed'` fed `diffDocs` identical inputs and expected opposite results. Resolved in favour of the no-change behaviour ("only CHANGED rows are emitted"). Because that deleted real coverage of a load-bearing property — `first_requested_at` must not be re-stamped, or every card would permanently read "oldest 0d" — a replacement test was added covering a soft-removed doc that reappears, where a row IS emitted and the original timestamp must survive.
+
+**Task 3 — `diffTracking` return shape changed (Critical fix).** The original returned one array mixing rows carrying `last_seen_at: nowIso` with rows carrying `last_seen_at: undefined`, intending "leave this column alone". That does not work: `JSON.stringify` drops `undefined` keys, supabase-js builds `columns=` from the *union* of keys across the batch, and PostgREST writes NULL into any column a row lacks. Every dropped borrower would have had `last_seen_at` silently nulled on the first run where a present and a removed borrower shared a batch — routine, not an edge case, and silent. It now returns `{ active, removed }` as two internally homogeneous, separately-typed lists, upserted in separate calls (see Task 7 above).
+
+**Task 3 — `diffDocs` gained a dropped-borrower pass.** It previously iterated only `incoming`, so a borrower who vanished from the sheet kept doc rows reading `status: 'needed'`, `removed_at: null` forever. A downstream view masked this by filtering on the tracking row, but that was accidental protection, not a guarantee.
+
+**Test counts throughout this plan are stale.** The real pre-existing baseline was 211, not 155. Verify actuals rather than trusting the numbers written here.
 
 ## Deploy order
 
