@@ -3,7 +3,7 @@
 // line ('fub-tasks'). Read-only against FUB: only GETs, never writes back.
 // See docs/phase-tasks-setup.md.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { fetchOpenTasks, fetchTasksUpdatedSince, mapTask } from '../_shared/fub-tasks.ts'
 
 // Re-scan window applied to the incremental cursor — see the `since` comment.
@@ -21,19 +21,29 @@ Deno.serve(async () => {
     // Fail loud on a map query error: an empty map silently upserts every task
     // with contact_id null, which looks like a healthy run but quietly wrecks
     // the screen's contact column.
-    const { data: contactMapRows, error: contactMapErr } = await db
-      .from('contacts')
-      .select('id, external_id')
-      .eq('source_crm', 'fub')
-    if (contactMapErr) throw new Error(`contact map: ${contactMapErr.message}`)
-    const contactIdByExternal = new Map((contactMapRows || []).map((r) => [r.external_id, r.id]))
+    // Paginate: a bare .select() truncates at PostgREST's 1000-row cap without
+    // erroring, and a short contact map silently upserts tasks with contact_id
+    // null — exactly the "healthy-looking run that wrecks the column" this
+    // comment warns about. fetchAll also throws on error, keeping the fail-loud.
+    let contactMapRows
+    try {
+      contactMapRows = await fetchAll(() =>
+        db.from('contacts').select('id, external_id').eq('source_crm', 'fub'),
+      )
+    } catch (e) {
+      throw new Error(`contact map: ${e?.message || e}`)
+    }
+    const contactIdByExternal = new Map(contactMapRows.map((r) => [r.external_id, r.id]))
 
-    const { data: dealMapRows, error: dealMapErr } = await db
-      .from('deals')
-      .select('id, external_id')
-      .eq('source_crm', 'fub')
-    if (dealMapErr) throw new Error(`deal map: ${dealMapErr.message}`)
-    const dealIdByExternal = new Map((dealMapRows || []).map((r) => [r.external_id, r.id]))
+    let dealMapRows
+    try {
+      dealMapRows = await fetchAll(() =>
+        db.from('deals').select('id, external_id').eq('source_crm', 'fub'),
+      )
+    } catch (e) {
+      throw new Error(`deal map: ${e?.message || e}`)
+    }
+    const dealIdByExternal = new Map(dealMapRows.map((r) => [r.external_id, r.id]))
 
     // Incremental since the last successful run. First run (no prior ok run)
     // pulls OPEN tasks only, so we never drag in the completed history.

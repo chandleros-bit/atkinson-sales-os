@@ -3,7 +3,7 @@
 // Read-only against FUB: this function only GETs from FollowUpBoss and
 // writes to our own Supabase tables. It never writes back to FUB.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import {
   fetchPipelinesAndStages,
   fetchPeople,
@@ -60,11 +60,18 @@ Deno.serve(async (req) => {
       upserted += contactRows.length
     }
 
-    const { data: contactMapRows } = await db
-      .from('contacts')
-      .select('id, external_id')
-      .eq('source_crm', 'fub')
-    const contactIdByExternal = new Map((contactMapRows || []).map((r) => [r.external_id, r.id]))
+    // Paginate: past 1000 contacts a bare .select() truncates silently and
+    // every deal beyond the cap resolves a null contact_id. fetchAll throws on
+    // error too, so a failed map read stops the run instead of nulling links.
+    let contactMapRows
+    try {
+      contactMapRows = await fetchAll(() =>
+        db.from('contacts').select('id, external_id').eq('source_crm', 'fub'),
+      )
+    } catch (e) {
+      throw new Error(`contact map: ${e?.message || e}`)
+    }
+    const contactIdByExternal = new Map(contactMapRows.map((r) => [r.external_id, r.id]))
 
     // 3. Deals, resolving contact_id and stage_id from the maps above.
     const deals = await fetchDeals(since)

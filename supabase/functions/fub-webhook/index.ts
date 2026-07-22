@@ -10,7 +10,7 @@
 // (e.g. "eventId", "uri", or "personId"/"dealId") against the payload FUB
 // sends to your account on first delivery, and adjust the parsing below.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import {
   fetchPersonById,
   fetchDealById,
@@ -42,11 +42,14 @@ Deno.serve(async (req) => {
           .select('id, external_id')
           .eq('business_id', 'bay')
         const stageIdByExternal = new Map((stageMapRows || []).map((r) => [r.external_id, r.id]))
-        const { data: contactMapRows } = await db
-          .from('contacts')
-          .select('id, external_id')
-          .eq('source_crm', 'fub')
-        const contactIdByExternal = new Map((contactMapRows || []).map((r) => [r.external_id, r.id]))
+        // Paginate: past 1000 contacts a bare .select() truncates silently and
+        // the webhook'd deal resolves a null contact_id — see fub-sync. The
+        // stages map above stays bare: a pipeline has a handful of stages, so
+        // that table is bounded-small and can never approach the cap.
+        const contactMapRows = await fetchAll(() =>
+          db.from('contacts').select('id, external_id').eq('source_crm', 'fub'),
+        )
+        const contactIdByExternal = new Map(contactMapRows.map((r) => [r.external_id, r.id]))
 
         const row = mapDeal(deal, contactIdByExternal, stageIdByExternal)
         const { error } = await db.from('deals').upsert(row, { onConflict: 'source_crm,external_id' })
