@@ -5,7 +5,7 @@
 // "credentials not set" error row each run — expected, and visible on Sync
 // Status exactly like zoho-sync. See docs/phase-tasks-setup.md.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { getAccessToken } from '../_shared/zoho.ts'
 import { fetchTasks, mapTask } from '../_shared/zoho-tasks.ts'
 
@@ -21,20 +21,28 @@ Deno.serve(async () => {
     const { accessToken, apiHost } = await getAccessToken()
 
     // Zoho contact id -> our contacts.id, Zoho deal id -> our deals.id.
-    // Fail loud on a map query error — see the fub-task-sync comment.
-    const { data: contactMapRows, error: contactMapErr } = await db
-      .from('contacts')
-      .select('id, external_id')
-      .eq('source_crm', 'zoho')
-    if (contactMapErr) throw new Error(`contact map: ${contactMapErr.message}`)
-    const contactIdByExternal = new Map((contactMapRows || []).map((r) => [r.external_id, r.id]))
+    // Paginate past the 1000-row cap and fail loud on error — see the
+    // fub-task-sync comment. MPG's Zoho book is tiny today, but the map read
+    // must not silently truncate if it ever grows.
+    let contactMapRows
+    try {
+      contactMapRows = await fetchAll(() =>
+        db.from('contacts').select('id, external_id').eq('source_crm', 'zoho'),
+      )
+    } catch (e) {
+      throw new Error(`contact map: ${e?.message || e}`)
+    }
+    const contactIdByExternal = new Map(contactMapRows.map((r) => [r.external_id, r.id]))
 
-    const { data: dealMapRows, error: dealMapErr } = await db
-      .from('deals')
-      .select('id, external_id')
-      .eq('source_crm', 'zoho')
-    if (dealMapErr) throw new Error(`deal map: ${dealMapErr.message}`)
-    const dealIdByExternal = new Map((dealMapRows || []).map((r) => [r.external_id, r.id]))
+    let dealMapRows
+    try {
+      dealMapRows = await fetchAll(() =>
+        db.from('deals').select('id, external_id').eq('source_crm', 'zoho'),
+      )
+    } catch (e) {
+      throw new Error(`deal map: ${e?.message || e}`)
+    }
+    const dealIdByExternal = new Map(dealMapRows.map((r) => [r.external_id, r.id]))
 
     // Incremental since the last successful run.
     const { data: lastOk } = await db

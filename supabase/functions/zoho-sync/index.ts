@@ -2,7 +2,7 @@
 // Triggered every 15 minutes by pg_cron (see docs/phase5-zoho-setup.md).
 // Read-only against Zoho: only GETs from Zoho, writes to our own Supabase tables.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import {
   getAccessToken,
   fetchDealStages,
@@ -71,11 +71,17 @@ Deno.serve(async () => {
       upserted += contactRows.length
     }
 
-    const { data: contactMapRows } = await db
-      .from('contacts')
-      .select('id, external_id')
-      .eq('source_crm', 'zoho')
-    const contactIdByExternal = new Map((contactMapRows || []).map((r) => [r.external_id, r.id]))
+    // Paginate past the 1000-row cap and fail loud on error — see fub-sync.
+    // MPG's Zoho book is tiny today, but the map must not truncate if it grows.
+    let contactMapRows
+    try {
+      contactMapRows = await fetchAll(() =>
+        db.from('contacts').select('id, external_id').eq('source_crm', 'zoho'),
+      )
+    } catch (e) {
+      throw new Error(`contact map: ${e?.message || e}`)
+    }
+    const contactIdByExternal = new Map(contactMapRows.map((r) => [r.external_id, r.id]))
 
     // 4. Deals, resolving contact_id and stage_id.
     const deals = await fetchDeals(apiHost, accessToken, since)

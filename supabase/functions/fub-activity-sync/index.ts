@@ -3,7 +3,7 @@
 // its own sync_log line ('fub-activity'). Read-only against FUB: only GETs,
 // never writes back. See docs/phase-activity-fub-setup.md.
 
-import { serviceClient, logSync } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import {
   fetchCalls,
   fetchTexts,
@@ -37,11 +37,19 @@ Deno.serve(async (req) => {
 
   try {
     // FUB person id -> our contacts.id, so activities resolve their contact.
-    const { data: contactMapRows } = await db
-      .from('contacts')
-      .select('id, external_id')
-      .eq('source_crm', 'fub')
-    const contactIdByExternal = new Map((contactMapRows || []).map((r) => [r.external_id, r.id]))
+    // Paginate past the 1000-row cap: a truncated map silently drops the
+    // contact link on every activity beyond it. fetchAll also throws on error,
+    // which this read previously swallowed — an empty map would have nulled
+    // every activity's contact while logging ok.
+    let contactMapRows
+    try {
+      contactMapRows = await fetchAll(() =>
+        db.from('contacts').select('id, external_id').eq('source_crm', 'fub'),
+      )
+    } catch (e) {
+      throw new Error(`contact map: ${e?.message || e}`)
+    }
+    const contactIdByExternal = new Map(contactMapRows.map((r) => [r.external_id, r.id]))
 
     // Incremental since the last successful run; first run is bounded to 90 days
     // so we don't pull the entire history of an 800+ contact account at once.
@@ -87,14 +95,19 @@ Deno.serve(async (req) => {
     // one that can have new email, keeping this from being one call per contact
     // in the whole book every run.
     try {
-      const { data: recentContacts } = await db
-        .from('contacts')
-        .select('id, external_id')
-        .eq('business_id', 'bay')
-        .eq('source_crm', 'fub')
-        .gte('last_touch_at', since)
+      // Bounded by `since`, but a first run reaches back 90 days and can return
+      // the whole active book — paginate so it can't truncate. A throw here is
+      // caught below and recorded as a skipped email pass, not a sync failure.
+      const recentContacts = await fetchAll(() =>
+        db
+          .from('contacts')
+          .select('id, external_id')
+          .eq('business_id', 'bay')
+          .eq('source_crm', 'fub')
+          .gte('last_touch_at', since),
+      )
       let emailCount = 0
-      for (const c of recentContacts || []) {
+      for (const c of recentContacts) {
         const emails = await fetchEmailsForContact(c.external_id, since)
         for (const rec of emails) {
           const row = mapActivity(rec, 'email', contactIdByExternal)
