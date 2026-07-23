@@ -3,6 +3,7 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import BizBadge from '../components/BizBadge'
 import CalendarRail from '../components/CalendarRail'
+import MyTasks from '../components/MyTasks'
 import CrmLink from '../components/CrmLink'
 import { crmProfileUrl } from '../lib/crm'
 import {
@@ -273,6 +274,7 @@ function AllOverview() {
             <SplitKpi label="In nurture" split={kpis.nurture} />
           </div>
 
+          <MyTasks />
           <AttentionCard
             rows={merged}
             dotClass="grad-dual"
@@ -384,6 +386,7 @@ function BayOverview() {
             <span className="num font-semibold text-muted">{kpis.nurture}</span> in nurture
           </p>
 
+          <MyTasks />
           <AttentionCard
             rows={workbench}
             dotStyle={{ background: 'var(--bay)' }}
@@ -467,6 +470,7 @@ function MpgOverview() {
             MPG pipeline is lead-stage today — deals appear here once opened in Zoho.
           </p>
 
+          <MyTasks />
           <AttentionCard
             rows={workbench}
             dotStyle={{ background: 'var(--mpg)' }}
