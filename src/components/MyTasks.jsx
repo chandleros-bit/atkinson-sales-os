@@ -35,14 +35,19 @@ export default function MyTasks() {
     ;(async () => {
       setLoading(true)
       setError(null)
-      const { data, error: err } = await supabase
-        .from('v_tasks')
-        .select('id, business_id, task_type, title, due_at, priority, contact_name, crm_profile_url')
-        .order('due_at', { ascending: true, nullsFirst: false })
-      if (!alive) return
-      if (err) setError(err.message)
-      else setRows(data || [])
-      setLoading(false)
+      try {
+        const { data, error: err } = await supabase
+          .from('v_tasks')
+          .select('id, business_id, task_type, title, due_at, contact_name, crm_profile_url')
+          .order('due_at', { ascending: true, nullsFirst: false })
+        if (!alive) return
+        if (err) setError(err.message)
+        else setRows(data || [])
+      } catch (e) {
+        if (alive) setError(String(e?.message || e))
+      } finally {
+        if (alive) setLoading(false)
+      }
     })()
     return () => {
       alive = false
