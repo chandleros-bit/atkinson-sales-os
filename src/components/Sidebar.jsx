@@ -60,23 +60,24 @@ export default function Sidebar() {
         : undefined
 
   return (
-    <aside className="flex w-[250px] flex-none flex-col border-r border-line bg-panel2 p-3.5">
-      {/* Org block */}
-      <div className="flex items-center gap-2.5 px-1.5 pb-3.5 pt-1">
-        <div className="grad-dual flex h-[34px] w-[34px] items-center justify-center rounded-[9px] text-[15px] font-bold text-[#08110c]">
+    <aside className="flex w-[200px] flex-none flex-col border-r border-line bg-panel2 p-3">
+      {/* Org block. The BETA chip sits on the sub-line, not beside the title —
+          at 200px the two do not share a row. */}
+      <div className="flex items-center gap-2 px-1.5 pb-3.5 pt-1">
+        <div className="grad-dual flex h-[32px] w-[32px] flex-none items-center justify-center rounded-[9px] text-[14px] font-bold text-[#08110c]">
           A
         </div>
-        <div>
-          <h1 className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
-            Atkinson Sales OS
+        <div className="min-w-0">
+          <h1 className="truncate text-[13px] font-semibold leading-tight">Atkinson Sales OS</h1>
+          <p className="mt-px flex items-center gap-1.5 text-[11px] text-muted">
+            Dual Pipeline
             <span
-              className="rounded border px-1 py-px text-[8.5px] font-bold tracking-wide"
+              className="rounded border px-1 text-[8.5px] font-bold tracking-wide"
               style={{ color: 'var(--mpg-ink)', borderColor: 'var(--mpg-line)' }}
             >
               BETA
             </span>
-          </h1>
-          <p className="mt-px text-[11px] text-muted">Dual Pipeline</p>
+          </p>
         </div>
       </div>
 
@@ -136,23 +137,28 @@ export default function Sidebar() {
         </div>
       </nav>
 
-      {/* Profile */}
-      <div className="mt-auto flex items-center gap-2.5 border-t border-line px-1.5 pb-0.5 pt-2.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-hoverbg text-xs font-semibold">
+      {/* Profile. Sign-out is an icon button here — the text button plus the
+          name does not fit the narrower rail. */}
+      <div className="mt-auto flex items-center gap-2 border-t border-line px-1.5 pb-0.5 pt-2.5">
+        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-hoverbg text-[11px] font-semibold">
           CA
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[12.5px] font-semibold">Chandler Atkinson</div>
-          <div className="text-[11px] text-muted">Super Admin</div>
+          <div className="truncate text-[12px] font-semibold">Chandler Atkinson</div>
+          {/* Sign-out rides the sub-line: on the 200px rail it would otherwise
+              steal enough width to truncate the name above it. */}
+          <div className="flex items-center gap-1.5 text-[10.5px] text-muted">
+            <span className="truncate">Super Admin</span>
+            {!isDemoMode && (
+              <button
+                onClick={signOut}
+                className="flex-none rounded px-1 text-[10.5px] text-dim hover:text-[color:var(--text)]"
+              >
+                Sign out
+              </button>
+            )}
+          </div>
         </div>
-        {!isDemoMode && (
-          <button
-            onClick={signOut}
-            className="rounded-md border border-line2 px-2 py-1 text-[10.5px] text-muted hover:text-[color:var(--text)]"
-          >
-            Sign out
-          </button>
-        )}
       </div>
     </aside>
   )

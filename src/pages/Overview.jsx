@@ -306,7 +306,12 @@ function PerformanceCard({ model, showBay, showMpg, markerLabel }) {
                 stroke="var(--accent)"
                 strokeWidth="3.5"
               />
-              <g transform={`translate(${model.marker.x} ${model.marker.y})`}>
+              {/* The marker sits on the newest point, hard against the right
+                  edge, so the 104-wide tooltip is clamped into the plot area
+                  instead of hanging off the card. */}
+              <g
+                transform={`translate(${Math.min(model.marker.x, CHART.x1 - 52)} ${model.marker.y})`}
+              >
                 <rect x="-52" y="-58" width="104" height="42" rx="10" fill="var(--text)" />
                 <text x="0" y="-38" textAnchor="middle" fontSize="14" fontWeight="800" fill="#fff">
                   {model.marker.value} calls
@@ -390,11 +395,14 @@ function GaugeCard({ title, sub, value, target, unit, subs }) {
             of {MONTH_NAMES[new Date().getMonth()]} goal
           </text>
         </svg>
-        <div className="mt-2 flex w-full gap-2 border-t border-line pt-3.5">
+        <div
+          className="mt-2 grid w-full gap-1.5 border-t border-line pt-3.5"
+          style={{ gridTemplateColumns: `repeat(${subs.length}, minmax(0,1fr))` }}
+        >
           {subs.map((s) => (
-            <div key={s.label} className="min-w-0 flex-1 text-center">
+            <div key={s.label} className="min-w-0 text-center">
               <div className="num text-[17px] font-extrabold tracking-tight">{s.val}</div>
-              <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">
+              <div className="mt-0.5 break-words text-[10.5px] font-semibold leading-tight text-dim">
                 {s.label}
               </div>
             </div>
@@ -446,11 +454,19 @@ function FunnelCard({ title, sub, to, fillPct, left, right, stats }) {
         </div>
       </div>
 
-      <div className="mt-4 flex gap-2 border-t border-line pt-4">
+      {/* Equal fractional tracks, not flex: a flex child will not shrink below
+          its longest word, which pushed the last stat past the card edge in the
+          3-column layout. Labels wrap instead. */}
+      <div
+        className="mt-4 grid gap-1.5 border-t border-line pt-4"
+        style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0,1fr))` }}
+      >
         {stats.map((s) => (
-          <div key={s.label} className="flex-1 text-center">
+          <div key={s.label} className="min-w-0 text-center">
             <div className="num text-[16px] font-extrabold">{s.n}</div>
-            <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">{s.label}</div>
+            <div className="mt-0.5 hyphens-auto break-words text-[10.5px] font-semibold leading-tight text-dim">
+              {s.label}
+            </div>
           </div>
         ))}
       </div>
