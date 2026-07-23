@@ -219,7 +219,7 @@ function LegendDot({ color, children }) {
 
 function PerformanceCard({ model, showBay, showMpg, markerLabel }) {
   return (
-    <Card className="col-span-2 xl:col-span-7">
+    <Card className="col-span-2 xl:col-span-5">
       <CardHead
         title="Performance"
         sub="Daily outbound calls"
@@ -338,15 +338,18 @@ function PerformanceCard({ model, showBay, showMpg, markerLabel }) {
 
 // ---- 3. Revenue gauge ---------------------------------------------------------
 
+// Narrow column (~280px at 1600), so the dial sits above its sub-stats rather
+// than beside them, and the goal figure rides in the sub-label.
 function GaugeCard({ title, sub, value, target, unit, subs }) {
   const pct = target > 0 ? Math.round((value / target) * 100) : 0
   const arcs = gaugeArcs(pct)
   const on = pace(value, target) === 'on'
+  const goalText = unit === 'currency' ? compactCurrency(target) : formatValue(target, unit)
   return (
-    <Card>
+    <Card className="col-span-2 xl:col-span-4">
       <CardHead
         title={title}
-        sub={sub}
+        sub={`${sub} · goal ${goalText}`}
         right={
           <span
             className="flex-none rounded-full px-[11px] py-[5px] text-[11.5px] font-bold"
@@ -360,8 +363,8 @@ function GaugeCard({ title, sub, value, target, unit, subs }) {
           </span>
         }
       />
-      <div className="mt-1 flex items-center gap-1.5">
-        <svg viewBox="0 0 220 176" width="188" height="150" className="flex-none">
+      <div className="mt-1 flex flex-col items-center">
+        <svg viewBox="0 0 220 150" width="100%" className="max-w-[210px]">
           <path d={arcs.trackD} fill="none" stroke="var(--line)" strokeWidth="16" strokeLinecap="round" />
           {arcs.valD && (
             <path
@@ -387,17 +390,13 @@ function GaugeCard({ title, sub, value, target, unit, subs }) {
             of {MONTH_NAMES[new Date().getMonth()]} goal
           </text>
         </svg>
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="num text-[20px] font-extrabold tracking-tight">
-              {unit === 'currency' ? compactCurrency(target) : formatValue(target, unit)}
-            </span>
-            <span className="text-[11.5px] font-semibold text-dim">Goal</span>
-          </div>
+        <div className="mt-2 flex w-full gap-2 border-t border-line pt-3.5">
           {subs.map((s) => (
-            <div key={s.label} className="flex flex-col gap-0.5">
-              <span className="num text-[20px] font-extrabold tracking-tight">{s.val}</span>
-              <span className="text-[11.5px] font-semibold text-dim">{s.label}</span>
+            <div key={s.label} className="min-w-0 flex-1 text-center">
+              <div className="num text-[17px] font-extrabold tracking-tight">{s.val}</div>
+              <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">
+                {s.label}
+              </div>
             </div>
           ))}
         </div>
@@ -410,7 +409,7 @@ function GaugeCard({ title, sub, value, target, unit, subs }) {
 
 function FunnelCard({ title, sub, to, fillPct, left, right, stats }) {
   return (
-    <Card>
+    <Card className="col-span-2 xl:col-span-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-[18px] font-bold tracking-tight">{title}</h3>
@@ -962,10 +961,8 @@ export default function Overview() {
                 markerLabel={`Today · ${biz === 'mpg' ? 'MPG' : 'Bayway'}`}
               />
 
-              <div className="col-span-2 flex flex-col gap-5 xl:col-span-5">
-                <GaugeCard {...view.gauge} />
-                <FunnelCard {...view.funnel} />
-              </div>
+              <GaugeCard {...view.gauge} />
+              <FunnelCard {...view.funnel} />
 
               <NeedsAttentionCard
                 rows={view.attention.rows}
