@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
 import { buildColumns, MPG_LEAD_FLOW } from '../lib/pipeline'
+import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
 
 function BizHeader({ biz, note }) {
@@ -21,6 +22,56 @@ function BizHeader({ biz, note }) {
         </span>
         {note}
       </div>
+    </div>
+  )
+}
+
+// Docs live on Bayway cards only — there is no Arive and no sheet for MPG.
+function DocsBlock({ r }) {
+  const state = docsState(r)
+  if (state === 'untracked') {
+    return <div className="mt-1.5 text-[11px] text-dim">Docs not tracked</div>
+  }
+  if (state === 'clear') {
+    return (
+      <div className="mt-1.5 text-[11px]" style={{ color: 'var(--bay)' }}>
+        ✓ All docs received
+      </div>
+    )
+  }
+  const aging = isDocAging(r.docs_oldest_requested_at)
+  const days = daysSince(r.docs_oldest_requested_at)
+  return (
+    <div className="mt-1.5">
+      <div
+        className={`text-[11px] ${aging ? 'font-semibold' : 'text-muted'}`}
+        style={aging ? { color: 'var(--bay-gold)' } : undefined}
+      >
+        {aging ? '⚠ ' : ''}
+        {r.docs_outstanding_count} doc{r.docs_outstanding_count === 1 ? '' : 's'}
+        {days !== null ? ` · oldest ${days}d` : ''}
+      </div>
+      <div className="truncate text-[11px] text-muted">{docSummary(r.docs_outstanding)}</div>
+      {/* The assistant's own note from the sheet's Notes column — why a doc is
+          still outstanding. Only shown here, in the outstanding state: on a
+          cleared or untracked card it has nothing to explain, and the board's
+          value is scanning a column in one pass. */}
+      {r.doc_notes ? (
+        <div className="truncate text-[11px] text-dim">{r.doc_notes}</div>
+      ) : null}
+    </div>
+  )
+}
+
+// One line, truncated. Omitted entirely when there is no note — an empty quote
+// reads as "they said nothing" rather than "we have nothing on record".
+function LastNote({ r }) {
+  if (!r.last_note_snippet) return null
+  const d = daysSince(r.last_note_at)
+  return (
+    <div className="mt-1.5 truncate text-[11px] text-muted">
+      💬 “{r.last_note_snippet}”
+      {d !== null ? <span className="text-dim"> · {d}d</span> : null}
     </div>
   )
 }
@@ -50,6 +101,12 @@ function Card({ r, lost, biz }) {
       >
         {lastTouchLabel(r.last_touch_at)}
       </div>
+      {biz !== 'mpg' && !lost && (
+        <>
+          <DocsBlock r={r} />
+          <LastNote r={r} />
+        </>
+      )}
     </div>
   )
 }
@@ -82,10 +139,31 @@ function Board({ columns, biz }) {
   )
 }
 
+const demoAge = (days) => new Date(Date.now() - days * 86_400_000).toISOString()
+
 const demoRows = [
-  { id: 'd1', stage: 'Waiting on Docs', name: 'Ramirez · Purchase', phone: '(713) 555-0142', last_touch_at: null, crm_profile_url: '#' },
-  { id: 'd2', stage: 'Pre-Approved', name: 'Nguyen · Refi', phone: '(281) 555-0195', last_touch_at: null, crm_profile_url: '#' },
-  { id: 'd3', stage: 'Pre-Approved', name: 'Okafor · Purchase', phone: '(832) 555-0110', last_touch_at: null, crm_profile_url: '#' },
+  {
+    id: 'd1', stage: 'Waiting on Docs', name: 'Ramirez · Purchase', phone: '(713) 555-0142',
+    last_touch_at: null, crm_profile_url: '#',
+    docs_tracked: true, docs_outstanding: ['Paystubs', 'W2', 'Bank Statements'],
+    docs_outstanding_count: 3, docs_oldest_requested_at: demoAge(12),
+    doc_notes: 'Employer reissuing the W2 — chasing weekly',
+    last_note_snippet: 'Sending W2 tomorrow, has to dig up the 2024 one',
+    last_note_at: demoAge(2),
+  },
+  {
+    id: 'd2', stage: 'Pre-Approved', name: 'Nguyen · Refi', phone: '(281) 555-0195',
+    last_touch_at: null, crm_profile_url: '#',
+    docs_tracked: true, docs_outstanding: [], docs_outstanding_count: 0,
+    docs_oldest_requested_at: null,
+    last_note_snippet: 'Locked rate, clear to close', last_note_at: demoAge(1),
+  },
+  {
+    id: 'd3', stage: 'Pre-Approved', name: 'Okafor · Purchase', phone: '(832) 555-0110',
+    last_touch_at: null, crm_profile_url: '#',
+    docs_tracked: false, docs_outstanding: [], docs_outstanding_count: 0,
+    docs_oldest_requested_at: null, last_note_snippet: null, last_note_at: null,
+  },
 ]
 
 // Per-business query + presentation config. MPG reads Zoho leads through
@@ -94,7 +172,10 @@ const demoRows = [
 const PIPELINE = {
   bay: {
     view: 'v_active_pipeline',
-    columns: 'id, business_id, name, email, phone, last_touch_at, stage, crm_profile_url',
+    columns:
+      'id, business_id, name, email, phone, last_touch_at, stage, crm_profile_url, ' +
+      'docs_tracked, docs_outstanding, docs_outstanding_count, docs_oldest_requested_at, ' +
+      'doc_notes, last_note_snippet, last_note_at',
     flowOrder: undefined, // default LOAN_FLOW_ORDER
     countLabel: 'active',
     empty: 'No active loans — add stages in FollowUpBoss.',

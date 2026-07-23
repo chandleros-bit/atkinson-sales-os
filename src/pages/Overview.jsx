@@ -189,6 +189,7 @@ function AllOverview() {
   const [bayContacts, setBayContacts] = useState(0)
   const [mpgContacts, setMpgContacts] = useState(0)
   const [latestSync, setLatestSync] = useState(null)
+  const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
@@ -199,7 +200,7 @@ function AllOverview() {
       setLoading(true)
       setError(null)
       try {
-        const [bayPipe, bayTagged, mpgLeads, bayCount, mpgCount, sync] = await Promise.all([
+        const [bayPipe, bayTagged, mpgLeads, bayCount, mpgCount, sync, taskRows] = await Promise.all([
           supabase
             .from('v_active_pipeline')
             .select('id, business_id, name, email, phone, last_touch_at, stage')
@@ -220,10 +221,19 @@ function AllOverview() {
             .order('ran_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
+          // v_tasks is open-only, so this is every outstanding task across both
+          // books — the combined view counts both.
+          supabase.from('v_tasks').select('id, business_id, due_at'),
         ])
         if (!alive) return
         const err =
-          bayPipe.error || bayTagged.error || mpgLeads.error || bayCount.error || mpgCount.error || sync.error
+          bayPipe.error ||
+          bayTagged.error ||
+          mpgLeads.error ||
+          bayCount.error ||
+          mpgCount.error ||
+          sync.error ||
+          taskRows.error
         if (err) {
           setError(err.message)
           return
@@ -235,6 +245,7 @@ function AllOverview() {
         setBayContacts(bayCount.count || 0)
         setMpgContacts(mpgCount.count || 0)
         setLatestSync(sync.data)
+        setTasks(taskRows.data || [])
       } catch (e) {
         if (alive) setError(String(e?.message || e))
       } finally {
@@ -250,7 +261,7 @@ function AllOverview() {
   const mpgOpen = mpgRows.filter((r) => isMpgOpen(r.stage))
   const attention = { mpg: mpgOpen.length, bay: bayHotRows.length, total: mpgOpen.length + bayHotRows.length }
   const merged = sortByAttention([...bayHotRows, ...mpgOpen])
-  const alert = !loading && !error ? deriveAlert({ latestSync, rows: bayRows }) : null
+  const alert = !loading && !error ? deriveAlert({ latestSync, tasks }) : null
 
   return (
     <div>
@@ -310,6 +321,7 @@ function BayOverview() {
   const [hotRows, setHotRows] = useState([])
   const [totalContacts, setTotalContacts] = useState(0)
   const [latestSync, setLatestSync] = useState(null)
+  const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
@@ -320,7 +332,7 @@ function BayOverview() {
       setLoading(true)
       setError(null)
       try {
-        const [pipeline, tagged, contactCount, sync] = await Promise.all([
+        const [pipeline, tagged, contactCount, sync, taskRows] = await Promise.all([
           supabase
             .from('v_active_pipeline')
             .select('id, business_id, name, email, phone, last_touch_at, stage')
@@ -337,9 +349,11 @@ function BayOverview() {
             .order('ran_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
+          // Bayway view: scope the banner to this book's tasks only.
+          supabase.from('v_tasks').select('id, business_id, due_at').eq('business_id', 'bay'),
         ])
         if (!alive) return
-        const err = pipeline.error || tagged.error || contactCount.error || sync.error
+        const err = pipeline.error || tagged.error || contactCount.error || sync.error || taskRows.error
         if (err) {
           setError(err.message)
           return
@@ -349,6 +363,7 @@ function BayOverview() {
         setHotRows(buildBayHotRows(tagged.data, pipe))
         setTotalContacts(contactCount.count || 0)
         setLatestSync(sync.data)
+        setTasks(taskRows.data || [])
       } catch (e) {
         if (alive) setError(String(e?.message || e))
       } finally {
@@ -361,7 +376,7 @@ function BayOverview() {
   }, [])
 
   const kpis = buildKpis(rows, totalContacts)
-  const alert = !loading && !error ? deriveAlert({ latestSync, rows }) : null
+  const alert = !loading && !error ? deriveAlert({ latestSync, tasks }) : null
   const workbench = sortByAttention(hotRows)
 
   return (
@@ -492,12 +507,38 @@ const placeholderDeals = [
   { id: 4, biz: 'bay', title: 'Nguyen · $215K Refi', sub: 'Rate/term · ref: direct', stage: 'Processing', date: 'Feb 27' },
 ]
 
+// Local mid-afternoon, deliberately not midnight UTC — bucketByDue reads a
+// due_at sitting exactly on midnight UTC as a date-only CRM value.
+function demoDue(dayOffset) {
+  const d = new Date()
+  d.setDate(d.getDate() + dayOffset)
+  d.setHours(15, 0, 0, 0)
+  return d.toISOString()
+}
+
+const demoTasks = [
+  { id: 'k1', business_id: 'bay', due_at: demoDue(-2) },
+  { id: 'k2', business_id: 'bay', due_at: demoDue(-1) },
+  { id: 'k3', business_id: 'bay', due_at: demoDue(0) },
+  { id: 'k4', business_id: 'mpg', due_at: demoDue(0) },
+  { id: 'k5', business_id: 'bay', due_at: demoDue(3) },
+]
+
+// A healthy sync, so demo exercises the amber task branch rather than tripping
+// one of the red "sync is broken" branches first.
+const demoSync = { status: 'ok', ran_at: new Date().toISOString(), message: null }
+
 function DemoOverview() {
   const { matches } = useBusiness()
   const deals = placeholderDeals.filter((d) => matches(d.biz))
+  const alert = deriveAlert({
+    latestSync: demoSync,
+    tasks: demoTasks.filter((t) => matches(t.business_id)),
+  })
   return (
     <div>
       <PageHeader subtitle="Demo mode — connect Supabase to see live pipeline data here." />
+      <AlertBanner alert={alert} />
       <div className="mt-6 grid grid-cols-2 gap-3.5 xl:grid-cols-4">
         <Kpi label="Active deals" value={deals.length} />
         <Kpi label="Pipeline value" value="—" />

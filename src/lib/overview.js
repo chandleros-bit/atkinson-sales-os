@@ -82,8 +82,12 @@ export function buildCombinedKpis(bayRows, mpgRows, bayContacts, mpgContacts, no
 }
 
 // latestSync: newest sync_log row for source 'fub' (or null if none).
+// tasks: v_tasks rows, already filtered to the business being viewed.
 // Returns { level: 'red'|'amber', text } or null. Red wins over amber.
-export function deriveAlert({ latestSync, rows, now = Date.now() }) {
+//
+// Red is reserved for "the system is broken" (sync down); amber means "you have
+// work". Keeping that split is why a backlog of tasks never masks a dead sync.
+export function deriveAlert({ latestSync, tasks, now = Date.now() }) {
   if (!latestSync) {
     return { level: 'red', text: 'FollowUpBoss has never synced — check the Sync Status screen.' }
   }
@@ -97,15 +101,25 @@ export function deriveAlert({ latestSync, rows, now = Date.now() }) {
       text: `FollowUpBoss last synced ${ageMin} minutes ago — the 15-minute schedule may be stuck.`,
     }
   }
-  const stale = rows.filter((r) => {
-    const d = daysSince(r.last_touch_at, now)
-    return d !== null && d >= STALE_TOUCH_DAYS
-  }).length
-  if (stale > 0) {
+  // What's actually actionable right now. Reuses bucketByDue so the banner and
+  // the Tasks screen can never disagree about what "overdue" or "today" means —
+  // including the date-only handling for CRM due dates that land on midnight UTC.
+  const buckets = bucketByDue(tasks || [], now)
+  const count = (key) => buckets.find((b) => b.key === key)?.rows.length || 0
+  const overdue = count('overdue')
+  const today = count('today')
+
+  if (overdue && today) {
     return {
       level: 'amber',
-      text: `${stale} active loan${stale === 1 ? '' : 's'} ${stale === 1 ? 'has' : 'have'} had no touch in ${STALE_TOUCH_DAYS}+ days.`,
+      text: `${overdue} task${overdue === 1 ? '' : 's'} overdue · ${today} due today`,
     }
+  }
+  if (overdue) {
+    return { level: 'amber', text: `${overdue} task${overdue === 1 ? '' : 's'} overdue` }
+  }
+  if (today) {
+    return { level: 'amber', text: `${today} task${today === 1 ? '' : 's'} due today` }
   }
   return null
 }
