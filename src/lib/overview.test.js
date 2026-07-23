@@ -8,6 +8,7 @@ import {
   deriveAlert,
   isHot,
   isMpgOpen,
+  buildMyTasks,
 } from './overview'
 
 // Fixed clock: 2026-07-09T12:00:00Z
@@ -226,5 +227,39 @@ describe('deriveAlert', () => {
       now: NOW,
     })
     expect(a.level).toBe('red')
+  })
+})
+
+describe('buildMyTasks', () => {
+  const T = new Date('2026-07-19T12:00:00').getTime()
+  const rows = [
+    { id: 'a', due_at: '2026-07-17T09:00:00' }, // 2 days overdue
+    { id: 'b', due_at: '2026-07-18T09:00:00' }, // yesterday, overdue
+    { id: 'c', due_at: '2026-07-19T16:00:00' }, // today
+    { id: 'e', due_at: '2026-07-20T09:00:00' }, // tomorrow — excluded
+    { id: 'f', due_at: '2026-07-25T09:00:00' }, // upcoming — excluded
+    { id: 'g', due_at: null }, // no due date — excluded
+  ]
+
+  it('keeps only overdue and today, overdue first, most-overdue on top', () => {
+    expect(buildMyTasks(rows, T).map((r) => r.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('tags each row with its bucket', () => {
+    const out = buildMyTasks(rows, T)
+    expect(out.find((r) => r.id === 'a').bucket).toBe('overdue')
+    expect(out.find((r) => r.id === 'c').bucket).toBe('today')
+  })
+
+  it('caps the result at 5', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `o${i}`,
+      due_at: '2026-07-18T09:00:00',
+    }))
+    expect(buildMyTasks(many, T)).toHaveLength(5)
+  })
+
+  it('returns empty for no rows', () => {
+    expect(buildMyTasks([], T)).toEqual([])
   })
 })

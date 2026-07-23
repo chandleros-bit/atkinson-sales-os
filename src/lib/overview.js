@@ -123,3 +123,15 @@ export function deriveAlert({ latestSync, tasks, now = Date.now() }) {
   }
   return null
 }
+
+// The Overview "My Tasks" card: up to 5 dated tasks that need attention now.
+// rows: v_tasks rows for the current view (open tasks only).
+// Returns overdue (most-overdue first) then today, each tagged with a `bucket`
+// of 'overdue' | 'today' for the row's due-cell rendering, capped at 5. Built
+// on bucketByDue so this can never disagree with the Tasks board's date logic.
+export function buildMyTasks(rows, now = Date.now()) {
+  const byKey = Object.fromEntries(bucketByDue(rows, now).map((g) => [g.key, g.rows]))
+  const overdue = byKey.overdue.map((r) => ({ ...r, bucket: 'overdue' }))
+  const today = byKey.today.map((r) => ({ ...r, bucket: 'today' }))
+  return [...overdue, ...today].slice(0, 5)
+}

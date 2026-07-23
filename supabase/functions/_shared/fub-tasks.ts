@@ -96,3 +96,17 @@ export function mapTask(rec, contactIdByExternal, dealIdByExternal) {
     updated_at: new Date().toISOString(),
   }
 }
+
+// Open-set reconciliation for completed tasks. An incremental updatedAfter pull
+// does not reliably re-fetch a task once it's completed in FUB, so the board
+// (v_tasks filters is_completed=false) would never drop it. Given the set of
+// external_ids currently OPEN in FUB and our still-open fub rows, return the
+// ids of the rows to mark completed: those no longer present in the open set.
+//
+// openExternalIds: Set<string> of external_ids currently open in FUB.
+// ourOpenRows:     [{ id, external_id }] — our fub rows still is_completed=false.
+export function reconcileCompleted(openExternalIds, ourOpenRows) {
+  return ourOpenRows
+    .filter((r) => !openExternalIds.has(String(r.external_id)))
+    .map((r) => r.id)
+}

@@ -4,7 +4,7 @@
 // See docs/phase-tasks-setup.md.
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
-import { fetchOpenTasks, fetchTasksUpdatedSince, mapTask } from '../_shared/fub-tasks.ts'
+import { fetchOpenTasks, fetchTasksUpdatedSince, mapTask, reconcileCompleted } from '../_shared/fub-tasks.ts'
 
 // Re-scan window applied to the incremental cursor — see the `since` comment.
 const OVERLAP_MS = 10 * 60_000
@@ -88,9 +88,52 @@ Deno.serve(async () => {
       upserted += batch.length
     }
 
+    // Reconcile completions FUB didn't hand back through the incremental window:
+    // fetch the full set of currently-open FUB task ids and mark any of our
+    // still-open fub rows not in that set completed, so they drop from v_tasks.
+    // fetchOpenTasks -> fubGet throws on any non-2xx response, so an HTTP-level
+    // FUB failure aborts this run before any reconciliation write. But a 200 with
+    // an unexpected /tasks shape (the shape is unverified — see fub-tasks.ts) would
+    // yield an EMPTY open set; trusting that would mass-complete the board. So we
+    // reconcile only when the open set is non-empty OR we hold no open rows anyway.
+    // A genuinely-emptied book is already handled by the incremental flag path
+    // (those rows are upserted completed above, so ourOpen won't include them);
+    // this guard bites only the suspicious "FUB says zero, but we still hold open
+    // rows" case. On the first run `records` already IS the open-task list, reuse it.
+    const openRecords = since ? await fetchOpenTasks() : records
+    const openExternalIds = new Set(
+      openRecords.filter((rec) => rec.id != null).map((rec) => String(rec.id)),
+    )
+    // Paginate: a bare .select() truncates at PostgREST's 1000-row cap, which
+    // would hide our >1000th still-open row from reconciliation forever. fetchAll
+    // throws on error, keeping the same fail-loud as the maps above.
+    let ourOpen
+    try {
+      ourOpen = await fetchAll(() =>
+        db.from('tasks').select('id, external_id').eq('source_crm', 'fub').eq('is_completed', false),
+      )
+    } catch (e) {
+      throw new Error(`open rows: ${e?.message || e}`)
+    }
+
+    const trustOpenSet = openExternalIds.size > 0 || ourOpen.length === 0
+    let reconciled = 0
+    if (trustOpenSet) {
+      const staleIds = reconcileCompleted(openExternalIds, ourOpen || [])
+      if (staleIds.length > 0) {
+        const { error: reconcileErr } = await db
+          .from('tasks')
+          .update({ is_completed: true, updated_at: new Date().toISOString() })
+          .in('id', staleIds)
+        if (reconcileErr) throw new Error(`reconcile completed: ${reconcileErr.message}`)
+        reconciled = staleIds.length
+      }
+    }
+
     const summary = [
       since ? 'incremental' : 'first run (open only)',
       `fetched:${records.length} upserted:${upserted}`,
+      !trustOpenSet ? 'reconcile skipped: empty open set' : reconciled ? `reconciled-completed:${reconciled}` : '',
       skippedNoId ? `skipped ${skippedNoId} with no id` : '',
       droppedCompleted ? `dropped ${droppedCompleted} already-completed` : '',
     ]
