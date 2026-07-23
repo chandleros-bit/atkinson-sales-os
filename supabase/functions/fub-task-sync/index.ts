@@ -78,13 +78,18 @@ Deno.serve(async () => {
       upserted += batch.length
     }
 
-    // Reconcile completions FUB didn't hand back through the incremental window.
-    // Fetch the full set of currently-open FUB task ids and mark any of our
+    // Reconcile completions FUB didn't hand back through the incremental window:
+    // fetch the full set of currently-open FUB task ids and mark any of our
     // still-open fub rows not in that set completed, so they drop from v_tasks.
-    // fetchOpenTasks -> fubGet THROWS on any non-2xx response, so a transient
-    // FUB failure aborts this whole run here — before any reconciliation write —
-    // and can never wrongly mark all open tasks completed. On the first run
-    // `records` already IS the open-task list, so reuse it and skip a fetch.
+    // fetchOpenTasks -> fubGet throws on any non-2xx response, so an HTTP-level
+    // FUB failure aborts this run before any reconciliation write. But a 200 with
+    // an unexpected /tasks shape (the shape is unverified — see fub-tasks.ts) would
+    // yield an EMPTY open set; trusting that would mass-complete the board. So we
+    // reconcile only when the open set is non-empty OR we hold no open rows anyway.
+    // A genuinely-emptied book is already handled by the incremental flag path
+    // (those rows are upserted completed above, so ourOpen won't include them);
+    // this guard bites only the suspicious "FUB says zero, but we still hold open
+    // rows" case. On the first run `records` already IS the open-task list, reuse it.
     const openRecords = since ? await fetchOpenTasks() : records
     const openExternalIds = new Set(
       openRecords.filter((rec) => rec.id != null).map((rec) => String(rec.id)),
@@ -96,21 +101,24 @@ Deno.serve(async () => {
       .eq('is_completed', false)
     if (ourOpenErr) throw new Error(`open rows: ${ourOpenErr.message}`)
 
-    const staleIds = reconcileCompleted(openExternalIds, ourOpen || [])
+    const trustOpenSet = openExternalIds.size > 0 || (ourOpen || []).length === 0
     let reconciled = 0
-    if (staleIds.length > 0) {
-      const { error: reapErr } = await db
-        .from('tasks')
-        .update({ is_completed: true, updated_at: new Date().toISOString() })
-        .in('id', staleIds)
-      if (reapErr) throw new Error(`reconcile completed: ${reapErr.message}`)
-      reconciled = staleIds.length
+    if (trustOpenSet) {
+      const staleIds = reconcileCompleted(openExternalIds, ourOpen || [])
+      if (staleIds.length > 0) {
+        const { error: reconcileErr } = await db
+          .from('tasks')
+          .update({ is_completed: true, updated_at: new Date().toISOString() })
+          .in('id', staleIds)
+        if (reconcileErr) throw new Error(`reconcile completed: ${reconcileErr.message}`)
+        reconciled = staleIds.length
+      }
     }
 
     const summary = [
       since ? 'incremental' : 'first run (open only)',
       `fetched:${records.length} upserted:${upserted}`,
-      reconciled ? `reconciled-completed:${reconciled}` : '',
+      !trustOpenSet ? 'reconcile skipped: empty open set' : reconciled ? `reconciled-completed:${reconciled}` : '',
       skippedNoId ? `skipped ${skippedNoId} with no id` : '',
       droppedCompleted ? `dropped ${droppedCompleted} already-completed` : '',
     ]
