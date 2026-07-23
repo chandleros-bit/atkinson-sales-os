@@ -4,7 +4,7 @@
 // See docs/phase-tasks-setup.md.
 
 import { serviceClient, logSync } from '../_shared/db.ts'
-import { fetchOpenTasks, fetchTasksUpdatedSince, mapTask } from '../_shared/fub-tasks.ts'
+import { fetchOpenTasks, fetchTasksUpdatedSince, mapTask, reconcileCompleted } from '../_shared/fub-tasks.ts'
 
 // Re-scan window applied to the incremental cursor — see the `since` comment.
 const OVERLAP_MS = 10 * 60_000
@@ -78,9 +78,39 @@ Deno.serve(async () => {
       upserted += batch.length
     }
 
+    // Reconcile completions FUB didn't hand back through the incremental window.
+    // Fetch the full set of currently-open FUB task ids and mark any of our
+    // still-open fub rows not in that set completed, so they drop from v_tasks.
+    // fetchOpenTasks -> fubGet THROWS on any non-2xx response, so a transient
+    // FUB failure aborts this whole run here — before any reconciliation write —
+    // and can never wrongly mark all open tasks completed. On the first run
+    // `records` already IS the open-task list, so reuse it and skip a fetch.
+    const openRecords = since ? await fetchOpenTasks() : records
+    const openExternalIds = new Set(
+      openRecords.filter((rec) => rec.id != null).map((rec) => String(rec.id)),
+    )
+    const { data: ourOpen, error: ourOpenErr } = await db
+      .from('tasks')
+      .select('id, external_id')
+      .eq('source_crm', 'fub')
+      .eq('is_completed', false)
+    if (ourOpenErr) throw new Error(`open rows: ${ourOpenErr.message}`)
+
+    const staleIds = reconcileCompleted(openExternalIds, ourOpen || [])
+    let reconciled = 0
+    if (staleIds.length > 0) {
+      const { error: reapErr } = await db
+        .from('tasks')
+        .update({ is_completed: true, updated_at: new Date().toISOString() })
+        .in('id', staleIds)
+      if (reapErr) throw new Error(`reconcile completed: ${reapErr.message}`)
+      reconciled = staleIds.length
+    }
+
     const summary = [
       since ? 'incremental' : 'first run (open only)',
       `fetched:${records.length} upserted:${upserted}`,
+      reconciled ? `reconciled-completed:${reconciled}` : '',
       skippedNoId ? `skipped ${skippedNoId} with no id` : '',
       droppedCompleted ? `dropped ${droppedCompleted} already-completed` : '',
     ]
