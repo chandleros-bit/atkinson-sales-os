@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapTask, taskDueAt, taskTitle, taskIsCompleted } from './fub-tasks.ts'
+import { mapTask, taskDueAt, taskTitle, taskIsCompleted, reconcileCompleted } from './fub-tasks.ts'
 
 describe('taskDueAt', () => {
   it('prefers dueDate then due then dueAt', () => {
@@ -87,5 +87,37 @@ describe('mapTask', () => {
 
   it('nulls priority when absent (FUB often has none)', () => {
     expect(mapTask({ id: 80 }, contacts, deals).priority).toBe(null)
+  })
+})
+
+describe('reconcileCompleted', () => {
+  it('returns ids of our rows no longer open in FUB', () => {
+    const open = new Set(['77', '78'])
+    const rows = [
+      { id: 'u1', external_id: '77' }, // still open
+      { id: 'u2', external_id: '79' }, // completed in FUB
+    ]
+    expect(reconcileCompleted(open, rows)).toEqual(['u2'])
+  })
+
+  it('returns empty when every row is still open', () => {
+    const open = new Set(['77', '78'])
+    expect(reconcileCompleted(open, [{ id: 'u1', external_id: '77' }])).toEqual([])
+  })
+
+  it('marks all rows when the open set is empty (everything done)', () => {
+    const rows = [
+      { id: 'u1', external_id: '77' },
+      { id: 'u2', external_id: '78' },
+    ]
+    expect(reconcileCompleted(new Set(), rows)).toEqual(['u1', 'u2'])
+  })
+
+  it('returns empty for no rows', () => {
+    expect(reconcileCompleted(new Set(['77']), [])).toEqual([])
+  })
+
+  it('compares external_id as a string on both sides', () => {
+    expect(reconcileCompleted(new Set(['77']), [{ id: 'u1', external_id: 77 }])).toEqual([])
   })
 })
