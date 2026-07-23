@@ -114,7 +114,7 @@ export default function Activity({ biz }) {
             key={c.key}
             onClick={() => setTypeFilter(c.key)}
             className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-              typeFilter === c.key ? 'bg-hoverbg text-white' : 'text-muted hover:text-white'
+              typeFilter === c.key ? 'bg-hoverbg text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
             }`}
           >
             {c.label}
@@ -123,7 +123,7 @@ export default function Activity({ biz }) {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
@@ -177,7 +177,7 @@ export default function Activity({ biz }) {
           <button
             onClick={loadOlder}
             disabled={loadingMore}
-            className="rounded-lg border border-line2 px-4 py-1.5 text-xs font-semibold text-muted hover:text-white disabled:opacity-50"
+            className="rounded-lg border border-line2 px-4 py-1.5 text-xs font-semibold text-muted hover:text-[color:var(--text)] disabled:opacity-50"
           >
             {loadingMore ? 'Loading…' : 'Load older'}
           </button>

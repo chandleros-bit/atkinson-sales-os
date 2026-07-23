@@ -3,41 +3,49 @@
 @tailwind utilities;
 
 :root {
-  /* Neutral chrome */
-  --bg: #0E0E10;
-  --panel: #17171A;
-  --panel2: #131316;
-  --hover: #1E1E22;
-  --line: #26262B;
-  --line2: #2E2E34;
-  --text: #F4F4F5;
-  --muted: #9A9AA2;
-  --dim: #6E6E77;
+  /* Neutral chrome (light) */
+  --bg: #EDEFF3;
+  --panel: #FFFFFF;
+  --panel2: #F6F7F9;
+  --hover: #F1F3F6;
+  --line: #E6E8ED;
+  --line2: #D9DDE4;
+  --text: #14181C;
+  --muted: #6B7280;
+  --dim: #9AA1AC;
 
-  /* MPG (blue) */
+  /* MPG (blue) — brand hue unchanged */
   --mpg: #26ABE0;
-  --mpg-soft: rgba(38, 171, 224, 0.13);
+  --mpg-ink: #1483B4; /* colored text on white */
+  --mpg-soft: rgba(38, 171, 224, 0.12);
   --mpg-line: rgba(38, 171, 224, 0.35);
 
-  /* Bayway (green) */
+  /* Bayway (green) — brand hue unchanged */
   --bay: #7CAD44;
+  --bay-ink: #5F8A2E; /* colored text on white */
   --bay-deep: #0B5E42;
-  --bay-soft: rgba(124, 173, 68, 0.14);
-  --bay-line: rgba(124, 173, 68, 0.35);
-  --bay-gold: #C9A052;
+  --bay-soft: rgba(124, 173, 68, 0.16);
+  --bay-line: rgba(124, 173, 68, 0.4);
+  --bay-gold: #B07A1F; /* deepened from #C9A052 for contrast on white */
 
-  /* Active accent - defaults to dual; BusinessContext swaps these */
+  /* Card chrome shared by the Overview command center */
+  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 30px rgba(16, 24, 40, 0.05);
+
+  /* Active accent - defaults to blue; BusinessContext swaps these */
   --accent: #26ABE0;
-  --accent-soft: rgba(38, 171, 224, 0.13);
+  --accent-soft: rgba(38, 171, 224, 0.12);
+  --accent-ink: #1483B4;
 }
 
 [data-biz='mpg'] {
   --accent: var(--mpg);
   --accent-soft: var(--mpg-soft);
+  --accent-ink: var(--mpg-ink);
 }
 [data-biz='bay'] {
   --accent: var(--bay);
   --accent-soft: var(--bay-soft);
+  --accent-ink: var(--bay-ink);
 }
 
 html,
@@ -62,7 +70,15 @@ body {
   background: linear-gradient(135deg, var(--mpg), var(--bay));
 }
 .grad-dual-soft {
-  background: linear-gradient(90deg, rgba(38, 171, 224, 0.14), rgba(124, 173, 68, 0.14));
+  background: linear-gradient(90deg, rgba(38, 171, 224, 0.12), rgba(124, 173, 68, 0.14));
+}
+
+/* Overview command-center card chrome. */
+.cc-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
 }
 
 :focus-visible {

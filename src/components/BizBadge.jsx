@@ -6,7 +6,8 @@ export default function BizBadge({ biz }) {
       className="rounded px-[5px] py-[1px] text-[9.5px] font-bold tracking-wide"
       style={{
         background: isMpg ? 'var(--mpg-soft)' : 'var(--bay-soft)',
-        color: isMpg ? 'var(--mpg)' : 'var(--bay)',
+        // Ink variants: the bright brand hues fail contrast at 9.5px on white.
+        color: isMpg ? 'var(--mpg-ink)' : 'var(--bay-ink)',
       }}
     >
       {isMpg ? 'MPG' : 'BAYWAY'}

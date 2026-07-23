@@ -19,7 +19,7 @@ export const BUCKETS = [
 // Overdue gets the gold warning accent already used for the "Stale" pill.
 export const BUCKET_META = {
   overdue: { color: 'var(--bay-gold)', border: 'rgba(201,160,82,.4)' },
-  today: { color: 'var(--bay)', border: 'rgba(124,173,68,.4)' },
+  today: { color: 'var(--bay-ink)', border: 'rgba(124,173,68,.4)' },
   tomorrow: { color: 'var(--muted)', border: 'var(--line)' },
   upcoming: { color: 'var(--muted)', border: 'var(--line)' },
   none: { color: 'var(--dim)', border: 'var(--line)' },

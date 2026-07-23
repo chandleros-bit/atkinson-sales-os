@@ -11,11 +11,17 @@ export const SYNC_INTERVAL_MS = 15 * 60 * 1000
 // Today's events only, all-day first, then ascending by start time.
 // Rows without starts_at are dropped. Input is not mutated.
 export function todayEvents(rows, now = Date.now()) {
-  const today = dayKey(new Date(now).toISOString())
+  return eventsForDay(rows, dayKey(new Date(now).toISOString()))
+}
+
+// One calendar day's events, all-day first, then ascending by start time. The
+// Overview calendar calls this for whichever day is selected; todayEvents is
+// the same thing pinned to today. Input is not mutated.
+export function eventsForDay(rows, key) {
   return [...rows]
     // eventDayKey, not dayKey: an all-day event is anchored at midnight UTC and
     // would otherwise read as yesterday, dropping off the rail entirely.
-    .filter((e) => e.starts_at && eventDayKey(e) === today)
+    .filter((e) => e.starts_at && eventDayKey(e) === key)
     .sort((a, b) => {
       if (!!a.is_all_day !== !!b.is_all_day) return a.is_all_day ? -1 : 1
       return new Date(a.starts_at) - new Date(b.starts_at)

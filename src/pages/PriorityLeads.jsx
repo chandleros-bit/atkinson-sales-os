@@ -12,7 +12,7 @@ function Header({ note }) {
       <h2 className="text-[26px] font-bold tracking-tight">Priority Leads</h2>
       <span
         className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
-        style={{ color: 'var(--bay)', background: 'var(--bay-soft)' }}
+        style={{ color: 'var(--bay-ink)', background: 'var(--bay-soft)' }}
       >
         BAYWAY
       </span>
@@ -32,7 +32,7 @@ function Tabs({ groups, active, onSelect }) {
             key={t.key}
             onClick={() => onSelect(t.key)}
             className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
-              on ? 'text-white' : 'text-muted hover:text-white'
+              on ? 'text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
             }`}
             style={{
               borderColor: on ? t.color : 'var(--line)',
@@ -122,7 +122,7 @@ function Row({ r }) {
         <div className="mt-2 text-[11.5px] text-muted">
           <button
             onClick={() => setOpen((v) => !v)}
-            className="text-dim hover:text-white"
+            className="text-dim hover:text-[color:var(--text)]"
             aria-expanded={open}
           >
             {open ? 'Hide note' : 'AI note · see more'}
@@ -186,7 +186,7 @@ export default function PriorityLeads() {
       />
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}

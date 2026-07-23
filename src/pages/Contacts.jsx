@@ -8,12 +8,12 @@ const PER_PAGE = 50
 function bayStagePill(stage) {
   if (stage === NURTURE) return { background: 'transparent', color: 'var(--dim)' }
   if (stage === 'Waiting on Docs') return { background: 'rgba(232,180,95,.14)', color: 'var(--bay-gold)' }
-  return { background: 'var(--bay-soft)', color: 'var(--bay)' }
+  return { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
 }
 
 function mpgStagePill(stage) {
   if (!stage || stage === '—') return { background: 'transparent', color: 'var(--dim)' }
-  return { background: 'var(--mpg-soft)', color: 'var(--mpg)' }
+  return { background: 'var(--mpg-soft)', color: 'var(--mpg-ink)' }
 }
 
 const BAY_FILTERS = [
@@ -217,7 +217,7 @@ export default function Contacts({ biz }) {
                 key={f.key}
                 onClick={() => onFilter(f.key)}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-                  stageFilter === f.key ? 'bg-hoverbg text-white' : 'text-muted hover:text-white'
+                  stageFilter === f.key ? 'bg-hoverbg text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
                 }`}
               >
                 {f.label}
@@ -228,7 +228,7 @@ export default function Contacts({ biz }) {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
@@ -244,7 +244,7 @@ export default function Contacts({ biz }) {
                 <button
                   key={colKey}
                   onClick={() => setSort(col.sortKey)}
-                  className={`${col.thClass} hover:text-white`}
+                  className={`${col.thClass} hover:text-[color:var(--text)]`}
                 >
                   {col.header(config)}
                   {arrow(col.sortKey)}

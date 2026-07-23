@@ -81,7 +81,7 @@ export default function SyncStatus() {
           <button
             onClick={runNow}
             disabled={running}
-            className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-muted hover:text-white disabled:opacity-50"
+            className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-muted hover:text-[color:var(--text)] disabled:opacity-50"
           >
             {running ? 'Running…' : 'Run FollowUpBoss sync now'}
           </button>
@@ -99,7 +99,7 @@ export default function SyncStatus() {
       )}
 
       {!isDemoMode && error && (
-        <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
@@ -136,7 +136,7 @@ export default function SyncStatus() {
                     </span>
                   </div>
                   {row?.message && !ok && (
-                    <div className="mt-1 truncate text-[11.5px] text-red-300/80">{row.message}</div>
+                    <div className="mt-1 truncate text-[11.5px] text-red-700/80">{row.message}</div>
                   )}
                   {!row && (
                     <div className="mt-1 text-[11.5px] text-dim">

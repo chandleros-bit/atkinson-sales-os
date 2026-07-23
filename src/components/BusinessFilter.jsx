@@ -24,13 +24,13 @@ export default function BusinessFilter() {
             aria-selected={active}
             onClick={() => setBiz(o.key)}
             className={`flex-1 rounded-[7px] py-1.5 text-xs font-semibold transition-colors ${
-              active ? 'text-white' : 'text-muted hover:text-white'
+              active ? 'text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
             } ${active && o.key === 'all' ? 'grad-dual-soft' : ''}`}
             style={
               active && o.key === 'mpg'
-                ? { background: 'var(--mpg-soft)', color: 'var(--mpg)' }
+                ? { background: 'var(--mpg-soft)', color: 'var(--mpg-ink)' }
                 : active && o.key === 'bay'
-                  ? { background: 'var(--bay-soft)', color: 'var(--bay)' }
+                  ? { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
                   : undefined
             }
           >

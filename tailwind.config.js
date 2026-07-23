@@ -4,22 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#0E0E10',
-        panel: '#17171A',
-        panel2: '#131316',
-        hoverbg: '#1E1E22',
-        line: '#26262B',
-        line2: '#2E2E34',
-        muted: '#9A9AA2',
-        dim: '#6E6E77',
-        mpg: { DEFAULT: '#26ABE0', deep: '#151518' },
-        bay: { DEFAULT: '#7CAD44', deep: '#0B5E42', gold: '#C9A052' },
+        bg: '#EDEFF3',
+        panel: '#FFFFFF',
+        panel2: '#F6F7F9',
+        hoverbg: '#F1F3F6',
+        line: '#E6E8ED',
+        line2: '#D9DDE4',
+        muted: '#6B7280',
+        dim: '#9AA1AC',
+        mpg: { DEFAULT: '#26ABE0', ink: '#1483B4', deep: '#EAF6FC' },
+        bay: { DEFAULT: '#7CAD44', ink: '#5F8A2E', deep: '#0B5E42', gold: '#B07A1F' },
       },
       fontFamily: {
         sans: ['"Work Sans"', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
-        card: '14px',
+        card: '20px',
       },
     },
   },

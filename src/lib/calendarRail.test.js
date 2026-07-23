@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { todayEvents, isSyncStale, SYNC_INTERVAL_MS } from './calendarRail'
+import { todayEvents, eventsForDay, isSyncStale, SYNC_INTERVAL_MS } from './calendarRail'
 
 // Local-time ISO so tests are deterministic regardless of env TZ.
 const local = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).toISOString()
@@ -57,5 +57,18 @@ describe('isSyncStale', () => {
 
   it('exposes the 15-minute interval', () => {
     expect(SYNC_INTERVAL_MS).toBe(15 * 60 * 1000)
+  })
+})
+
+describe('eventsForDay', () => {
+  const rows = [
+    { id: 'a', is_all_day: false, starts_at: local(2026, 7, 20, 14, 0) },
+    { id: 'b', is_all_day: true, starts_at: allDayMarker(2026, 7, 20) },
+    { id: 'c', is_all_day: false, starts_at: local(2026, 7, 21, 9, 0) },
+  ]
+
+  it('picks one day, all-day first', () => {
+    expect(eventsForDay(rows, '2026-07-20').map((e) => e.id)).toEqual(['b', 'a'])
+    expect(eventsForDay(rows, '2026-07-22')).toEqual([])
   })
 })

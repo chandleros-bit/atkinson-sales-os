@@ -9,7 +9,7 @@ function Item({ to, icon, children, badge, badgeBiz }) {
       to={to}
       className={({ isActive }) =>
         `relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] leading-none ${
-          isActive ? 'grad-dual-soft text-white' : 'text-muted hover:bg-hoverbg hover:text-white'
+          isActive ? 'grad-dual-soft text-[color:var(--text)]' : 'text-muted hover:bg-hoverbg hover:text-[color:var(--text)]'
         }`
       }
     >
@@ -25,7 +25,7 @@ function Item({ to, icon, children, badge, badgeBiz }) {
               className="ml-auto rounded-full px-1.5 py-px text-[10px] font-bold"
               style={{
                 background: badgeBiz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)',
-                color: badgeBiz === 'mpg' ? 'var(--mpg)' : 'var(--bay)',
+                color: badgeBiz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)',
               }}
             >
               {badge}
@@ -71,7 +71,7 @@ export default function Sidebar() {
             Atkinson Sales OS
             <span
               className="rounded border px-1 py-px text-[8.5px] font-bold tracking-wide"
-              style={{ color: 'var(--mpg)', borderColor: 'var(--mpg-line)' }}
+              style={{ color: 'var(--mpg-ink)', borderColor: 'var(--mpg-line)' }}
             >
               BETA
             </span>
@@ -115,14 +115,14 @@ export default function Sidebar() {
         </div>
 
         <div>
-          <GroupLabel color="var(--mpg)">MPG</GroupLabel>
+          <GroupLabel color="var(--mpg-ink)">MPG</GroupLabel>
           <Item to="/mpg/pipeline" icon="▤" badge="—" badgeBiz="mpg">Pipeline</Item>
           <Item to="/mpg/activity" icon="◷">Activity</Item>
           <Item to="/mpg/contacts" icon="◵">Contacts · Zoho</Item>
         </div>
 
         <div>
-          <GroupLabel color="var(--bay)">BAYWAY</GroupLabel>
+          <GroupLabel color="var(--bay-ink)">BAYWAY</GroupLabel>
           <Item to="/bayway/pipeline" icon="▤" badge="—" badgeBiz="bay">Pipeline</Item>
           <Item to="/bayway/priority-leads" icon="◆">Priority Leads</Item>
           <Item to="/bayway/activity" icon="◷">Activity</Item>
@@ -148,7 +148,7 @@ export default function Sidebar() {
         {!isDemoMode && (
           <button
             onClick={signOut}
-            className="rounded-md border border-line2 px-2 py-1 text-[10.5px] text-muted hover:text-white"
+            className="rounded-md border border-line2 px-2 py-1 text-[10.5px] text-muted hover:text-[color:var(--text)]"
           >
             Sign out
           </button>

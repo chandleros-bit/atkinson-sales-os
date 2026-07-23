@@ -8,7 +8,7 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen">
       <Sidebar />
-      <main className="min-w-0 flex-1 px-8 py-7">
+      <main className="min-w-0 flex-1 p-[26px]">
         {isDemoMode && (
           <div className="mb-5 rounded-[11px] border border-line bg-panel px-4 py-2.5 text-xs text-muted">
             Demo mode — Supabase is not connected yet. Copy .env.example to .env,

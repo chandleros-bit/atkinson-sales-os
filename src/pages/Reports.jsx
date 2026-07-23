@@ -15,7 +15,7 @@ const TABS = [
 ]
 
 const PACE_STYLE = {
-  on: { color: 'var(--bay)', bar: 'var(--bay)' },
+  on: { color: 'var(--bay-ink)', bar: 'var(--bay)' },
   behind: { color: 'var(--bay-gold)', bar: 'var(--bay-gold)' },
   none: { color: 'var(--muted)', bar: 'var(--line2)' },
 }
@@ -50,7 +50,7 @@ function MetricCard({ card }) {
         {card.source !== 'live' && (
           <span
             className="rounded px-1 py-px text-[9px] font-semibold tracking-wide"
-            style={{ background: 'var(--hoverbg)', color: 'var(--dim)' }}
+            style={{ background: 'var(--hover)', color: 'var(--dim)' }}
           >
             {card.source === 'manual' ? 'MANUAL' : 'SNAPSHOT'}
           </span>
@@ -85,7 +85,7 @@ function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
   if (biz === 'all') {
     return (
       <div className="mt-6 rounded-card border border-line bg-panel p-4 text-sm text-muted">
-        Pick <b className="text-white">MPG</b> or <b className="text-white">Bayway</b> in the sidebar to log {PERIOD_LABEL[tab]}’s numbers.
+        Pick <b className="text-[color:var(--text)]">MPG</b> or <b className="text-[color:var(--text)]">Bayway</b> in the sidebar to log {PERIOD_LABEL[tab]}’s numbers.
       </div>
     )
   }
@@ -101,7 +101,7 @@ function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
               min="0"
               defaultValue={values[m.key] ?? ''}
               onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
-              className="mt-1 w-full rounded-md border border-line2 bg-panel2 px-2 py-1.5 text-sm text-white"
+              className="mt-1 w-full rounded-md border border-line2 bg-panel2 px-2 py-1.5 text-sm text-[color:var(--text)]"
             />
             {m.key === 'calls' && biz === 'bay' && (
               <span className="mt-1 block text-[10.5px] text-dim">
@@ -114,7 +114,7 @@ function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
       <button
         disabled={saving}
         onClick={() => onSave(draft)}
-        className="mt-3 rounded-md bg-white px-3 py-1.5 text-[13px] font-semibold text-[#07120b] disabled:opacity-50"
+        className="mt-3 rounded-md bg-[color:var(--text)] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Save'}
       </button>
@@ -152,7 +152,7 @@ function EditTargets({ tab, biz, targets, onClose, onSave, saving }) {
     Object.fromEntries(metrics.map((m) => [m.key, targets[m.key] ?? ''])),
   )
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-card border border-line bg-panel2 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 text-sm font-semibold">Edit targets — {tab}</div>
         <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
@@ -163,7 +163,7 @@ function EditTargets({ tab, biz, targets, onClose, onSave, saving }) {
                 type="number" min="0"
                 value={draft[m.key]}
                 onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
-                className="w-28 rounded-md border border-line2 bg-panel px-2 py-1 text-sm text-white"
+                className="w-28 rounded-md border border-line2 bg-panel px-2 py-1 text-sm text-[color:var(--text)]"
               />
             </label>
           ))}
@@ -173,7 +173,7 @@ function EditTargets({ tab, biz, targets, onClose, onSave, saving }) {
           <button
             disabled={saving}
             onClick={() => onSave(draft)}
-            className="rounded-md bg-white px-3 py-1.5 text-[13px] font-semibold text-[#07120b] disabled:opacity-50"
+            className="rounded-md bg-[color:var(--text)] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save targets'}
           </button>
@@ -296,7 +296,7 @@ export default function Reports() {
               aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
               className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${
-                tab === t.key ? 'border-white font-semibold text-white' : 'border-transparent text-muted hover:text-white'
+                tab === t.key ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
               }`}
             >
               {t.label}
@@ -306,7 +306,7 @@ export default function Reports() {
         {!isDemoMode && (
           <button
             onClick={() => setEditing(true)}
-            className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-[11.5px] text-muted hover:text-white"
+            className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-[11.5px] text-muted hover:text-[color:var(--text)]"
           >
             Edit targets
           </button>
@@ -314,7 +314,7 @@ export default function Reports() {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-300">
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
         </div>
       )}
