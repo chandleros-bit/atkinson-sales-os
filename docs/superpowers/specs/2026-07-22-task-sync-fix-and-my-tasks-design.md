@@ -40,7 +40,11 @@ This is self-healing (any historically-stuck row clears on the next run) and cor
 
 Reconciliation runs **only if the open-set fetch succeeded.** `fetchOpenTasks` → `fubGet` throws on any non-2xx response, which aborts the whole run inside the existing `try` **before** reconciliation executes. So a transient FUB API failure logs an error and changes nothing; it can never wrongly mark all open tasks completed.
 
-An empty open set (legitimately: everything is done) is allowed to clear all rows — that is the correct outcome, not an error.
+**Empty-open-set guard (implementation deviation — deliberate).** The original design here said an empty open set (legitimately: everything is done) should be allowed to clear all rows. During implementation this was tightened: a non-2xx is not the only way the fetch can be untrustworthy. The `/tasks` response shape is **unverified** (see the header comment in `_shared/fub-tasks.ts`), and a `200 OK` whose body doesn't match the expected list key makes `pick()` return `[]` — indistinguishable from a genuine "zero open tasks" without extra signal. Trusting that empty set would mass-complete the whole board.
+
+So reconciliation is guarded by `trustOpenSet = openExternalIds.size > 0 || ourOpen.length === 0`: it proceeds when FUB returned at least one open task, or when we hold no open rows anyway. It **skips** (logging `reconcile skipped: empty open set`) only in the "FUB says zero, but we still hold open rows" case.
+
+Tradeoff, accepted: the fail-safe direction is to *not* clear on an ambiguous empty response. The cost is that if the book legitimately empties to zero while some rows are still stuck open in our table, those specific rows won't reconcile until at least one FUB task is open again (then the whole backlog clears at once). This is self-healing and non-destructive, and the common "just completed my last task" case is already handled by the incremental flag path (those rows are upserted `is_completed=true` in step 2, so `ourOpen` won't include them). **Follow-up:** once Task 5's live check confirms the `/tasks` response shape (ideally its `_metadata.total`), the guard can be relaxed to distinguish a real zero from a malformed body, restoring the original "empty means done" behavior safely.
 
 ### Ordering within the run
 
