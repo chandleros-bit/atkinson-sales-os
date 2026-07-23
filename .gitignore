@@ -11,3 +11,6 @@ supabase/.temp
 
 # Brainstorming companion sessions
 .superpowers
+
+.vercel
+.env*
