@@ -5,6 +5,7 @@ import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
   sumWon, countWon, deriveStageCounts, pipelineValue, periodDateFor,
+  sprintRows, sprintWindow, MPG_SPRINT,
 } from '../lib/reports'
 
 const TABS = [
@@ -12,6 +13,7 @@ const TABS = [
   { key: 'weekly', label: 'Weekly' },
   { key: 'monthly', label: 'Monthly' },
   { key: 'revenue', label: 'Revenue' },
+  { key: 'sprint', label: 'Sprint' },
 ]
 
 const PACE_STYLE = {
@@ -75,7 +77,11 @@ function CardGrid({ cards }) {
 }
 
 const PERIOD_LABEL = {
-  daily: 'today', weekly: 'this week', monthly: 'this month', revenue: 'this month',
+  daily: 'today',
+  weekly: 'this week',
+  monthly: 'this month',
+  revenue: 'this month',
+  sprint: 'today’s sprint progress',
 }
 
 function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
@@ -92,6 +98,11 @@ function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
   return (
     <div className="mt-6 rounded-card border border-line bg-panel p-4">
       <div className="mb-3 text-sm font-semibold">Log {PERIOD_LABEL[tab]}</div>
+      {tab === 'sprint' && (
+        <div className="mb-3 rounded-md border border-line bg-panel2 px-3 py-2 text-[11.5px] text-muted">
+          Enter the increments completed today. The Sprint tab sums MPG progress across {MPG_SPRINT.label}.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {metrics.map((m) => (
           <label key={m.key} className="text-xs text-muted">
@@ -186,7 +197,7 @@ function EditTargets({ tab, biz, targets, onClose, onSave, saving }) {
 export default function Reports() {
   const { biz } = useBusiness()
   const [tab, setTab] = useState('daily')
-  const [data, setData] = useState(null)
+  const [data, setData] = useState(() => (isDemoMode ? demoReportsData() : null))
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
@@ -194,7 +205,10 @@ export default function Reports() {
   const [editing, setEditing] = useState(false)
 
   const load = useCallback(async () => {
-    if (isDemoMode) return
+    if (isDemoMode) {
+      setData(demoReportsData())
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -206,13 +220,15 @@ export default function Reports() {
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
       })()
       const todayStartIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
-      const [deals, active, bayContacts, mpgContacts, week, month, series, settings, todayCalls] = await Promise.all([
+      const sprint = sprintWindow()
+      const [deals, active, bayContacts, mpgContacts, week, month, sprintMetrics, series, settings, todayCalls] = await Promise.all([
         supabase.from('deals').select('status, value, expected_close, business_id'),
         supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay'),
         supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
         supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'mpg'),
         supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', wk),
         supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', from),
+        supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', sprint.from).lt('date', sprint.to),
         supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', sevenAgo),
         supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
         supabase.from('activities')
@@ -220,7 +236,7 @@ export default function Reports() {
           .eq('business_id', 'bay').eq('type', 'call').gte('occurred_at', todayStartIso),
       ])
       const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error ||
-        month.error || series.error || settings.error || todayCalls.error
+        month.error || sprintMetrics.error || series.error || settings.error || todayCalls.error
       if (err) { setError(err.message); return }
       setData({
         deals: deals.data || [],
@@ -229,6 +245,7 @@ export default function Reports() {
         mpgContacts: mpgContacts.count || 0,
         week: week.data || [],
         month: month.data || [],
+        sprint: sprintMetrics.data || [],
         series: series.data || [],
         savedTargets: settings.data?.value || {},
         targets: resolveTargets(DEFAULT_TARGETS, settings.data?.value),
@@ -245,7 +262,7 @@ export default function Reports() {
 
   async function saveMetrics(draft) {
     const entries = Object.entries(draft).filter(([, v]) => v !== '' && v != null)
-    if (entries.length === 0 || biz === 'all') return
+    if (entries.length === 0 || biz === 'all' || isDemoMode) return
     setSaving(true)
     const date = periodDateFor(tab)
     const rows = entries.map(([metric_key, v]) => ({
@@ -320,12 +337,12 @@ export default function Reports() {
       )}
       {isDemoMode && (
         <div className="mt-4 rounded-lg border border-line bg-panel px-3 py-2 text-xs text-muted">
-          Demo mode — connect Supabase to see live scoreboard data.
+          Demo mode — showing sample scoreboard data. Connect Supabase to save entries.
         </div>
       )}
       {loading && <div className="mt-6 text-sm text-muted">Loading scoreboard…</div>}
-      {!loading && !error && !isDemoMode && <CardGrid cards={cards} />}
-      {!loading && !error && !isDemoMode && data && tab === 'daily' && (
+      {!loading && !error && <CardGrid cards={cards} />}
+      {!loading && !error && data && tab === 'daily' && (
         <TrendStrip
           series={dailySeries(
             biz === 'all' ? data.series : data.series.filter((r) => r.business_id === biz),
@@ -333,7 +350,7 @@ export default function Reports() {
           )}
         />
       )}
-      {!loading && !error && !isDemoMode && data && (
+      {!loading && !error && data && (
         <LogMetrics
           key={`${tab}-${biz}`}
           tab={tab}
@@ -356,6 +373,76 @@ export default function Reports() {
       )}
     </div>
   )
+}
+
+function demoReportsData() {
+  const today = todayKey()
+  const monthFirst = today.slice(0, 8) + '01'
+  const sprintDemo = [
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_outbound_attempts', value: 210 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_live_conversations', value: 42 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_completed_applications', value: 8 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_qualified_preapprovals', value: 5 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_contracts_refis', value: 2 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_funded_loans', value: 1 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_referral_touches', value: 38 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_under_contract', value: 1 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_preapproved', value: 3 },
+    { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_waiting_docs', value: 8 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_targeted_contacts', value: 120 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_owner_conversations', value: 32 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_discovery_meetings', value: 9 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_statements_received', value: 7 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_statements_analyzed', value: 6 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_proposals_sent', value: 4 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_signed', value: 2 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_activated', value: 1 },
+    { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_qualified_future_pipeline', value: 5 },
+  ]
+  const month = [
+    { date: monthFirst, business_id: 'bay', metric_key: 'realtor_meetings', value: 3 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'businesses_contacted', value: 120 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'owner_conversations', value: 32 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'merchant_proposals_delivered', value: 4 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'new_merchant_accounts', value: 2 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'new_residual', value: 640 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'rev_active_merchants', value: 2 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'rev_monthly_residual', value: 640 },
+    { date: monthFirst, business_id: 'mpg', metric_key: 'rev_processing_volume', value: 86000 },
+  ]
+  const series = [
+    { date: today, business_id: 'bay', metric_key: 'calls', value: 24 },
+    { date: today, business_id: 'bay', metric_key: 'live_conversations', value: 5 },
+    { date: today, business_id: 'bay', metric_key: 'followups', value: 8 },
+    { date: today, business_id: 'mpg', metric_key: 'calls', value: 18 },
+    { date: today, business_id: 'mpg', metric_key: 'live_conversations', value: 4 },
+    { date: today, business_id: 'mpg', metric_key: 'followups', value: 6 },
+    { date: today, business_id: 'mpg', metric_key: 'new_contacts', value: 3 },
+  ]
+  return {
+    deals: [
+      { status: 'won', value: 340000, expected_close: today, business_id: 'bay' },
+      { status: 'open', value: 625000, expected_close: null, business_id: 'bay' },
+    ],
+    activeRows: [
+      { stage: 'Waiting on Docs', business_id: 'bay' },
+      { stage: 'Pre-Approved', business_id: 'bay' },
+      { stage: 'Pre-Approved', business_id: 'bay' },
+    ],
+    bayContacts: 826,
+    mpgContacts: 42,
+    week: [
+      { business_id: 'bay', metric_key: 'realtor_convos', value: 18 },
+      { business_id: 'mpg', metric_key: 'bizowner_convos', value: 32 },
+      { business_id: 'mpg', metric_key: 'merchant_proposals', value: 4 },
+    ],
+    month,
+    sprint: sprintDemo,
+    series: [...series, ...month, ...sprintDemo],
+    savedTargets: {},
+    targets: resolveTargets(DEFAULT_TARGETS, null),
+    todayCalls: 24,
+  }
 }
 
 // Maps each tab's metric keys to a number. Manual keys come from the
@@ -392,6 +479,9 @@ function computeValues(tab, biz, data) {
       pipeline_value: pipelineValue(bayDeals),
       db_total: dbTotal,
     }
+  }
+  if (tab === 'sprint') {
+    return rollupMetrics(bizFilter(sprintRows(data.sprint)))
   }
   // revenue
   const manual = rollupMetrics(bizFilter(data.month))

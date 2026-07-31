@@ -29,6 +29,10 @@ import {
   monthWindow,
   pace,
   formatValue,
+  sprintRows,
+  weeksRemaining,
+  neededPerWeek,
+  MPG_SPRINT,
 } from '../lib/reports'
 import {
   todayKey,
@@ -47,6 +51,8 @@ const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
+const DEMO_TODAY = todayKey()
+const DEMO_MONTH = DEMO_TODAY.slice(0, 8) + '01'
 
 function greeting() {
   const h = new Date().getHours()
@@ -474,6 +480,111 @@ function FunnelCard({ title, sub, to, fillPct, left, right, stats }) {
   )
 }
 
+function SprintProgress({ label, value, target, color = 'var(--mpg)' }) {
+  const pct = goalPct(value, target)
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-[12px] font-semibold text-muted">{label}</span>
+        <span className="num flex-none text-[12px] font-bold">{value}/{target}</span>
+      </div>
+      <div className="mt-1.5 h-[6px] overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      </div>
+    </div>
+  )
+}
+
+function MpgSprintCard({ sprint }) {
+  return (
+    <Card className="col-span-2 xl:col-span-4">
+      <CardHead
+        title="MPG Sprint"
+        sub={`${MPG_SPRINT.label} · base 8 activated, stretch 10 signed`}
+        right={
+          <span
+            className="flex-none rounded-full px-[11px] py-[5px] text-[11.5px] font-bold"
+            style={
+              sprint.onPace
+                ? { background: 'var(--mpg-soft)', color: 'var(--mpg-ink)' }
+                : { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }
+            }
+          >
+            {sprint.onPace ? 'On track' : 'Behind'}
+          </span>
+        }
+      />
+
+      <div className="mt-4 grid gap-3">
+        <SprintProgress label="Activated + processing" value={sprint.activated} target={sprint.activatedTarget} />
+        <SprintProgress label="Merchants signed" value={sprint.signed} target={sprint.signedTarget} />
+        <SprintProgress label="Statements analyzed" value={sprint.statements} target={sprint.statementTarget} />
+        <SprintProgress label="Discovery meetings" value={sprint.discovery} target={sprint.discoveryTarget} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-1.5 border-t border-line pt-4">
+        <div className="min-w-0 text-center">
+          <div className="num text-[16px] font-extrabold">{sprint.weeksLeft}</div>
+          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Weeks left</div>
+        </div>
+        <div className="min-w-0 text-center">
+          <div className="num text-[16px] font-extrabold">{sprint.activatedPerWeek}</div>
+          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Activated / wk</div>
+        </div>
+        <div className="min-w-0 text-center">
+          <div className="num text-[16px] font-extrabold">{sprint.signedPerWeek}</div>
+          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Signed / wk</div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function BaySprintCard({ sprint }) {
+  return (
+    <Card className="col-span-2 xl:col-span-4">
+      <CardHead
+        title="Bayway Sprint"
+        sub={`${MPG_SPRINT.label} · base 10 funded, stretch 12`}
+        right={
+          <span
+            className="flex-none rounded-full px-[11px] py-[5px] text-[11.5px] font-bold"
+            style={
+              sprint.onPace
+                ? { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
+                : { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }
+            }
+          >
+            {sprint.onPace ? 'On track' : 'Behind'}
+          </span>
+        }
+      />
+
+      <div className="mt-4 grid gap-3">
+        <SprintProgress label="Funded loans" value={sprint.funded} target={sprint.fundedTarget} color="var(--bay)" />
+        <SprintProgress label="Completed applications" value={sprint.applications} target={sprint.applicationTarget} color="var(--bay)" />
+        <SprintProgress label="Qualified pre-approvals" value={sprint.preapprovals} target={sprint.preapprovalTarget} color="var(--bay)" />
+        <SprintProgress label="Contracts/refi opps" value={sprint.contracts} target={sprint.contractTarget} color="var(--bay)" />
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-1.5 border-t border-line pt-4">
+        <div className="min-w-0 text-center">
+          <div className="num text-[16px] font-extrabold">{sprint.underContract}</div>
+          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Under contract</div>
+        </div>
+        <div className="min-w-0 text-center">
+          <div className="num text-[16px] font-extrabold">{sprint.baselinePreapproved}</div>
+          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Pre-approved</div>
+        </div>
+        <div className="min-w-0 text-center">
+          <div className="num text-[16px] font-extrabold">{sprint.waitingDocs}</div>
+          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Waiting docs</div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 // ---- 5. Needs Attention -------------------------------------------------------
 
 const ATTENTION_COLS = 'grid-cols-[2.4fr_1fr_.8fr_1.1fr]'
@@ -651,7 +762,7 @@ function buildBayHotRows(taggedRows, pipelineRows) {
 // (pipeline, deals, priority leads) are skipped in the MPG view and vice versa,
 // so a single-book view never pays for the other book's queries.
 function useCommandCenter(biz) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState(() => (isDemoMode ? demoCommandData() : null))
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
@@ -670,8 +781,8 @@ function useCommandCenter(biz) {
         const { from: monthStart } = monthWindow()
         // One metrics read covers every window the cards need: today, yesterday
         // (delta pills), the 14-day chart, and month-to-date manual revenue rows
-        // — which land on the 1st and can fall outside the 14-day window.
-        const metricsFrom = [daysAgoKey(CHART_DAYS - 1), monthStart].sort()[0]
+        // — plus sprint rows, which can fall outside both windows.
+        const metricsFrom = [daysAgoKey(CHART_DAYS - 1), monthStart, MPG_SPRINT.from].sort()[0]
 
         const q = {
           metrics: supabase
@@ -762,6 +873,62 @@ function useCommandCenter(biz) {
   return { data, loading, error }
 }
 
+function demoCommandData() {
+  return {
+    metrics: [
+      { date: DEMO_TODAY, business_id: 'bay', metric_key: 'calls', value: 24 },
+      { date: DEMO_TODAY, business_id: 'bay', metric_key: 'live_conversations', value: 5 },
+      { date: DEMO_TODAY, business_id: 'mpg', metric_key: 'calls', value: 18 },
+      { date: DEMO_TODAY, business_id: 'mpg', metric_key: 'live_conversations', value: 4 },
+      { date: DEMO_MONTH, business_id: 'mpg', metric_key: 'rev_monthly_residual', value: 640 },
+      { date: DEMO_MONTH, business_id: 'mpg', metric_key: 'rev_active_merchants', value: 2 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_outbound_attempts', value: 210 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_live_conversations', value: 42 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_completed_applications', value: 8 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_qualified_preapprovals', value: 5 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_contracts_refis', value: 2 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_funded_loans', value: 1 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_referral_touches', value: 38 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_under_contract', value: 1 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_preapproved', value: 3 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_waiting_docs', value: 8 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_targeted_contacts', value: 120 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_owner_conversations', value: 32 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_discovery_meetings', value: 9 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_statements_received', value: 7 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_statements_analyzed', value: 6 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_proposals_sent', value: 4 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_signed', value: 2 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_activated', value: 1 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_qualified_future_pipeline', value: 5 },
+    ],
+    targets: resolveTargets(DEFAULT_TARGETS, null),
+    latestSync: { ran_at: new Date().toISOString(), status: 'ok', message: null },
+    tasks: [],
+    bayPipe: [
+      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', phone: '(713) 555-0142', stage: 'Waiting on Docs', last_touch_at: null },
+      { id: 'b2', business_id: 'bay', name: 'Nguyen Refi', phone: '(281) 555-0195', stage: 'Pre-Approved', last_touch_at: new Date().toISOString() },
+      { id: 'b3', business_id: 'bay', name: 'Okafor Purchase', phone: '(832) 555-0110', stage: 'Pre-Approved', last_touch_at: new Date().toISOString() },
+    ],
+    bayHot: [
+      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', phone: '(713) 555-0142', stage: 'Waiting on Docs', last_touch_at: null },
+    ],
+    bayContacts: 826,
+    deals: [
+      { status: 'won', value: 340000, expected_close: DEMO_TODAY, business_id: 'bay' },
+      { status: 'open', value: 625000, expected_close: null, business_id: 'bay' },
+    ],
+    leads: [
+      { id: 'l1', name: 'Jessica Chen', score: 92, tier: 'hot', last_activity_at: null, fub_profile_url: '#' },
+    ],
+    mpgRows: [
+      { id: 'm1', business_id: 'mpg', name: 'Ana Torres', company: 'Riverside Deli', phone: '(832) 555-0191', stage: 'Open', last_touch_at: null },
+      { id: 'm2', business_id: 'mpg', name: 'Chris Lee', company: 'Heights Auto', phone: '(713) 555-0108', stage: 'Contacted', last_touch_at: new Date().toISOString() },
+      { id: 'm3', business_id: 'mpg', name: 'Priya Shah', company: 'Oak Spa', phone: '(281) 555-0133', stage: 'Qualified', last_touch_at: new Date().toISOString() },
+    ],
+  }
+}
+
 // The daily activity scoreboard. The combined view splits calls by book; a
 // single-book view shows that book's four daily metrics instead.
 // Per-book call goals are half the combined `calls` target, so the two book
@@ -836,6 +1003,31 @@ function buildView(biz, data) {
 
   const monthRows = metrics.filter((r) => r.date >= win.from && r.date < win.to)
   const mpgMonth = rollupMetrics(monthRows.filter((r) => r.business_id === 'mpg'))
+  const mpgSprintRows = sprintRows(metrics.filter((r) => r.business_id === 'mpg'))
+  const mpgSprint = rollupMetrics(mpgSprintRows)
+  const baySprintRows = sprintRows(metrics.filter((r) => r.business_id === 'bay'))
+  const baySprint = rollupMetrics(baySprintRows)
+  const weeksLeft = weeksRemaining()
+  const activatedPerWeek = neededPerWeek(
+    mpgSprint.mpg_merchants_activated,
+    targets.mpg_merchants_activated,
+    weeksLeft,
+  )
+  const signedPerWeek = neededPerWeek(
+    mpgSprint.mpg_merchants_signed,
+    targets.mpg_merchants_signed,
+    weeksLeft,
+  )
+  const fundedPerWeek = neededPerWeek(
+    baySprint.bay_funded_loans,
+    targets.bay_funded_loans,
+    weeksLeft,
+  )
+  const applicationsPerWeek = neededPerWeek(
+    baySprint.bay_completed_applications,
+    targets.bay_completed_applications,
+    weeksLeft,
+  )
 
   const mpgOpen = mpgRows.filter((r) => isMpgOpen(r.stage))
   const attentionRows =
@@ -928,6 +1120,38 @@ function buildView(biz, data) {
     chart,
     gauge,
     funnel,
+    sprint: {
+      mpg: {
+        activated: Number(mpgSprint.mpg_merchants_activated || 0),
+        signed: Number(mpgSprint.mpg_merchants_signed || 0),
+        statements: Number(mpgSprint.mpg_statements_analyzed || 0),
+        discovery: Number(mpgSprint.mpg_discovery_meetings || 0),
+        activatedTarget: targets.mpg_merchants_activated,
+        signedTarget: targets.mpg_merchants_signed,
+        statementTarget: targets.mpg_statements_analyzed,
+        discoveryTarget: targets.mpg_discovery_meetings,
+        weeksLeft,
+        activatedPerWeek,
+        signedPerWeek,
+        onPace: activatedPerWeek <= 0.75 && signedPerWeek <= 1,
+      },
+      bay: {
+        funded: Number(baySprint.bay_funded_loans || 0),
+        applications: Number(baySprint.bay_completed_applications || 0),
+        preapprovals: Number(baySprint.bay_qualified_preapprovals || 0),
+        contracts: Number(baySprint.bay_contracts_refis || 0),
+        fundedTarget: targets.bay_funded_loans,
+        applicationTarget: targets.bay_completed_applications,
+        preapprovalTarget: targets.bay_qualified_preapprovals,
+        contractTarget: targets.bay_contracts_refis,
+        underContract: Number(baySprint.bay_pipeline_under_contract || 0),
+        baselinePreapproved: Number(baySprint.bay_pipeline_preapproved || 0),
+        waitingDocs: Number(baySprint.bay_pipeline_waiting_docs || 0),
+        fundedPerWeek,
+        applicationsPerWeek,
+        onPace: fundedPerWeek <= 1 && applicationsPerWeek <= 4,
+      },
+    },
     attention,
     leads: sortByScore(data.leads).slice(0, 5),
   }
@@ -979,6 +1203,8 @@ export default function Overview() {
 
               <GaugeCard {...view.gauge} />
               <FunnelCard {...view.funnel} />
+              {biz !== 'mpg' && <BaySprintCard sprint={view.sprint.bay} />}
+              {biz !== 'bay' && <MpgSprintCard sprint={view.sprint.mpg} />}
 
               <NeedsAttentionCard
                 rows={view.attention.rows}

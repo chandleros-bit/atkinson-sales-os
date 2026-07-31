@@ -50,6 +50,26 @@ export const METRICS = [
   { key: 'rev_avg_per_closing',   label: 'Avg income / closing',   tab: 'revenue', biz: 'bay', source: 'derived', unit: 'currency' },
   { key: 'rev_avg_residual',      label: 'Avg residual / account', tab: 'revenue', biz: 'mpg', source: 'derived', unit: 'currency' },
   { key: 'rev_annualized',        label: 'Annualized income',      tab: 'revenue', biz: 'both',source: 'derived', unit: 'currency' },
+  // ---- 90-day sprint -----------------------------------------------------
+  { key: 'mpg_targeted_contacts',        label: 'Targeted contacts',      tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_owner_conversations',      label: 'Owner conversations',    tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_discovery_meetings',       label: 'Discovery meetings',     tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_statements_received',      label: 'Statements received',    tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_statements_analyzed',      label: 'Statements analyzed',    tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_proposals_sent',           label: 'Proposals sent',         tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_merchants_signed',         label: 'Merchants signed',       tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_merchants_activated',      label: 'Activated + processing', tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'mpg_qualified_future_pipeline',label: 'Future pipeline',        tab: 'sprint', biz: 'mpg', source: 'manual', unit: 'count' },
+  { key: 'bay_outbound_attempts',         label: 'Outbound attempts',      tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_live_conversations',        label: 'Live conversations',     tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_completed_applications',    label: 'Completed applications', tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_qualified_preapprovals',    label: 'Qualified pre-approvals',tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_contracts_refis',           label: 'Contracts/refi opps',    tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_funded_loans',              label: 'Funded loans',           tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_referral_touches',          label: 'Referral touches',       tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_pipeline_under_contract',   label: 'Under contract baseline',tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_pipeline_preapproved',      label: 'Pre-approved baseline',  tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_pipeline_waiting_docs',     label: 'Waiting docs baseline',  tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
 ]
 
 // Defaults straight from the doc. Editable at runtime via settings.metric_targets.
@@ -68,6 +88,23 @@ export const DEFAULT_TARGETS = {
   rev_active_merchants: 100, rev_monthly_residual: 10_000,
   rev_combined_income: 27_500, rev_processing_volume: 1_000_000,
   rev_avg_per_closing: 3_500, rev_avg_residual: 100, rev_annualized: 330_000,
+  mpg_targeted_contacts: 720, mpg_owner_conversations: 180,
+  mpg_discovery_meetings: 48, mpg_statements_received: 36,
+  mpg_statements_analyzed: 36, mpg_proposals_sent: 24,
+  mpg_merchants_signed: 10, mpg_merchants_activated: 8,
+  mpg_qualified_future_pipeline: 15,
+  bay_outbound_attempts: 1200, bay_live_conversations: 240,
+  bay_completed_applications: 48, bay_qualified_preapprovals: 30,
+  bay_contracts_refis: 16, bay_funded_loans: 10,
+  bay_referral_touches: 240,
+  bay_pipeline_under_contract: 1, bay_pipeline_preapproved: 3,
+  bay_pipeline_waiting_docs: 8,
+}
+
+export const MPG_SPRINT = {
+  from: '2026-07-30',
+  to: '2026-10-29',
+  label: 'July 30-Oct 28',
 }
 
 export function metricsForTab(tab, biz) {
@@ -133,11 +170,33 @@ export function monthWindow(now = Date.now()) {
   return { from, to }
 }
 
+export function sprintWindow() {
+  return MPG_SPRINT
+}
+
 // rows: metrics_daily rows ({ metric_key, value }). -> { [metric_key]: sum }.
 export function rollupMetrics(rows) {
   const out = {}
   for (const r of rows) out[r.metric_key] = (out[r.metric_key] || 0) + Number(r.value || 0)
   return out
+}
+
+export function sprintRows(rows, win = sprintWindow()) {
+  return rows.filter((r) => String(r.date || '').slice(0, 10) >= win.from && String(r.date || '').slice(0, 10) < win.to)
+}
+
+export function weeksRemaining(win = sprintWindow(), now = Date.now()) {
+  const today = dayKey(new Date(now).toISOString())
+  const start = today < win.from ? win.from : today
+  if (start >= win.to) return 0
+  const ms = new Date(`${win.to}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()
+  return Math.max(0, Math.ceil(ms / (7 * 86_400_000)))
+}
+
+export function neededPerWeek(value, target, remainingWeeks) {
+  const need = Math.max(0, Number(target || 0) - Number(value || 0))
+  if (!remainingWeeks) return need
+  return Math.ceil((need / remainingWeeks) * 10) / 10
 }
 
 // dateStr: a 'YYYY-MM-DD' (or ISO) date. from/to: YYYY-MM-DD keys. [from, to).
@@ -200,6 +259,7 @@ export function dailySeries(rows, metricKey, endKey, days = 7) {
 // -> the 1st.
 export function periodDateFor(tab, now = Date.now()) {
   if (tab === 'daily') return dayKey(new Date(now).toISOString())
+  if (tab === 'sprint') return dayKey(new Date(now).toISOString())
   if (tab === 'weekly') return weekStart(now)
   return monthWindow(now).from
 }

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { METRICS, DEFAULT_TARGETS, metricsForTab, resolveTargets, pace, formatValue, metricCardView, buildTabModel, weekStart, monthWindow, rollupMetrics, sumWon, countWon, pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor } from './reports'
+import {
+  METRICS, DEFAULT_TARGETS, MPG_SPRINT, metricsForTab, resolveTargets, pace,
+  formatValue, metricCardView, buildTabModel, weekStart, monthWindow,
+  rollupMetrics, sprintRows, weeksRemaining, neededPerWeek, sumWon, countWon,
+  pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor,
+} from './reports'
 
 describe('METRICS registry', () => {
   it('every metric has a default target', () => {
@@ -9,7 +14,7 @@ describe('METRICS registry', () => {
   })
   it('uses only known tabs, sources, biz, units', () => {
     for (const m of METRICS) {
-      expect(['daily', 'weekly', 'monthly', 'revenue']).toContain(m.tab)
+      expect(['daily', 'weekly', 'monthly', 'revenue', 'sprint']).toContain(m.tab)
       expect(['live', 'derived', 'manual']).toContain(m.source)
       expect(['mpg', 'bay', 'both']).toContain(m.biz)
       expect(['count', 'currency', 'minutes']).toContain(m.unit)
@@ -27,6 +32,32 @@ describe('metricsForTab', () => {
     expect(bay.every((m) => m.tab === 'daily' && (m.biz === 'bay' || m.biz === 'both'))).toBe(true)
     const all = metricsForTab('daily', 'all')
     expect(all.length).toBeGreaterThanOrEqual(bay.length)
+  })
+  it('returns MPG sprint metrics for the sprint tab', () => {
+    const mpg = metricsForTab('sprint', 'mpg')
+    expect(mpg.map((m) => m.key)).toContain('mpg_merchants_activated')
+    expect(mpg.every((m) => m.tab === 'sprint' && m.biz === 'mpg')).toBe(true)
+  })
+  it('returns Bayway sprint metrics for the sprint tab', () => {
+    const bay = metricsForTab('sprint', 'bay')
+    expect(bay.map((m) => m.key)).toEqual([
+      'bay_outbound_attempts',
+      'bay_live_conversations',
+      'bay_completed_applications',
+      'bay_qualified_preapprovals',
+      'bay_contracts_refis',
+      'bay_funded_loans',
+      'bay_referral_touches',
+      'bay_pipeline_under_contract',
+      'bay_pipeline_preapproved',
+      'bay_pipeline_waiting_docs',
+    ])
+    expect(bay.every((m) => m.tab === 'sprint' && m.biz === 'bay')).toBe(true)
+  })
+  it('returns both books in the all-business sprint tab', () => {
+    const all = metricsForTab('sprint', 'all').map((m) => m.key)
+    expect(all).toContain('mpg_merchants_activated')
+    expect(all).toContain('bay_funded_loans')
   })
 })
 
@@ -127,6 +158,34 @@ describe('rollupMetrics', () => {
   })
 })
 
+describe('sprint helpers', () => {
+  it('defines the MPG sprint window as an exclusive upper bound', () => {
+    expect(MPG_SPRINT).toEqual({
+      from: '2026-07-30',
+      to: '2026-10-29',
+      label: 'July 30-Oct 28',
+    })
+  })
+
+  it('filters rows to the sprint date window', () => {
+    const rows = [
+      { date: '2026-07-29', metric_key: 'mpg_merchants_signed', value: 99 },
+      { date: '2026-07-30', metric_key: 'mpg_merchants_signed', value: 1 },
+      { date: '2026-10-28', metric_key: 'mpg_merchants_signed', value: 2 },
+      { date: '2026-10-29', metric_key: 'mpg_merchants_signed', value: 99 },
+    ]
+    expect(rollupMetrics(sprintRows(rows))).toEqual({ mpg_merchants_signed: 3 })
+  })
+
+  it('calculates remaining weekly pace requirements', () => {
+    const now = new Date(2026, 6, 30, 12, 0, 0).getTime()
+    const remaining = weeksRemaining(undefined, now)
+    expect(remaining).toBeGreaterThan(0)
+    expect(neededPerWeek(2, 10, 4)).toBe(2)
+    expect(neededPerWeek(9, 10, 4)).toBe(0.3)
+  })
+})
+
 describe('sumWon / countWon', () => {
   const WIN = { from: '2026-07-01', to: '2026-08-01' }
   const deals = [
@@ -201,5 +260,8 @@ describe('periodDateFor', () => {
   it('writes monthly and revenue entries to the 1st of the month', () => {
     expect(periodDateFor('monthly', NOW_P)).toBe('2026-07-01')
     expect(periodDateFor('revenue', NOW_P)).toBe('2026-07-01')
+  })
+  it('writes sprint entries to the current day', () => {
+    expect(periodDateFor('sprint', NOW_P)).toBe('2026-07-15')
   })
 })
