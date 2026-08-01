@@ -46,6 +46,24 @@ describe('contactExternalId', () => {
     expect(contactExternalId({ Who_Id: { id: '88' } }, 'appointment')).toBe('88')
     expect(contactExternalId({}, 'call')).toBe(null)
   })
+  it('falls back to a Lead in What_Id when Who_Id is null (MPG case)', () => {
+    expect(
+      contactExternalId({ Who_Id: null, What_Id: { id: '55' }, $se_module: 'Leads' }, 'call'),
+    ).toBe('55')
+    expect(
+      contactExternalId({ Who_Id: null, What_Id: { id: '55' }, $se_module: 'Contacts' }, 'appointment'),
+    ).toBe('55')
+  })
+  it('ignores What_Id when it points at a non-person module', () => {
+    expect(contactExternalId({ What_Id: { id: '55' }, $se_module: 'Deals' }, 'call')).toBe(null)
+    expect(contactExternalId({ What_Id: { id: '55' }, $se_module: 'Accounts' }, 'call')).toBe(null)
+    expect(contactExternalId({ What_Id: { id: '55' } }, 'call')).toBe(null) // no $se_module
+  })
+  it('prefers Who_Id over What_Id when both are present', () => {
+    expect(
+      contactExternalId({ Who_Id: { id: '77' }, What_Id: { id: '55' }, $se_module: 'Leads' }, 'call'),
+    ).toBe('77')
+  })
   it('reads a note Parent_Id only when the parent is a person module', () => {
     expect(contactExternalId({ Parent_Id: { id: '5' }, $se_module: 'Contacts' }, 'note')).toBe('5')
     expect(contactExternalId({ Parent_Id: { id: '5' }, $se_module: 'Leads' }, 'note')).toBe('5')
@@ -77,6 +95,15 @@ describe('mapActivity', () => {
   it('leaves contact_id null when the Zoho id is unknown or missing', () => {
     expect(mapActivity({ id: 9, Who_Id: { id: '999' } }, 'call', contactIdByExternal).contact_id).toBe(null)
     expect(mapActivity({ id: 9 }, 'call', contactIdByExternal).contact_id).toBe(null)
+  })
+  it('resolves a call contact_id from a Lead in What_Id', () => {
+    const row = mapActivity(
+      { id: 14, Who_Id: null, What_Id: { id: '77', name: 'Kari Foster' }, $se_module: 'Leads' },
+      'call',
+      contactIdByExternal,
+    )
+    expect(row.external_id).toBe('call-14')
+    expect(row.contact_id).toBe('uuid-contact')
   })
   it('resolves a note contact_id from its person parent', () => {
     const row = mapActivity(

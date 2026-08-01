@@ -53,19 +53,34 @@ export function snippet(rec, type) {
   }
 }
 
+const PERSON_MODULES = new Set(['Contacts', 'Leads'])
+
+// The Zoho record whose id should resolve to our contact, for a Call / Event.
+// Zoho splits the association by module: a call on a Contact carries the person
+// in Who_Id, but a call on a Lead carries it in What_Id with $se_module 'Leads'
+// (Who_Id is null). MPG's book lives on Leads, so What_Id is the common case.
+// What_Id is polymorphic (Deals/Accounts too), so trust it only for a person
+// module. Who_Id wins when both are present.
+function personExternalId(rec) {
+  if (rec.Who_Id && rec.Who_Id.id) return String(rec.Who_Id.id)
+  const se = rec['$se_module']
+  if (PERSON_MODULES.has(se) && rec.What_Id && rec.What_Id.id) return String(rec.What_Id.id)
+  return null
+}
+
 // The Zoho record whose id should resolve to our contact.
-// Calls / Events carry Who_Id (the person). Notes attach to a polymorphic
-// parent — link only when that parent is a person module (Contacts/Leads);
-// a note on a Deal/Account has no contact to point at.
+// Notes attach to a polymorphic parent — link only when that parent is a person
+// module; a note on a Deal/Account has no contact to point at. Calls / Events
+// use personExternalId (Who_Id, or a Lead in What_Id).
 export function contactExternalId(rec, type) {
   if (type === 'note') {
     const pid = rec.Parent_Id && rec.Parent_Id.id ? String(rec.Parent_Id.id) : null
     if (!pid) return null
     const se = rec['$se_module']
-    if (se && se !== 'Contacts' && se !== 'Leads') return null
+    if (se && !PERSON_MODULES.has(se)) return null
     return pid
   }
-  return rec.Who_Id && rec.Who_Id.id ? String(rec.Who_Id.id) : null
+  return personExternalId(rec)
 }
 
 // contactIdByExternal: Map<zoho record id (string), our contacts.id (uuid)>
