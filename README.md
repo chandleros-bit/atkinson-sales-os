@@ -117,8 +117,15 @@ of 2026-07-13:
   `docs/phase-activity-fub-setup.md`. The feed covers **calls, notes, and
   appointments** — FollowUpBoss's API won't list texts or emails account-wide
   (both require a per-contact query), so those are deferred; the sync skips any
-  unavailable endpoint rather than failing. MPG activity (Zoho) remains a
-  future phase; `/mpg/activity` stays a placeholder.
+  unavailable endpoint rather than failing.
+- **Phase 12 — MPG activity (Zoho), built:** the Zoho mirror of Phase 11.
+  `Activity.jsx` is now config-driven for both books; `/mpg/activity` serves the
+  `mpg` config. New `zoho-activity-sync` function + `_shared/zoho-activity.ts`
+  mapping + `v_mpg_activity` view (`0024`) + 15-min cron (`0025`). The feed
+  covers **calls, meetings, and notes** — Zoho has no listable text/email
+  module. The `call` tag takes the business accent (blue MPG / green Bayway) so
+  the two palettes never mix on one page. Setup: `docs/phase-activity-zoho-setup.md`.
+  Awaiting the same Zoho secrets as `zoho-sync` before it carries live data.
 
 ### Not yet built
 
@@ -130,8 +137,6 @@ of 2026-07-13:
 - **Deals sync** (FUB + Zoho → `deals` table, currently empty) — not started.
   Biggest visible gap vs. the original mockup: unlocks the dollar KPI row
   (Active deals $, Pipeline value, Closed-this-month).
-- **MPG (Zoho) activity** — the Bayway activity feed shipped in Phase 11; the
-  MPG side still needs a Zoho activity sync before `/mpg/activity` can light up.
 - **Targets and polish** (original Phase 7 scope) — not started.
 
 Locked scope for v1: read-only, CRM + calendar sources only, dark theme, single Super Admin user.

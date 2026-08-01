@@ -45,10 +45,7 @@ export default function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/mpg/pipeline" element={<Pipeline biz="mpg" />} />
-              <Route
-                path="/mpg/activity"
-                element={<PagePlaceholder title="Activity" biz="mpg" phase="6" />}
-              />
+              <Route path="/mpg/activity" element={<Activity biz="mpg" />} />
               <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />
               <Route path="/bayway/pipeline" element={<Pipeline biz="bay" />} />
               <Route path="/bayway/priority-leads" element={<PriorityLeads />} />
