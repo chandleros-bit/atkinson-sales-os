@@ -49,13 +49,26 @@ adjust if needed:
   `$se_module` (linked only when the parent is a `Contacts`/`Leads` record). If
   your payloads nest these differently, extend `contactExternalId`.
 
-### Texts and emails are omitted (by design)
+### Scope: calls only (as shipped)
 
-Zoho has no first-class, listable Text or Email module the way FUB has
-`/calls`/`/notes`. The MPG feed therefore carries **calls, meetings, and
-notes**. Each module is fetched in its own try/catch, so one failing module is
-recorded in `sync_log.message` under `skipped ...` while the others flow into
-the feed.
+The feed carries **calls**. On the first live run against the Media Payments
+Group org (2026-08-01) the other two modules were blocked by Zoho permissions,
+not by the code:
+
+- **Meetings (`Events`)** → `NO_PERMISSION`: the sync user's profile has no read
+  access to the Meetings module. If MPG starts logging meetings there, grant the
+  profile Read on Meetings (Setup → Users and Control → Profiles) and re-add
+  `['appointment', fetchEvents]` to the `fetchers` list in the function.
+- **Notes** → `NOT_SUPPORTED` "supported only for admin users": Zoho's list-all
+  Notes API is admin-only. Options: use an admin refresh token and re-add
+  `['note', fetchNotes]`, or add a per-contact Notes pass
+  (`GET /Contacts/{id}/Notes`, non-admin-safe) mirroring the FUB per-contact
+  email pass.
+
+Both mappings (`fetchEvents` / `fetchNotes` and their occurred/snippet/parent
+handling) remain in `_shared/zoho-activity.ts` and are unit-tested, so
+re-enabling either is a one-line change in the function. Texts and emails have
+no listable Zoho module and are out of scope.
 
 ## Notes
 

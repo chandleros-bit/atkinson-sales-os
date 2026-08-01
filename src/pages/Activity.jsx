@@ -23,9 +23,9 @@ const ACTIVITY = {
     label: 'MPG',
     accent: 'mpg',
     source: 'v_mpg_activity',
-    // Zoho has no listable text/email module, so the MPG feed is calls,
-    // meetings, and notes (see zoho-activity.ts).
-    copy: 'MPG activity — calls, meetings, and notes from Zoho CRM.',
+    // Calls only today — Zoho meetings/notes are gated behind module/admin
+    // permissions the sync user lacks (see zoho-activity.ts).
+    copy: 'MPG activity — calls from Zoho CRM.',
     empty: 'No activity yet — connect the Zoho activity sync (see docs/phase-activity-zoho-setup.md).',
     demoRows: [
       { id: 'd1', type: 'call', occurred_at: new Date(Date.now() - 2 * 3600000).toISOString(), contact_name: 'Northline Retail', snippet: 'Owner call — walked through pricing', owner: 'You', crm_profile_url: '#' },

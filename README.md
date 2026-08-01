@@ -118,14 +118,18 @@ of 2026-07-13:
   appointments** — FollowUpBoss's API won't list texts or emails account-wide
   (both require a per-contact query), so those are deferred; the sync skips any
   unavailable endpoint rather than failing.
-- **Phase 12 — MPG activity (Zoho), built:** the Zoho mirror of Phase 11.
-  `Activity.jsx` is now config-driven for both books; `/mpg/activity` serves the
-  `mpg` config. New `zoho-activity-sync` function + `_shared/zoho-activity.ts`
-  mapping + `v_mpg_activity` view (`0024`) + 15-min cron (`0025`). The feed
-  covers **calls, meetings, and notes** — Zoho has no listable text/email
-  module. The `call` tag takes the business accent (blue MPG / green Bayway) so
-  the two palettes never mix on one page. Setup: `docs/phase-activity-zoho-setup.md`.
-  Awaiting the same Zoho secrets as `zoho-sync` before it carries live data.
+- **Phase 12 — MPG activity (Zoho), live 2026-08-01:** the Zoho mirror of
+  Phase 11. `Activity.jsx` is now config-driven for both books; `/mpg/activity`
+  serves the `mpg` config. New `zoho-activity-sync` function +
+  `_shared/zoho-activity.ts` mapping + `v_mpg_activity` view (`0024`) + 15-min
+  cron (`0025`). Deployed, migrations applied, Zoho secrets set, first sync
+  pulled calls. Ships **calls-only**: on the live run Zoho blocked Meetings
+  (`NO_PERMISSION` — sync user's profile lacks module access) and Notes
+  (`NOT_SUPPORTED` — list-all is admin-only). Both mappings stay in
+  `_shared/zoho-activity.ts` (unit-tested) for a one-line re-enable once
+  permissions are granted. The `call` tag takes the business accent (blue MPG /
+  green Bayway) so the two palettes never mix on one page. Setup +
+  re-enable steps: `docs/phase-activity-zoho-setup.md`.
 
 ### Not yet built
 

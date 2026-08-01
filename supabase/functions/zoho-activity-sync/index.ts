@@ -8,7 +8,7 @@
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { getAccessToken } from '../_shared/zoho.ts'
-import { fetchCalls, fetchEvents, fetchNotes, mapActivity } from '../_shared/zoho-activity.ts'
+import { fetchCalls, mapActivity } from '../_shared/zoho-activity.ts'
 
 const NINETY_DAYS_MS = 90 * 86_400_000
 
@@ -47,13 +47,14 @@ Deno.serve(async () => {
       .maybeSingle()
     const since = lastOk?.ran_at || new Date(Date.now() - NINETY_DAYS_MS).toISOString()
 
-    // Each module is fetched independently so one endpoint's failure can't
-    // abort the rest; skips are recorded in the sync_log message.
-    const fetchers = [
-      ['call', fetchCalls],
-      ['appointment', fetchEvents],
-      ['note', fetchNotes],
-    ]
+    // Calls only. Meetings (Events) and Notes are deferred: the sync user's
+    // Zoho profile has no read access to the Meetings module, and the list-all
+    // Notes API is admin-only. Both mappings still live in zoho-activity.ts, so
+    // re-enabling is a one-line change here once permissions are granted (or a
+    // per-contact Notes pass is added). See docs/phase-activity-zoho-setup.md.
+    // Kept as a list so adding modules back stays a one-liner; the per-module
+    // try/catch also isolates any future addition's failure.
+    const fetchers = [['call', fetchCalls]]
 
     const rows = []
     const counts = []
