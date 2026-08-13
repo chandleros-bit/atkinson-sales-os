@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapActivity, occurredAt, snippet } from './fub-activity.ts'
+import { mapActivity, occurredAt, snippet, callDirection } from './fub-activity.ts'
 
 describe('occurredAt', () => {
   it('prefers appointment date over created', () => {
@@ -32,11 +32,22 @@ describe('snippet', () => {
   })
 })
 
+describe('callDirection', () => {
+  it('reads FUB isIncoming: false is outbound, true is inbound', () => {
+    expect(callDirection({ isIncoming: false })).toBe('outbound')
+    expect(callDirection({ isIncoming: true })).toBe('inbound')
+  })
+  it('returns null when isIncoming is missing or not a boolean', () => {
+    expect(callDirection({})).toBe(null)
+    expect(callDirection({ isIncoming: 'no' })).toBe(null)
+  })
+})
+
 describe('mapActivity', () => {
   const contactIdByExternal = new Map([['501', 'uuid-contact']])
   it('namespaces external_id by type and resolves contact_id from personId', () => {
     const row = mapActivity(
-      { id: 12, personId: 501, created: '2026-07-12T14:00:00Z', note: 'Discussed FHA' },
+      { id: 12, personId: 501, created: '2026-07-12T14:00:00Z', note: 'Discussed FHA', isIncoming: false },
       'call',
       contactIdByExternal,
     )
@@ -48,8 +59,9 @@ describe('mapActivity', () => {
       contact_id: 'uuid-contact',
       occurred_at: '2026-07-12T14:00:00Z',
       notes: 'Discussed FHA',
+      direction: 'outbound',
     })
-    expect(row.raw).toEqual({ id: 12, personId: 501, created: '2026-07-12T14:00:00Z', note: 'Discussed FHA' })
+    expect(row.raw).toEqual({ id: 12, personId: 501, created: '2026-07-12T14:00:00Z', note: 'Discussed FHA', isIncoming: false })
   })
   it('leaves contact_id null when personId is unknown or missing', () => {
     expect(mapActivity({ id: 9, personId: 999, created: 'x' }, 'note', contactIdByExternal).contact_id).toBe(null)
@@ -58,5 +70,10 @@ describe('mapActivity', () => {
   it('resolves contact_id from a nested person object', () => {
     const row = mapActivity({ id: 10, person: { id: 501 }, created: 'x' }, 'note', contactIdByExternal)
     expect(row.contact_id).toBe('uuid-contact')
+  })
+  it('sets direction only for calls with a known direction', () => {
+    expect(mapActivity({ id: 10, person: { id: 501 }, created: 'x' }, 'note', contactIdByExternal).direction).toBe(null)
+    expect(mapActivity({ id: 11, personId: 501, created: 'x' }, 'call', contactIdByExternal).direction).toBe(null)
+    expect(mapActivity({ id: 12, personId: 501, created: 'x', isIncoming: true }, 'call', contactIdByExternal).direction).toBe('inbound')
   })
 })
