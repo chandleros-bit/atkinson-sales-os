@@ -13,7 +13,7 @@ const CHIP = {
   today: { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' },
 }
 
-export default function MyTasks() {
+export default function MyTasks({ className = '' }) {
   const { matches } = useBusiness()
   const [rows, setRows] = useState([])
   const [done, setDone] = useState({})
@@ -65,7 +65,7 @@ export default function MyTasks() {
           .join(' · ')
 
   return (
-    <section className="cc-card p-[20px]">
+    <section className={`cc-card flex flex-col p-[20px] ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-[18px] font-bold tracking-tight">My Tasks</h3>

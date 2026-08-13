@@ -5,6 +5,7 @@ import { useBusiness } from '../context/BusinessContext'
 import BizBadge from '../components/BizBadge'
 import CalendarCard from '../components/CalendarCard'
 import MyTasks from '../components/MyTasks'
+import TodayAgenda from '../components/TodayAgenda'
 import CrmLink from '../components/CrmLink'
 import { crmProfileUrl } from '../lib/crm'
 import {
@@ -71,6 +72,21 @@ function bizInk(biz) {
 }
 function bizSoft(biz) {
   return biz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)'
+}
+
+// Day-over-day pill palette: green up, red down, neutral flat (handoff tokens).
+function deltaStyle(up) {
+  if (up === true) return { background: 'var(--pos-bg)', color: 'var(--pos-ink)' }
+  if (up === false) return { background: 'var(--neg-bg)', color: 'var(--neg-ink)' }
+  return { background: 'var(--panel2)', color: 'var(--muted)' }
+}
+
+function PhoneIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0122 16.92z" />
+    </svg>
+  )
 }
 
 function stagePillStyle(stage, biz) {
@@ -165,48 +181,37 @@ function EmptyRow({ children }) {
 // ---- 1. KPI scoreboard --------------------------------------------------------
 
 function KpiCard({ card }) {
-  const pct = goalPct(card.value, card.goal)
+  const up = card.delta?.up
+  const arrow = up === true ? '▲' : up === false ? '▼' : ''
+  const arrowColor =
+    up === true ? 'var(--pos-ink)' : up === false ? 'var(--neg-ink)' : 'var(--dim)'
   return (
-    <Card className="col-span-1 flex flex-col gap-3 xl:col-span-3">
+    <Card className="col-span-1 flex flex-col xl:col-span-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="h-[9px] w-[9px] flex-none rounded-full"
-            style={{ background: card.accent }}
-          />
-          <span className="truncate text-[12.5px] font-semibold text-muted">{card.label}</span>
-        </div>
+        <span className="truncate text-[13px] font-medium text-muted">{card.label}</span>
         {card.delta && (
           <span
-            className="flex-none rounded-full px-2 py-[3px] text-[11.5px] font-bold"
-            style={
-              card.delta.up === null
-                ? { background: 'var(--panel2)', color: 'var(--muted)' }
-                : card.delta.up
-                  ? { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
-                  : { background: '#FCEBEB', color: '#DC2626' }
-            }
+            className="flex-none rounded-[7px] px-2 py-[3px] text-[11.5px] font-bold"
+            style={deltaStyle(card.delta.up)}
           >
             {card.delta.text}
           </span>
         )}
       </div>
 
-      <div className="num text-[34px] font-extrabold leading-none tracking-tight">{card.value}</div>
-
-      <div>
-        <div className="h-[7px] overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
-          <div
-            className="h-full rounded-full transition-[width] duration-300 ease-out"
-            style={{ width: `${pct}%`, background: card.accent }}
-          />
-        </div>
-        <div className="mt-[7px] flex items-center justify-between">
-          <span className="text-[12px] font-medium text-dim">goal {card.goal}</span>
-          <span className="num text-[11.5px] font-bold" style={{ color: card.ink }}>
-            {card.value}/{card.goal}
+      <div className="mt-4 flex items-end gap-2">
+        <span className="num text-[31px] font-extrabold leading-none tracking-[-0.8px]">
+          {card.value}
+        </span>
+        {arrow && (
+          <span className="mb-[3px] text-[15px] leading-none" style={{ color: arrowColor }}>
+            {arrow}
           </span>
-        </div>
+        )}
+      </div>
+
+      <div className="num mt-3 text-[12.5px] font-medium text-dim">
+        {card.value} of {card.goal} goal
       </div>
     </Card>
   )
@@ -214,30 +219,41 @@ function KpiCard({ card }) {
 
 // ---- 2. Performance chart -----------------------------------------------------
 
-function LegendDot({ color, children }) {
+function HeadMetric({ m }) {
   return (
-    <span className="flex items-center gap-[7px] text-[12.5px] font-semibold text-muted">
-      <span className="h-[9px] w-[9px] rounded-full" style={{ background: color }} />
-      {children}
-    </span>
+    <div>
+      <div className="flex items-center gap-[7px] text-[12px] font-semibold text-muted">
+        <span className="h-2 w-2 rounded-full" style={{ background: m.color }} />
+        {m.label}
+      </div>
+      <div className="mt-1.5 flex items-center gap-2">
+        <span className="num text-[26px] font-extrabold tracking-[-0.5px]">{m.value}</span>
+        {m.delta && (
+          <span
+            className="rounded-[7px] px-[7px] py-[3px] text-[11px] font-bold"
+            style={deltaStyle(m.delta.up)}
+          >
+            {m.delta.text}
+          </span>
+        )}
+      </div>
+    </div>
   )
 }
 
-function PerformanceCard({ model, showBay, showMpg, markerLabel }) {
+function PerformanceCard({ model, showBay, showMpg, headMetrics, caption, markerLabel }) {
   return (
-    <Card className="col-span-2 xl:col-span-5">
-      <CardHead
-        title="Performance"
-        sub="Daily outbound calls"
-        right={
-          <span className="flex-none rounded-[11px] border border-line bg-panel2 px-3 py-2 text-[13px] font-semibold text-muted">
-            Last {CHART_DAYS} days
-          </span>
-        }
-      />
-      <div className="mt-3 flex gap-[18px]">
-        {showBay && <LegendDot color="var(--bay)">Bayway</LegendDot>}
-        {showMpg && <LegendDot color="var(--mpg)">MPG</LegendDot>}
+    <Card className="col-span-2 flex flex-col xl:col-span-6">
+      <div className="flex items-start justify-between gap-5">
+        <div className="min-w-0">
+          <h3 className="text-[17px] font-bold tracking-tight">Performance</h3>
+          <div className="mt-[5px] text-[12.5px] text-muted">{caption}</div>
+        </div>
+        <div className="flex flex-none gap-[26px]">
+          {headMetrics.map((m) => (
+            <HeadMetric key={m.label} m={m} />
+          ))}
+        </div>
       </div>
 
       {model.empty ? (
@@ -300,30 +316,40 @@ function PerformanceCard({ model, showBay, showMpg, markerLabel }) {
                 x2={model.marker.x}
                 y1={model.marker.y}
                 y2={CHART.bottom + 4}
-                stroke="var(--accent)"
-                strokeWidth="1.4"
+                stroke="var(--dim)"
+                strokeWidth="1.3"
                 strokeDasharray="3 4"
               />
               <circle
                 cx={model.marker.x}
                 cy={model.marker.y}
-                r="6.5"
+                r="6"
                 fill="var(--panel)"
                 stroke="var(--accent)"
                 strokeWidth="3.5"
               />
               {/* The marker sits on the newest point, hard against the right
-                  edge, so the 104-wide tooltip is clamped into the plot area
-                  instead of hanging off the card. */}
+                  edge, so the 120-wide tooltip is clamped into the plot area
+                  instead of hanging off the card. A white card with a hairline
+                  border, per the handoff — label over value. */}
               <g
-                transform={`translate(${Math.min(model.marker.x, CHART.x1 - 52)} ${model.marker.y})`}
+                transform={`translate(${Math.min(model.marker.x, CHART.x1 - 60)} ${model.marker.y})`}
               >
-                <rect x="-52" y="-58" width="104" height="42" rx="10" fill="var(--text)" />
-                <text x="0" y="-38" textAnchor="middle" fontSize="14" fontWeight="800" fill="#fff">
-                  {model.marker.value} calls
-                </text>
-                <text x="0" y="-23" textAnchor="middle" fontSize="10.5" fontWeight="600" fill="#8B93A0">
+                <rect
+                  x="-60"
+                  y="-60"
+                  width="120"
+                  height="46"
+                  rx="11"
+                  fill="var(--panel)"
+                  stroke="var(--line2)"
+                  strokeWidth="1.2"
+                />
+                <text x="-46" y="-40" fontSize="11.5" fontWeight="600" fill="var(--muted)">
                   {markerLabel}
+                </text>
+                <text x="-46" y="-23" fontSize="14" fontWeight="800" fill="var(--text)">
+                  {model.marker.value} calls
                 </text>
               </g>
             </>
@@ -346,6 +372,11 @@ function PerformanceCard({ model, showBay, showMpg, markerLabel }) {
     </Card>
   )
 }
+
+// NOTE: GaugeCard, FunnelCard, and NeedsAttentionCard (and their buildView
+// gauge/funnel/attention props) are intentionally retained but no longer
+// mounted — the reorganized Overview drops them per the handoff. Kept in place
+// so they can be restored without reconstructing the data wiring.
 
 // ---- 3. Revenue gauge ---------------------------------------------------------
 
@@ -495,34 +526,46 @@ function SprintProgress({ label, value, target, color = 'var(--mpg)' }) {
   )
 }
 
-function MpgSprintCard({ sprint }) {
+// A "Behind"/"On track" status pill for the sprint headers.
+function StatusPill({ onPace, palette }) {
+  const ok =
+    palette === 'mpg'
+      ? { background: 'var(--mpg-soft)', color: 'var(--mpg-ink)' }
+      : { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
   return (
-    <Card className="col-span-2 xl:col-span-4">
-      <CardHead
-        title="MPG Sprint"
-        sub={`${MPG_SPRINT.label} · base 8 activated, stretch 10 signed`}
-        right={
-          <span
-            className="flex-none rounded-full px-[11px] py-[5px] text-[11.5px] font-bold"
-            style={
-              sprint.onPace
-                ? { background: 'var(--mpg-soft)', color: 'var(--mpg-ink)' }
-                : { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }
-            }
-          >
-            {sprint.onPace ? 'On track' : 'Behind'}
-          </span>
-        }
-      />
+    <span
+      className="flex-none rounded-lg px-2.5 py-1 text-[11.5px] font-bold"
+      style={onPace ? ok : { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }}
+    >
+      {onPace ? 'On track' : 'Behind'}
+    </span>
+  )
+}
 
-      <div className="mt-4 grid gap-3">
+// Row 3 sprint tracker. `span` is the grid-span class; `cols` (1|2) sets how many
+// columns the progress bars wrap into — 1 at span-3, 2 at span-6 (handoff).
+function MpgSprintCard({ sprint, span, cols = 1 }) {
+  return (
+    <Card className={`${span} flex flex-col`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[17px] font-bold tracking-tight">MPG Sprint</h3>
+          <div className="mt-[5px] text-[12.5px] text-muted">This month · base 8, stretch 10 signed</div>
+        </div>
+        <StatusPill onPace={sprint.onPace} palette="mpg" />
+      </div>
+
+      <div
+        className="mt-[18px] grid gap-x-6 gap-y-[15px]"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}
+      >
         <SprintProgress label="Activated + processing" value={sprint.activated} target={sprint.activatedTarget} />
         <SprintProgress label="Merchants signed" value={sprint.signed} target={sprint.signedTarget} />
         <SprintProgress label="Statements analyzed" value={sprint.statements} target={sprint.statementTarget} />
         <SprintProgress label="Discovery meetings" value={sprint.discovery} target={sprint.discoveryTarget} />
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-1.5 border-t border-line pt-4">
+      <div className="mt-auto grid grid-cols-3 gap-1.5 border-t border-line pt-[18px]">
         <div className="min-w-0 text-center">
           <div className="num text-[16px] font-extrabold">{sprint.weeksLeft}</div>
           <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Weeks left</div>
@@ -540,34 +583,28 @@ function MpgSprintCard({ sprint }) {
   )
 }
 
-function BaySprintCard({ sprint }) {
+function BaySprintCard({ sprint, span, cols = 1 }) {
   return (
-    <Card className="col-span-2 xl:col-span-4">
-      <CardHead
-        title="Bayway Sprint"
-        sub={`${MPG_SPRINT.label} · base 10 funded, stretch 12`}
-        right={
-          <span
-            className="flex-none rounded-full px-[11px] py-[5px] text-[11.5px] font-bold"
-            style={
-              sprint.onPace
-                ? { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
-                : { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }
-            }
-          >
-            {sprint.onPace ? 'On track' : 'Behind'}
-          </span>
-        }
-      />
+    <Card className={`${span} flex flex-col`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[17px] font-bold tracking-tight">Bayway Sprint</h3>
+          <div className="mt-[5px] text-[12.5px] text-muted">This month · base 10, stretch 12</div>
+        </div>
+        <StatusPill onPace={sprint.onPace} palette="bay" />
+      </div>
 
-      <div className="mt-4 grid gap-3">
+      <div
+        className="mt-[18px] grid gap-x-6 gap-y-[15px]"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}
+      >
         <SprintProgress label="Funded loans" value={sprint.funded} target={sprint.fundedTarget} color="var(--bay)" />
         <SprintProgress label="Completed applications" value={sprint.applications} target={sprint.applicationTarget} color="var(--bay)" />
         <SprintProgress label="Qualified pre-approvals" value={sprint.preapprovals} target={sprint.preapprovalTarget} color="var(--bay)" />
         <SprintProgress label="Contracts/refi opps" value={sprint.contracts} target={sprint.contractTarget} color="var(--bay)" />
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-1.5 border-t border-line pt-4">
+      <div className="mt-auto grid grid-cols-3 gap-1.5 border-t border-line pt-[18px]">
         <div className="min-w-0 text-center">
           <div className="num text-[16px] font-extrabold">{sprint.underContract}</div>
           <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Under contract</div>
@@ -666,78 +703,119 @@ function NeedsAttentionCard({ rows, sub, empty, wide }) {
 
 // ---- 6. Priority Leads --------------------------------------------------------
 
-// v_priority_leads carries no city or loan stage, so the sub-line shows what it
-// does have: tier, last touch, score. The round button opens the FUB profile
-// (the view has no phone number to dial).
-function PriorityLeadsCard({ rows }) {
+// Ranked lead list per book. `rows` are pre-normalized to a common shape
+// ({ id, name, sub, avatarBg, initials, url }) by buildBayPriority /
+// buildMpgPriority, so this component is book-agnostic — only the accent chrome
+// (dot, label, call button) switches on `biz`. The round button opens the
+// contact's CRM profile (neither source carries a phone number to dial).
+function PriorityLeadsCard({ biz, rows, span, to }) {
+  const color = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
+  const ink = biz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)'
+  const soft = biz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)'
+  const label = biz === 'mpg' ? 'MPG' : 'Bayway'
   return (
-    <Card className="col-span-2 xl:col-span-4">
+    <Card className={`${span} flex flex-col`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-[18px] font-bold tracking-tight">Priority Leads</h3>
+          <h3 className="text-[17px] font-bold tracking-tight">Priority Leads</h3>
           <div
-            className="mt-[3px] flex items-center gap-1.5 text-[12.5px] font-semibold"
-            style={{ color: 'var(--bay-ink)' }}
+            className="mt-[5px] flex items-center gap-1.5 text-[12.5px] font-semibold"
+            style={{ color: ink }}
           >
-            <span className="h-2 w-2 rounded-full" style={{ background: 'var(--bay)' }} />
-            Bayway
+            <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+            {label}
           </div>
         </div>
-        <IconLink to="/bayway/priority-leads" label="Open priority leads">
+        <IconLink to={to} label={`Open ${label} priority leads`}>
           <ArrowOut />
         </IconLink>
       </div>
-      <div className="mt-2 flex flex-col">
+      <div className="mt-1.5 flex flex-col">
         {rows.length === 0 && <EmptyRow>No scored leads yet.</EmptyRow>}
-        {rows.map((l) => {
-          const meta = tierMeta(l.tier)
-          return (
-            <div
-              key={l.id}
-              className="flex items-center gap-3 border-b border-line py-3 last:border-b-0"
+        {rows.map((l) => (
+          <div
+            key={l.id}
+            className="flex items-center gap-3 border-b border-line py-3 last:border-b-0"
+          >
+            <span
+              className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full text-[13px] font-extrabold text-white"
+              style={{ background: l.avatarBg }}
+            >
+              {l.initials}
+            </span>
+            <div className="min-w-0 flex-1">
+              <CrmLink url={l.url} className="block truncate text-[13.5px] font-semibold">
+                {l.name}
+              </CrmLink>
+              <div className="truncate text-[12px] text-dim">{l.sub}</div>
+            </div>
+            <CrmLink
+              url={l.url}
+              title="Open in CRM"
+              className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px]"
             >
               <span
-                className="grid h-[42px] w-[42px] flex-none place-items-center rounded-full text-[14px] font-extrabold text-white"
-                style={{ background: meta.color }}
+                className="grid h-[34px] w-[34px] place-items-center rounded-[10px]"
+                style={{ background: soft, color: ink }}
               >
-                {initials(l.name)}
+                <PhoneIcon />
               </span>
-              <div className="min-w-0 flex-1">
-                <CrmLink url={l.fub_profile_url} className="block truncate text-[14px] font-bold">
-                  {l.name || '(no name)'}
-                </CrmLink>
-                <div className="truncate text-[12px] text-dim">
-                  {meta.label} · {lastTouchLabel(l.last_activity_at)}
-                  {l.score != null && ` · score ${Math.round(l.score)}`}
-                </div>
-              </div>
-              <CrmLink
-                url={l.fub_profile_url}
-                title="Open in FollowUpBoss"
-                className="grid h-[38px] w-[38px] flex-none place-items-center rounded-[11px]"
-              >
-                <span
-                  className="grid h-[38px] w-[38px] place-items-center rounded-[11px]"
-                  style={{ background: 'var(--bay-soft)', color: 'var(--bay-ink)' }}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                  >
-                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0122 16.92z" />
-                  </svg>
-                </span>
-              </CrmLink>
-            </div>
-          )
-        })}
+            </CrmLink>
+          </div>
+        ))}
       </div>
     </Card>
   )
+}
+
+// Bayway priority leads → the common card shape. FUB is the only scored book,
+// so tier/score are real here.
+function buildBayPriority(leads) {
+  return sortByScore(leads || [])
+    .slice(0, 5)
+    .map((l) => {
+      const meta = tierMeta(l.tier)
+      return {
+        id: l.id,
+        name: l.name || '(no name)',
+        initials: initials(l.name),
+        avatarBg: meta.color,
+        url: l.fub_profile_url,
+        sub:
+          `${meta.label} · ${lastTouchLabel(l.last_activity_at)}` +
+          (l.score != null ? ` · score ${Math.round(l.score)}` : ''),
+      }
+    })
+}
+
+// MPG has no lead scoring (v_priority_leads is FUB/Bayway only). Derive a ranked
+// list from v_mpg_contacts: open leads first, then most-recently touched.
+// Recency stands in for a score and drives a pseudo-tier avatar tint (hot ≤2d,
+// warm ≤7d, else cool) so the card reads like its Bayway sibling.
+function buildMpgPriority(rows) {
+  const open = (rows || []).filter((r) => isMpgOpen(r.stage))
+  const pool = open.length ? open : rows || []
+  return [...pool]
+    .sort((a, b) => {
+      const at = a.last_touch_at ? new Date(a.last_touch_at).getTime() : 0
+      const bt = b.last_touch_at ? new Date(b.last_touch_at).getTime() : 0
+      return bt - at
+    })
+    .slice(0, 5)
+    .map((r) => {
+      const d = daysSince(r.last_touch_at)
+      const avatarBg =
+        d !== null && d <= 2 ? '#DC6B2F' : d !== null && d <= 7 ? 'var(--mpg)' : 'var(--dim)'
+      const name = r.company || r.name || '(no name)'
+      return {
+        id: r.id,
+        name,
+        initials: initials(name),
+        avatarBg,
+        url: r.crm_profile_url,
+        sub: `${r.stage || '—'} · ${lastTouchLabel(r.last_touch_at)}`,
+      }
+    })
 }
 
 // ---- Data ---------------------------------------------------------------------
@@ -1001,6 +1079,26 @@ function buildView(biz, data) {
     biz === 'mpg' ? 'mpg' : 'bay',
   )
 
+  // Inline chart-head metrics: today's calls per visible book + the day-over-day
+  // pill (same source as the KPI scoreboard, so the two never disagree).
+  const yKey = daysAgoKey(1)
+  const callsOn = (b, key) =>
+    Number(rollupMetrics(metrics.filter((r) => r.date === key && r.business_id === b)).calls || 0)
+  const headMetric = (label, color, b) => ({
+    label,
+    color,
+    value: callsOn(b, tKey),
+    delta: deltaPill(callsOn(b, tKey), callsOn(b, yKey)),
+  })
+  const headMetrics =
+    biz === 'mpg' ? [headMetric('MPG', 'var(--mpg)', 'mpg')]
+    : biz === 'bay' ? [headMetric('Bayway', 'var(--bay)', 'bay')]
+    : [headMetric('Bayway', 'var(--bay)', 'bay'), headMetric('MPG', 'var(--mpg)', 'mpg')]
+  const chartCaption =
+    biz === 'mpg' ? 'Daily outbound calls · MPG'
+    : biz === 'bay' ? 'Daily outbound calls · Bayway'
+    : 'Daily outbound calls · Bayway & MPG'
+
   const monthRows = metrics.filter((r) => r.date >= win.from && r.date < win.to)
   const mpgMonth = rollupMetrics(monthRows.filter((r) => r.business_id === 'mpg'))
   const mpgSprintRows = sprintRows(metrics.filter((r) => r.business_id === 'mpg'))
@@ -1118,6 +1216,8 @@ function buildView(biz, data) {
     alert: deriveAlert({ latestSync: data.latestSync, tasks: data.tasks }),
     kpis: buildKpiCards(biz, metrics, targets),
     chart,
+    headMetrics,
+    chartCaption,
     gauge,
     funnel,
     sprint: {
@@ -1154,6 +1254,8 @@ function buildView(biz, data) {
     },
     attention,
     leads: sortByScore(data.leads).slice(0, 5),
+    bayLeads: buildBayPriority(data.leads),
+    mpgLeads: buildMpgPriority(mpgRows),
   }
 }
 
@@ -1186,40 +1288,56 @@ export default function Overview() {
         <>
           <AlertBanner alert={view.alert} />
 
-          {/* The rail only splits off at 2xl: at 1280 the main region would be
-              ~560px, which crushes the 12-column grid inside it. */}
-          <div className="mt-5 grid items-start gap-5 2xl:grid-cols-[minmax(0,1fr)_384px]">
-            <div className="grid grid-cols-2 items-start gap-5 xl:grid-cols-12">
-              {view.kpis.map((c) => (
-                <KpiCard key={c.label} card={c} />
-              ))}
+          {/* One 12-column grid, no side rail (handoff). `items-stretch` lets the
+              shorter cards in a row match the tallest card's height, and the
+              accent vars make the chart marker/tick green in All + Bayway, blue
+              in MPG. */}
+          <div
+            className="mt-5 grid grid-cols-2 items-stretch gap-[18px] xl:grid-cols-12"
+            style={
+              biz === 'mpg'
+                ? { '--accent': 'var(--mpg)', '--accent-soft': 'var(--mpg-soft)', '--accent-ink': 'var(--mpg-ink)' }
+                : { '--accent': 'var(--bay)', '--accent-soft': 'var(--bay-soft)', '--accent-ink': 'var(--bay-ink)' }
+            }
+          >
+            {/* Row 1 — KPI scoreboard */}
+            {view.kpis.map((c) => (
+              <KpiCard key={c.label} card={c} />
+            ))}
 
-              <PerformanceCard
-                model={view.chart}
-                showBay={biz !== 'mpg'}
-                showMpg={biz !== 'bay'}
-                markerLabel={`Today · ${biz === 'mpg' ? 'MPG' : 'Bayway'}`}
-              />
+            {/* Row 2 — Performance · My Tasks · Today */}
+            <PerformanceCard
+              model={view.chart}
+              showBay={biz !== 'mpg'}
+              showMpg={biz !== 'bay'}
+              headMetrics={view.headMetrics}
+              caption={view.chartCaption}
+              markerLabel={`Today · ${biz === 'mpg' ? 'MPG' : 'Bayway'}`}
+            />
+            <MyTasks className="col-span-1 xl:col-span-3" />
+            <TodayAgenda className="col-span-1 xl:col-span-3" />
 
-              <GaugeCard {...view.gauge} />
-              <FunnelCard {...view.funnel} />
-              {biz !== 'mpg' && <BaySprintCard sprint={view.sprint.bay} />}
-              {biz !== 'bay' && <MpgSprintCard sprint={view.sprint.mpg} />}
-
-              <NeedsAttentionCard
-                rows={view.attention.rows}
-                sub={view.attention.sub}
-                empty={view.attention.empty}
-                wide={biz === 'mpg'}
-              />
-
-              {biz !== 'mpg' && <PriorityLeadsCard rows={view.leads} />}
-            </div>
-
-            <div className="flex flex-col gap-5">
-              <MyTasks />
-              <CalendarCard />
-            </div>
+            {/* Row 3 — Sprints + Priority Leads (per-book at 3 cols, doubled at 6) */}
+            {biz === 'all' && (
+              <>
+                <MpgSprintCard sprint={view.sprint.mpg} span="col-span-1 xl:col-span-3" cols={1} />
+                <BaySprintCard sprint={view.sprint.bay} span="col-span-1 xl:col-span-3" cols={1} />
+                <PriorityLeadsCard biz="mpg" rows={view.mpgLeads} span="col-span-1 xl:col-span-3" to="/mpg/pipeline" />
+                <PriorityLeadsCard biz="bay" rows={view.bayLeads} span="col-span-1 xl:col-span-3" to="/bayway/priority-leads" />
+              </>
+            )}
+            {biz === 'mpg' && (
+              <>
+                <MpgSprintCard sprint={view.sprint.mpg} span="col-span-2 xl:col-span-6" cols={2} />
+                <PriorityLeadsCard biz="mpg" rows={view.mpgLeads} span="col-span-2 xl:col-span-6" to="/mpg/pipeline" />
+              </>
+            )}
+            {biz === 'bay' && (
+              <>
+                <BaySprintCard sprint={view.sprint.bay} span="col-span-2 xl:col-span-6" cols={2} />
+                <PriorityLeadsCard biz="bay" rows={view.bayLeads} span="col-span-2 xl:col-span-6" to="/bayway/priority-leads" />
+              </>
+            )}
           </div>
         </>
       )}

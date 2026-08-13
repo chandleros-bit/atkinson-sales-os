@@ -28,6 +28,12 @@
   --bay-line: rgba(124, 173, 68, 0.4);
   --bay-gold: #B07A1F; /* deepened from #C9A052 for contrast on white */
 
+  /* Delta pills — day-over-day up/down/flat (handoff tokens) */
+  --pos-bg: #E7F5EC;
+  --pos-ink: #2E9E52;
+  --neg-bg: #FCEBEA;
+  --neg-ink: #DC4B43;
+
   /* Card chrome shared by the Overview command center */
   --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 30px rgba(16, 24, 40, 0.05);
 

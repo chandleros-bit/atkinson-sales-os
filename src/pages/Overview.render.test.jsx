@@ -104,37 +104,41 @@ describe('Overview command center', () => {
     expect(text).toContain('Bayway Calls · Today')
     expect(text).toContain('MPG Calls · Today')
     expect(text).toContain('Performance')
-    expect(text).toContain('Revenue Goal')
-    expect(text).toContain('Pre-Approvals')
     expect(text).toContain('Bayway Sprint')
     expect(text).toContain('MPG Sprint')
-    expect(text).toContain('Needs Attention')
     expect(text).toContain('Priority Leads')
     expect(text).toContain('My Tasks')
-    // Bayway HOT contact + open MPG lead both reach the attention table.
-    expect(text).toContain('Ramirez')
-    expect(text).toContain('Riverside Deli')
-    // 47 + 31 combined calls, and the funded deal in the funnel footer.
+    expect(text).toContain('Today')
+    // Both books' priority leads reach the row-3 cards.
+    expect(text).toContain('Jessica Chen') // Bayway (scored)
+    expect(text).toContain('Riverside Deli') // MPG (derived from v_mpg_contacts)
+    // Dropped cards no longer render.
+    expect(text).not.toContain('Revenue Goal')
+    expect(text).not.toContain('Pre-Approvals')
+    expect(text).not.toContain('Needs Attention')
+    // 47 + 31 combined calls in the Outbound Calls KPI.
     expect(text).toContain('78')
   })
 
   it('scopes the Bayway view', async () => {
     const text = await render('bay')
     expect(text).toContain('Bayway view')
-    expect(text).toContain('Pre-Approvals')
     expect(text).toContain('Bayway Sprint')
     expect(text).toContain('Priority Leads')
+    expect(text).toContain('Jessica Chen')
     expect(text).not.toContain('MPG Calls')
     expect(text).not.toContain('MPG Sprint')
+    expect(text).not.toContain('Pre-Approvals')
   })
 
-  it('swaps the Bayway-only cards out of the MPG view', async () => {
+  it('shows the MPG-only sprint and priority leads in the MPG view', async () => {
     const text = await render('mpg')
     expect(text).toContain('MPG view')
-    expect(text).toContain('Lead Pipeline')
     expect(text).toContain('MPG Sprint')
-    expect(text).not.toContain('Pre-Approvals')
+    expect(text).toContain('Priority Leads')
+    expect(text).toContain('Riverside Deli')
     expect(text).not.toContain('Bayway Sprint')
-    expect(text).not.toContain('Priority Leads')
+    expect(text).not.toContain('Pre-Approvals')
+    expect(text).not.toContain('Lead Pipeline')
   })
 })
