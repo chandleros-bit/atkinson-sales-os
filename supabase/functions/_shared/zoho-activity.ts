@@ -83,6 +83,18 @@ export function contactExternalId(rec, type) {
   return personExternalId(rec)
 }
 
+// Direction of a Zoho call. Zoho Calls carry `Call_Type`, whose value may be
+// 'Outbound'/'Inbound' or 'Outbound Call'/'Inbound Call' depending on layout,
+// so match on a case-insensitive prefix. VERIFY the field name and value casing
+// against a live Calls record; an unrecognized value returns null (excluded
+// from the outbound count, failing safe).
+export function callDirection(rec) {
+  const t = String(rec.Call_Type || '').toLowerCase()
+  if (t.startsWith('outbound')) return 'outbound'
+  if (t.startsWith('inbound')) return 'inbound'
+  return null
+}
+
 // contactIdByExternal: Map<zoho record id (string), our contacts.id (uuid)>
 export function mapActivity(rec, type, contactIdByExternal) {
   const ext = contactExternalId(rec, type)
@@ -93,6 +105,7 @@ export function mapActivity(rec, type, contactIdByExternal) {
     // (source_crm, external_id) constraint on `activities` (same as fub side).
     external_id: `${type}-${rec.id}`,
     type,
+    direction: type === 'call' ? callDirection(rec) : null,
     contact_id: (ext && contactIdByExternal.get(ext)) || null,
     occurred_at: occurredAt(rec, type),
     notes: snippet(rec, type),

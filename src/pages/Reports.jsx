@@ -5,7 +5,7 @@ import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
   sumWon, countWon, deriveStageCounts, pipelineValue, periodDateFor,
-  sprintRows, sprintWindow, MPG_SPRINT,
+  sprintRows, sprintWindow, MPG_SPRINT, callsByDay,
 } from '../lib/reports'
 
 const TABS = [
@@ -84,7 +84,7 @@ const PERIOD_LABEL = {
   sprint: 'today’s sprint progress',
 }
 
-function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
+function LogMetrics({ tab, biz, values, syncedCalls, onSave, saving }) {
   const metrics = metricsForTab(tab, biz).filter((m) => m.source === 'manual')
   const [draft, setDraft] = useState({})
   if (metrics.length === 0) return null
@@ -114,9 +114,9 @@ function LogMetrics({ tab, biz, values, todayCalls, onSave, saving }) {
               onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
               className="mt-1 w-full rounded-md border border-line2 bg-panel2 px-2 py-1.5 text-sm text-[color:var(--text)]"
             />
-            {m.key === 'calls' && biz === 'bay' && (
+            {m.key === 'calls' && (
               <span className="mt-1 block text-[10.5px] text-dim">
-                FUB logged {todayCalls} today
+                Auto: {syncedCalls} outbound calls synced today — add any made outside the CRM
               </span>
             )}
           </label>
@@ -219,9 +219,12 @@ export default function Reports() {
         const pad = (n) => String(n).padStart(2, '0')
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
       })()
-      const todayStartIso = new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
+      const sevenAgoStartIso = (() => {
+        const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 6)
+        return d.toISOString()
+      })()
       const sprint = sprintWindow()
-      const [deals, active, bayContacts, mpgContacts, week, month, sprintMetrics, series, settings, todayCalls] = await Promise.all([
+      const [deals, active, bayContacts, mpgContacts, week, month, sprintMetrics, series, settings, callRows] = await Promise.all([
         supabase.from('deals').select('status, value, expected_close, business_id'),
         supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay'),
         supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
@@ -232,11 +235,11 @@ export default function Reports() {
         supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', sevenAgo),
         supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
         supabase.from('activities')
-          .select('id', { count: 'exact', head: true })
-          .eq('business_id', 'bay').eq('type', 'call').gte('occurred_at', todayStartIso),
+          .select('occurred_at, business_id')
+          .eq('type', 'call').eq('direction', 'outbound').gte('occurred_at', sevenAgoStartIso),
       ])
       const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error ||
-        month.error || sprintMetrics.error || series.error || settings.error || todayCalls.error
+        month.error || sprintMetrics.error || series.error || settings.error || callRows.error
       if (err) { setError(err.message); return }
       setData({
         deals: deals.data || [],
@@ -249,7 +252,7 @@ export default function Reports() {
         series: series.data || [],
         savedTargets: settings.data?.value || {},
         targets: resolveTargets(DEFAULT_TARGETS, settings.data?.value),
-        todayCalls: todayCalls.count || 0,
+        callRows: callRows.data || [],
       })
     } catch (e) {
       setError(String(e?.message || e))
@@ -342,21 +345,32 @@ export default function Reports() {
       )}
       {loading && <div className="mt-6 text-sm text-muted">Loading scoreboard…</div>}
       {!loading && !error && <CardGrid cards={cards} />}
-      {!loading && !error && data && tab === 'daily' && (
-        <TrendStrip
-          series={dailySeries(
-            biz === 'all' ? data.series : data.series.filter((r) => r.business_id === biz),
-            'calls', todayKey(), 7,
-          )}
-        />
-      )}
+      {!loading && !error && data && tab === 'daily' && (() => {
+        const manualSeries = dailySeries(
+          biz === 'all' ? data.series : data.series.filter((r) => r.business_id === biz),
+          'calls', todayKey(), 7,
+        )
+        const syncedRows = biz === 'all' ? data.callRows : data.callRows.filter((r) => r.business_id === biz)
+        const byDay = callsByDay(syncedRows)
+        const start = new Date(); start.setDate(start.getDate() - 6)
+        const pad = (n) => String(n).padStart(2, '0')
+        const combined = manualSeries.map((v, i) => {
+          const d = new Date(start); d.setDate(start.getDate() + i)
+          const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+          return v + (byDay[key] || 0)
+        })
+        return <TrendStrip series={combined} />
+      })()}
       {!loading && !error && data && (
         <LogMetrics
           key={`${tab}-${biz}`}
           tab={tab}
           biz={biz}
           values={computeValues(tab, biz, data)}
-          todayCalls={data.todayCalls}
+          syncedCalls={(() => {
+            const rows = biz === 'all' ? data.callRows : data.callRows.filter((r) => r.business_id === biz)
+            return callsByDay(rows)[todayKey()] || 0
+          })()}
           onSave={saveMetrics}
           saving={saving}
         />
@@ -441,7 +455,11 @@ function demoReportsData() {
     series: [...series, ...month, ...sprintDemo],
     savedTargets: {},
     targets: resolveTargets(DEFAULT_TARGETS, null),
-    todayCalls: 24,
+    callRows: [
+      { occurred_at: new Date().toISOString(), business_id: 'bay' },
+      { occurred_at: new Date().toISOString(), business_id: 'bay' },
+      { occurred_at: new Date().toISOString(), business_id: 'mpg' },
+    ],
   }
 }
 
@@ -451,7 +469,9 @@ function computeValues(tab, biz, data) {
   const bizFilter = (rows) => (biz === 'all' ? rows : rows.filter((r) => r.business_id === biz))
   if (tab === 'daily') {
     const today = data.series.filter((r) => r.date === todayKey())
-    return rollupMetrics(bizFilter(today))
+    const manual = rollupMetrics(bizFilter(today))
+    const syncedToday = callsByDay(bizFilter(data.callRows))[todayKey()] || 0
+    return { ...manual, calls: Number(manual.calls || 0) + syncedToday }
   }
   if (tab === 'weekly') {
     const manual = rollupMetrics(bizFilter(data.week))

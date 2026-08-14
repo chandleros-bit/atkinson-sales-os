@@ -85,6 +85,16 @@ export function snippet(rec, type) {
   }
 }
 
+// Direction of a FUB call. FUB call records carry `isIncoming` (boolean).
+// VERIFY on first live payload that this field is present and named this way;
+// if it differs, adjust here — an unrecognized shape returns null (the call is
+// then excluded from the outbound count, failing safe rather than mis-counting).
+export function callDirection(rec) {
+  if (rec.isIncoming === false) return 'outbound'
+  if (rec.isIncoming === true) return 'inbound'
+  return null
+}
+
 // contactIdByExternal: Map<fub person id (string), our contacts.id (uuid)>
 export function mapActivity(rec, type, contactIdByExternal) {
   const personId = rec.personId ?? rec.person?.id ?? null
@@ -95,6 +105,7 @@ export function mapActivity(rec, type, contactIdByExternal) {
     // the unique(source_crm, external_id) constraint on `activities`.
     external_id: `${type}-${rec.id}`,
     type,
+    direction: type === 'call' ? callDirection(rec) : null,
     contact_id: (personId != null && contactIdByExternal.get(String(personId))) || null,
     occurred_at: occurredAt(rec, type),
     notes: snippet(rec, type),

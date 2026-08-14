@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapActivity, occurredAt, snippet, contactExternalId } from './zoho-activity.ts'
+import { mapActivity, occurredAt, snippet, contactExternalId, callDirection } from './zoho-activity.ts'
 
 describe('occurredAt', () => {
   it('prefers the call start time over created', () => {
@@ -40,6 +40,19 @@ describe('snippet', () => {
   })
 })
 
+describe('callDirection', () => {
+  it('reads Zoho Call_Type prefix, case-insensitively', () => {
+    expect(callDirection({ Call_Type: 'Outbound' })).toBe('outbound')
+    expect(callDirection({ Call_Type: 'Outbound Call' })).toBe('outbound')
+    expect(callDirection({ Call_Type: 'inbound' })).toBe('inbound')
+    expect(callDirection({ Call_Type: 'Inbound Call' })).toBe('inbound')
+  })
+  it('returns null when Call_Type is missing or unrecognized', () => {
+    expect(callDirection({})).toBe(null)
+    expect(callDirection({ Call_Type: 'Missed' })).toBe(null)
+  })
+})
+
 describe('contactExternalId', () => {
   it('reads Who_Id for calls and events', () => {
     expect(contactExternalId({ Who_Id: { id: '77' } }, 'call')).toBe('77')
@@ -77,7 +90,7 @@ describe('mapActivity', () => {
   const contactIdByExternal = new Map([['77', 'uuid-contact']])
   it('namespaces external_id by type and resolves contact_id from Who_Id', () => {
     const row = mapActivity(
-      { id: 12, Who_Id: { id: '77' }, Call_Start_Time: '2026-07-12T14:00:00Z', Description: 'Pricing Q' },
+      { id: 12, Who_Id: { id: '77' }, Call_Start_Time: '2026-07-12T14:00:00Z', Description: 'Pricing Q', Call_Type: 'Outbound' },
       'call',
       contactIdByExternal,
     )
@@ -89,6 +102,7 @@ describe('mapActivity', () => {
       contact_id: 'uuid-contact',
       occurred_at: '2026-07-12T14:00:00Z',
       notes: 'Pricing Q',
+      direction: 'outbound',
     })
     expect(row.raw.id).toBe(12)
   })
@@ -113,5 +127,10 @@ describe('mapActivity', () => {
     )
     expect(row.external_id).toBe('note-10')
     expect(row.contact_id).toBe('uuid-contact')
+  })
+  it('sets direction only for calls with a known direction', () => {
+    expect(mapActivity({ id: 10, Parent_Id: { id: '77' }, $se_module: 'Contacts', Note_Content: 'x' }, 'note', contactIdByExternal).direction).toBe(null)
+    expect(mapActivity({ id: 11, Who_Id: { id: '77' } }, 'call', contactIdByExternal).direction).toBe(null)
+    expect(mapActivity({ id: 12, Who_Id: { id: '77' }, Call_Type: 'Inbound Call' }, 'call', contactIdByExternal).direction).toBe('inbound')
   })
 })

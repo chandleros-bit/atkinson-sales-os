@@ -253,6 +253,20 @@ export function dailySeries(rows, metricKey, endKey, days = 7) {
   return out
 }
 
+// rows: activity rows { occurred_at }, already filtered by the caller to
+// type='call', direction='outbound', and the desired business. Returns
+// { [YYYY-MM-DD]: count } using local day keys (same basis as
+// metrics_daily.date via dayKey), so synced counts line up with manual entries.
+export function callsByDay(rows) {
+  const out = {}
+  for (const r of rows) {
+    if (!r.occurred_at) continue
+    const key = dayKey(r.occurred_at)
+    out[key] = (out[key] || 0) + 1
+  }
+  return out
+}
+
 // The metrics_daily.date a tab's manual entry writes to. Rows land on the
 // period's first day so the existing gte(weekStart)/gte(monthStart) rollups
 // pick them up unchanged. daily -> today, weekly -> Monday, monthly/revenue

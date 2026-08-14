@@ -4,6 +4,7 @@ import {
   formatValue, metricCardView, buildTabModel, weekStart, monthWindow,
   rollupMetrics, sprintRows, weeksRemaining, neededPerWeek, sumWon, countWon,
   pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor,
+  callsByDay,
 } from './reports'
 
 describe('METRICS registry', () => {
@@ -233,6 +234,27 @@ describe('dailySeries', () => {
       { date: '2026-07-13', metric_key: 'followups', value: 9 }, // other key ignored
     ]
     expect(dailySeries(rows, 'calls', '2026-07-15', 3)).toEqual([5, 0, 12])
+  })
+})
+
+describe('callsByDay', () => {
+  it('returns an empty object for no rows', () => {
+    expect(callsByDay([])).toEqual({})
+  })
+  it('counts one row on its local day key', () => {
+    // 2026-08-13T14:00:00Z is 2026-08-13 in negative-UTC-offset zones and UTC.
+    expect(callsByDay([{ occurred_at: '2026-08-13T14:00:00Z' }])).toEqual({ '2026-08-13': 1 })
+  })
+  it('sums multiple rows per day and separates days', () => {
+    const rows = [
+      { occurred_at: '2026-08-13T14:00:00Z' },
+      { occurred_at: '2026-08-13T18:30:00Z' },
+      { occurred_at: '2026-08-12T09:00:00Z' },
+    ]
+    expect(callsByDay(rows)).toEqual({ '2026-08-13': 2, '2026-08-12': 1 })
+  })
+  it('ignores rows with no occurred_at', () => {
+    expect(callsByDay([{ occurred_at: null }, { occurred_at: '2026-08-13T14:00:00Z' }])).toEqual({ '2026-08-13': 1 })
   })
 })
 
