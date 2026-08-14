@@ -22,8 +22,10 @@ export const METRICS = [
   { key: 'merchant_proposals',   label: 'Merchant proposals',          tab: 'weekly', biz: 'mpg', source: 'manual', unit: 'count' },
   { key: 'mortgage_consults',    label: 'Mortgage consultations',      tab: 'weekly', biz: 'bay', source: 'manual', unit: 'count' },
   { key: 'weekly_conversations', label: 'Meaningful conversations',    tab: 'weekly', biz: 'both', source: 'derived', unit: 'count' },
+  { key: 'calls_weekly',  label: 'Outbound calls', tab: 'weekly',  biz: 'both', source: 'derived', unit: 'count' },
   // ---- Monthly: pipeline + database -------------------------------------
   { key: 'realtor_meetings',   label: 'Realtor meetings',      tab: 'monthly', biz: 'bay', source: 'manual',  unit: 'count' },
+  { key: 'calls_monthly', label: 'Outbound calls', tab: 'monthly', biz: 'both', source: 'derived', unit: 'count' },
   { key: 'pre_approvals',      label: 'In pre-approval (now)', tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
   { key: 'applications',       label: 'In application (now)',  tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
   { key: 'loans_closed',       label: 'Loans closed (MTD)',    tab: 'monthly', biz: 'bay', source: 'live',    unit: 'count' },
@@ -84,6 +86,7 @@ export const DEFAULT_TARGETS = {
   db_total: 5000, db_realtors: 500, db_past_clients: 1000,
   db_business_owners: 2000, db_prospects: 1500,
   weekly_conversations: 100,
+  calls_weekly: 500, calls_monthly: 2000,
   rev_closings: 5, rev_loan_volume: 2_000_000, rev_gross_commission: 17_500,
   rev_active_merchants: 100, rev_monthly_residual: 10_000,
   rev_combined_income: 27_500, rev_processing_volume: 1_000_000,
@@ -265,6 +268,19 @@ export function callsByDay(rows) {
     out[key] = (out[key] || 0) + 1
   }
   return out
+}
+
+// rows: activity rows { occurred_at }, already filtered by the caller to
+// type='call', direction='outbound', and the desired business. fromKey: a
+// YYYY-MM-DD local day key (weekStart() / monthWindow().from). Returns the count
+// of rows whose local day (via dayKey) is on or after fromKey. No upper bound is
+// needed — callers never fetch future-dated rows.
+export function callsSince(rows, fromKey) {
+  let n = 0
+  for (const r of rows) {
+    if (r.occurred_at && dayKey(r.occurred_at) >= fromKey) n++
+  }
+  return n
 }
 
 // The metrics_daily.date a tab's manual entry writes to. Rows land on the

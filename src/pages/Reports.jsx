@@ -5,7 +5,7 @@ import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
   sumWon, countWon, deriveStageCounts, pipelineValue, periodDateFor,
-  sprintRows, sprintWindow, MPG_SPRINT, callsByDay,
+  sprintRows, sprintWindow, MPG_SPRINT, callsByDay, callsSince,
 } from '../lib/reports'
 
 const TABS = [
@@ -219,9 +219,11 @@ export default function Reports() {
         const pad = (n) => String(n).padStart(2, '0')
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
       })()
-      const sevenAgoStartIso = (() => {
-        const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - 6)
-        return d.toISOString()
+      const earliestStartIso = (() => {
+        const sevenAgoMidnight = new Date(); sevenAgoMidnight.setHours(0, 0, 0, 0); sevenAgoMidnight.setDate(sevenAgoMidnight.getDate() - 6)
+        const wkStart = new Date(`${wk}T00:00:00`)
+        const moStart = new Date(`${from}T00:00:00`)
+        return new Date(Math.min(sevenAgoMidnight.getTime(), wkStart.getTime(), moStart.getTime())).toISOString()
       })()
       const sprint = sprintWindow()
       const [deals, active, bayContacts, mpgContacts, week, month, sprintMetrics, series, settings, callRows] = await Promise.all([
@@ -236,7 +238,7 @@ export default function Reports() {
         supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
         supabase.from('activities')
           .select('occurred_at, business_id')
-          .eq('type', 'call').eq('direction', 'outbound').gte('occurred_at', sevenAgoStartIso),
+          .eq('type', 'call').eq('direction', 'outbound').gte('occurred_at', earliestStartIso),
       ])
       const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error ||
         month.error || sprintMetrics.error || series.error || settings.error || callRows.error
@@ -479,6 +481,7 @@ function computeValues(tab, biz, data) {
       ...manual,
       weekly_conversations:
         Number(manual.realtor_convos || 0) + Number(manual.bizowner_convos || 0),
+      calls_weekly: Number(manual.calls || 0) + callsSince(bizFilter(data.callRows), weekStart()),
     }
   }
   if (tab === 'monthly') {
@@ -498,6 +501,7 @@ function computeValues(tab, biz, data) {
       loan_volume: sumWon(bayDeals, win),
       pipeline_value: pipelineValue(bayDeals),
       db_total: dbTotal,
+      calls_monthly: Number(manual.calls || 0) + callsSince(bizFilter(data.callRows), win.from),
     }
   }
   if (tab === 'sprint') {

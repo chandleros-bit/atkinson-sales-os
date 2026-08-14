@@ -4,7 +4,7 @@ import {
   formatValue, metricCardView, buildTabModel, weekStart, monthWindow,
   rollupMetrics, sprintRows, weeksRemaining, neededPerWeek, sumWon, countWon,
   pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor,
-  callsByDay,
+  callsByDay, callsSince,
 } from './reports'
 
 describe('METRICS registry', () => {
@@ -255,6 +255,26 @@ describe('callsByDay', () => {
   })
   it('ignores rows with no occurred_at', () => {
     expect(callsByDay([{ occurred_at: null }, { occurred_at: '2026-08-13T14:00:00Z' }])).toEqual({ '2026-08-13': 1 })
+  })
+})
+
+describe('callsSince', () => {
+  it('returns 0 for no rows', () => {
+    expect(callsSince([], '2026-08-01')).toBe(0)
+  })
+  it('counts a row exactly on fromKey (inclusive)', () => {
+    expect(callsSince([{ occurred_at: '2026-08-01T15:00:00Z' }], '2026-08-01')).toBe(1)
+  })
+  it('excludes rows before fromKey and includes rows after', () => {
+    const rows = [
+      { occurred_at: '2026-07-31T23:00:00Z' },
+      { occurred_at: '2026-08-05T10:00:00Z' },
+      { occurred_at: '2026-08-01T12:00:00Z' },
+    ]
+    expect(callsSince(rows, '2026-08-01')).toBe(2)
+  })
+  it('ignores rows with no occurred_at', () => {
+    expect(callsSince([{ occurred_at: null }, { occurred_at: '2026-08-02T12:00:00Z' }], '2026-08-01')).toBe(1)
   })
 })
 
