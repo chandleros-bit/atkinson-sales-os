@@ -470,8 +470,7 @@ function computeValues(tab, biz, data) {
   if (tab === 'daily') {
     const today = data.series.filter((r) => r.date === todayKey())
     const manual = rollupMetrics(bizFilter(today))
-    const syncedRows = biz === 'all' ? data.callRows : data.callRows.filter((r) => r.business_id === biz)
-    const syncedToday = callsByDay(syncedRows)[todayKey()] || 0
+    const syncedToday = callsByDay(bizFilter(data.callRows))[todayKey()] || 0
     return { ...manual, calls: Number(manual.calls || 0) + syncedToday }
   }
   if (tab === 'weekly') {
