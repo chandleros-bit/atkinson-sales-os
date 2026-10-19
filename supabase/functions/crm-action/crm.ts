@@ -95,8 +95,14 @@ function tally(values, top = 12) {
 // all_people_total is the unfiltered count: a list reporting the same total
 // means the filter was ignored. Samples up to 100 people per list.
 export async function summarizeSmartLists(get, myUserId) {
+  // Custom lists built in FUB 2.0 only come back with fub2=true; merge both.
   const json = await get('/smartLists', { limit: 100 })
-  const lists = listOf(json, ['smartlists', 'smartLists'])
+  const json2 = await get('/smartLists', { limit: 100, fub2: true }).catch(() => ({}))
+  const byId = new Map()
+  for (const l of [...listOf(json, ['smartlists', 'smartLists']), ...listOf(json2, ['smartlists', 'smartLists'])]) {
+    byId.set(l.id, l)
+  }
+  const lists = [...byId.values()]
   const all = await get('/people', { limit: 1 })
   const out = []
   for (const l of lists) {
