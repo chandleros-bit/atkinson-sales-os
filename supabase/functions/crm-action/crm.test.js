@@ -76,3 +76,29 @@ describe('zohoAdapter', () => {
     expect(rec).toMatchObject({ id: 'N1', Note_Content: 'Sent rates', Parent_Id: { id: 'L5' }, $se_module: 'Leads' })
   })
 })
+
+describe('summarizeSmartLists', () => {
+  it('counts each list and tallies stages and tags without names', async () => {
+    const { summarizeSmartLists } = await import('./crm.ts')
+    const get = async (path, params) => {
+      if (path === '/smartLists') return { smartlists: [{ id: 11, name: '01 - New Leads - Untouched', filters: { stage: 'Lead' } }] }
+      if (params.smartListId == null) return { _metadata: { total: 1218 }, people: [] }
+      return {
+        _metadata: { total: 3 },
+        people: [
+          { id: 1, name: 'A', stage: 'Lead', tags: ['HOT', 'Stage: Attempted'], assignedUserId: 6 },
+          { id: 2, name: 'B', stage: 'Lead', tags: ['HOT'], assignedUserId: 2 },
+          { id: 3, name: 'C', stage: 'Nurture', tags: [], assignedUserId: 6 },
+        ],
+      }
+    }
+    const out = await summarizeSmartLists(get, '6')
+    expect(out.all_people_total).toBe(1218)
+    expect(out.lists[0]).toEqual({
+      id: 11, name: '01 - New Leads - Untouched', total: 3, sampled: 3, mine_in_sample: 2,
+      stages: { Lead: 2, Nurture: 1 }, tags: { HOT: 2, 'Stage: Attempted': 1 },
+      definition_keys: ['filters'], definition: { stage: 'Lead' },
+    })
+    expect(JSON.stringify(out)).not.toContain('"A"')
+  })
+})

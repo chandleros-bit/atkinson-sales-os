@@ -174,6 +174,16 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
     }
   }
 
+  // Read-only: FUB Smart Lists with a summary of who is in each (counts,
+  // person stages, top tags), to see what each list is built on. No names.
+  if (req.action === 'smart_lists') {
+    try {
+      return reply(200, { status: 'ok', smart_lists: await adapters.bay.smartLists() })
+    } catch (e) {
+      return reply(200, { status: 'error', error: msg(e) })
+    }
+  }
+
   const resolved = await resolve(db, req)
   if (resolved.refuse) return reply(200, { status: 'refused', error: resolved.refuse })
   const target = resolved.target
