@@ -1,0 +1,4 @@
+# Netlify: serve the SPA for every path so deep links and refreshes
+# (/priority, /tasks, /bayway/pipeline, ...) load the app instead of a 404.
+# Vercel does the same via the rewrite in vercel.json.
+/*    /index.html   200
