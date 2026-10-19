@@ -159,6 +159,7 @@ function ActionsSheet({ row, onClose }) {
                 contactId={row.id}
                 contactName={row.name}
                 hasPhone={!!row.phone}
+                stage={row.business_id === 'bay' ? row.stage : null}
                 onDone={() => {
                   refreshPriorityQueue()
                   onClose()
@@ -241,7 +242,8 @@ export default function UpNextRow({ row, compact = false }) {
             contactId={row.id}
             contactName={row.name}
             hasPhone={!!row.phone}
-            only={['call', 'note', 'followup']}
+                stage={row.business_id === 'bay' ? row.stage : null}
+            only={['call', 'note', 'followup', 'stage']}
             onDone={() => refreshPriorityQueue()}
           />
           <CrmLink url={row.crm_profile_url} className="grid h-10 place-items-center px-2 text-[12.5px] font-semibold text-muted">

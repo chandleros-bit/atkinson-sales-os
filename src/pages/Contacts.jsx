@@ -8,7 +8,7 @@ const PER_PAGE = 50
 
 function bayStagePill(stage) {
   if (stage === NURTURE) return { background: 'transparent', color: 'var(--dim)' }
-  if (stage === 'Waiting on Docs') return { background: 'rgba(232,180,95,.14)', color: 'var(--bay-gold)' }
+  if (stage === 'Application Received') return { background: 'rgba(232,180,95,.14)', color: 'var(--bay-gold)' }
   return { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
 }
 
@@ -33,7 +33,7 @@ const CONFIGS = {
     filters: BAY_FILTERS,
     stagePill: bayStagePill,
     demoRows: [
-      { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Pre-Approved', last_touch_at: null, crm_profile_url: '#' },
+      { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Application/Estimate Sent', last_touch_at: null, crm_profile_url: '#' },
       { id: 'd2', name: 'Nguyen · Refi', email: 'nguyen@example.com', phone: '(281) 555-0195', stage: NURTURE, last_touch_at: null, crm_profile_url: '#' },
     ],
   },

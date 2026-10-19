@@ -445,9 +445,9 @@ function demoReportsData() {
       { status: 'open', value: 625000, expected_close: null, business_id: 'bay' },
     ],
     activeRows: [
-      { stage: 'Waiting on Docs', business_id: 'bay' },
-      { stage: 'Pre-Approved', business_id: 'bay' },
-      { stage: 'Pre-Approved', business_id: 'bay' },
+      { stage: 'Application Received', business_id: 'bay' },
+      { stage: 'Application/Estimate Sent', business_id: 'bay' },
+      { stage: 'Application/Estimate Sent', business_id: 'bay' },
     ],
     bayContacts: 826,
     mpgContacts: 42,
@@ -492,15 +492,16 @@ function computeValues(tab, biz, data) {
     const manual = rollupMetrics(bizFilter(data.month))
     const bayDeals = data.deals.filter((d) => d.business_id === 'bay')
     const win = monthWindow()
-    const stageCounts = deriveStageCounts(data.activeRows, ['App Sent', 'Pre-Approved'])
+    // Board columns from the FUB stage tags (bay-stages.ts).
+    const stageCounts = deriveStageCounts(data.activeRows, ['Application/Estimate Sent', 'Application Received'])
     const dbTotal =
       biz === 'all' ? data.bayContacts + data.mpgContacts
       : biz === 'bay' ? data.bayContacts
       : data.mpgContacts
     return {
       ...manual,
-      pre_approvals: stageCounts['Pre-Approved'],
-      applications: stageCounts['App Sent'],
+      pre_approvals: stageCounts['Application Received'],
+      applications: stageCounts['Application/Estimate Sent'],
       loans_closed: countWon(bayDeals, win),
       loan_volume: sumWon(bayDeals, win),
       pipeline_value: pipelineValue(bayDeals),

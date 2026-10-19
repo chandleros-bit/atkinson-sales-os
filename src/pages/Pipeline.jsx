@@ -115,6 +115,7 @@ function Card({ r, lost, biz, onDone }) {
         contactId={r.id}
         contactName={r.name}
         hasPhone={!!r.phone}
+        stage={biz === 'mpg' ? null : r.stage}
         onDone={onDone}
       />
     </div>
@@ -153,7 +154,7 @@ const demoAge = (days) => new Date(Date.now() - days * 86_400_000).toISOString()
 
 const demoRows = [
   {
-    id: 'd1', stage: 'Waiting on Docs', name: 'Ramirez · Purchase', phone: '(713) 555-0142',
+    id: 'd1', stage: 'Application Received', name: 'Ramirez · Purchase', phone: '(713) 555-0142',
     last_touch_at: null, crm_profile_url: '#',
     docs_tracked: true, docs_outstanding: ['Paystubs', 'W2', 'Bank Statements'],
     docs_outstanding_count: 3, docs_oldest_requested_at: demoAge(12),
@@ -162,14 +163,14 @@ const demoRows = [
     last_note_at: demoAge(2),
   },
   {
-    id: 'd2', stage: 'Pre-Approved', name: 'Nguyen · Refi', phone: '(281) 555-0195',
+    id: 'd2', stage: 'Application/Estimate Sent', name: 'Nguyen · Refi', phone: '(281) 555-0195',
     last_touch_at: null, crm_profile_url: '#',
     docs_tracked: true, docs_outstanding: [], docs_outstanding_count: 0,
     docs_oldest_requested_at: null,
     last_note_snippet: 'Locked rate, clear to close', last_note_at: demoAge(1),
   },
   {
-    id: 'd3', stage: 'Pre-Approved', name: 'Okafor · Purchase', phone: '(832) 555-0110',
+    id: 'd3', stage: 'Application/Estimate Sent', name: 'Okafor · Purchase', phone: '(832) 555-0110',
     last_touch_at: null, crm_profile_url: '#',
     docs_tracked: false, docs_outstanding: [], docs_outstanding_count: 0,
     docs_oldest_requested_at: null, last_note_snippet: null, last_note_at: null,

@@ -15,7 +15,7 @@ export const FOLLOW_UP_PRESETS = [
   { key: 'pick', label: 'Pick a date' },
 ]
 
-const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task'])
+const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage'])
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -117,6 +117,7 @@ export function buildActionRequest(form) {
     }
   }
   if (action === 'complete_task') return { ...base, task_id: form.taskId, payload: {} }
+  if (action === 'set_stage') return { ...base, contact_id: form.contactId, payload: { target: form.target } }
   return { ...base, task_id: form.taskId, payload: { due_date: form.dueDate } }
 }
 
@@ -140,6 +141,7 @@ const DONE = {
   create_task: 'follow-up scheduled',
   complete_task: 'task completed',
   push_task: 'task moved',
+  set_stage: 'stage moved',
 }
 const LABEL = {
   log_call: 'Call',
@@ -147,6 +149,7 @@ const LABEL = {
   create_task: 'Follow-up task',
   complete_task: 'Completing the task',
   push_task: 'Moving the task',
+  set_stage: 'Moving the stage',
 }
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)

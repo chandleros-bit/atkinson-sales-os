@@ -156,3 +156,25 @@ describe('QuickActions', () => {
     expect(document.body.textContent).toContain('Completing the task failed: FUB 500.')
   })
 })
+
+describe('QuickActions: Move stage', () => {
+  it('shows six targets with the current column marked, and sends set_stage', async () => {
+    invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await mount({ ...bay, stage: 'Application/Estimate Sent' })
+    await click(byLabel('Move stage'))
+    const options = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')]
+    expect(options.map((b) => b.textContent.replace('Now', ''))).toEqual([
+      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received',
+    ])
+    expect(options.filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent.replace('Now', '')))
+      .toEqual(['Estimate Sent', 'Application Sent'])
+    await click(options[2])
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'c1', payload: { target: 'working' } })
+    expect(document.body.textContent).toContain('Stage moved in FollowUpBoss')
+  })
+
+  it('is not offered for MPG or without a board stage', async () => {
+    await mount({ ...bay, stage: null })
+    expect(byLabel('Move stage')).toBe(null)
+  })
+})

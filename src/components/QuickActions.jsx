@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { showToast } from './Toaster'
+import { STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
 import {
   OUTCOMES,
   FOLLOW_UP_PRESETS,
@@ -39,6 +40,7 @@ const Icon = {
   followup: <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM12 14v4M10 16h4" />,
   done: <path d="M20 6L9 17l-5-5" />,
   push: <path d="M5 12h14M13 6l6 6-6 6" />,
+  stage: <path d="M4 6h16M4 12h11M4 18h6M18 15l3 3-3 3" />,
 }
 
 function Svg({ name, size = 16 }) {
@@ -441,6 +443,45 @@ function PushForm({ businessId, task, t, onSuccess, onPending, onFailed }) {
   )
 }
 
+// Move a Bayway lead between board columns. Writes FUB workflow tags via
+// crm-action set_stage (bay-stages.ts). Estimate Sent and Application Sent
+// share a column but are separate tags (Smart Lists 04 / 05).
+function StageForm({ businessId, contactId, stage, t, onSuccess }) {
+  const { busy, result, send, retry, setResult } = useSubmit({ businessId, onSuccess })
+  const move = (target) => {
+    try {
+      send(buildActionRequest({ action: 'set_stage', contactId, target }))
+    } catch (e) {
+      setResult({ tone: 'error', text: e.message, failed: [] })
+    }
+  }
+  return (
+    <>
+      <div className="flex flex-col gap-2">
+        {STAGE_TARGETS.map((target) => {
+          const current = target.stage === stage
+          return (
+            <button
+              key={target.key}
+              type="button"
+              disabled={busy}
+              aria-pressed={current}
+              onClick={() => move(target.key)}
+              className="flex min-h-[44px] items-center justify-between rounded-[10px] border px-3 text-left text-[13.5px] font-semibold disabled:opacity-50"
+              style={current ? { borderColor: t.accent, background: t.soft, color: t.ink } : { borderColor: 'var(--line2)' }}
+            >
+              <span>{target.label}</span>
+              {current && <span className="text-[11px] font-bold uppercase tracking-wide">Now</span>}
+            </button>
+          )
+        })}
+      </div>
+      {busy && <div className="mt-3 text-[12.5px] text-muted">Updating tags in FollowUpBoss…</div>}
+      <ResultBox result={result} onRetry={retry} busy={busy} />
+    </>
+  )
+}
+
 /**
  * Props:
  *   businessId  'bay' | 'mpg' (the ROW's business)
@@ -450,9 +491,10 @@ function PushForm({ businessId, task, t, onSuccess, onPending, onFailed }) {
  *   task        { id, title } on task rows: adds Complete and Push
  *   onDone      called after a write reached the CRM, so the page reloads
  *   onPending / onFailed  (kind, dueDate?) for optimistic task-row updates
- *   only        optional subset of ['call','note','followup','done','push']
+ *   stage       the Bayway board column the lead is in; adds Move stage
+ *   only        optional subset of ['call','note','followup','stage','done','push']
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, onDone, onPending, onFailed, only, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, onDone, onPending, onFailed, only, className = '' }) {
   const flags = useWritebackFlags()
   const [open, setOpen] = useState(null)
   const completing = useRef(false)
@@ -506,6 +548,9 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
       {contactId && show('followup') && (
         <IconButton t={t} name="followup" label="Schedule follow-up" onClick={() => setOpen('followup')} />
       )}
+      {contactId && businessId === 'bay' && stage && show('stage') && (
+        <IconButton t={t} name="stage" label="Move stage" onClick={() => setOpen('stage')} />
+      )}
       {task && show('done') && <IconButton t={t} name="done" label="Complete task" onClick={complete} />}
       {task && show('push') && <IconButton t={t} name="push" label="Push task" onClick={() => setOpen('push')} />}
 
@@ -522,6 +567,11 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
       {open === 'followup' && (
         <Sheet title="Schedule follow-up" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
           <FollowUpForm businessId={businessId} contactId={contactId} contactName={contactName} t={t} onSuccess={success} />
+        </Sheet>
+      )}
+      {open === 'stage' && (
+        <Sheet title="Move stage" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
+          <StageForm businessId={businessId} contactId={contactId} stage={stage} t={t} onSuccess={success} />
         </Sheet>
       )}
       {open === 'push' && task && (
