@@ -55,7 +55,7 @@ function query(table) {
     data: TABLES[table] ?? [],
     count: Array.isArray(TABLES[table]) ? TABLES[table].length : 0,
   }
-  for (const m of ['select', 'eq', 'gte', 'lt', 'in', 'order', 'limit', 'range']) q[m] = () => q
+  for (const m of ['select', 'eq', 'gte', 'lt', 'in', 'order', 'limit', 'range', 'or']) q[m] = () => q
   q.maybeSingle = () => {
     q._single = true
     return q

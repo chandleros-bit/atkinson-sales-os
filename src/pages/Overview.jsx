@@ -3,20 +3,18 @@ import { Link } from 'react-router-dom'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
-import BizBadge from '../components/BizBadge'
 import CalendarCard from '../components/CalendarCard'
 import MyTasks from '../components/MyTasks'
 import TodayAgenda from '../components/TodayAgenda'
+import UpNextRow from '../components/UpNextRow'
+import { usePriorityQueue } from '../lib/usePriorityQueue'
+import { urgentCount } from '../lib/priorityQueue'
 import CrmLink from '../components/CrmLink'
-import { crmProfileUrl } from '../lib/crm'
 import {
   deriveAlert,
-  sortByAttention,
   lastTouchLabel,
   daysSince,
-  isHot,
   isMpgOpen,
-  STALE_TOUCH_DAYS,
 } from '../lib/overview'
 import { LOAN_FLOW_ORDER } from '../lib/pipeline'
 import { tierMeta, sortByScore } from '../lib/priorityLeads'
@@ -71,9 +69,6 @@ function bizColor(biz) {
 function bizInk(biz) {
   return biz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)'
 }
-function bizSoft(biz) {
-  return biz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)'
-}
 
 // Day-over-day pill palette: green up, red down, neutral flat (handoff tokens).
 function deltaStyle(up) {
@@ -88,14 +83,6 @@ function PhoneIcon() {
       <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0122 16.92z" />
     </svg>
   )
-}
-
-function stagePillStyle(stage, biz) {
-  if (biz === 'mpg') return { background: 'var(--mpg-soft)', color: 'var(--mpg-ink)' }
-  if (stage === 'Waiting on Docs') {
-    return { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }
-  }
-  return { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
 }
 
 // ---- Chrome ------------------------------------------------------------------
@@ -374,10 +361,11 @@ function PerformanceCard({ model, showBay, showMpg, headMetrics, caption, marker
   )
 }
 
-// NOTE: GaugeCard, FunnelCard, and NeedsAttentionCard (and their buildView
-// gauge/funnel/attention props) are intentionally retained but no longer
-// mounted — the reorganized Overview drops them per the handoff. Kept in place
-// so they can be restored without reconstructing the data wiring.
+// NOTE: GaugeCard and FunnelCard (and their buildView gauge/funnel props) are
+// intentionally retained but no longer mounted — the reorganized Overview drops
+// them per the handoff. Kept in place so they can be restored without
+// reconstructing the data wiring. (Needs Attention was removed outright: Up
+// Next replaced it.)
 
 // ---- 3. Revenue gauge ---------------------------------------------------------
 
@@ -623,80 +611,40 @@ function BaySprintCard({ sprint, span, cols = 1 }) {
   )
 }
 
-// ---- 5. Needs Attention -------------------------------------------------------
+// ---- 5. Up Next ----------------------------------------------------------------
 
-const ATTENTION_COLS = 'grid-cols-[2.4fr_1fr_.8fr_1.1fr]'
-
-function AttentionRow({ r }) {
-  const biz = r.business_id
-  const isMpg = biz === 'mpg'
-  const d = daysSince(r.last_touch_at)
-  const stale = d === null || d >= STALE_TOUCH_DAYS
-  const headline = (isMpg ? r.company || r.name : r.name) || '(no name)'
-  const note = (isMpg ? r.name || r.phone || r.email : r.phone || r.email) || 'no contact info'
+// The top of the Up Next queue (src/lib/priorityQueue.js): the same first rows
+// /priority shows, from the same shared fetch. It replaced Needs Attention
+// (HOT / Open + 7-day stale), a subset of the "Hot, going cold" and "Gone
+// quiet" buckets, which would have listed the same people under other rules.
+function UpNextCard({ biz }) {
+  const { queue, loading, error } = usePriorityQueue(biz)
+  const top = queue.slice(0, 5)
+  const urgent = urgentCount(queue)
   return (
-    <div
-      className={`grid ${ATTENTION_COLS} items-center gap-3 border-b border-line px-1.5 py-3 last:border-b-0 hover:bg-hoverbg`}
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <span
-          className="grid h-[38px] w-[38px] flex-none place-items-center rounded-[11px]"
-          style={{ background: bizSoft(biz) }}
-        >
-          <span className="h-[9px] w-[9px] rounded-full" style={{ background: bizColor(biz) }} />
-        </span>
-        <div className="min-w-0">
-          <CrmLink url={r.crm_profile_url} className="block truncate text-[14px] font-bold">
-            {headline}
-          </CrmLink>
-          <div className="truncate text-[12px] text-dim">{note}</div>
-        </div>
-      </div>
-      <div>
-        <BizBadge biz={biz} />
-      </div>
-      <div
-        className={`num text-[13px] font-semibold ${stale ? '' : 'text-muted'}`}
-        style={stale ? { color: 'var(--bay-gold)' } : undefined}
-      >
-        {lastTouchLabel(r.last_touch_at)}
-      </div>
-      <div>
-        <span
-          className="inline-block whitespace-nowrap rounded-full px-[11px] py-[5px] text-[12px] font-bold"
-          style={stagePillStyle(r.stage, biz)}
-        >
-          {r.stage || '—'}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function NeedsAttentionCard({ rows, sub, empty, wide }) {
-  return (
-    <Card className={`col-span-2 ${wide ? 'xl:col-span-12' : 'xl:col-span-8'}`}>
+    <Card className="col-span-2 xl:col-span-12">
       <CardHead
-        title="Needs Attention"
-        sub={sub}
+        title="Up Next"
+        sub={loading ? 'Loading…' : `${queue.length} to work · ${urgent} need action now`}
         right={
-          <IconLink to="/bayway/contacts" label="Open contacts">
+          <IconLink to="/priority" label="See all of Up Next">
             <ArrowOut />
           </IconLink>
         }
       />
-      <div
-        className={`grid ${ATTENTION_COLS} gap-3 border-b border-line px-1.5 pb-2.5 pt-4 text-[11.5px] font-bold uppercase tracking-wide text-dim`}
-      >
-        <div>Item</div>
-        <div>Business</div>
-        <div>Age</div>
-        <div>Status</div>
-      </div>
-      {rows.length === 0 ? (
-        <EmptyRow>{empty}</EmptyRow>
-      ) : (
-        rows.map((r) => <AttentionRow key={`${r.business_id}-${r.id}`} r={r} />)
+      {error && <EmptyRow>{error}</EmptyRow>}
+      {!loading && !error && top.length === 0 && <EmptyRow>Nobody slipping. Nice work.</EmptyRow>}
+      {top.length > 0 && (
+        <div className="mt-2">
+          {top.map((r) => (
+            <UpNextRow key={r.id} row={r} compact />
+          ))}
+        </div>
+      )}
+      {queue.length > top.length && (
+        <Link to="/priority" className="mt-2 inline-block text-[13px] font-semibold text-muted hover:text-[color:var(--text)]">
+          See all {queue.length} →
+        </Link>
       )}
     </Card>
   )
@@ -821,22 +769,6 @@ function buildMpgPriority(rows) {
 
 // ---- Data ---------------------------------------------------------------------
 
-// Bayway HOT rows for Needs Attention: every Bayway contact tagged HOT (any
-// stage, incl. nurture). taggedRows carry raw.tags; pipelineRows supply the
-// loan stage for the pill, defaulting to 'Nurture' when the contact has none.
-function buildBayHotRows(taggedRows, pipelineRows) {
-  const stageById = new Map((pipelineRows || []).map((r) => [r.id, r.stage]))
-  return (taggedRows || [])
-    .filter((c) => isHot(c.tags))
-    .map((c) => ({
-      ...c,
-      business_id: 'bay',
-      stage: stageById.get(c.id) || 'Nurture',
-      // Rows come off the contacts table (not a view), so build the FUB link here.
-      crm_profile_url: crmProfileUrl('bay', c.external_id),
-    }))
-}
-
 // One fetch for every card, scoped to the active book. Bayway-only sources
 // (pipeline, deals, priority leads) are skipped in the MPG view and vice versa,
 // so a single-book view never pays for the other book's queries.
@@ -900,15 +832,6 @@ function useCommandCenter(biz) {
               .eq('business_id', 'bay')
               .order('id'),
           )
-          // Not pushed down to a server-side tag filter: isHot matches "hot"
-          // case-insensitively after trimming, and a jsonb `cs` filter is exact.
-          q.bayTagged = fetchAllSettled(() =>
-            supabase
-              .from('contacts')
-              .select('id, name, email, phone, last_touch_at, external_id, tags:raw->tags')
-              .eq('business_id', 'bay')
-              .order('id'),
-          )
           q.bayCount = supabase
             .from('contacts')
             .select('id', { count: 'exact', head: true })
@@ -954,7 +877,6 @@ function useCommandCenter(biz) {
           latestSync: res.sync.data,
           tasks: res.tasks.data || [],
           bayPipe,
-          bayHot: buildBayHotRows(res.bayTagged?.data, bayPipe),
           bayContacts: res.bayCount?.count || 0,
           deals: res.deals?.data || [],
           leads: res.leads?.data || [],
@@ -1010,9 +932,6 @@ function demoCommandData() {
       { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', phone: '(713) 555-0142', stage: 'Waiting on Docs', last_touch_at: null },
       { id: 'b2', business_id: 'bay', name: 'Nguyen Refi', phone: '(281) 555-0195', stage: 'Pre-Approved', last_touch_at: new Date().toISOString() },
       { id: 'b3', business_id: 'bay', name: 'Okafor Purchase', phone: '(832) 555-0110', stage: 'Pre-Approved', last_touch_at: new Date().toISOString() },
-    ],
-    bayHot: [
-      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', phone: '(713) 555-0142', stage: 'Waiting on Docs', last_touch_at: null },
     ],
     bayContacts: 826,
     deals: [
@@ -1087,7 +1006,7 @@ function buildKpiCards(biz, metrics, targets) {
 // Assembles every card's props from one fetch. Pure over `data`, so the whole
 // screen re-derives from a single memo.
 function buildView(biz, data) {
-  const { metrics, targets, deals, bayPipe, bayHot, mpgRows, bayContacts } = data
+  const { metrics, targets, deals, bayPipe, mpgRows, bayContacts } = data
   const tKey = todayKey()
   const win = monthWindow()
 
@@ -1150,20 +1069,8 @@ function buildView(biz, data) {
     weeksLeft,
   )
 
+  // The (unmounted) MPG funnel card still reads the Open count.
   const mpgOpen = mpgRows.filter((r) => isMpgOpen(r.stage))
-  const attentionRows =
-    biz === 'bay' ? sortByAttention(bayHot)
-    : biz === 'mpg' ? sortByAttention(mpgOpen)
-    : sortByAttention([...bayHot, ...mpgOpen])
-
-  const attention = {
-    rows: attentionRows,
-    sub: `${attentionRows.length} item${attentionRows.length === 1 ? '' : 's'} · sorted by longest since last touch`,
-    empty:
-      biz === 'bay' ? 'No HOT-tagged contacts — tag a lead HOT in FollowUpBoss.'
-      : biz === 'mpg' ? 'No open MPG leads — set a lead to Open in Zoho CRM.'
-      : 'No HOT Bayway or open MPG contacts right now.',
-  }
 
   // MPG revenue is a manual monthly residual; Bayway is live closed volume.
   // Each book's gauge tracks its own unit rather than summing dollars that mean
@@ -1275,7 +1182,6 @@ function buildView(biz, data) {
         onPace: fundedPerWeek <= 1 && applicationsPerWeek <= 4,
       },
     },
-    attention,
     leads: sortByScore(data.leads).slice(0, 5),
     bayLeads: buildBayPriority(data.leads),
     mpgLeads: buildMpgPriority(mpgRows),
@@ -1327,6 +1233,9 @@ export default function Overview() {
             {view.kpis.map((c) => (
               <KpiCard key={c.label} card={c} />
             ))}
+
+            {/* Up Next — who to call next (same rows as /priority) */}
+            <UpNextCard biz={biz} />
 
             {/* Row 2 — Performance · My Tasks · Today */}
             <PerformanceCard
