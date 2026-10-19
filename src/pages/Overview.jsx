@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import BizBadge from '../components/BizBadge'
 import CalendarCard from '../components/CalendarCard'
@@ -863,10 +864,15 @@ function useCommandCenter(biz) {
         const metricsFrom = [daysAgoKey(CHART_DAYS - 1), monthStart, MPG_SPRINT.from].sort()[0]
 
         const q = {
-          metrics: supabase
-            .from('metrics_daily')
-            .select('date, business_id, metric_key, value')
-            .gte('date', metricsFrom),
+          // metricsFrom reaches back to MPG_SPRINT.from, so this window holds
+          // ~90 days x 2 books x every metric key: page it.
+          metrics: fetchAllSettled(() =>
+            supabase
+              .from('metrics_daily')
+              .select('date, business_id, metric_key, value')
+              .gte('date', metricsFrom)
+              .order('id'),
+          ),
           settings: supabase
             .from('settings')
             .select('value')
@@ -881,37 +887,54 @@ function useCommandCenter(biz) {
             .maybeSingle(),
           // v_tasks is open-only. The combined view counts both books; a
           // single-book view scopes the banner to that book, as before.
-          tasks:
-            biz === 'all'
-              ? supabase.from('v_tasks').select('id, business_id, due_at')
-              : supabase.from('v_tasks').select('id, business_id, due_at').eq('business_id', biz),
+          tasks: fetchAllSettled(() => {
+            const t = supabase.from('v_tasks').select('id, business_id, due_at').order('id')
+            return biz === 'all' ? t : t.eq('business_id', biz)
+          }),
         }
         if (wantsBay) {
-          q.bayPipe = supabase
-            .from('v_active_pipeline')
-            .select('id, business_id, name, email, phone, last_touch_at, stage')
-            .eq('business_id', 'bay')
-          q.bayTagged = supabase
-            .from('contacts')
-            .select('id, name, email, phone, last_touch_at, external_id, tags:raw->tags')
-            .eq('business_id', 'bay')
+          q.bayPipe = fetchAllSettled(() =>
+            supabase
+              .from('v_active_pipeline')
+              .select('id, business_id, name, email, phone, last_touch_at, stage')
+              .eq('business_id', 'bay')
+              .order('id'),
+          )
+          // Not pushed down to a server-side tag filter: isHot matches "hot"
+          // case-insensitively after trimming, and a jsonb `cs` filter is exact.
+          q.bayTagged = fetchAllSettled(() =>
+            supabase
+              .from('contacts')
+              .select('id, name, email, phone, last_touch_at, external_id, tags:raw->tags')
+              .eq('business_id', 'bay')
+              .order('id'),
+          )
           q.bayCount = supabase
             .from('contacts')
             .select('id', { count: 'exact', head: true })
             .eq('business_id', 'bay')
-          q.deals = supabase
-            .from('deals')
-            .select('status, value, expected_close, business_id')
-            .eq('business_id', 'bay')
-          q.leads = supabase
-            .from('v_priority_leads')
-            .select('id, name, score, tier, last_activity_at, fub_profile_url')
-            .eq('business_id', 'bay')
+          q.deals = fetchAllSettled(() =>
+            supabase
+              .from('deals')
+              .select('status, value, expected_close, business_id')
+              .eq('business_id', 'bay')
+              .order('id'),
+          )
+          q.leads = fetchAllSettled(() =>
+            supabase
+              .from('v_priority_leads')
+              .select('id, name, score, tier, last_activity_at, fub_profile_url')
+              .eq('business_id', 'bay')
+              .order('id'),
+          )
         }
         if (wantsMpg) {
-          q.mpgLeads = supabase
-            .from('v_mpg_contacts')
-            .select('id, name, company, email, phone, last_touch_at, stage, crm_profile_url')
+          q.mpgLeads = fetchAllSettled(() =>
+            supabase
+              .from('v_mpg_contacts')
+              .select('id, name, company, email, phone, last_touch_at, stage, crm_profile_url')
+              .order('id'),
+          )
         }
 
         const keys = Object.keys(q)
