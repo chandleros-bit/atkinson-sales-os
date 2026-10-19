@@ -4,7 +4,7 @@
 // docs/superpowers/specs/2026-10-18-quick-actions-writeback-design.md.
 
 // FUB's six allowed call outcomes. Zoho gets the same label (zoho-write.ts).
-export const OUTCOMES = ['Interested', 'Not interested', 'Left message', 'No answer', 'Busy', 'Bad number']
+export const OUTCOMES = ['Interested', 'Not Interested', 'Left Message', 'No Answer', 'Busy', 'Bad Number']
 
 export const CRM_LABEL = { bay: 'FollowUpBoss', mpg: 'Zoho' }
 
@@ -55,8 +55,8 @@ export function followUpDate(preset, now = new Date(), picked) {
   }
 }
 
-const FOLLOW_UP_ON = new Set(['Left message', 'No answer', 'Busy'])
-const CONNECTED = new Set(['Interested', 'Not interested'])
+const FOLLOW_UP_ON = new Set(['Left Message', 'No Answer', 'Busy'])
+const CONNECTED = new Set(['Interested', 'Not Interested'])
 
 export const defaultFollowUpOn = (outcome) => FOLLOW_UP_ON.has(outcome)
 export const defaultDurationMin = (outcome) => (CONNECTED.has(outcome) ? 5 : 1)

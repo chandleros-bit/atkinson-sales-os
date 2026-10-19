@@ -7,13 +7,13 @@ describe('planSteps', () => {
       action: 'log_call',
       contact_id: 'c1',
       payload: {
-        outcome: 'Left message', note: 'vm', duration_min: 1,
+        outcome: 'Left Message', note: 'vm', duration_min: 1,
         complete_task_id: 't1',
         follow_up: { due_date: '2026-10-19', title: 'Follow up: Jo', type: 'Follow Up' },
       },
     })
     expect(steps.map((s) => s.step)).toEqual(['log_call', 'complete_task', 'create_task'])
-    expect(steps[0]).toEqual({ step: 'log_call', outcome: 'Left message', note: 'vm', durationMin: 1 })
+    expect(steps[0]).toEqual({ step: 'log_call', outcome: 'Left Message', note: 'vm', durationMin: 1 })
     expect(steps[1]).toEqual({ step: 'complete_task', taskId: 't1' })
     expect(steps[2]).toEqual({ step: 'create_task', title: 'Follow up: Jo', type: 'Follow Up', dueDate: '2026-10-19' })
   })

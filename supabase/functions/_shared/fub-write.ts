@@ -2,8 +2,9 @@
 // Checked against FUB's API reference on 2026-10-18; see
 // docs/superpowers/specs/2026-10-18-quick-actions-writeback-design.md.
 
-// FUB's allowed call outcomes. The dashboard's chips use these labels as-is.
-export const FUB_OUTCOMES = ['Interested', 'Not interested', 'Left message', 'No answer', 'Busy', 'Bad number']
+// FUB's allowed call outcomes, exact casing (FUB 400s on 'Left message').
+// The dashboard's chips use these labels as-is.
+export const FUB_OUTCOMES = ['Interested', 'Not Interested', 'Left Message', 'No Answer', 'Busy', 'Bad Number']
 
 export const FUB_TASK_TYPES = [
   'Follow Up', 'Call', 'Text', 'Email', 'Appointment', 'Showing', 'Closing', 'Open House', 'Thank You',

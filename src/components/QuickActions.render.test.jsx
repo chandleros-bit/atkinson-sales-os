@@ -100,7 +100,7 @@ describe('QuickActions', () => {
     })
     await mount({ ...bay, onDone })
     await click(byLabel('Log call'))
-    await click(byText('No answer'))
+    await click(byText('No Answer'))
     await click(byText('Log call'))
     expect(document.querySelector('[role="alert"]').textContent).toContain('Call logged in FollowUpBoss. Follow-up task failed: FUB 422.')
     expect(onDone).toHaveBeenCalled()

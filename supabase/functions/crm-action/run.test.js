@@ -94,7 +94,7 @@ function fubAdapter(overrides = {}) {
     ...overrides,
   }
   const read = {
-    call: async (id) => ({ id, personId: 4821, isIncoming: false, outcome: 'Left message', created: '2026-10-18T15:00:00Z' }),
+    call: async (id) => ({ id, personId: 4821, isIncoming: false, outcome: 'Left Message', created: '2026-10-18T15:00:00Z' }),
     note: async (id) => ({ id, personId: 4821, body: 'Asked for W-2s', created: '2026-10-18T15:00:00Z' }),
     task: async (id) => ({
       id, personId: 4821, name: 'Follow up: Jo', type: 'Follow Up', dueDate: '2026-10-19',
@@ -126,7 +126,7 @@ const logCallReq = (extra = {}) => ({
   client_action_id: uuid(1),
   action: 'log_call',
   contact_id: 'c-bay',
-  payload: { outcome: 'Left message', duration_min: 1, ...extra },
+  payload: { outcome: 'Left Message', duration_min: 1, ...extra },
 })
 
 let db
@@ -223,7 +223,7 @@ describe('crm-action run: Bayway steps and mirror', () => {
     expect(res.http).toBe(200)
     expect(res.body.status).toBe('ok')
     expect(bay.sent.map((s) => s[0])).toEqual(['logCall', 'completeTask', 'createTask'])
-    expect(bay.sent[0][1]).toEqual({ externalId: '4821', phone: '713-555-0142', outcome: 'Left message', note: 'vm', durationMin: 1 })
+    expect(bay.sent[0][1]).toEqual({ externalId: '4821', phone: '713-555-0142', outcome: 'Left Message', note: 'vm', durationMin: 1 })
     expect(res.body.results.map((r) => [r.step, r.ok, r.crm_id])).toEqual([
       ['log_call', true, 48213], ['complete_task', true, 9001], ['create_task', true, 9100],
     ])

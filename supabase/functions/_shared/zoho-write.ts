@@ -30,11 +30,11 @@ export function zohoDateTime(d) {
 // Zoho's stock Call_Result picklist, mapped from FUB's outcome labels.
 const CALL_RESULT = {
   Interested: 'Interested',
-  'Not interested': 'Not interested',
-  'Left message': 'No response/Busy',
-  'No answer': 'No response/Busy',
+  'Not Interested': 'Not interested',
+  'Left Message': 'No response/Busy',
+  'No Answer': 'No response/Busy',
   Busy: 'No response/Busy',
-  'Bad number': 'Invalid number',
+  'Bad Number': 'Invalid number',
 }
 
 export function zohoCallResult(outcome) {

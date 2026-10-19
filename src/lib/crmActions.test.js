@@ -44,16 +44,16 @@ describe('followUpDate', () => {
 
 describe('outcome defaults', () => {
   it('lists FUB\'s six outcomes', () => {
-    expect(OUTCOMES).toEqual(['Interested', 'Not interested', 'Left message', 'No answer', 'Busy', 'Bad number'])
+    expect(OUTCOMES).toEqual(['Interested', 'Not Interested', 'Left Message', 'No Answer', 'Busy', 'Bad Number'])
   })
   it('turns the follow-up on only for non-connects worth retrying', () => {
-    expect(OUTCOMES.filter(defaultFollowUpOn)).toEqual(['Left message', 'No answer', 'Busy'])
+    expect(OUTCOMES.filter(defaultFollowUpOn)).toEqual(['Left Message', 'No Answer', 'Busy'])
   })
   it('prefills 5 minutes for a conversation and 1 otherwise', () => {
     expect(defaultDurationMin('Interested')).toBe(5)
-    expect(defaultDurationMin('Not interested')).toBe(5)
-    expect(defaultDurationMin('Left message')).toBe(1)
-    expect(defaultDurationMin('Bad number')).toBe(1)
+    expect(defaultDurationMin('Not Interested')).toBe(5)
+    expect(defaultDurationMin('Left Message')).toBe(1)
+    expect(defaultDurationMin('Bad Number')).toBe(1)
   })
 })
 
@@ -80,7 +80,7 @@ describe('buildActionRequest', () => {
     const form = {
       action: 'log_call',
       contactId,
-      outcome: 'Left message',
+      outcome: 'Left Message',
       note: '  call back after 3 ',
       durationMin: 1,
       followUp: { on: true, dueDate: '2026-10-19', title: 'Follow up: Jessica', type: 'Follow Up' },
@@ -95,7 +95,7 @@ describe('buildActionRequest', () => {
       action: 'log_call',
       contact_id: contactId,
       payload: {
-        outcome: 'Left message',
+        outcome: 'Left Message',
         note: 'call back after 3',
         duration_min: 1,
         follow_up: { due_date: '2026-10-19', title: 'Follow up: Jessica', type: 'Follow Up' },
@@ -139,7 +139,7 @@ describe('retryRequestFor', () => {
     action: 'log_call',
     contact_id: 'c1',
     payload: {
-      outcome: 'No answer', duration_min: 1,
+      outcome: 'No Answer', duration_min: 1,
       follow_up: { due_date: '2026-10-19', title: 'Follow up: Jo', type: 'Follow Up' },
       complete_task_id: 't1',
     },

@@ -7,8 +7,8 @@ import {
 
 describe('buildFubCall', () => {
   it('builds an outbound call with duration in seconds', () => {
-    expect(buildFubCall({ personId: '4821', phone: '(713) 555-0142', outcome: 'Left message', note: 'call back', durationMin: 1.5 }))
-      .toEqual({ personId: 4821, phone: '(713) 555-0142', isIncoming: false, outcome: 'Left message', note: 'call back', duration: 90 })
+    expect(buildFubCall({ personId: '4821', phone: '(713) 555-0142', outcome: 'Left Message', note: 'call back', durationMin: 1.5 }))
+      .toEqual({ personId: 4821, phone: '(713) 555-0142', isIncoming: false, outcome: 'Left Message', note: 'call back', duration: 90 })
   })
   it('omits an empty note and a zero duration', () => {
     expect(buildFubCall({ personId: 1, phone: '5', outcome: 'Busy', durationMin: 0 }))
@@ -82,12 +82,12 @@ describe('buildZohoCall', () => {
     })
   })
   it('adds Call_Result only when the org has the picklist', () => {
-    expect(buildZohoCall({ leadId: 1, outcome: 'Bad number', durationMin: 1, now, callResult: true }).data[0].Call_Result)
+    expect(buildZohoCall({ leadId: 1, outcome: 'Bad Number', durationMin: 1, now, callResult: true }).data[0].Call_Result)
       .toBe('Invalid number')
     expect('Call_Result' in buildZohoCall({ leadId: 1, outcome: 'Busy', durationMin: 1, now }).data[0]).toBe(false)
   })
   it('maps every outcome and refuses an unknown one', () => {
-    expect(zohoCallResult('No answer')).toBe('No response/Busy')
+    expect(zohoCallResult('No Answer')).toBe('No response/Busy')
     expect(() => buildZohoCall({ leadId: 1, outcome: 'Connected', now })).toThrow(/outcome/)
   })
 })
