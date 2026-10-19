@@ -150,8 +150,8 @@ export default function Tasks() {
         {!loading && !error && <span className="num text-[12px] text-muted">{total} open</span>}
       </div>
       <p className="mt-1 text-sm text-muted">
-        Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Read-only:
-        complete tasks in the CRM and they drop off here on the next sync.
+        Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Complete or
+        push a task here and it changes in the CRM too.
       </p>
 
       <div className="mt-4 flex flex-wrap gap-1">
@@ -222,16 +222,17 @@ export default function Tasks() {
                         <span className="ml-2 text-[11px] font-normal text-dim">{r.task_type}</span>
                       )}
                     </div>
-                    <div className="w-40 flex-none truncate text-[12.5px] text-muted">
+                    <div className="hidden w-40 flex-none truncate text-[12.5px] text-muted lg:block">
                       <CrmLink url={r.crm_profile_url}>{r.contact_name || '—'}</CrmLink>
                     </div>
                     {r.owner && (
-                      <div className="w-28 flex-none truncate text-right text-[11px] text-dim">
+                      <div className="hidden w-28 flex-none truncate text-right text-[11px] text-dim xl:block">
                         {r.owner}
                       </div>
                     )}
                     <QuickActions
                       className="-my-1.5 -mr-2"
+                      only={['call', 'done', 'push']}
                       businessId={r.business_id}
                       contactId={r.contact_id}
                       contactName={r.contact_name}
