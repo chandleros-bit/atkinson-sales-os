@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { summarizeWriteback } from '../lib/crmActions'
 
 const SOURCE_LABELS = {
   fub: { label: 'FollowUpBoss (Bayway)', biz: 'bay' },
@@ -24,11 +25,42 @@ function timeAgo(iso) {
   return `${Math.round(hrs / 24)}d ago`
 }
 
+// Quick Actions write-back health (crm_actions, last 24 hours).
+function WritebackRow({ wb }) {
+  const failed = wb.error + wb.partial
+  const total = wb.ok + wb.partial + wb.error + wb.refused + wb.pending
+  const dotColor = total === 0 ? 'var(--dim)' : failed ? '#e8785f' : 'var(--bay)'
+  return (
+    <div className="mt-4 rounded-card border border-line bg-panel">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <span
+          className="h-2 w-2 flex-none rounded-full"
+          style={{ background: dotColor, boxShadow: `0 0 0 4px ${dotColor}22` }}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-semibold">Write-back (Quick Actions)</div>
+          <div className="mt-0.5 text-[12px] text-muted">
+            Last 24h: {wb.ok} ok · {wb.partial} partial · {wb.error} failed
+            {wb.refused ? ` · ${wb.refused} refused` : ''}
+          </div>
+          {wb.latestError && (
+            <div className="mt-1 truncate text-[11.5px] text-red-700/80">
+              Latest problem ({timeAgo(wb.latestError.at)}): {wb.latestError.text}
+            </div>
+          )}
+        </div>
+        <div className="num text-right text-[12.5px] text-muted">{wb.lastAt ? timeAgo(wb.lastAt) : 'none yet'}</div>
+      </div>
+    </div>
+  )
+}
+
 export default function SyncStatus() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
   const [running, setRunning] = useState(false)
+  const [writeback, setWriteback] = useState(null)
 
   const load = useCallback(async () => {
     if (isDemoMode) return
@@ -53,6 +85,17 @@ export default function SyncStatus() {
       if (!latestBySource.has(row.source)) latestBySource.set(row.source, row)
     }
     setRows([...latestBySource.values()])
+
+    // Quick Actions write-back: last 24 hours of crm_actions. A failed read
+    // (e.g. before migration 0028) just hides the row.
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+    const wb = await supabase
+      .from('crm_actions')
+      .select('status, results, created_at')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    setWriteback(wb.error ? null : summarizeWriteback(wb.data))
     setLoading(false)
   }, [])
 
@@ -89,8 +132,8 @@ export default function SyncStatus() {
         )}
       </div>
       <p className="mt-1 text-sm text-muted">
-        Per-source health for FollowUpBoss, Zoho, and both Outlook calendars. Read-only — this
-        page shows what synced in, it never writes back to any source.
+        Per-source health for FollowUpBoss, Zoho, and both Outlook calendars. The source rows show what synced in;
+        the Write-back row shows Quick Actions sent to FollowUpBoss and Zoho.
       </p>
 
       {isDemoMode && (
@@ -156,6 +199,8 @@ export default function SyncStatus() {
           })}
         </div>
       )}
+
+      {!isDemoMode && !loading && writeback && <WritebackRow wb={writeback} />}
 
       {!isDemoMode && loading && (
         <div className="mt-6 text-sm text-muted">Loading sync history…</div>

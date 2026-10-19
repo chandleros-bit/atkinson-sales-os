@@ -177,3 +177,18 @@ export function summarizeResult(res, businessId) {
     failed: failed.map((r) => r.step),
   }
 }
+
+// crm_actions rows (newest first) -> the Sync Status "Write-back" row:
+// counts by outcome and the newest failure's message.
+export function summarizeWriteback(rows) {
+  const out = { ok: 0, partial: 0, error: 0, refused: 0, pending: 0, latestError: null, lastAt: null }
+  for (const r of rows || []) {
+    if (r.status in out) out[r.status] += 1
+    out.lastAt ??= r.created_at
+    if (!out.latestError && ['partial', 'error', 'refused'].includes(r.status)) {
+      const failed = (r.results || []).find((x) => !x.ok)
+      out.latestError = { text: failed?.error || r.status, at: r.created_at, step: failed?.step || null }
+    }
+  }
+  return out
+}

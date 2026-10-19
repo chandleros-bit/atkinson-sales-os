@@ -9,6 +9,7 @@ import {
   buildActionRequest,
   retryRequestFor,
   summarizeResult,
+  summarizeWriteback,
 } from './crmActions'
 
 // 2026-10-16 is a Friday.
@@ -194,5 +195,24 @@ describe('summarizeResult', () => {
       .toEqual({ tone: 'error', text: 'Call failed: boom.', failed: ['log_call'] })
     expect(summarizeResult({ status: 'refused', error: 'Write-back is off for MPG' }, 'mpg'))
       .toEqual({ tone: 'error', text: 'Write-back is off for MPG', failed: [] })
+  })
+})
+
+describe('summarizeWriteback', () => {
+  it('counts outcomes and surfaces the newest failure', () => {
+    const rows = [
+      { status: 'ok', created_at: '2026-10-18T15:00:00Z', results: [{ step: 'log_call', ok: true }] },
+      { status: 'partial', created_at: '2026-10-18T14:00:00Z', results: [{ step: 'log_call', ok: true }, { step: 'create_task', ok: false, error: 'FUB 422' }] },
+      { status: 'error', created_at: '2026-10-18T13:00:00Z', results: [{ step: 'log_call', ok: false, error: 'older' }] },
+      { status: 'refused', created_at: '2026-10-18T12:00:00Z', results: [{ step: 'log_call', ok: false, error: 'Write-back is off for MPG' }] },
+    ]
+    expect(summarizeWriteback(rows)).toEqual({
+      ok: 1, partial: 1, error: 1, refused: 1, pending: 0,
+      latestError: { text: 'FUB 422', at: '2026-10-18T14:00:00Z', step: 'create_task' },
+      lastAt: '2026-10-18T15:00:00Z',
+    })
+  })
+  it('is empty for no rows', () => {
+    expect(summarizeWriteback([])).toEqual({ ok: 0, partial: 0, error: 0, refused: 0, pending: 0, latestError: null, lastAt: null })
   })
 })
