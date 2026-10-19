@@ -2,13 +2,11 @@
 // Spec: docs/superpowers/specs/2026-07-10-phase4-pipeline-board-design.md
 import { sortByAttention } from './overview'
 
-export const LOAN_FLOW_ORDER = [
-  'New Lead',
-  'Attempted',
-  'App Sent',
-  'Waiting on Docs',
-  'Pre-Approved',
-]
+// Bayway columns, from the FUB tag mapping shared with crm-action
+// (docs/superpowers/specs/2026-10-19-bayway-stage-tags-design.md).
+import { BAY_STAGES } from '../../supabase/functions/_shared/bay-stages.ts'
+
+export const LOAN_FLOW_ORDER = BAY_STAGES
 
 // MPG (Zoho) leads use lead-status buckets, not the loan flow. 'Open' is the
 // live/new bucket in Media Payments Group's Zoho; the rest are the standard

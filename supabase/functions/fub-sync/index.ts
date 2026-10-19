@@ -15,6 +15,7 @@ import {
   mapStage,
   mapContact,
   mapDeal,
+  shouldFullPeopleRefresh,
 } from '../_shared/fub.ts'
 
 Deno.serve(withCors(async (req) => {
@@ -54,7 +55,10 @@ Deno.serve(withCors(async (req) => {
       .maybeSingle()
 
     const since = lastOk?.ran_at || null
-    const people = await fetchPeople(since)
+    // Hourly full pass so tag edits made in FUB reach the board (see
+    // shouldFullPeopleRefresh). Deals below stay incremental.
+    const fullPeople = shouldFullPeopleRefresh(Date.now(), req.url)
+    const people = await fetchPeople(fullPeople ? null : since)
     // Chandler's book only (see _shared/fub-owner.ts). People fetched here but
     // assigned to another agent are removed, which also catches a lead
     // reassigned away from him since the last run.
@@ -76,9 +80,12 @@ Deno.serve(withCors(async (req) => {
       if (error) throw new Error(`remove other owners' contacts: ${error.message}`)
       removed = n || 0
     }
-    const ownerNote = myId
-      ? `people: kept ${mine.length} of ${people.length} (FUB user ${myId}), removed ${removed}`
-      : 'people: owner filter off (FUB_USER_ID unset)'
+    const ownerNote = [
+      fullPeople ? 'full people refresh' : 'incremental',
+      myId
+        ? `people: kept ${mine.length} of ${people.length} (FUB user ${myId}), removed ${removed}`
+        : 'people: owner filter off (FUB_USER_ID unset)',
+    ].join(' | ')
 
     // Paginate: past 1000 contacts a bare .select() truncates silently and
     // every deal beyond the cap resolves a null contact_id. fetchAll throws on

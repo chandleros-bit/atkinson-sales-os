@@ -929,9 +929,9 @@ function demoCommandData() {
     latestSync: { ran_at: new Date().toISOString(), status: 'ok', message: null },
     tasks: [],
     bayPipe: [
-      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', phone: '(713) 555-0142', stage: 'Waiting on Docs', last_touch_at: null },
-      { id: 'b2', business_id: 'bay', name: 'Nguyen Refi', phone: '(281) 555-0195', stage: 'Pre-Approved', last_touch_at: new Date().toISOString() },
-      { id: 'b3', business_id: 'bay', name: 'Okafor Purchase', phone: '(832) 555-0110', stage: 'Pre-Approved', last_touch_at: new Date().toISOString() },
+      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', phone: '(713) 555-0142', stage: 'Application Received', last_touch_at: null },
+      { id: 'b2', business_id: 'bay', name: 'Nguyen Refi', phone: '(281) 555-0195', stage: 'Application/Estimate Sent', last_touch_at: new Date().toISOString() },
+      { id: 'b3', business_id: 'bay', name: 'Okafor Purchase', phone: '(832) 555-0110', stage: 'Application/Estimate Sent', last_touch_at: new Date().toISOString() },
     ],
     bayContacts: 826,
     deals: [
@@ -1125,18 +1125,18 @@ function buildView(biz, data) {
     // The Bayway board has no underwriting/CTC/funded stage — the funnel footer
     // uses the real v_active_pipeline stages plus funded loans from `deals`.
     const counts = deriveStageCounts(bayPipe, LOAN_FLOW_ORDER)
-    const preApproved = counts['Pre-Approved'] || 0
+    const received = counts['Application Received'] || 0
     funnel = {
-      title: 'Pre-Approvals',
+      title: 'Applications',
       sub: 'Bayway · active pipeline',
       to: '/bayway/pipeline',
-      fillPct: goalPct(preApproved, bayPipe.length || 1),
-      left: { n: preApproved, label: 'Pre-Approved' },
+      fillPct: goalPct(received, bayPipe.length || 1),
+      left: { n: received, label: 'App Received' },
       right: { n: bayPipe.length, label: 'In Pipeline' },
       stats: [
-        { label: 'App Sent', n: counts['App Sent'] || 0 },
-        { label: 'Waiting on Docs', n: counts['Waiting on Docs'] || 0 },
-        { label: 'Pre-Approved', n: preApproved },
+        { label: 'Contacted', n: counts['Contacted/Working'] || 0 },
+        { label: 'App/Est. Sent', n: counts['Application/Estimate Sent'] || 0 },
+        { label: 'App Received', n: received },
         { label: 'Funded MTD', n: countWon(deals, win) },
       ],
     }

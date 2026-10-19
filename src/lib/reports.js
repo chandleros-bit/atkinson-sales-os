@@ -26,8 +26,8 @@ export const METRICS = [
   // ---- Monthly: pipeline + database -------------------------------------
   { key: 'realtor_meetings',   label: 'Realtor meetings',      tab: 'monthly', biz: 'bay', source: 'manual',  unit: 'count' },
   { key: 'calls_monthly', label: 'Outbound calls', tab: 'monthly', biz: 'both', source: 'derived', unit: 'count' },
-  { key: 'pre_approvals',      label: 'In pre-approval (now)', tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
-  { key: 'applications',       label: 'In application (now)',  tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
+  { key: 'pre_approvals',      label: 'Application received (now)', tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
+  { key: 'applications',       label: 'App / estimate sent (now)', tab: 'monthly', biz: 'bay', source: 'derived', unit: 'count' },
   { key: 'loans_closed',       label: 'Loans closed (MTD)',    tab: 'monthly', biz: 'bay', source: 'live',    unit: 'count' },
   { key: 'loan_volume',        label: 'Loan volume (MTD)',     tab: 'monthly', biz: 'bay', source: 'live',    unit: 'currency' },
   { key: 'pipeline_value',     label: 'Pipeline value (open)', tab: 'monthly', biz: 'bay', source: 'live',    unit: 'currency' },

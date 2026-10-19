@@ -8,9 +8,9 @@ describe('LOAN_FLOW_ORDER', () => {
     expect(LOAN_FLOW_ORDER).toEqual([
       'New Lead',
       'Attempted',
-      'App Sent',
-      'Waiting on Docs',
-      'Pre-Approved',
+      'Contacted/Working',
+      'Application/Estimate Sent',
+      'Application Received',
     ])
   })
 })
@@ -48,19 +48,19 @@ describe('isLostStage', () => {
 describe('buildColumns', () => {
   it('orders known stages by loan-flow order, not input order', () => {
     const cols = buildColumns([
-      row(1, 'Pre-Approved'),
+      row(1, 'Application Received'),
       row(2, 'New Lead'),
-      row(3, 'Waiting on Docs'),
+      row(3, 'Application/Estimate Sent'),
     ])
-    expect(cols.map((c) => c.stage)).toEqual(['New Lead', 'Waiting on Docs', 'Pre-Approved'])
+    expect(cols.map((c) => c.stage)).toEqual(['New Lead', 'Application/Estimate Sent', 'Application Received'])
   })
   it('drops empty columns — only populated stages appear', () => {
     const cols = buildColumns([row(1, 'Pre-Approved')])
     expect(cols.map((c) => c.stage)).toEqual(['Pre-Approved'])
   })
   it('appends unknown stages after known ones, alphabetically', () => {
-    const cols = buildColumns([row(1, 'Zebra'), row(2, 'Pre-Approved'), row(3, 'Apple')])
-    expect(cols.map((c) => c.stage)).toEqual(['Pre-Approved', 'Apple', 'Zebra'])
+    const cols = buildColumns([row(1, 'Zebra'), row(2, 'Application Received'), row(3, 'Apple')])
+    expect(cols.map((c) => c.stage)).toEqual(['Application Received', 'Apple', 'Zebra'])
   })
   it('routes lost-like stages to the rightmost columns', () => {
     const cols = buildColumns([row(1, 'Lost'), row(2, 'New Lead'), row(3, 'Zebra')])

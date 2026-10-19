@@ -305,3 +305,64 @@ describe('crm-action run: MPG mirror', () => {
     expect((await go({ client_action_id: uuid(8), action: 'log_call', contact_id: 'c-mpg', payload: { outcome: 'Busy' } })).body.status).toBe('ok')
   })
 })
+
+describe('crm-action run: smart_lists', () => {
+  it('returns the adapter summary for the allowed user and writes nothing', async () => {
+    bay.smartLists = async () => ({ lists: [{ id: 1, name: '01' }] })
+    const res = await go({ client_action_id: uuid(9), action: 'smart_lists' })
+    expect(res.body).toEqual({ status: 'ok', smart_lists: { lists: [{ id: 1, name: '01' }] } })
+    expect(db.calls).toEqual([])
+  })
+  it('403s anyone else', async () => {
+    expect((await go({ client_action_id: uuid(9), action: 'smart_lists' }, { userId: 'x' })).http).toBe(403)
+  })
+})
+
+describe('crm-action run: set_stage (Bayway stage tags)', () => {
+  // Stand-in for fub.ts mapContact: the fields run.ts relies on.
+  const mapContact = (p) => ({ business_id: 'bay', source_crm: 'fub', external_id: String(p.id), name: p.name, phone: null, person_stage: p.stage, raw: p })
+  const stageReq = (contactId, target, n = 20) => ({ client_action_id: uuid(n), action: 'set_stage', contact_id: contactId, payload: { target } })
+
+  beforeEach(() => {
+    db.tables.contacts.push(
+      { id: 'c-lead', business_id: 'bay', source_crm: 'fub', external_id: '5001', name: 'Lead One', phone: '1', person_stage: 'Lead' },
+      { id: 'c-pq', business_id: 'bay', source_crm: 'fub', external_id: '5002', name: 'Pre Qual', phone: '1', person_stage: 'Pre-Qualified' },
+      { id: 'c-nur', business_id: 'bay', source_crm: 'fub', external_id: '5003', name: 'Nurt', phone: '1', person_stage: 'Nurture' },
+    )
+    bay.send.setStage = vi.fn(async ({ externalId, target }) => ({ id: externalId, tags: ['Active', 'Working Estimate'], target }))
+    bay.read.person = async (id) => ({ id, name: 'Lead One', stage: 'Lead', tags: ['Active', 'Working Estimate'] })
+    bay.map.contact = mapContact
+  })
+
+  it('moves a Lead, then mirrors the person back through the people mapper', async () => {
+    const res = await go(stageReq('c-lead', 'working'))
+    expect(res.body.status).toBe('ok')
+    expect(bay.send.setStage).toHaveBeenCalledWith({ externalId: '5001', target: 'working' })
+    const row = db.tables.contacts.find((c) => c.external_id === '5001')
+    expect(row.raw.tags).toEqual(['Active', 'Working Estimate'])
+    expect(db.calls.find((c) => c[0] === 'upsert' && c[1] === 'contacts')[3]).toEqual({ onConflict: 'source_crm,external_id' })
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'set_stage', status: 'ok' })
+  })
+
+  it('refuses an unknown target', async () => {
+    expect((await go(stageReq('c-lead', 'closed', 21))).body).toEqual({ status: 'refused', error: 'Unknown stage: closed' })
+    expect(bay.send.setStage).not.toHaveBeenCalled()
+  })
+
+  it('refuses moving a Pre-Qualified lead below Application Received', async () => {
+    const res = await go(stageReq('c-pq', 'attempted', 22))
+    expect(res.body.status).toBe('refused')
+    expect(res.body.error).toMatch(/Pre-Qualified/)
+    expect((await go(stageReq('c-pq', 'application_received', 23))).body.status).toBe('ok')
+  })
+
+  it('refuses a lead whose FUB stage keeps it off the board', async () => {
+    const res = await go(stageReq('c-nur', 'attempted', 24))
+    expect(res.body.error).toMatch(/Nurture/)
+  })
+
+  it('refuses MPG', async () => {
+    const res = await go(stageReq('c-mpg', 'attempted', 25))
+    expect(res.body.error).toMatch(/Bayway only/)
+  })
+})
