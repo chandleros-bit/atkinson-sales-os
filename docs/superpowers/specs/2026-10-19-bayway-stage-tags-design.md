@@ -5,7 +5,7 @@
 
 ## Problem
 
-Chandler wants the Bayway board to be **New Lead > Attempted > Contacted/Working > Application/Estimate Sent > Application Received**, kept in step with FollowUpBoss in both directions. FUB person stages can only be edited by the account owner, so the pipeline position lives in **tags**. His FUB Smart Lists (01–09) already filter on these tags, so the dashboard reads and writes the same tags rather than inventing new ones.
+Chandler wants the Bayway board to be **New Lead > Attempted > Contacted/Working > Application/Estimate Sent > Application Received**, kept in step with FollowUpBoss in both directions. FUB person stages can only be edited by the account owner, so the pipeline position lives in **tags**. His FUB Smart Lists (01–11) already filter on these tags, so the dashboard reads and writes the same tags rather than inventing new ones.
 
 ## Mapping (one config: `supabase/functions/_shared/bay-stages.ts`, mirrored in SQL `derive_stage`)
 
@@ -13,11 +13,13 @@ A lead is on the board only when its FUB person stage is **Lead** or **Pre-Quali
 
 | Column | Tags (any) | Also | Smart Lists |
 |---|---|---|---|
-| New Lead | none of the below | | 01, 02 |
-| Attempted | `attempted` | | (new) |
+| New Lead | none of the below | | 01 |
+| Attempted | `attempted` | | 02 (Follow-Up Due) |
 | Contacted/Working | `Working Estimate` | | 03 |
 | Application/Estimate Sent | `estimate sent`, `application sent` | | 04, 05 |
-| Application Received | `application received`, `need docs`, `under contract` | person stage Pre-Qualified | 06, 07, 09 |
+| Application Received | `application received`, `need docs`, `under contract` | person stage Pre-Qualified | 06 (Application Received), 07 (Missing Documents), 08 (Pre-Approved), 10 (Closings) |
+
+Smart List numbers as renumbered by Chandler on 2026-10-19. 09 is Active Clients - No Next Task (tag `Active`); 11 is Nurture / Credit Repair. FUB's API cannot apply the filters of 06 and 11: `/people?smartListId=` returns the whole account, the same symptom 03 and 04 had before their filters were fixed.
 
 ## Writing back ("Move stage")
 
