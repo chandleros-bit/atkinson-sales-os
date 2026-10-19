@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
@@ -227,18 +228,21 @@ export default function Reports() {
       })()
       const sprint = sprintWindow()
       const [deals, active, bayContacts, mpgContacts, week, month, sprintMetrics, series, settings, callRows] = await Promise.all([
-        supabase.from('deals').select('status, value, expected_close, business_id'),
-        supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay'),
+        fetchAllSettled(() => supabase.from('deals').select('status, value, expected_close, business_id').order('id')),
+        fetchAllSettled(() => supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay').order('id')),
         supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
         supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'mpg'),
         supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', wk),
         supabase.from('metrics_daily').select('business_id, metric_key, value').gte('date', from),
-        supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', sprint.from).lt('date', sprint.to),
+        // The sprint window is ~90 days: page it.
+        fetchAllSettled(() => supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', sprint.from).lt('date', sprint.to).order('id')),
         supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', sevenAgo),
         supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
-        supabase.from('activities')
+        // Up to 31 days of outbound calls across both books can pass 1,000.
+        fetchAllSettled(() => supabase.from('activities')
           .select('occurred_at, business_id')
-          .eq('type', 'call').eq('direction', 'outbound').gte('occurred_at', earliestStartIso),
+          .eq('type', 'call').eq('direction', 'outbound').gte('occurred_at', earliestStartIso)
+          .order('id')),
       ])
       const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error ||
         month.error || sprintMetrics.error || series.error || settings.error || callRows.error

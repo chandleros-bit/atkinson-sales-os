@@ -21,7 +21,9 @@ import {
 Deno.serve(async (req) => {
   const url = new URL(req.url)
   const expected = Deno.env.get('FUB_WEBHOOK_SECRET')
-  if (expected && url.searchParams.get('secret') !== expected) {
+  // Fail closed: with no secret configured, reject everything rather than
+  // accept unauthenticated writes from anyone who finds the URL.
+  if (!expected || url.searchParams.get('secret') !== expected) {
     return new Response('unauthorized', { status: 401 })
   }
 

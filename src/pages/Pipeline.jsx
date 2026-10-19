@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
 import { buildColumns, MPG_LEAD_FLOW } from '../lib/pipeline'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
@@ -200,9 +201,10 @@ export default function Pipeline({ biz }) {
     setLoading(true)
     setError(null)
     try {
-      let q = supabase.from(cfg.view).select(cfg.columns)
-      if (biz === 'bay') q = q.eq('business_id', 'bay')
-      const { data, error: err } = await q
+      const { data, error: err } = await fetchAllSettled(() => {
+        const q = supabase.from(cfg.view).select(cfg.columns).order('id')
+        return biz === 'bay' ? q.eq('business_id', 'bay') : q
+      })
       if (err) {
         setError(err.message)
         return

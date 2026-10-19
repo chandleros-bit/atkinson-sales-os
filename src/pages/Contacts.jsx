@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel } from '../lib/overview'
 import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
 
@@ -143,7 +144,9 @@ export default function Contacts({ biz }) {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase.from(config.source).select('*')
+      const { data, error: err } = await fetchAllSettled(() =>
+        supabase.from(config.source).select('*').order('id'),
+      )
       if (err) {
         setError(err.message)
         return
