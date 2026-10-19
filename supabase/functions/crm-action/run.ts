@@ -13,6 +13,7 @@
 // the next sync insert a second copy and double the call counts.
 
 import { planSteps, shouldStop, overallStatus, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS } from './plan.ts'
+import { STAGE_TARGETS } from '../_shared/bay-stages.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SOURCE_FOR = { bay: 'fub', mpg: 'zoho' }
@@ -26,7 +27,7 @@ const msg = (e) => String(e?.message || e).slice(0, 500)
 async function loadContact(db, id) {
   const { data, error } = await db
     .from('contacts')
-    .select('id, business_id, source_crm, external_id, name, phone')
+    .select('id, business_id, source_crm, external_id, name, phone, person_stage')
     .eq('id', id)
     .maybeSingle()
   if (error) throw new Error(`contact lookup: ${error.message}`)
@@ -103,6 +104,19 @@ function preflight(req, target) {
   if (req.action === 'log_call' && businessId === 'bay' && !contact?.phone) return 'No phone on file in FUB'
   if (TASK_ACTIONS.has(req.action) && task?.is_completed) return 'Task is already completed'
   if (req.action === 'log_call' && task?.is_completed) return 'That task is already completed'
+  if (req.action === 'set_stage') {
+    // Bayway stages are FUB tags (bay-stages.ts); MPG's come from Zoho.
+    if (businessId !== 'bay') return 'Move stage is Bayway only; MPG stages come from Zoho'
+    const key = req.payload?.target
+    if (!STAGE_TARGETS.some((t) => t.key === key)) return `Unknown stage: ${key}`
+    const ps = String(contact?.person_stage || '').trim().toLowerCase()
+    if (ps === 'pre-qualified' && key !== 'application_received') {
+      return 'This lead is Pre-Qualified in FUB, which always shows as Application Received. Change the FUB stage first.'
+    }
+    if (ps !== 'lead' && ps !== 'pre-qualified') {
+      return `This lead's FUB stage is ${contact?.person_stage || 'empty'}, so it isn't on the board. Set it to Lead in FUB first.`
+    }
+  }
   return null
 }
 
@@ -123,6 +137,8 @@ async function send(adapter, step, target) {
       })
     case 'complete_task':
       return adapter.send.completeTask({ externalId: task.external_id })
+    case 'set_stage':
+      return adapter.send.setStage({ externalId: contact.external_id, target: step.target })
     case 'push_task':
       return adapter.send.pushTask({
         externalId: task.external_id, dueDate: step.dueDate,
@@ -137,6 +153,14 @@ async function send(adapter, step, target) {
 async function mirror(db, adapter, step, out, target, now) {
   const { contact, task } = target
   const contactMap = contact ? new Map([[String(contact.external_id), contact.id]]) : new Map()
+  if (step.step === 'set_stage') {
+    // Re-read the person and upsert it through the people sync's own mapper;
+    // the stage trigger then records the move (stage_key / stage_since).
+    const rec = await adapter.read.person(out.id)
+    const { error } = await db.from('contacts').upsert(adapter.map.contact(rec), ON_CONFLICT)
+    if (error) throw new Error(`contacts upsert: ${error.message}`)
+    return
+  }
   if (step.step === 'log_call' || step.step === 'add_note') {
     const type = step.step === 'log_call' ? 'call' : 'note'
     const rec = type === 'call'

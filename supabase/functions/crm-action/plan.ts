@@ -3,10 +3,10 @@
 // complete and a follow-up to create, and those run after the call, in that
 // order, so the user's "done" and "next" both hang off a call that happened.
 
-export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'whoami', 'smart_lists']
+export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'whoami', 'smart_lists']
 
 // Actions that act on one of our contacts / tasks (the request carries its uuid).
-export const CONTACT_ACTIONS = new Set(['log_call', 'add_note', 'create_task'])
+export const CONTACT_ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'set_stage'])
 export const TASK_ACTIONS = new Set(['complete_task', 'push_task'])
 
 export function planSteps(request) {
@@ -33,6 +33,8 @@ export function planSteps(request) {
       return [{ step: 'complete_task', taskId: request.task_id }]
     case 'push_task':
       return [{ step: 'push_task', taskId: request.task_id, dueDate: p.due_date }]
+    case 'set_stage':
+      return [{ step: 'set_stage', target: p.target }]
     case 'whoami':
       return [{ step: 'whoami' }]
     default:

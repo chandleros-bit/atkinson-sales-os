@@ -6,7 +6,8 @@
 // single-record read paths (/calls/{id}, /notes/{id}, /tasks/{id}, /me) and
 // whether PUT /tasks/{id} accepts dueDate (FUB_PUSH_MODE).
 
-import { fubGet, fubSend } from '../_shared/fub.ts'
+import { fubGet, fubSend, mapContact } from '../_shared/fub.ts'
+import { retagForTarget } from '../_shared/bay-stages.ts'
 import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, FUB_TASK_TYPES } from '../_shared/fub-write.ts'
 import { mapActivity as fubMapActivity } from '../_shared/fub-activity.ts'
 import { mapTask as fubMapTask } from '../_shared/fub-tasks.ts'
@@ -47,6 +48,14 @@ export function fubAdapter(env) {
         await fubSend('PUT', `/tasks/${externalId}`, buildFubTaskUpdate({ complete: true }))
         return { id: externalId }
       },
+      // Move stage = swap workflow tags. PUT /people replaces the whole tag
+      // list, so read the current tags and send the full new list.
+      setStage: async ({ externalId, target }) => {
+        const person = await fubGet(`/people/${externalId}`)
+        const tags = retagForTarget(person.tags || [], target)
+        await fubSend('PUT', `/people/${externalId}`, { tags })
+        return { id: externalId, tags }
+      },
       pushTask: async ({ externalId, dueDate, contactExternalId, title, type }) => {
         if (pushMode === 'complete_and_recreate') {
           if (!contactExternalId) throw new Error('Task has no contact to reschedule onto')
@@ -67,8 +76,9 @@ export function fubAdapter(env) {
       call: (id) => fubGet(`/calls/${id}`),
       note: (id) => fubGet(`/notes/${id}`),
       task: (id) => fubGet(`/tasks/${id}`),
+      person: (id) => fubGet(`/people/${id}`),
     },
-    map: { activity: fubMapActivity, task: fubMapTask },
+    map: { activity: fubMapActivity, task: fubMapTask, contact: mapContact },
     whoami: async () => {
       const me = await fubGet('/me')
       return { id: me.id, name: me.name, email: me.email, role: me.role }
