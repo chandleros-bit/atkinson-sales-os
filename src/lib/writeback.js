@@ -10,12 +10,9 @@ let flagsPromise = null
 // load; a failed read means "off" (actions hidden), never "on".
 export function loadWritebackFlags() {
   if (isDemoMode) return Promise.resolve({})
-  flagsPromise ??= supabase
-    .from('settings')
-    .select('value')
-    .eq('key', 'writeback_enabled')
-    .maybeSingle()
-    .then(
+  flagsPromise ??= Promise.resolve(
+    supabase.from('settings').select('value').eq('key', 'writeback_enabled').maybeSingle(),
+  ).then(
       ({ data }) => data?.value || {},
       () => ({}),
     )

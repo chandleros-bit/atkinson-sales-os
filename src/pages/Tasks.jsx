@@ -12,6 +12,7 @@ import {
   normalizePriority,
 } from '../lib/tasks'
 import CrmLink from '../components/CrmLink'
+import QuickActions from '../components/QuickActions'
 
 // One generous window; both books together are far under this today. If a book
 // ever exceeds it the "Load more" button pages the rest in.
@@ -77,13 +78,13 @@ export default function Tasks() {
   const [hasMore, setHasMore] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState('all')
 
-  const fetchPage = useCallback(async (offset) => {
+  const fetchPage = useCallback(async (offset, size = PER_PAGE) => {
     const { data, error: err } = await supabase
       .from('v_tasks')
       .select('*')
       .order('due_at', { ascending: true, nullsFirst: false })
       .order('id', { ascending: true })
-      .range(offset, offset + PER_PAGE - 1)
+      .range(offset, offset + size - 1)
     if (err) throw new Error(err.message)
     return data || []
   }, [])
@@ -106,6 +107,19 @@ export default function Tasks() {
   useEffect(() => {
     load()
   }, [load])
+
+  // After a Quick Action: re-read everything already on screen, quietly, so
+  // a completed task drops off and a pushed one moves to its new day.
+  const [pending, setPending] = useState({})
+  const refresh = async () => {
+    try {
+      const page = await fetchPage(0, Math.max(rows.length, PER_PAGE))
+      setRows(page)
+      setPending({})
+    } catch (e) {
+      setError(String(e?.message || e))
+    }
+  }
 
   const loadMore = async () => {
     if (loadingMore) return
@@ -196,7 +210,8 @@ export default function Tasks() {
                 {g.rows.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg"
+                    className="flex items-center gap-3 border-b border-line px-4 py-3 transition-opacity last:border-b-0 hover:bg-hoverbg"
+                    style={pending[r.id] ? { opacity: 0.35 } : undefined}
                   >
                     <BizTag business_id={r.business_id} />
                     <DueCell bucketKey={g.key} due_at={r.due_at} />
@@ -215,6 +230,17 @@ export default function Tasks() {
                         {r.owner}
                       </div>
                     )}
+                    <QuickActions
+                      className="-my-1.5 -mr-2"
+                      businessId={r.business_id}
+                      contactId={r.contact_id}
+                      contactName={r.contact_name}
+                      hasPhone={!!r.contact_phone}
+                      task={{ id: r.id, title: r.title }}
+                      onPending={() => setPending((p) => ({ ...p, [r.id]: true }))}
+                      onFailed={() => setPending((p) => ({ ...p, [r.id]: false }))}
+                      onDone={refresh}
+                    />
                   </div>
                 ))}
               </div>

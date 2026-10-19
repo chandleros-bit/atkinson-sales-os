@@ -6,6 +6,7 @@ import { useBusiness } from '../context/BusinessContext'
 import { buildMyTasks } from '../lib/overview'
 import { dueLabel } from '../lib/tasks'
 import CrmLink from './CrmLink'
+import QuickActions from './QuickActions'
 
 // Overdue reads red, due-today amber — the same urgency ladder as the Overview
 // alert banner, so the rail and the banner never disagree.
@@ -17,7 +18,9 @@ const CHIP = {
 export default function MyTasks({ className = '' }) {
   const { matches } = useBusiness()
   const [rows, setRows] = useState([])
-  const [done, setDone] = useState({})
+  // Rows fading out while a Complete / Push is in flight (reverted on error).
+  const [pending, setPending] = useState({})
+  const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
@@ -28,19 +31,23 @@ export default function MyTasks({ className = '' }) {
     }
     let alive = true
     ;(async () => {
-      setLoading(true)
+      // A reload after a Quick Action stays quiet so the rail doesn't flash.
+      if (reloadKey === 0) setLoading(true)
       setError(null)
       try {
         const { data, error: err } = await fetchAllSettled(() =>
           supabase
             .from('v_tasks')
-            .select('id, business_id, task_type, title, due_at, contact_name, crm_profile_url')
+            .select('id, business_id, task_type, title, due_at, contact_id, contact_name, contact_phone, crm_profile_url')
             .order('due_at', { ascending: true, nullsFirst: false })
             .order('id', { ascending: true }),
         )
         if (!alive) return
         if (err) setError(err.message)
-        else setRows(data || [])
+        else {
+          setRows(data || [])
+          setPending({})
+        }
       } catch (e) {
         if (alive) setError(String(e?.message || e))
       } finally {
@@ -50,7 +57,7 @@ export default function MyTasks({ className = '' }) {
     return () => {
       alive = false
     }
-  }, [])
+  }, [reloadKey])
 
   // In demo mode the fetch is skipped, so rows stays [] and the empty state
   // shows — the live Overview never renders this in demo anyway.
@@ -104,45 +111,20 @@ export default function MyTasks({ className = '' }) {
       {!loading && !error && tasks.length > 0 && (
         <div className="mt-2.5 flex flex-col">
           {tasks.map((t) => {
-            const isDone = !!done[t.id]
+            const isPending = !!pending[t.id]
             const isMpg = t.business_id === 'mpg'
             const chip = CHIP[t.bucket] || CHIP.today
             return (
               <div
                 key={t.id}
-                className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0"
+                className="flex items-center gap-3 border-b border-line py-2.5 transition-opacity last:border-b-0"
+                style={isPending ? { opacity: 0.35 } : undefined}
               >
-                {/* Local-only: the checkbox marks a task done for this session.
-                    Completion still happens in the CRM and lands via sync. */}
-                <button
-                  type="button"
-                  onClick={() => setDone((d) => ({ ...d, [t.id]: !d[t.id] }))}
-                  aria-pressed={isDone}
-                  aria-label={isDone ? 'Mark not done' : 'Mark done'}
-                  className="grid h-[22px] w-[22px] flex-none place-items-center rounded-[7px] border-2"
-                  style={{
-                    borderColor: isDone ? 'var(--accent)' : 'var(--line2)',
-                    background: isDone ? 'var(--accent)' : 'var(--panel)',
-                  }}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#fff"
-                    strokeWidth="3.5"
-                    style={{ opacity: isDone ? 1 : 0 }}
-                  >
-                    <path d="M20 6L9 17l-5-5" />
-                  </svg>
-                </button>
-
                 <div className="min-w-0 flex-1">
                   <div
                     className="truncate text-[13.5px] font-semibold"
                     style={
-                      isDone ? { color: 'var(--dim)', textDecoration: 'line-through' } : undefined
+                      isPending ? { color: 'var(--dim)', textDecoration: 'line-through' } : undefined
                     }
                   >
                     {t.title || '(untitled task)'}
@@ -167,6 +149,19 @@ export default function MyTasks({ className = '' }) {
                 >
                   {t.bucket === 'overdue' ? dueLabel(t.due_at) : 'Today'}
                 </span>
+
+                <QuickActions
+                  className="-mr-2"
+                  only={['call', 'done', 'push']}
+                  businessId={t.business_id}
+                  contactId={t.contact_id}
+                  contactName={t.contact_name}
+                  hasPhone={!!t.contact_phone}
+                  task={{ id: t.id, title: t.title }}
+                  onPending={() => setPending((p) => ({ ...p, [t.id]: true }))}
+                  onFailed={() => setPending((p) => ({ ...p, [t.id]: false }))}
+                  onDone={() => setReloadKey((k) => k + 1)}
+                />
               </div>
             )
           })}

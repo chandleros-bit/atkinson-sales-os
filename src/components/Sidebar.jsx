@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import BusinessFilter from './BusinessFilter'
 import { useAuth } from '../context/AuthContext'
 import { useBusiness } from '../context/BusinessContext'
+import NewTaskDialog from './NewTaskDialog'
 
 function Item({ to, icon, children, badge, badgeBiz }) {
   return (
@@ -51,6 +53,7 @@ function GroupLabel({ children, color }) {
 export default function Sidebar() {
   const { signOut, isDemoMode } = useAuth()
   const { biz } = useBusiness()
+  const [newTaskOpen, setNewTaskOpen] = useState(false)
 
   const newTaskStyle =
     biz === 'mpg'
@@ -88,7 +91,7 @@ export default function Sidebar() {
             biz === 'all' ? 'grad-dual' : ''
           }`}
           style={newTaskStyle}
-          title="Phase 3 - task creation lands with the Overview build"
+          onClick={() => setNewTaskOpen(true)}
         >
           + New Task
         </button>
@@ -160,6 +163,7 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
+      {newTaskOpen && <NewTaskDialog onClose={() => setNewTaskOpen(false)} />}
     </aside>
   )
 }

@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
+import { showToast } from './Toaster'
 import {
   OUTCOMES,
   FOLLOW_UP_PRESETS,
@@ -248,14 +249,15 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
   // Oldest open task due today or earlier for this contact. Bounded (limit 1).
   useEffect(() => {
     let alive = true
-    supabase
-      .from('v_tasks')
-      .select('id, title, due_at')
-      .eq('contact_id', contactId)
-      .lte('due_at', endOfTodayIso())
-      .order('due_at', { ascending: true })
-      .limit(1)
-      .then(({ data }) => alive && setOpenTask(data?.[0] || null), () => {})
+    Promise.resolve(
+      supabase
+        .from('v_tasks')
+        .select('id, title, due_at')
+        .eq('contact_id', contactId)
+        .lte('due_at', endOfTodayIso())
+        .order('due_at', { ascending: true })
+        .limit(1),
+    ).then(({ data }) => alive && setOpenTask(data?.[0] || null), () => {})
     return () => {
       alive = false
     }
@@ -439,35 +441,6 @@ function PushForm({ businessId, task, t, onSuccess, onPending, onFailed }) {
   )
 }
 
-function Toast({ toast, onClose, onRetry }) {
-  useEffect(() => {
-    if (!toast || toast.tone !== 'ok') return undefined
-    const id = setTimeout(onClose, 3200)
-    return () => clearTimeout(id)
-  }, [toast, onClose])
-  if (!toast) return null
-  const bad = toast.tone !== 'ok'
-  return (
-    <div
-      role="status"
-      className="fixed bottom-4 left-1/2 z-[60] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-[12px] px-4 py-3 text-[13px] font-semibold shadow-lg"
-      style={{ background: bad ? 'var(--neg-ink)' : 'var(--text)', color: '#fff' }}
-    >
-      <span>{toast.text}</span>
-      {bad && onRetry && (
-        <button type="button" onClick={onRetry} className="min-h-[32px] rounded-md border border-white/60 px-2">
-          Retry
-        </button>
-      )}
-      {bad && (
-        <button type="button" onClick={onClose} aria-label="Dismiss" className="min-h-[32px] px-1">
-          ✕
-        </button>
-      )}
-    </div>
-  )
-}
-
 /**
  * Props:
  *   businessId  'bay' | 'mpg' (the ROW's business)
@@ -477,11 +450,11 @@ function Toast({ toast, onClose, onRetry }) {
  *   task        { id, title } on task rows: adds Complete and Push
  *   onDone      called after a write reached the CRM, so the page reloads
  *   onPending / onFailed  (kind, dueDate?) for optimistic task-row updates
+ *   only        optional subset of ['call','note','followup','done','push']
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, onDone, onPending, onFailed, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, onDone, onPending, onFailed, only, className = '' }) {
   const flags = useWritebackFlags()
   const [open, setOpen] = useState(null)
-  const [toast, setToast] = useState(null)
   const completing = useRef(false)
   const t = tone(businessId)
   const crm = CRM_LABEL[businessId]
@@ -491,7 +464,7 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
   const success = (summary, { keepOpen } = {}) => {
     if (!keepOpen) {
       setOpen(null)
-      setToast(summary)
+      showToast(summary)
     }
     onDone?.(summary)
   }
@@ -504,40 +477,37 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
     completing.current = false
     const summary = summarizeResult(res, businessId)
     if (summary.tone === 'ok') {
-      setToast(summary)
+      showToast(summary)
       onDone?.(summary)
     } else {
       onFailed?.('complete')
-      setToast({ ...summary, retry: complete })
+      showToast({ ...summary, retry: complete })
     }
   }
 
   const callDisabled = businessId === 'bay' && !hasPhone
+  const show = (name) => !only || only.includes(name)
   const stop = (e) => e.stopPropagation()
   const subtitle = [contactName, crm].filter(Boolean).join(' · ')
 
   return (
     <div className={`flex items-center gap-0.5 ${className}`} onClick={stop}>
-      {contactId && (
-        <>
-          <IconButton
-            t={t}
-            name="call"
-            label="Log call"
-            title={callDisabled ? 'No phone on file in FUB' : 'Log call'}
-            disabled={callDisabled}
-            onClick={() => setOpen('call')}
-          />
-          <IconButton t={t} name="note" label="Add note" onClick={() => setOpen('note')} />
-          <IconButton t={t} name="followup" label="Schedule follow-up" onClick={() => setOpen('followup')} />
-        </>
+      {contactId && show('call') && (
+        <IconButton
+          t={t}
+          name="call"
+          label="Log call"
+          title={callDisabled ? 'No phone on file in FUB' : 'Log call'}
+          disabled={callDisabled}
+          onClick={() => setOpen('call')}
+        />
       )}
-      {task && (
-        <>
-          <IconButton t={t} name="done" label="Complete task" onClick={complete} />
-          <IconButton t={t} name="push" label="Push task" onClick={() => setOpen('push')} />
-        </>
+      {contactId && show('note') && <IconButton t={t} name="note" label="Add note" onClick={() => setOpen('note')} />}
+      {contactId && show('followup') && (
+        <IconButton t={t} name="followup" label="Schedule follow-up" onClick={() => setOpen('followup')} />
       )}
+      {task && show('done') && <IconButton t={t} name="done" label="Complete task" onClick={complete} />}
+      {task && show('push') && <IconButton t={t} name="push" label="Push task" onClick={() => setOpen('push')} />}
 
       {open === 'call' && (
         <Sheet title="Log call" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
@@ -559,7 +529,6 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
           <PushForm businessId={businessId} task={task} t={t} onSuccess={success} onPending={onPending} onFailed={onFailed} />
         </Sheet>
       )}
-      <Toast toast={toast} onClose={() => setToast(null)} onRetry={toast?.retry} />
     </div>
   )
 }

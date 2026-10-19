@@ -5,6 +5,7 @@ import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
 import { buildColumns, MPG_LEAD_FLOW } from '../lib/pipeline'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
+import QuickActions from '../components/QuickActions'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -77,7 +78,7 @@ function LastNote({ r }) {
   )
 }
 
-function Card({ r, lost, biz }) {
+function Card({ r, lost, biz, onDone }) {
   const d = daysSince(r.last_touch_at)
   const stale = d === null || d >= STALE_TOUCH_DAYS
   const accent = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
@@ -108,11 +109,19 @@ function Card({ r, lost, biz }) {
           <LastNote r={r} />
         </>
       )}
+      <QuickActions
+        className="-mb-1.5 -ml-2 mt-1"
+        businessId={biz === 'mpg' ? 'mpg' : 'bay'}
+        contactId={r.id}
+        contactName={r.name}
+        hasPhone={!!r.phone}
+        onDone={onDone}
+      />
     </div>
   )
 }
 
-function Column({ col, biz }) {
+function Column({ col, biz, onDone }) {
   return (
     <div className="w-[280px] flex-none rounded-card border border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
@@ -123,18 +132,18 @@ function Column({ col, biz }) {
       </div>
       <div className="flex flex-col gap-2 p-2.5">
         {col.cards.map((r) => (
-          <Card key={r.id} r={r} lost={col.isLost} biz={biz} />
+          <Card key={r.id} r={r} lost={col.isLost} biz={biz} onDone={onDone} />
         ))}
       </div>
     </div>
   )
 }
 
-function Board({ columns, biz }) {
+function Board({ columns, biz, onDone }) {
   return (
     <div className="mt-5 flex gap-3.5 overflow-x-auto pb-2">
       {columns.map((col) => (
-        <Column key={col.stage} col={col} biz={biz} />
+        <Column key={col.stage} col={col} biz={biz} onDone={onDone} />
       ))}
     </div>
   )
@@ -196,9 +205,11 @@ export default function Pipeline({ biz }) {
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
-  const load = useCallback(async () => {
+  // quiet: refresh after a Quick Action without swapping the board for the
+  // loading state (which would unmount the card that fired it).
+  const load = useCallback(async ({ quiet = false } = {}) => {
     if (isDemoMode) return
-    setLoading(true)
+    if (!quiet) setLoading(true)
     setError(null)
     try {
       const { data, error: err } = await fetchAllSettled(() => {
@@ -259,7 +270,9 @@ export default function Pipeline({ biz }) {
         </div>
       )}
 
-      {!loading && !error && rows.length > 0 && <Board columns={columns} biz={biz} />}
+      {!loading && !error && rows.length > 0 && (
+        <Board columns={columns} biz={biz} onDone={() => load({ quiet: true })} />
+      )}
     </div>
   )
 }

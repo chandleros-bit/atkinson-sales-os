@@ -27,13 +27,14 @@ vi.mock('../lib/supabase', () => ({
 
 const { default: QuickActions } = await import('./QuickActions')
 const { resetWritebackFlags } = await import('../lib/writeback')
+const { default: Toaster } = await import('./Toaster')
 
 async function mount(props) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
   await act(async () => {
-    root.render(React.createElement(QuickActions, props))
+    root.render(React.createElement(React.Fragment, null, React.createElement(QuickActions, props), React.createElement(Toaster)))
   })
   return host
 }
@@ -59,8 +60,8 @@ beforeEach(() => {
 
 describe('QuickActions', () => {
   it('renders nothing for a book whose write-back flag is off', async () => {
-    const host = await mount({ ...bay, businessId: 'mpg' })
-    expect(host.innerHTML).toBe('')
+    await mount({ ...bay, businessId: 'mpg' })
+    expect(document.querySelectorAll('button')).toHaveLength(0)
   })
 
   it('disables Log call with a tooltip when the contact has no phone', async () => {
