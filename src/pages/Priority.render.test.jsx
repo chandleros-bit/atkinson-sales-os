@@ -1,0 +1,98 @@
+// @vitest-environment jsdom
+// Up Next page against a fake Supabase: bucket groups, the daily cap with
+// "Show all", the touched-today line, the empty state, and tap-to-dial on a
+// phone. Same createRoot + act style as Overview.render.test.
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createRoot } from 'react-dom/client'
+import { act } from 'react'
+import { MemoryRouter } from 'react-router-dom'
+import React from 'react'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const iso = (daysAgo, hh = 9) => {
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  d.setHours(hh, 0, 0, 0)
+  return d.toISOString()
+}
+const lead = (o) => ({
+  business_id: 'bay', company: null, phone: '7135550142', crm_profile_url: '#',
+  stage: null, stage_since: null, is_hot: false, is_active: false, is_partner: false, score: null,
+  crm_created_at: iso(400), crm_last_activity_at: null,
+  last_outbound_at: iso(0, 0), last_outbound_call_at: iso(0, 0), last_inbound_at: null,
+  open_task_count: 0, oldest_open_due_at: null, snooze_count_60d: 0, ...o,
+})
+
+const DATA = { signals: [], rules: { daily_cap: 2, use_crm_last_activity_fallback: false }, touched: [] }
+
+function query(table) {
+  const q = {}
+  for (const m of ['select', 'eq', 'gte', 'order', 'range', 'or']) q[m] = () => q
+  q.maybeSingle = () => ({ then: (r) => r({ data: table === 'settings' ? { value: DATA.rules } : null, error: null }) })
+  q.then = (resolve) =>
+    resolve({ data: table === 'v_lead_signals' ? DATA.signals : table === 'activities' ? DATA.touched : [], error: null })
+  return q
+}
+
+vi.mock('../lib/supabase', () => ({ isDemoMode: false, supabase: { from: (t) => query(t), functions: { invoke: vi.fn() } } }))
+vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: 'all', matches: () => true }) }))
+
+let mobile = false
+beforeEach(() => {
+  document.body.innerHTML = ''
+  window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
+})
+
+async function render() {
+  vi.resetModules()
+  const { default: Priority } = await import('./Priority')
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  await act(async () => {
+    createRoot(host).render(React.createElement(MemoryRouter, null, React.createElement(Priority)))
+  })
+  await act(async () => {})
+  return host
+}
+
+describe('Up Next page', () => {
+  it('groups by bucket, caps the list, and shows the rest on demand', async () => {
+    mobile = false
+    DATA.signals = [
+      lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) }),
+      lead({ id: 'b', name: 'Ben Overdue', open_task_count: 1, oldest_open_due_at: iso(3) }),
+      lead({ id: 'c', name: 'Cy Quiet', is_active: true, stage: 'New Lead', last_outbound_at: iso(20), last_outbound_call_at: iso(20), open_task_count: 1, oldest_open_due_at: iso(-2) }),
+    ]
+    DATA.touched = [{ contact_id: 'c', business_id: 'bay' }, { contact_id: 'c', business_id: 'bay' }, { contact_id: 'zz', business_id: 'bay' }]
+    const host = await render()
+    const text = host.textContent
+    expect(text).toContain('Up Next')
+    expect(text).toContain('1 touched today · 2 to go')
+    expect(text).toContain('They reached out')
+    expect(text).toContain('Follow-up overdue')
+    expect(text).toContain('Follow-up 3 days overdue')
+    expect(text).not.toContain('Cy Quiet')
+    const showAll = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Show all 3')
+    await act(async () => showAll.click())
+    expect(host.textContent).toContain('Cy Quiet')
+    expect(host.textContent).toContain('20 days since last touch')
+  })
+
+  it('makes the whole row a tel: link on a phone', async () => {
+    mobile = true
+    DATA.signals = [lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) })]
+    const host = await render()
+    const link = host.querySelector('a[aria-label="Call Ana Inbound"]')
+    expect(link.getAttribute('href')).toBe('tel:7135550142')
+    expect(link.textContent).toContain('no callback')
+  })
+
+  it('shows the empty state when nobody is slipping', async () => {
+    mobile = false
+    DATA.signals = [lead({ id: 'fine', name: 'All Good' })]
+    DATA.touched = []
+    const host = await render()
+    expect(host.textContent).toContain('Nobody slipping. Nice work.')
+  })
+})

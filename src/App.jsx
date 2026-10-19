@@ -4,6 +4,7 @@ import { BusinessProvider } from './context/BusinessContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Overview from './pages/Overview'
+import Priority from './pages/Priority'
 import SyncStatus from './pages/SyncStatus'
 import Pipeline from './pages/Pipeline'
 import Contacts from './pages/Contacts'
@@ -41,6 +42,7 @@ export default function App() {
               }
             >
               <Route path="/" element={<Overview />} />
+              <Route path="/priority" element={<Priority />} />
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/tasks" element={<Tasks />} />

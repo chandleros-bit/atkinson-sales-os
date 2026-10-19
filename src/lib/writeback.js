@@ -41,7 +41,13 @@ export function useWritebackFlags() {
 export async function invokeCrmAction(request) {
   try {
     const { data, error } = await supabase.functions.invoke('crm-action', { body: request })
-    if (!error) return data
+    if (!error) {
+      // Lets other views (the Up Next queue and its badge) refresh.
+      if (data?.status === 'ok' || data?.status === 'partial') {
+        window.dispatchEvent(new CustomEvent('crm-action:done', { detail: data }))
+      }
+      return data
+    }
     let message = error.message
     try {
       const body = await error.context?.json?.()

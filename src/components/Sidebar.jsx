@@ -4,11 +4,14 @@ import BusinessFilter from './BusinessFilter'
 import { useAuth } from '../context/AuthContext'
 import { useBusiness } from '../context/BusinessContext'
 import NewTaskDialog from './NewTaskDialog'
+import { usePriorityQueue } from '../lib/usePriorityQueue'
+import { urgentCount } from '../lib/priorityQueue'
 
-function Item({ to, icon, children, badge, badgeBiz }) {
+function Item({ to, icon, children, badge, badgeBiz, onNavigate }) {
   return (
     <NavLink
       to={to}
+      onClick={onNavigate}
       className={({ isActive }) =>
         `relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-[13px] leading-none ${
           isActive ? 'grad-dual-soft text-[color:var(--text)]' : 'text-muted hover:bg-hoverbg hover:text-[color:var(--text)]'
@@ -24,11 +27,15 @@ function Item({ to, icon, children, badge, badgeBiz }) {
           <span>{children}</span>
           {badge != null && (
             <span
-              className="ml-auto rounded-full px-1.5 py-px text-[10px] font-bold"
-              style={{
-                background: badgeBiz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)',
-                color: badgeBiz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)',
-              }}
+              className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-bold ${badgeBiz === 'all' ? 'grad-dual text-[#07120b]' : ''}`}
+              style={
+                badgeBiz === 'all'
+                  ? undefined
+                  : {
+                      background: badgeBiz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)',
+                      color: badgeBiz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)',
+                    }
+              }
             >
               {badge}
             </span>
@@ -50,10 +57,13 @@ function GroupLabel({ children, color }) {
   )
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }) {
   const { signOut, isDemoMode } = useAuth()
   const { biz } = useBusiness()
   const [newTaskOpen, setNewTaskOpen] = useState(false)
+  // "Act now" count (buckets 1-3) for the current filter; same data as /priority.
+  const { queue } = usePriorityQueue(biz)
+  const urgent = urgentCount(queue)
 
   const newTaskStyle =
     biz === 'mpg'
@@ -63,7 +73,7 @@ export default function Sidebar() {
         : undefined
 
   return (
-    <aside className="flex w-[200px] flex-none flex-col border-r border-line bg-panel2 p-3">
+    <aside className="flex h-full w-[200px] flex-none flex-col overflow-y-auto border-r border-line bg-panel2 p-3">
       {/* Org block. The BETA chip sits on the sub-line, not beside the title —
           at 200px the two do not share a row. */}
       <div className="flex items-center gap-2 px-1.5 pb-3.5 pt-1">
@@ -112,31 +122,34 @@ export default function Sidebar() {
       <nav className="flex flex-col gap-4">
         <div>
           <GroupLabel>OVERVIEW</GroupLabel>
-          <Item to="/" icon="▤">Overview</Item>
-          <Item to="/calendar" icon="▦">Calendar</Item>
-          <Item to="/tasks" icon="✓">Tasks</Item>
-          <Item to="/reports" icon="▢">Reports</Item>
+          <Item to="/priority" icon="◎" badge={urgent || null} badgeBiz={biz} onNavigate={onNavigate}>
+            Priority
+          </Item>
+          <Item onNavigate={onNavigate} to="/" icon="▤">Overview</Item>
+          <Item onNavigate={onNavigate} to="/calendar" icon="▦">Calendar</Item>
+          <Item onNavigate={onNavigate} to="/tasks" icon="✓">Tasks</Item>
+          <Item onNavigate={onNavigate} to="/reports" icon="▢">Reports</Item>
         </div>
 
         <div>
           <GroupLabel color="var(--mpg-ink)">MPG</GroupLabel>
-          <Item to="/mpg/pipeline" icon="▤" badge="—" badgeBiz="mpg">Pipeline</Item>
-          <Item to="/mpg/activity" icon="◷">Activity</Item>
-          <Item to="/mpg/contacts" icon="◵">Contacts · Zoho</Item>
+          <Item onNavigate={onNavigate} to="/mpg/pipeline" icon="▤" badge="—" badgeBiz="mpg">Pipeline</Item>
+          <Item onNavigate={onNavigate} to="/mpg/activity" icon="◷">Activity</Item>
+          <Item onNavigate={onNavigate} to="/mpg/contacts" icon="◵">Contacts · Zoho</Item>
         </div>
 
         <div>
           <GroupLabel color="var(--bay-ink)">BAYWAY</GroupLabel>
-          <Item to="/bayway/pipeline" icon="▤" badge="—" badgeBiz="bay">Pipeline</Item>
-          <Item to="/bayway/priority-leads" icon="◆">Priority Leads</Item>
-          <Item to="/bayway/activity" icon="◷">Activity</Item>
-          <Item to="/bayway/contacts" icon="◵">Contacts · FUB</Item>
+          <Item onNavigate={onNavigate} to="/bayway/pipeline" icon="▤" badge="—" badgeBiz="bay">Pipeline</Item>
+          <Item onNavigate={onNavigate} to="/bayway/priority-leads" icon="◆">Priority Leads</Item>
+          <Item onNavigate={onNavigate} to="/bayway/activity" icon="◷">Activity</Item>
+          <Item onNavigate={onNavigate} to="/bayway/contacts" icon="◵">Contacts · FUB</Item>
         </div>
 
         <div>
           <GroupLabel>MANAGE</GroupLabel>
-          <Item to="/sync" icon="⟳">Sync Status</Item>
-          <Item to="/settings" icon="⚙">Settings</Item>
+          <Item onNavigate={onNavigate} to="/sync" icon="⟳">Sync Status</Item>
+          <Item onNavigate={onNavigate} to="/settings" icon="⚙">Settings</Item>
         </div>
       </nav>
 
