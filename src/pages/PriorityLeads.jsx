@@ -3,9 +3,10 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, isHot } from '../lib/overview'
 import { TIERS, tierMeta, scoreBarPct, groupByTier } from '../lib/priorityLeads'
+import QuickActions from '../components/QuickActions'
 
 const COLUMNS =
-  'id, name, owner, score, tier, last_activity_at, last_activity_type, ai_note, tags, fub_profile_url'
+  'id, name, owner, score, tier, last_activity_at, last_activity_type, ai_note, tags, fub_profile_url, phone'
 
 function Header({ note }) {
   return (
@@ -62,7 +63,7 @@ function ScoreBar({ score, color }) {
   )
 }
 
-function Row({ r }) {
+function Row({ r, onDone }) {
   const [open, setOpen] = useState(false)
   const meta = tierMeta(r.tier)
   const lastLabel = lastTouchLabel(r.last_activity_at)
@@ -114,8 +115,16 @@ function Row({ r }) {
             {r.owner && <span className="text-dim">· {r.owner}</span>}
           </div>
         </div>
-        <div className="flex-none pt-0.5">
+        <div className="flex flex-none flex-col items-end gap-1 pt-0.5">
           <ScoreBar score={r.score} color={meta.color} />
+          <QuickActions
+            className="-mr-2"
+            businessId="bay"
+            contactId={r.id}
+            contactName={r.name}
+            hasPhone={!!r.phone}
+            onDone={onDone}
+          />
         </div>
       </div>
 
@@ -149,9 +158,10 @@ export default function PriorityLeads() {
   const [error, setError] = useState(null)
   const [active, setActive] = useState('hot')
 
-  const load = useCallback(async () => {
+  // quiet: refresh after a Quick Action without unmounting the list.
+  const load = useCallback(async ({ quiet = false } = {}) => {
     if (isDemoMode) return
-    setLoading(true)
+    if (!quiet) setLoading(true)
     setError(null)
     try {
       const { data, error: err } = await fetchAllSettled(() =>
@@ -208,7 +218,7 @@ export default function PriorityLeads() {
       {!loading && !error && current.length > 0 && (
         <div className="mt-4 flex flex-col gap-2">
           {current.map((r) => (
-            <Row key={r.id} r={r} />
+            <Row key={r.id} r={r} onDone={() => load({ quiet: true })} />
           ))}
         </div>
       )}

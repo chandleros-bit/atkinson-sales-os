@@ -12,6 +12,7 @@ import {
   normalizePriority,
 } from '../lib/tasks'
 import CrmLink from '../components/CrmLink'
+import QuickActions from '../components/QuickActions'
 
 // One generous window; both books together are far under this today. If a book
 // ever exceeds it the "Load more" button pages the rest in.
@@ -77,13 +78,13 @@ export default function Tasks() {
   const [hasMore, setHasMore] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState('all')
 
-  const fetchPage = useCallback(async (offset) => {
+  const fetchPage = useCallback(async (offset, size = PER_PAGE) => {
     const { data, error: err } = await supabase
       .from('v_tasks')
       .select('*')
       .order('due_at', { ascending: true, nullsFirst: false })
       .order('id', { ascending: true })
-      .range(offset, offset + PER_PAGE - 1)
+      .range(offset, offset + size - 1)
     if (err) throw new Error(err.message)
     return data || []
   }, [])
@@ -106,6 +107,19 @@ export default function Tasks() {
   useEffect(() => {
     load()
   }, [load])
+
+  // After a Quick Action: re-read everything already on screen, quietly, so
+  // a completed task drops off and a pushed one moves to its new day.
+  const [pending, setPending] = useState({})
+  const refresh = async () => {
+    try {
+      const page = await fetchPage(0, Math.max(rows.length, PER_PAGE))
+      setRows(page)
+      setPending({})
+    } catch (e) {
+      setError(String(e?.message || e))
+    }
+  }
 
   const loadMore = async () => {
     if (loadingMore) return
@@ -136,8 +150,8 @@ export default function Tasks() {
         {!loading && !error && <span className="num text-[12px] text-muted">{total} open</span>}
       </div>
       <p className="mt-1 text-sm text-muted">
-        Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Read-only:
-        complete tasks in the CRM and they drop off here on the next sync.
+        Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Complete or
+        push a task here and it changes in the CRM too.
       </p>
 
       <div className="mt-4 flex flex-wrap gap-1">
@@ -196,7 +210,8 @@ export default function Tasks() {
                 {g.rows.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg"
+                    className="flex items-center gap-3 border-b border-line px-4 py-3 transition-opacity last:border-b-0 hover:bg-hoverbg"
+                    style={pending[r.id] ? { opacity: 0.35 } : undefined}
                   >
                     <BizTag business_id={r.business_id} />
                     <DueCell bucketKey={g.key} due_at={r.due_at} />
@@ -207,14 +222,26 @@ export default function Tasks() {
                         <span className="ml-2 text-[11px] font-normal text-dim">{r.task_type}</span>
                       )}
                     </div>
-                    <div className="w-40 flex-none truncate text-[12.5px] text-muted">
+                    <div className="hidden w-40 flex-none truncate text-[12.5px] text-muted lg:block">
                       <CrmLink url={r.crm_profile_url}>{r.contact_name || '—'}</CrmLink>
                     </div>
                     {r.owner && (
-                      <div className="w-28 flex-none truncate text-right text-[11px] text-dim">
+                      <div className="hidden w-28 flex-none truncate text-right text-[11px] text-dim xl:block">
                         {r.owner}
                       </div>
                     )}
+                    <QuickActions
+                      className="-my-1.5 -mr-2"
+                      only={['call', 'done', 'push']}
+                      businessId={r.business_id}
+                      contactId={r.contact_id}
+                      contactName={r.contact_name}
+                      hasPhone={!!r.contact_phone}
+                      task={{ id: r.id, title: r.title }}
+                      onPending={() => setPending((p) => ({ ...p, [r.id]: true }))}
+                      onFailed={() => setPending((p) => ({ ...p, [r.id]: false }))}
+                      onDone={refresh}
+                    />
                   </div>
                 ))}
               </div>

@@ -30,6 +30,14 @@ describe('taskIsCompleted', () => {
   it('defaults to false when neither field is present', () => {
     expect(taskIsCompleted({})).toBe(false)
   })
+  // Live FUB GET /tasks/{id} after a completion (2026-10-18): isCompleted is a
+  // number and completed is the completion timestamp.
+  it('reads the numeric isCompleted and completed timestamp FUB returns', () => {
+    expect(taskIsCompleted({ isCompleted: 1, completed: '2026-10-19T02:40:46Z' })).toBe(true)
+    expect(taskIsCompleted({ isCompleted: 0, completed: null })).toBe(false)
+    expect(taskIsCompleted({ completed: '2026-10-19T02:40:46Z' })).toBe(true)
+    expect(taskIsCompleted({ completed: '' })).toBe(false)
+  })
 })
 
 describe('mapTask', () => {
