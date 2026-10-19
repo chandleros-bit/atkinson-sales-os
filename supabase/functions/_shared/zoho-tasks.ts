@@ -36,11 +36,16 @@ export function mapTask(rec, contactIdByExternal, dealIdByExternal) {
   // sends it; otherwise accept the id only if it is a deal we already synced.
   const seModule = rec['$se_module'] || null
   const whatIsDeal = seModule ? seModule === 'Deals' : true
+  // MPG's book lives on Leads: a task on a lead carries the lead in What_Id
+  // (Who_Id is null), the same rule zoho-activity.ts uses for calls. Who_Id
+  // still wins when both are present.
+  const whatIsPerson = seModule === 'Leads' || seModule === 'Contacts'
+  const personId = whoId || (whatIsPerson ? whatId : null)
   return {
     business_id: 'mpg',
     source_crm: 'zoho',
     external_id: String(rec.id),
-    contact_id: (whoId && contactIdByExternal.get(whoId)) || null,
+    contact_id: (personId && contactIdByExternal.get(personId)) || null,
     deal_id: (whatIsDeal && whatId && dealIdByExternal.get(whatId)) || null,
     title: rec.Subject || 'Task',
     task_type: rec.Task_Type || rec.Category || null,

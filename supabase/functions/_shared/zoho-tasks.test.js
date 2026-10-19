@@ -96,3 +96,29 @@ describe('mapTask', () => {
     expect(mapTask({ id: '7', Who_Id: {} }, contacts, deals).contact_id).toBe(null)
   })
 })
+
+describe('mapTask on a Lead', () => {
+  // MPG's book lives on Leads: a task on a lead carries it in What_Id with
+  // $se_module 'Leads' and no Who_Id. crm-action creates tasks this way.
+  const contacts = new Map([['zl1', 'uuid-lead-contact']])
+  const deals = new Map([['zl1', 'uuid-should-not-match']])
+
+  it('resolves the contact from a Lead in What_Id and leaves the deal empty', () => {
+    const row = mapTask(
+      { id: 't1', Subject: 'Follow up: Ana', What_Id: { id: 'zl1' }, '$se_module': 'Leads', Status: 'Not Started' },
+      contacts,
+      deals,
+    )
+    expect(row.contact_id).toBe('uuid-lead-contact')
+    expect(row.deal_id).toBe(null)
+  })
+
+  it('still prefers Who_Id when both are present', () => {
+    const row = mapTask(
+      { id: 't2', Who_Id: { id: 'zc9' }, What_Id: { id: 'zl1' }, '$se_module': 'Leads' },
+      new Map([['zc9', 'uuid-who'], ['zl1', 'uuid-lead-contact']]),
+      new Map(),
+    )
+    expect(row.contact_id).toBe('uuid-who')
+  })
+})
