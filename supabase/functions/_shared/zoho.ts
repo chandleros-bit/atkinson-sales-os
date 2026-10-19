@@ -1,8 +1,11 @@
 // Zoho CRM (MPG) OAuth2 client + field mapping for the scheduled MPG sync.
 //
 // Field mappings verified against the live Media Payments Group Zoho account
-// (US data center; pipeline currently on Leads). Read-only: only GETs from Zoho.
+// (US data center; pipeline currently on Leads). The syncs only GET; zohoSend
+// is the crm-action write path (see docs/phase-writeback-setup.md).
 // See docs/phase5-zoho-setup.md.
+
+import { withRetry429 } from './retry.ts'
 
 const DEFAULT_ACCOUNTS_HOST = 'https://accounts.zoho.com'
 const DEFAULT_API_HOST = 'https://www.zohoapis.com'
@@ -52,6 +55,41 @@ export async function zohoGet(apiHost, accessToken, path, params = {}, sinceIso)
     throw new Error(`Zoho GET ${path} -> ${res.status}: ${body.slice(0, 300)}`)
   }
   return res.json()
+}
+
+// A record-level failure inside a 2xx Zoho write response, or null. Zoho wraps
+// writes as { data: [{ code, status, message, details }] } and reports a bad
+// record with status 'error' while the HTTP status is still 200/201.
+export function zohoRecordError(json) {
+  const r = json?.data?.[0]
+  if (!r || String(r.status).toLowerCase() !== 'error') return null
+  const details = r.details ? ` ${JSON.stringify(r.details).slice(0, 200)}` : ''
+  return `${r.code || 'ERROR'}: ${r.message || 'record rejected'}${details}`
+}
+
+// Write to Zoho (crm-action only). One retry on 429; a record-level error in a
+// 2xx body throws like an HTTP failure. Returns the parsed body.
+export async function zohoSend(apiHost, accessToken, method, path, body, { sleep } = {}) {
+  const res = await withRetry429(
+    () =>
+      fetch(`${apiHost}/crm/v2/${path}`, {
+        method,
+        headers: { Authorization: `Zoho-oauthtoken ${accessToken}`, 'Content-Type': 'application/json' },
+        body: body == null ? undefined : JSON.stringify(body),
+      }),
+    { sleep },
+  )
+  const text = await res.text()
+  if (!res.ok) throw new Error(`Zoho ${method} ${path} -> ${res.status}: ${text.slice(0, 300)}`)
+  let json = {}
+  try {
+    json = text ? JSON.parse(text) : {}
+  } catch {
+    throw new Error(`Zoho ${method} ${path} -> ${res.status}: unparseable body ${text.slice(0, 200)}`)
+  }
+  const recordError = zohoRecordError(json)
+  if (recordError) throw new Error(`Zoho ${method} ${path} -> ${recordError}`)
+  return json
 }
 
 // Paginate a Zoho module list. Zoho uses page/per_page(<=200) + info.more_records.

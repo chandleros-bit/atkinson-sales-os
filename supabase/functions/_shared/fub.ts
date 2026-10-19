@@ -8,6 +8,8 @@
 // The sync function logs raw payload shape to sync_log.message on error to
 // make that first-pass adjustment fast.
 
+import { withRetry429 } from './retry.ts'
+
 const FUB_BASE = 'https://api.followupboss.com/v1'
 
 function authHeader() {
@@ -16,21 +18,40 @@ function authHeader() {
   return 'Basic ' + btoa(`${key}:`)
 }
 
+function fubHeaders() {
+  return {
+    Authorization: authHeader(),
+    'X-System': 'AtkinsonSalesOS',
+    'X-System-Key': Deno.env.get('FUB_SYSTEM_KEY') || '',
+  }
+}
+
 export async function fubGet(path, params = {}) {
   const url = new URL(FUB_BASE + path)
   Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, String(v)))
-  const res = await fetch(url, {
-    headers: {
-      Authorization: authHeader(),
-      'X-System': 'AtkinsonSalesOS',
-      'X-System-Key': Deno.env.get('FUB_SYSTEM_KEY') || '',
-    },
-  })
+  const res = await fetch(url, { headers: fubHeaders() })
   if (!res.ok) {
     const body = await res.text()
     throw new Error(`FUB GET ${path} -> ${res.status}: ${body.slice(0, 300)}`)
   }
   return res.json()
+}
+
+// Write to FUB (crm-action only). Same auth + X-System headers as fubGet, one
+// retry on 429, and the same error shape so failures read alike in crm_actions.
+export async function fubSend(method, path, body, { sleep } = {}) {
+  const res = await withRetry429(
+    () =>
+      fetch(FUB_BASE + path, {
+        method,
+        headers: { ...fubHeaders(), 'Content-Type': 'application/json' },
+        body: body == null ? undefined : JSON.stringify(body),
+      }),
+    { sleep },
+  )
+  const text = await res.text()
+  if (!res.ok) throw new Error(`FUB ${method} ${path} -> ${res.status}: ${text.slice(0, 300)}`)
+  return text ? JSON.parse(text) : {}
 }
 
 // Paginate through a FUB list endpoint. FUB uses offset/limit with a
