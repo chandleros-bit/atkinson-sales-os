@@ -73,7 +73,58 @@ export function fubAdapter(env) {
       const me = await fubGet('/me')
       return { id: me.id, name: me.name, email: me.email, role: me.role }
     },
+    smartLists: async () => summarizeSmartLists(fubGet, env('FUB_USER_ID')),
   }
+}
+
+const listOf = (json, keys) => {
+  for (const k of keys) {
+    if (Array.isArray(json?.[k])) return json[k]
+    if (Array.isArray(json?._embedded?.[k])) return json._embedded[k]
+  }
+  return []
+}
+
+function tally(values, top = 12) {
+  const m = new Map()
+  for (const v of values) m.set(v, (m.get(v) || 0) + 1)
+  return Object.fromEntries([...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, top))
+}
+
+// VERIFY: FUB's /smartLists shape and whether /people honors smartListId.
+// all_people_total is the unfiltered count: a list reporting the same total
+// means the filter was ignored. Samples up to 100 people per list.
+export async function summarizeSmartLists(get, myUserId) {
+  // Custom lists built in FUB 2.0 only come back with fub2=true; merge both.
+  const json = await get('/smartLists', { limit: 100 })
+  const json2 = await get('/smartLists', { limit: 100, fub2: true }).catch(() => ({}))
+  const byId = new Map()
+  for (const l of [...listOf(json, ['smartlists', 'smartLists']), ...listOf(json2, ['smartlists', 'smartLists'])]) {
+    byId.set(l.id, l)
+  }
+  const lists = [...byId.values()]
+  const all = await get('/people', { limit: 1 })
+  const out = []
+  for (const l of lists) {
+    try {
+      const page = await get('/people', { smartListId: l.id, limit: 100 })
+      const people = listOf(page, ['people'])
+      out.push({
+        id: l.id,
+        name: l.name,
+        total: page?._metadata?.total ?? null,
+        sampled: people.length,
+        mine_in_sample: people.filter((p) => String(p.assignedUserId) === String(myUserId)).length,
+        stages: tally(people.map((p) => p.stage || '(none)')),
+        tags: tally(people.flatMap((p) => (Array.isArray(p.tags) ? p.tags : []))),
+        definition_keys: Object.keys(l).filter((k) => !['id', 'name'].includes(k)),
+        definition: l.filters ?? l.criteria ?? l.query ?? null,
+      })
+    } catch (e) {
+      out.push({ id: l.id, name: l.name, error: String(e?.message || e).slice(0, 200) })
+    }
+  }
+  return { list_response_keys: Object.keys(json || {}), all_people_total: all?._metadata?.total ?? null, lists: out }
 }
 
 export function zohoAdapter(env) {

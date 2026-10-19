@@ -305,3 +305,15 @@ describe('crm-action run: MPG mirror', () => {
     expect((await go({ client_action_id: uuid(8), action: 'log_call', contact_id: 'c-mpg', payload: { outcome: 'Busy' } })).body.status).toBe('ok')
   })
 })
+
+describe('crm-action run: smart_lists', () => {
+  it('returns the adapter summary for the allowed user and writes nothing', async () => {
+    bay.smartLists = async () => ({ lists: [{ id: 1, name: '01' }] })
+    const res = await go({ client_action_id: uuid(9), action: 'smart_lists' })
+    expect(res.body).toEqual({ status: 'ok', smart_lists: { lists: [{ id: 1, name: '01' }] } })
+    expect(db.calls).toEqual([])
+  })
+  it('403s anyone else', async () => {
+    expect((await go({ client_action_id: uuid(9), action: 'smart_lists' }, { userId: 'x' })).http).toBe(403)
+  })
+})
