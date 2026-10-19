@@ -112,3 +112,18 @@ export function mapActivity(rec, type, contactIdByExternal) {
     raw: rec,
   }
 }
+
+// One row per external_id. Postgres refuses an upsert batch that hits the same
+// conflict key twice ("ON CONFLICT DO UPDATE command cannot affect row a second
+// time") and the whole run fails. The per-contact email pass produces exactly
+// that when one email involves two Bayway contacts, and offset paging over a
+// list sorted by `updated` can repeat a record that changes mid-run. Keep the
+// first row: an email row carries the contact it was fetched for.
+export function dedupeByExternalId(rows) {
+  const seen = new Set()
+  return rows.filter((r) => {
+    if (seen.has(r.external_id)) return false
+    seen.add(r.external_id)
+    return true
+  })
+}

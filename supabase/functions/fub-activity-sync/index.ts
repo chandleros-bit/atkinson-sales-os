@@ -11,6 +11,7 @@ import {
   fetchAppointments,
   fetchEmailsForContact,
   mapActivity,
+  dedupeByExternalId,
 } from '../_shared/fub-activity.ts'
 
 const NINETY_DAYS_MS = 90 * 86_400_000
@@ -121,12 +122,17 @@ Deno.serve(async (req) => {
       skipped.push(`email (${String(e?.message || e).slice(0, 100)})`)
     }
 
-    if (rows.length) {
+    // A repeated external_id in one batch fails the whole upsert (and, since
+    // `since` only advances on an ok run, every run after it). See
+    // dedupeByExternalId.
+    const unique = dedupeByExternalId(rows)
+    if (unique.length < rows.length) counts.push(`dupes:${rows.length - unique.length}`)
+    if (unique.length) {
       const { error } = await db
         .from('activities')
-        .upsert(rows, { onConflict: 'source_crm,external_id' })
+        .upsert(unique, { onConflict: 'source_crm,external_id' })
       if (error) throw new Error(`activity upsert: ${error.message}`)
-      upserted += rows.length
+      upserted += unique.length
     }
 
     // Only a total wipeout (every endpoint failed) is an error; a partial run
