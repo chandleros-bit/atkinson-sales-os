@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { runSyncFunction } from '../lib/syncRun'
 import { summarizeWriteback } from '../lib/crmActions'
 
 const SOURCE_LABELS = {
@@ -105,12 +106,10 @@ export default function SyncStatus() {
 
   const runNow = async () => {
     setRunning(true)
-    try {
-      await supabase.functions.invoke('fub-sync')
-    } catch (e) {
-      setError(e.message)
-    }
+    const failure = await runSyncFunction(supabase, 'fub-sync')
     await load()
+    // After load(), which clears error on its way in.
+    if (failure) setError(failure)
     setRunning(false)
   }
 

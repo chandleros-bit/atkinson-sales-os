@@ -2,8 +2,11 @@
 // Triggered every 15 minutes by pg_cron (see docs/phase2-fub-setup.md).
 // Read-only against FUB: this function only GETs from FollowUpBoss and
 // writes to our own Supabase tables. It never writes back to FUB.
+// Also called from the browser (Sync Status "Run FollowUpBoss sync now"), so
+// it answers CORS preflight. Stays deployed --no-verify-jwt for pg_cron.
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
+import { withCors } from '../_shared/cors.ts'
 import {
   fetchPipelinesAndStages,
   fetchPeople,
@@ -13,7 +16,7 @@ import {
   mapDeal,
 } from '../_shared/fub.ts'
 
-Deno.serve(async (req) => {
+Deno.serve(withCors(async (req) => {
   const db = serviceClient()
   let upserted = 0
 
@@ -95,4 +98,4 @@ Deno.serve(async (req) => {
       headers: { 'content-type': 'application/json' },
     })
   }
-})
+}))
