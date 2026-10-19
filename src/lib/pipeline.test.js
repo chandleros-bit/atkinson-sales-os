@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildColumns, isLostStage, LOAN_FLOW_ORDER, MPG_LEAD_FLOW } from './pipeline'
+import { buildColumns, isLostStage, LOAN_FLOW_ORDER, MPG_LEAD_FLOW, dropTargetFor, withPendingMoves } from './pipeline'
 
 const row = (id, stage, last_touch_at = null) => ({ id, stage, last_touch_at })
 
@@ -94,5 +94,45 @@ describe('buildColumns', () => {
     )
     expect(cols.map((c) => c.stage)).toEqual(['Open', 'Contacted', 'Junk Lead'])
     expect(cols.find((c) => c.stage === 'Junk Lead').isLost).toBe(true)
+  })
+})
+
+describe('buildColumns with every flow column', () => {
+  it('keeps empty flow columns so a card can be dropped into an empty stage', () => {
+    const cols = buildColumns([row(1, 'Attempted')], ['New Lead', 'Attempted', 'Application Received'], { showAllFlow: true })
+    expect(cols.map((c) => [c.stage, c.cards.length])).toEqual([['New Lead', 0], ['Attempted', 1], ['Application Received', 0]])
+  })
+  it('still drops empty columns by default', () => {
+    expect(buildColumns([row(1, 'Attempted')], ['New Lead', 'Attempted']).map((c) => c.stage)).toEqual(['Attempted'])
+  })
+})
+
+describe('dropTargetFor', () => {
+  it('maps a column to its Move stage target', () => {
+    expect(dropTargetFor('Attempted')).toEqual({ key: 'attempted' })
+    expect(dropTargetFor('Nurture / Credit Repair')).toEqual({ key: 'credit_repair' })
+    expect(dropTargetFor('New Lead')).toEqual({ key: 'new_lead' })
+  })
+  it('asks which tag for the shared Application/Estimate Sent column', () => {
+    expect(dropTargetFor('Application/Estimate Sent')).toEqual({
+      choose: [
+        { key: 'estimate_sent', label: 'Estimate Sent' },
+        { key: 'application_sent', label: 'Application Sent' },
+      ],
+    })
+  })
+  it('has no target for a stage that is not a Bayway column', () => {
+    expect(dropTargetFor('Somewhere Else')).toBe(null)
+  })
+})
+
+describe('withPendingMoves', () => {
+  it('shows a card in its new column while the move is in flight', () => {
+    const rows = [{ id: 'a', stage: 'New Lead' }, { id: 'b', stage: 'Attempted' }]
+    expect(withPendingMoves(rows, { a: 'Attempted' })).toEqual([
+      { id: 'a', stage: 'Attempted', moving: true },
+      { id: 'b', stage: 'Attempted' },
+    ])
+    expect(withPendingMoves(rows, {})).toBe(rows)
   })
 })

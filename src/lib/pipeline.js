@@ -4,7 +4,7 @@ import { sortByAttention } from './overview'
 
 // Bayway columns, from the FUB tag mapping shared with crm-action
 // (docs/superpowers/specs/2026-10-19-bayway-stage-tags-design.md).
-import { BAY_STAGES } from '../../supabase/functions/_shared/bay-stages.ts'
+import { BAY_STAGES, STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
 
 export const LOAN_FLOW_ORDER = BAY_STAGES
 
@@ -41,9 +41,12 @@ export function isLostStage(stage) {
 // rows: pipeline rows ({ id, stage, last_touch_at, ... }) from v_active_pipeline
 // (Bayway) or v_mpg_contacts (MPG). flowOrder curates the left-to-right column
 // order for known stages; unknown-active stages follow alphabetically, lost last.
-// Returns ordered [{ stage, isLost, cards }] for populated stages only.
-export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER) {
+// Returns ordered [{ stage, isLost, cards }] for populated stages only, unless
+// showAllFlow: then every flowOrder stage gets a column (drop targets on the
+// draggable Bayway board).
+export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER, { showAllFlow = false } = {}) {
   const groups = new Map()
+  if (showAllFlow) for (const stage of flowOrder) groups.set(stage, [])
   for (const r of rows) {
     const stage = (r.stage || '').trim()
     if (!stage) continue
@@ -72,4 +75,22 @@ export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER) {
     if (typeof sa === 'number') return sa - sb
     return String(sa).localeCompare(String(sb))
   })
+}
+
+// Dragging a Bayway card onto a column = a Move stage to that column. The
+// Application/Estimate Sent column holds two tags (Smart Lists 04 / 05), so a
+// drop there asks which one. null: not a Bayway column (no drop).
+export function dropTargetFor(stage) {
+  const targets = STAGE_TARGETS.filter((t) => t.stage === stage)
+  if (targets.length === 0) return null
+  if (targets.length === 1) return { key: targets[0].key }
+  return { choose: targets.map((t) => ({ key: t.key, label: t.label })) }
+}
+
+// pending: { [rowId]: stage } for moves still in flight. The card shows in its
+// new column (marked moving) until the server answers, then the page reloads
+// or the entry is dropped to snap it back.
+export function withPendingMoves(rows, pending) {
+  if (!pending || Object.keys(pending).length === 0) return rows
+  return rows.map((r) => (pending[r.id] ? { ...r, stage: pending[r.id], moving: true } : r))
 }
