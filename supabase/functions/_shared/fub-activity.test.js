@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapActivity, occurredAt, snippet, callDirection } from './fub-activity.ts'
+import { mapActivity, occurredAt, snippet, callDirection, dedupeByExternalId } from './fub-activity.ts'
 
 describe('occurredAt', () => {
   it('prefers appointment date over created', () => {
@@ -75,5 +75,23 @@ describe('mapActivity', () => {
     expect(mapActivity({ id: 10, person: { id: 501 }, created: 'x' }, 'note', contactIdByExternal).direction).toBe(null)
     expect(mapActivity({ id: 11, personId: 501, created: 'x' }, 'call', contactIdByExternal).direction).toBe(null)
     expect(mapActivity({ id: 12, personId: 501, created: 'x', isIncoming: true }, 'call', contactIdByExternal).direction).toBe('inbound')
+  })
+})
+
+describe('dedupeByExternalId', () => {
+  it('keeps the first row per external_id so one upsert batch never repeats a key', () => {
+    const rows = [
+      { external_id: 'email-1', contact_id: 'a' },
+      { external_id: 'call-2', contact_id: 'b' },
+      { external_id: 'email-1', contact_id: 'c' },
+    ]
+    expect(dedupeByExternalId(rows)).toEqual([
+      { external_id: 'email-1', contact_id: 'a' },
+      { external_id: 'call-2', contact_id: 'b' },
+    ])
+  })
+  it('passes a clean batch through unchanged', () => {
+    const rows = [{ external_id: 'call-1' }, { external_id: 'note-1' }]
+    expect(dedupeByExternalId(rows)).toEqual(rows)
   })
 })
