@@ -58,3 +58,16 @@ describe('fetchAll', () => {
     await expect(fetchAll(src)).rejects.toThrow('permission denied')
   })
 })
+
+describe('linkFubOrphans', () => {
+  it('returns a log note with the linked counts', async () => {
+    const { linkFubOrphans } = await import('./db.ts')
+    const db = { rpc: async (name) => (name === 'link_fub_orphans' ? { data: { activities: 2, tasks: 1 }, error: null } : { error: { message: 'no' } }) }
+    expect(await linkFubOrphans(db)).toBe('linked activities:2 tasks:1')
+  })
+  it('returns an empty note when nothing was linked, and throws on an RPC error', async () => {
+    const { linkFubOrphans } = await import('./db.ts')
+    expect(await linkFubOrphans({ rpc: async () => ({ data: { activities: 0, tasks: 0 }, error: null }) })).toBe('')
+    await expect(linkFubOrphans({ rpc: async () => ({ data: null, error: { message: 'boom' } }) })).rejects.toThrow('link orphans: boom')
+  })
+})

@@ -5,7 +5,7 @@
 // Also called from the browser (Sync Status "Run FollowUpBoss sync now"), so
 // it answers CORS preflight. Stays deployed --no-verify-jwt for pg_cron.
 
-import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll, linkFubOrphans } from '../_shared/db.ts'
 import { withCors } from '../_shared/cors.ts'
 import { myFubUserId, partitionByOwner } from '../_shared/fub-owner.ts'
 import {
@@ -111,7 +111,9 @@ Deno.serve(withCors(async (req) => {
       upserted += dealRows.length
     }
 
-    await logSync(db, 'fub', 'ok', upserted, ownerNote)
+    // New people may be the missing link for activity / tasks synced earlier.
+    const linked = await linkFubOrphans(db)
+    await logSync(db, 'fub', 'ok', upserted, [ownerNote, linked].filter(Boolean).join(' | '))
     return new Response(JSON.stringify({ ok: true, upserted }), {
       headers: { 'content-type': 'application/json' },
     })

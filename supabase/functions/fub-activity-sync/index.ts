@@ -3,7 +3,7 @@
 // its own sync_log line ('fub-activity'). Read-only against FUB: only GETs,
 // never writes back. See docs/phase-activity-fub-setup.md.
 
-import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll, linkFubOrphans } from '../_shared/db.ts'
 import { fetchPersonById } from '../_shared/fub.ts'
 import { myFubUserId, unresolvedPersonIds, keepActivityRecord } from '../_shared/fub-owner.ts'
 import {
@@ -159,12 +159,14 @@ Deno.serve(async (req) => {
       if (error) throw new Error(`activity upsert: ${error.message}`)
       upserted += unique.length
     }
+    const linked = await linkFubOrphans(db)
 
     // Only a total wipeout (every endpoint failed) is an error; a partial run
     // still succeeds. The message keeps per-type counts + skips for diagnosis.
     const summary = [
       overrideSince ? `backfill since ${overrideSince}` : '',
       counts.join(' '),
+      linked,
       skipped.length ? `skipped ${skipped.join('; ')}` : '',
     ]
       .filter(Boolean)

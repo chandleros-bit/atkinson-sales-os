@@ -36,3 +36,15 @@ export async function fetchAll(makeQuery) {
   }
   return rows
 }
+
+// Attach FUB activities / tasks that were synced before their person existed
+// in contacts (migration 0032). The people, activity and task syncs share a
+// cron tick, so all three call this at the end of a run; whichever finishes
+// last does the linking. Returns a sync_log note, '' when nothing was linked.
+export async function linkFubOrphans(db) {
+  const { data, error } = await db.rpc('link_fub_orphans')
+  if (error) throw new Error(`link orphans: ${error.message}`)
+  const a = data?.activities || 0
+  const t = data?.tasks || 0
+  return a || t ? `linked activities:${a} tasks:${t}` : ''
+}

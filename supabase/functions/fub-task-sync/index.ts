@@ -3,7 +3,7 @@
 // line ('fub-tasks'). Read-only against FUB: only GETs, never writes back.
 // See docs/phase-tasks-setup.md.
 
-import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
+import { serviceClient, logSync, fetchAll, linkFubOrphans } from '../_shared/db.ts'
 import { fetchOpenTasks, fetchTasksUpdatedSince, mapTask, reconcileCompleted } from '../_shared/fub-tasks.ts'
 import { myFubUserId, partitionByOwner, isMine } from '../_shared/fub-owner.ts'
 
@@ -148,12 +148,14 @@ Deno.serve(async () => {
       }
     }
 
+    const linked = await linkFubOrphans(db)
     const summary = [
       since ? 'incremental' : 'first run (open only)',
       `fetched:${records.length} upserted:${upserted}`,
       !trustOpenSet ? 'reconcile skipped: empty open set' : reconciled ? `reconciled-completed:${reconciled}` : '',
       skippedNoId ? `skipped ${skippedNoId} with no id` : '',
       droppedCompleted ? `dropped ${droppedCompleted} already-completed` : '',
+      linked,
       myId ? `other agents' tasks: skipped ${others.length}, removed ${removedOthers}` : 'owner filter off',
     ]
       .filter(Boolean)
