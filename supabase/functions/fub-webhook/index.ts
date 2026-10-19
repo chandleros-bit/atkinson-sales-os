@@ -11,6 +11,7 @@
 // sends to your account on first delivery, and adjust the parsing below.
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
+import { myFubUserId, isMine } from '../_shared/fub-owner.ts'
 import {
   fetchPersonById,
   fetchDealById,
@@ -59,8 +60,15 @@ Deno.serve(async (req) => {
         upserted += 1
       }
     } else {
+      const myId = myFubUserId((k) => Deno.env.get(k))
       for (const id of resourceIds) {
         const person = await fetchPersonById(id)
+        // Another agent's lead (or one reassigned away): keep it out.
+        if (!isMine(person, myId)) {
+          const { error } = await db.rpc('remove_fub_contacts', { ext_ids: [String(person.id ?? id)] })
+          if (error) throw new Error(`remove other owner's contact: ${error.message}`)
+          continue
+        }
         const row = mapContact(person)
         const { error } = await db.from('contacts').upsert(row, { onConflict: 'source_crm,external_id' })
         if (error) throw new Error(`contact upsert: ${error.message}`)

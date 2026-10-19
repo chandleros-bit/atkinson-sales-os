@@ -1,9 +1,13 @@
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
   test: {
+    // Claude Code session worktrees live under .claude/worktrees with their own
+    // node_modules; their copies of the tests must not run (or load a 2nd React).
+    exclude: [...configDefaults.exclude, '.claude/**'],
     alias: {
       // The edge functions import ical.js from esm.sh (Deno has no node_modules).
       // Point that specifier at the npm devDependency so ics.ts can be unit

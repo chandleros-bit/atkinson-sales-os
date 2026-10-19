@@ -7,6 +7,7 @@
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { withCors } from '../_shared/cors.ts'
+import { myFubUserId, partitionByOwner } from '../_shared/fub-owner.ts'
 import {
   fetchPipelinesAndStages,
   fetchPeople,
@@ -54,7 +55,12 @@ Deno.serve(withCors(async (req) => {
 
     const since = lastOk?.ran_at || null
     const people = await fetchPeople(since)
-    const contactRows = people.map(mapContact)
+    // Chandler's book only (see _shared/fub-owner.ts). People fetched here but
+    // assigned to another agent are removed, which also catches a lead
+    // reassigned away from him since the last run.
+    const myId = myFubUserId((k) => Deno.env.get(k))
+    const { mine, others } = partitionByOwner(people, myId)
+    const contactRows = mine.map(mapContact)
     if (contactRows.length) {
       const { error } = await db
         .from('contacts')
@@ -62,6 +68,17 @@ Deno.serve(withCors(async (req) => {
       if (error) throw new Error(`contact upsert: ${error.message}`)
       upserted += contactRows.length
     }
+    let removed = 0
+    if (others.length) {
+      const { data: n, error } = await db.rpc('remove_fub_contacts', {
+        ext_ids: others.map((p) => String(p.id)),
+      })
+      if (error) throw new Error(`remove other owners' contacts: ${error.message}`)
+      removed = n || 0
+    }
+    const ownerNote = myId
+      ? `people: kept ${mine.length} of ${people.length} (FUB user ${myId}), removed ${removed}`
+      : 'people: owner filter off (FUB_USER_ID unset)'
 
     // Paginate: past 1000 contacts a bare .select() truncates silently and
     // every deal beyond the cap resolves a null contact_id. fetchAll throws on
@@ -87,7 +104,7 @@ Deno.serve(withCors(async (req) => {
       upserted += dealRows.length
     }
 
-    await logSync(db, 'fub', 'ok', upserted)
+    await logSync(db, 'fub', 'ok', upserted, ownerNote)
     return new Response(JSON.stringify({ ok: true, upserted }), {
       headers: { 'content-type': 'application/json' },
     })
