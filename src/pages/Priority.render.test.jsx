@@ -44,9 +44,13 @@ beforeEach(() => {
   window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
 })
 
+const { default: Priority } = await import('./Priority')
+const { refreshPriorityQueue } = await import('../lib/usePriorityQueue')
+
+// The queue cache is module-level; reload it from this test's DATA rather than
+// re-importing modules (which would load a second React).
 async function render() {
-  vi.resetModules()
-  const { default: Priority } = await import('./Priority')
+  await refreshPriorityQueue()
   const host = document.createElement('div')
   document.body.appendChild(host)
   await act(async () => {
