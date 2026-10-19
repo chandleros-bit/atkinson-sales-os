@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import { buildMyTasks } from '../lib/overview'
 import { dueLabel } from '../lib/tasks'
@@ -30,10 +31,13 @@ export default function MyTasks({ className = '' }) {
       setLoading(true)
       setError(null)
       try {
-        const { data, error: err } = await supabase
-          .from('v_tasks')
-          .select('id, business_id, task_type, title, due_at, contact_name, crm_profile_url')
-          .order('due_at', { ascending: true, nullsFirst: false })
+        const { data, error: err } = await fetchAllSettled(() =>
+          supabase
+            .from('v_tasks')
+            .select('id, business_id, task_type, title, due_at, contact_name, crm_profile_url')
+            .order('due_at', { ascending: true, nullsFirst: false })
+            .order('id', { ascending: true }),
+        )
         if (!alive) return
         if (err) setError(err.message)
         else setRows(data || [])

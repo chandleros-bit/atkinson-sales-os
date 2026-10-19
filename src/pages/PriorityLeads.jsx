@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, isHot } from '../lib/overview'
 import { TIERS, tierMeta, scoreBarPct, groupByTier } from '../lib/priorityLeads'
 
@@ -153,10 +154,13 @@ export default function PriorityLeads() {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: err } = await supabase
-        .from('v_priority_leads')
-        .select(COLUMNS)
-        .eq('business_id', 'bay')
+      const { data, error: err } = await fetchAllSettled(() =>
+        supabase
+          .from('v_priority_leads')
+          .select(COLUMNS)
+          .eq('business_id', 'bay')
+          .order('id'),
+      )
       if (err) {
         setError(err.message)
         return
