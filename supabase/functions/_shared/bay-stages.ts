@@ -13,7 +13,11 @@ export const BAY_STAGES = [
   'Contacted/Working',
   'Application/Estimate Sent',
   'Application Received',
+  // Parked leads (Smart List 11). Last on the board; the name contains
+  // "Nurture", so Up Next leaves these leads alone.
+  'Nurture / Credit Repair',
 ]
+const PARKED = 'Nurture / Credit Repair'
 
 // Workflow tags by column (lowercase). Furthest column wins.
 const STAGE_TAGS = {
@@ -21,6 +25,7 @@ const STAGE_TAGS = {
   'Contacted/Working': ['working estimate'],
   'Application/Estimate Sent': ['estimate sent', 'application sent'],
   'Application Received': ['application received', 'need docs', 'under contract'],
+  'Nurture / Credit Repair': ['credit repair'],
 }
 const WORKFLOW = new Set(Object.values(STAGE_TAGS).flat())
 const ON_BOARD = new Set(['lead', 'pre-qualified'])
@@ -31,9 +36,11 @@ const norm = (t) => String(t ?? '').trim().toLowerCase()
 export function bayStageFromTags(tags, personStage) {
   const ps = norm(personStage)
   if (!ON_BOARD.has(ps)) return null
-  if (ps === 'pre-qualified') return 'Application Received'
   const have = new Set((Array.isArray(tags) ? tags : []).map(norm))
-  for (let i = BAY_STAGES.length - 1; i > 0; i--) {
+  // A parked lead stays parked whatever else it is tagged with.
+  if (STAGE_TAGS[PARKED].some((t) => have.has(t))) return PARKED
+  if (ps === 'pre-qualified') return 'Application Received'
+  for (let i = BAY_STAGES.indexOf(PARKED) - 1; i > 0; i--) {
     const stage = BAY_STAGES[i]
     if (STAGE_TAGS[stage].some((t) => have.has(t))) return stage
   }
@@ -55,6 +62,7 @@ export const STAGE_TARGETS = [
     tag: 'application received',
     keep: ['application received', 'need docs', 'under contract'],
   },
+  { key: 'credit_repair', label: 'Nurture / Credit Repair', stage: PARKED, tag: 'Credit Repair', keep: ['credit repair'] },
 ]
 const TARGET = Object.fromEntries(STAGE_TARGETS.map((t) => [t.key, t]))
 

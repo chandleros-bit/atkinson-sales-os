@@ -158,13 +158,13 @@ describe('QuickActions', () => {
 })
 
 describe('QuickActions: Move stage', () => {
-  it('shows six targets with the current column marked, and sends set_stage', async () => {
+  it('shows seven targets with the current column marked, and sends set_stage', async () => {
     invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
     await mount({ ...bay, stage: 'Application/Estimate Sent' })
     await click(byLabel('Move stage'))
     const options = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')]
     expect(options.map((b) => b.textContent.replace('Now', ''))).toEqual([
-      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received',
+      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received', 'Nurture / Credit Repair',
     ])
     expect(options.filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent.replace('Now', '')))
       .toEqual(['Estimate Sent', 'Application Sent'])

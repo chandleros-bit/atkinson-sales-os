@@ -354,6 +354,7 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     expect(res.body.status).toBe('refused')
     expect(res.body.error).toMatch(/Pre-Qualified/)
     expect((await go(stageReq('c-pq', 'application_received', 23))).body.status).toBe('ok')
+    expect((await go(stageReq('c-pq', 'credit_repair', 26))).body.status).toBe('ok')
   })
 
   it('refuses a lead whose FUB stage keeps it off the board', async () => {
