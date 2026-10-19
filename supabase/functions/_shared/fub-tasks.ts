@@ -69,9 +69,13 @@ export function taskTitle(rec) {
   return rec.name || rec.subject || rec.description || 'Task'
 }
 
+// FUB's GET /tasks/{id} returns isCompleted as a number (1/0) and `completed`
+// as the completion timestamp (seen live 2026-10-18), so accept those as well
+// as booleans.
 export function taskIsCompleted(rec) {
-  if (typeof rec.isCompleted === 'boolean') return rec.isCompleted
+  if (rec.isCompleted != null) return rec.isCompleted === true || Number(rec.isCompleted) === 1
   if (typeof rec.completed === 'boolean') return rec.completed
+  if (typeof rec.completed === 'string') return rec.completed.trim() !== ''
   return false
 }
 

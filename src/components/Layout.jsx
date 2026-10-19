@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
+import Toaster from './Toaster'
 import { useAuth } from '../context/AuthContext'
 
 export default function Layout() {
@@ -17,6 +18,7 @@ export default function Layout() {
         )}
         <Outlet />
       </main>
+      <Toaster />
     </div>
   )
 }
