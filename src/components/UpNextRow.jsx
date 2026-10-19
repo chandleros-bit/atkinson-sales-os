@@ -228,8 +228,9 @@ export default function UpNextRow({ row, compact = false }) {
       ) : (
         body
       )}
+      {/* Inline actions only with room for them (lg+); below that, the ⋯ sheet. */}
       {!mobile && !compact && (
-        <div className="flex flex-none items-center gap-1">
+        <div className="hidden flex-none items-center gap-1 lg:flex">
           {tel && (
             <a href={tel} className="grid h-10 place-items-center rounded-[10px] px-2.5 text-[12.5px] font-semibold text-muted hover:bg-hoverbg" title={`Call ${row.phone}`}>
               Call
