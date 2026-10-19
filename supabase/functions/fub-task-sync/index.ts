@@ -5,6 +5,7 @@
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { fetchOpenTasks, fetchTasksUpdatedSince, mapTask, reconcileCompleted } from '../_shared/fub-tasks.ts'
+import { myFubUserId, partitionByOwner, isMine } from '../_shared/fub-owner.ts'
 
 // Re-scan window applied to the incremental cursor — see the `since` comment.
 const OVERLAP_MS = 10 * 60_000
@@ -70,7 +71,24 @@ Deno.serve(async () => {
     // each other. Drop them and count them instead.
     const identified = records.filter((rec) => rec.id != null)
     const skippedNoId = records.length - identified.length
-    let rows = identified.map((rec) => mapTask(rec, contactIdByExternal, dealIdByExternal))
+    // Only tasks assigned to Chandler (see _shared/fub-owner.ts). A task
+    // reassigned to another agent since the last run is removed.
+    const myId = myFubUserId((k) => Deno.env.get(k))
+    const { mine, others } = partitionByOwner(identified, myId)
+    let removedOthers = 0
+    if (others.length) {
+      const otherIds = others.map((rec) => String(rec.id))
+      for (let i = 0; i < otherIds.length; i += BATCH) {
+        const { error, count } = await db
+          .from('tasks')
+          .delete({ count: 'exact' })
+          .eq('source_crm', 'fub')
+          .in('external_id', otherIds.slice(i, i + BATCH))
+        if (error) throw new Error(`remove other owners' tasks: ${error.message}`)
+        removedOthers += count || 0
+      }
+    }
+    let rows = mine.map((rec) => mapTask(rec, contactIdByExternal, dealIdByExternal))
     // Defensive: if FUB ignores the isCompleted filter on the first run, drop
     // completed rows here rather than importing history. Counted, because a
     // nonzero number here is exactly the signal that the filter was ignored.
@@ -102,7 +120,7 @@ Deno.serve(async () => {
     // rows" case. On the first run `records` already IS the open-task list, reuse it.
     const openRecords = since ? await fetchOpenTasks() : records
     const openExternalIds = new Set(
-      openRecords.filter((rec) => rec.id != null).map((rec) => String(rec.id)),
+      openRecords.filter((rec) => rec.id != null && isMine(rec, myId)).map((rec) => String(rec.id)),
     )
     // Paginate: a bare .select() truncates at PostgREST's 1000-row cap, which
     // would hide our >1000th still-open row from reconciliation forever. fetchAll
@@ -136,6 +154,7 @@ Deno.serve(async () => {
       !trustOpenSet ? 'reconcile skipped: empty open set' : reconciled ? `reconciled-completed:${reconciled}` : '',
       skippedNoId ? `skipped ${skippedNoId} with no id` : '',
       droppedCompleted ? `dropped ${droppedCompleted} already-completed` : '',
+      myId ? `other agents' tasks: skipped ${others.length}, removed ${removedOthers}` : 'owner filter off',
     ]
       .filter(Boolean)
       .join(' | ')

@@ -4,6 +4,8 @@
 // never writes back. See docs/phase-activity-fub-setup.md.
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
+import { fetchPersonById } from '../_shared/fub.ts'
+import { myFubUserId, unresolvedPersonIds, keepActivityRecord } from '../_shared/fub-owner.ts'
 import {
   fetchCalls,
   fetchTexts,
@@ -15,6 +17,8 @@ import {
 } from '../_shared/fub-activity.ts'
 
 const NINETY_DAYS_MS = 90 * 86_400_000
+// Owner lookups per run for people not in our contacts (see below).
+const MAX_OWNER_LOOKUPS = 200
 
 Deno.serve(async (req) => {
   const db = serviceClient()
@@ -125,8 +129,29 @@ Deno.serve(async (req) => {
     // A repeated external_id in one batch fails the whole upsert (and, since
     // `since` only advances on an ok run, every run after it). See
     // dedupeByExternalId.
-    const unique = dedupeByExternalId(rows)
-    if (unique.length < rows.length) counts.push(`dupes:${rows.length - unique.length}`)
+    // Chandler's book only (see _shared/fub-owner.ts). The contact map holds
+    // only his people, so activity on anyone else's lead won't resolve. Look
+    // each unknown person up once to tell another agent's lead (dropped) from
+    // one of his the contact sync hasn't stored yet (kept: since only moves
+    // forward, dropping it would lose that activity for good).
+    const myId = myFubUserId((k) => Deno.env.get(k))
+    let owned = rows
+    if (myId) {
+      const ownerByPersonId = new Map()
+      for (const pid of unresolvedPersonIds(rows.map((r) => r.raw), contactIdByExternal).slice(0, MAX_OWNER_LOOKUPS)) {
+        try {
+          const p = await fetchPersonById(pid)
+          ownerByPersonId.set(pid, p?.assignedUserId != null ? String(p.assignedUserId) : '')
+        } catch {
+          // No entry: kept (see keepActivityRecord).
+        }
+      }
+      owned = rows.filter((r) => keepActivityRecord(r.raw, contactIdByExternal, ownerByPersonId, myId))
+      if (owned.length < rows.length) counts.push(`other-agents:${rows.length - owned.length}`)
+    }
+
+    const unique = dedupeByExternalId(owned)
+    if (unique.length < owned.length) counts.push(`dupes:${owned.length - unique.length}`)
     if (unique.length) {
       const { error } = await db
         .from('activities')
