@@ -145,7 +145,7 @@ const LABEL = {
   log_call: 'Call',
   add_note: 'Note',
   create_task: 'Follow-up task',
-  complete_task: 'Completing the open task',
+  complete_task: 'Completing the task',
   push_task: 'Moving the task',
 }
 
