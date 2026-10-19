@@ -86,6 +86,15 @@ export async function fetchPeople(sinceIso) {
   )
 }
 
+// FUB does not bump a person's `updated` when tags change, so an incremental
+// (updatedAfter) people pass never sees tag edits made in FUB, and the Bayway
+// board is driven by tags (see bay-stages.ts). The first scheduled run each
+// hour (and any run called with ?full=1) re-reads every person instead.
+export function shouldFullPeopleRefresh(now, url) {
+  if (url && new URL(url).searchParams.get('full') === '1') return true
+  return new Date(now).getUTCMinutes() < 15
+}
+
 export async function fetchDeals(sinceIso) {
   return fubList(
     '/deals',
