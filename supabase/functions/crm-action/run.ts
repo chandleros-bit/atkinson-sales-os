@@ -110,7 +110,8 @@ function preflight(req, target) {
     const key = req.payload?.target
     if (!STAGE_TARGETS.some((t) => t.key === key)) return `Unknown stage: ${key}`
     const ps = String(contact?.person_stage || '').trim().toLowerCase()
-    if (ps === 'pre-qualified' && key !== 'application_received') {
+    // Pre-Qualified always reads as Application Received unless parked (Credit Repair).
+    if (ps === 'pre-qualified' && !['application_received', 'credit_repair'].includes(key)) {
       return 'This lead is Pre-Qualified in FUB, which always shows as Application Received. Change the FUB stage first.'
     }
     if (ps !== 'lead' && ps !== 'pre-qualified') {

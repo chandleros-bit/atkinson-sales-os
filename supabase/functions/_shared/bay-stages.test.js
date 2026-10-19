@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { BAY_STAGES, STAGE_TARGETS, bayStageFromTags, retagForTarget, targetForStage } from './bay-stages.ts'
 
 describe('BAY_STAGES', () => {
-  it('lists the five columns in board order', () => {
-    expect(BAY_STAGES).toEqual(['New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received'])
+  it('lists the six columns in board order', () => {
+    expect(BAY_STAGES).toEqual(['New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Nurture / Credit Repair'])
   })
 })
 
@@ -23,6 +23,13 @@ describe('bayStageFromTags', () => {
   })
   it('uses the furthest stage when several workflow tags are present', () => {
     expect(bayStageFromTags(['attempted', 'estimate sent', 'Working Estimate'], 'Lead')).toBe('Application/Estimate Sent')
+  })
+  it('parks a Credit Repair lead in Nurture / Credit Repair over any other stage tag (Smart List 11)', () => {
+    expect(bayStageFromTags(['Credit Repair'], 'Lead')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['DSCR', ' credit repair '], 'Lead')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['application received', 'Credit Repair'], 'Lead')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['Credit Repair'], 'Pre-Qualified')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['Credit Repair'], 'Nurture')).toBe(null)
   })
   it('treats Pre-Qualified as Application Received', () => {
     expect(bayStageFromTags([], 'Pre-Qualified')).toBe('Application Received')
@@ -55,11 +62,16 @@ describe('retagForTarget', () => {
     expect(retagForTarget(['need docs', 'estimate sent'], 'application_received')).toEqual(['need docs'])
     expect(retagForTarget(['Active'], 'application_received')).toEqual(['Active', 'application received'])
   })
+  it('parks in Credit Repair by swapping out other stage tags, and un-parks by removing it', () => {
+    expect(retagForTarget(['application received', 'DSCR'], 'credit_repair')).toEqual(['DSCR', 'Credit Repair'])
+    expect(retagForTarget(['Credit Repair', 'DSCR'], 'attempted')).toEqual(['DSCR', 'attempted'])
+    expect(retagForTarget(['credit repair'], 'credit_repair')).toEqual(['credit repair'])
+  })
   it('rejects an unknown target', () => {
     expect(() => retagForTarget([], 'closed')).toThrow(/Unknown stage target/)
   })
-  it('lists six targets', () => {
-    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received'])
+  it('lists seven targets', () => {
+    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'credit_repair'])
   })
 })
 
