@@ -18,6 +18,19 @@ describe('planSteps', () => {
     expect(steps[2]).toEqual({ step: 'create_task', title: 'Follow up: Jo', type: 'Follow Up', dueDate: '2026-10-19' })
   })
 
+  it('parks the lead in Nurture last, after the call, completion and follow-up', () => {
+    const steps = planSteps({
+      action: 'log_call',
+      payload: {
+        outcome: 'Interested', complete_task_id: 't1',
+        follow_up: { due_date: '2026-10-21', title: 'Follow up', type: 'Follow Up' },
+        set_stage: 'credit_repair',
+      },
+    })
+    expect(steps.map((s) => s.step)).toEqual(['log_call', 'complete_task', 'create_task', 'set_stage'])
+    expect(steps.at(-1)).toEqual({ step: 'set_stage', target: 'credit_repair' })
+  })
+
   it('plans a bare call as one step', () => {
     expect(planSteps({ action: 'log_call', payload: { outcome: 'Busy' } }).map((s) => s.step)).toEqual(['log_call'])
   })

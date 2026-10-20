@@ -366,4 +366,32 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     const res = await go(stageReq('c-mpg', 'attempted', 25))
     expect(res.body.error).toMatch(/Bayway only/)
   })
+
+  const parkCall = (contactId, n) => ({
+    client_action_id: uuid(n), action: 'log_call', contact_id: contactId,
+    payload: { outcome: 'Not Interested', duration_min: 5, next_step: 'none', no_next_step_reason: 'Moving to Nurture', set_stage: 'credit_repair' },
+  })
+
+  it('logs the call, then parks the lead in Nurture', async () => {
+    const res = await go(parkCall('c-lead', 30))
+    expect(res.body.status).toBe('ok')
+    expect(res.body.results.map((r) => r.step)).toEqual(['log_call', 'set_stage'])
+    expect(bay.send.logCall).toHaveBeenCalled()
+    expect(bay.send.setStage).toHaveBeenCalledWith({ externalId: '5001', target: 'credit_repair' })
+    expect(db.tables.crm_actions.at(-1).request.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture' })
+  })
+
+  it('refuses a Nurture park for MPG before anything is sent', async () => {
+    const res = await go({ ...parkCall('c-mpg', 31), payload: { ...parkCall('c-mpg', 31).payload, set_stage: 'credit_repair' } })
+    expect(res.body.status).toBe('refused')
+    expect(res.body.error).toMatch(/Bayway only/)
+    expect(mpg.send.logCall).not.toHaveBeenCalled()
+  })
+
+  it('does not park when the call itself fails', async () => {
+    bay.send.logCall = vi.fn(async () => { throw new Error('FUB POST /calls -> 500: down') })
+    const res = await go(parkCall('c-lead', 32))
+    expect(res.body.status).toBe('error')
+    expect(bay.send.setStage).not.toHaveBeenCalled()
+  })
 })
