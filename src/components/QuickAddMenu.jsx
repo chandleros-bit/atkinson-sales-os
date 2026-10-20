@@ -11,8 +11,12 @@ export const QUICK_ADD = [
   { kind: 'task', label: 'Task…' },
 ]
 
-export default function QuickAddMenu({ onPick, className = '', style }) {
+const NEW_LEAD = { kind: 'lead', label: 'New lead…' }
+
+// showLead: offer "New lead…" (settings.create_lead_enabled plus write-back).
+export default function QuickAddMenu({ onPick, showLead = false, className = '', style }) {
   const [open, setOpen] = useState(false)
+  const items = showLead ? [NEW_LEAD, ...QUICK_ADD] : QUICK_ADD
   const box = useRef(null)
 
   useEffect(() => {
@@ -45,7 +49,7 @@ export default function QuickAddMenu({ onPick, className = '', style }) {
           aria-label="New"
           className="absolute left-0 right-0 top-[42px] z-30 rounded-[10px] border border-line bg-panel p-1 shadow-lg"
         >
-          {QUICK_ADD.map((it) => (
+          {items.map((it) => (
             <button
               key={it.kind}
               type="button"

@@ -4,6 +4,9 @@ import BusinessFilter from './BusinessFilter'
 import { useAuth } from '../context/AuthContext'
 import { useBusiness } from '../context/BusinessContext'
 import NewTaskDialog from './NewTaskDialog'
+import NewLeadDialog from './NewLeadDialog'
+import PersonSheet from './PersonSheet'
+import { useWritebackFlags, useSettingFlags } from '../lib/writeback'
 import { openSearch } from './SearchPalette'
 import QuickAddMenu from './QuickAddMenu'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
@@ -63,6 +66,13 @@ export default function Sidebar({ onNavigate }) {
   const { signOut, isDemoMode } = useAuth()
   const { biz } = useBusiness()
   const [newTaskOpen, setNewTaskOpen] = useState(false)
+  const [newLeadOpen, setNewLeadOpen] = useState(false)
+  // The lead just created (or an existing match) opens in a person sheet.
+  const [personId, setPersonId] = useState(null)
+  // New lead needs both switches on for a book.
+  const writeback = useWritebackFlags()
+  const createLead = useSettingFlags('create_lead_enabled')
+  const leadBooks = ['bay', 'mpg'].filter((b) => writeback[b] === true && createLead[b] === true)
   // "Act now" count (buckets 1-3) for the current filter; same data as /priority.
   const { queue } = usePriorityQueue(biz)
   const urgent = urgentCount(queue)
@@ -101,9 +111,14 @@ export default function Sidebar({ onNavigate }) {
         <QuickAddMenu
           className={biz === 'all' ? 'grad-dual' : ''}
           style={newTaskStyle}
+          showLead={leadBooks.length > 0}
           onPick={(kind) => {
             if (kind === 'task') {
               setNewTaskOpen(true)
+              return
+            }
+            if (kind === 'lead') {
+              setNewLeadOpen(true)
               return
             }
             // Close the phone menu first, then ask who.
@@ -188,6 +203,22 @@ export default function Sidebar({ onNavigate }) {
         </div>
       </div>
       {newTaskOpen && <NewTaskDialog onClose={() => setNewTaskOpen(false)} />}
+      {newLeadOpen && (
+        <NewLeadDialog
+          books={leadBooks}
+          defaultBook={biz}
+          onClose={() => setNewLeadOpen(false)}
+          onOpen={(id) => {
+            setNewLeadOpen(false)
+            setPersonId(id)
+          }}
+          onCreated={(id) => {
+            setNewLeadOpen(false)
+            if (id) setPersonId(id)
+          }}
+        />
+      )}
+      {personId && <PersonSheet id={personId} onClose={() => setPersonId(null)} />}
     </aside>
   )
 }
