@@ -43,6 +43,8 @@ export const DEFAULT_RULES = {
     'Application Received': 14,
     'Nurture / Credit Repair': null,
   },
+  // Minutes before a new, uncalled lead's timer turns red (board + tab title).
+  speed_to_lead_minutes: 5,
   daily_cap: 15,
   use_crm_last_activity_fallback: true,
   mpg_active_statuses: ['Open', 'Pending', 'Initial lead follow up'],
@@ -196,6 +198,8 @@ export function reasonText(row, now = Date.now()) {
     case 'reached_out':
       return `Called you ${agoShort(row.last_inbound_at, now)} ago, no callback`
     case 'new_lead': {
+      const mins = Math.max(0, Math.floor((now - ms(row.crm_created_at)) / 60000))
+      if (mins < 60) return `New lead · ${mins}m, not called`
       const hrs = Math.max(0, Math.round((now - ms(row.crm_created_at)) / 3600000))
       return hrs < 48 ? `New lead · ${plural(hrs, 'hour')}, not called` : `New lead · ${plural(daysSince(row.crm_created_at, now), 'day')}, not called`
     }

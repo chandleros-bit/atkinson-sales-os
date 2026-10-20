@@ -243,6 +243,10 @@ describe('groupForDisplay / urgentCount', () => {
 })
 
 describe('reasonText / lastCallLabel', () => {
+  it('counts a new lead in minutes for its first hour', () => {
+    expect(reasonText({ ...base({ crm_created_at: daysAgo(0, '08:48:00') }), bucket: 'new_lead' }, NOW)).toBe('New lead · 12m, not called')
+    expect(reasonText({ ...base({ crm_created_at: daysAgo(0, '07:30:00') }), bucket: 'new_lead' }, NOW)).toBe('New lead · 2 hours, not called')
+  })
   it('reads like plain words', () => {
     expect(reasonText({ ...base({ last_inbound_at: daysAgo(0, '07:00:00') }), bucket: 'reached_out' }, NOW)).toBe('Called you 2h ago, no callback')
     expect(reasonText({ ...base({ crm_created_at: daysAgo(1, '07:00:00') }), bucket: 'new_lead' }, NOW)).toBe('New lead · 26 hours, not called')

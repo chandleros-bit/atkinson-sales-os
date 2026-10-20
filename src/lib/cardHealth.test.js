@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextStep, stuckFor, cardHealth, healthRank, sortByHealth, columnSummary } from './cardHealth'
+import { nextStep, stuckFor, cardHealth, healthRank, sortByHealth, columnSummary, speedToLead, formatElapsed, lateLeadCount, titleFor } from './cardHealth'
 import { DEFAULT_RULES } from './priorityQueue'
 
 // Local times (no Z), the same convention as priorityQueue.test.js.
@@ -83,5 +83,62 @@ describe('ordering and summary', () => {
   it('summarises a column', () => {
     expect(columnSummary([overdue, stuck, none], rules, NOW)).toBe('1 overdue · 1 stuck')
     expect(columnSummary([none, scheduled], rules, NOW)).toBe('')
+  })
+})
+
+describe('speedToLead', () => {
+  const fresh = (o = {}) => row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:56:00'), last_outbound_call_at: null, ...o })
+
+  it('runs on a new, uncalled lead and turns late at speed_to_lead_minutes', () => {
+    expect(speedToLead(fresh(), rules, NOW)).toEqual({ minutes: 4, late: false, text: '4m · not called' })
+    expect(speedToLead(fresh({ crm_created_at: daysAgo(0, '08:55:00') }), rules, NOW)).toEqual({ minutes: 5, late: true, text: '5m · not called' })
+  })
+  it('also runs on MPG Not Contacted / Open', () => {
+    expect(speedToLead(fresh({ stage: 'Not Contacted' }), rules, NOW)).not.toBeNull()
+    expect(speedToLead(fresh({ stage: 'Open' }), rules, NOW)).not.toBeNull()
+  })
+  it('stops once called, outside the first column, or after new_lead_days', () => {
+    expect(speedToLead(fresh({ last_outbound_call_at: daysAgo(0, '08:58:00') }), rules, NOW)).toBeNull()
+    expect(speedToLead(fresh({ stage: 'Attempted' }), rules, NOW)).toBeNull()
+    expect(speedToLead(fresh({ crm_created_at: daysAgo(8) }), rules, NOW)).toBeNull()
+    expect(speedToLead(fresh({ crm_created_at: null }), rules, NOW)).toBeNull()
+  })
+})
+
+describe('formatElapsed', () => {
+  it('minutes, hours and minutes, then days', () => {
+    expect(formatElapsed(0)).toBe('0m')
+    expect(formatElapsed(59)).toBe('59m')
+    expect(formatElapsed(60)).toBe('1h')
+    expect(formatElapsed(72)).toBe('1h 12m')
+    expect(formatElapsed(47 * 60 + 59)).toBe('47h 59m')
+    expect(formatElapsed(48 * 60)).toBe('2d')
+  })
+})
+
+describe('speed in health and ordering', () => {
+  it('cardHealth carries speed, and new uncalled leads sort first, late ones before fresh ones', () => {
+    const late = row({ id: 'late', stage: 'New Lead', crm_created_at: daysAgo(0, '08:00:00') })
+    const freshLead = row({ id: 'fresh', stage: 'New Lead', crm_created_at: daysAgo(0, '08:58:00') })
+    const overdue = row({ id: 'overdue', stage: 'New Lead', crm_created_at: daysAgo(30), open_task_count: 1, oldest_open_due_at: daysAgo(2) })
+    expect(cardHealth(late, rules, NOW).speed).toMatchObject({ late: true })
+    expect(sortByHealth([overdue, freshLead, late], rules, NOW).map((r) => r.id)).toEqual(['late', 'fresh', 'overdue'])
+  })
+})
+
+describe('tab title', () => {
+  it('counts late new leads across both books', () => {
+    const rows = [
+      row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:00:00') }),
+      row({ stage: 'Open', crm_created_at: daysAgo(0, '08:30:00') }),
+      row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:58:00') }),
+      row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:00:00'), last_outbound_call_at: daysAgo(0, '08:10:00') }),
+    ]
+    expect(lateLeadCount(rows, rules, NOW)).toBe(2)
+  })
+  it('prefixes the title only when someone is waiting', () => {
+    expect(titleFor(0)).toBe('Atkinson Sales OS')
+    expect(titleFor(1)).toBe('(1) New lead waiting · Atkinson Sales OS')
+    expect(titleFor(3)).toBe('(3) New leads waiting · Atkinson Sales OS')
   })
 })

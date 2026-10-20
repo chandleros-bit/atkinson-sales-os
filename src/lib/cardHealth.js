@@ -40,13 +40,40 @@ export function stuckFor(row, rules, now = Date.now()) {
   return { days, text: `${days}d in ${row.stage}` }
 }
 
-export function cardHealth(row, rules, now = Date.now()) {
-  return { next: nextStep(row, now), stuck: stuckFor(row, rules, now) }
+// The first column of each book, where a new lead's next step is the first call.
+export const SPEED_STAGES = new Set(['New Lead', 'Not Contacted', 'Open'])
+
+export function formatElapsed(minutes) {
+  if (minutes < 60) return `${minutes}m`
+  if (minutes < 48 * 60) {
+    const h = Math.floor(minutes / 60)
+    const m = minutes % 60
+    return m ? `${h}h ${m}m` : `${h}h`
+  }
+  return `${Math.floor(minutes / 1440)}d`
 }
 
-// Smaller sorts first: overdue, stuck, no next step, due today, scheduled.
+// Speed-to-lead: wall-clock time since the lead arrived, until the first
+// outbound call. Same window as Up Next's "New, not yet called" bucket.
+// { minutes, late, text } or null.
+export function speedToLead(row, rules, now = Date.now()) {
+  if (!SPEED_STAGES.has(row.stage) || row.last_outbound_call_at || !row.crm_created_at) return null
+  const created = new Date(row.crm_created_at).getTime()
+  if (Number.isNaN(created)) return null
+  if (calendarDaysSince(row.crm_created_at, now) > rules.new_lead_days) return null
+  const minutes = Math.max(0, Math.floor((now - created) / 60000))
+  return { minutes, late: minutes >= rules.speed_to_lead_minutes, text: `${formatElapsed(minutes)} · not called` }
+}
+
+export function cardHealth(row, rules, now = Date.now()) {
+  return { next: nextStep(row, now), stuck: stuckFor(row, rules, now), speed: speedToLead(row, rules, now) }
+}
+
+// Smaller sorts first: uncalled new leads (late, then fresh), then overdue,
+// stuck, no next step, due today, scheduled.
 const NEXT_RANK = { overdue: 0, none: 2, today: 3, scheduled: 4, parked: 5 }
 export function healthRank(h) {
+  if (h.speed) return h.speed.late ? -2 : -1
   if (h.next.state === 'overdue') return 0
   if (h.stuck) return 1
   return NEXT_RANK[h.next.state]
@@ -69,4 +96,15 @@ export function columnSummary(cards, rules, now = Date.now()) {
     if (h.stuck) stuck += 1
   }
   return [overdue && `${overdue} overdue`, stuck && `${stuck} stuck`].filter(Boolean).join(' · ')
+}
+
+// How many new, uncalled leads are past speed_to_lead_minutes (any book).
+export function lateLeadCount(rows, rules, now = Date.now()) {
+  return (rows || []).filter((r) => speedToLead(r, rules, now)?.late).length
+}
+
+export const APP_TITLE = 'Atkinson Sales OS'
+export function titleFor(late) {
+  if (!late) return APP_TITLE
+  return `(${late}) New lead${late === 1 ? '' : 's'} waiting · ${APP_TITLE}`
 }

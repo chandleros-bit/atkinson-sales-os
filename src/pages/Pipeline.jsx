@@ -5,6 +5,7 @@ import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
 import { buildColumns, MPG_LEAD_FLOW, dropTargetFor, withPendingMoves } from '../lib/pipeline'
 import { cardHealth, sortByHealth, columnSummary } from '../lib/cardHealth'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
+import { useNow } from '../lib/useNow'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { buildActionRequest, summarizeResult } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
@@ -87,7 +88,21 @@ function LastNote({ r }) {
 const DOT = { overdue: 'var(--neg-ink)', today: 'var(--bay-gold)', scheduled: 'var(--pos-ink)', none: 'var(--dim)' }
 
 function HealthLine({ h }) {
-  if (!h || h.next.state === 'parked') return null
+  if (!h) return null
+  if (h.speed) {
+    return (
+      <div
+        className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold"
+        style={{ color: h.speed.late ? 'var(--neg-ink)' : 'var(--muted)' }}
+        data-health="speed"
+        data-late={h.speed.late ? 'true' : 'false'}
+      >
+        <span aria-hidden="true">⏱</span>
+        {h.speed.text}
+      </div>
+    )
+  }
+  if (h.next.state === 'parked') return null
   const overdue = h.next.state === 'overdue'
   return (
     <div className="mt-1 flex items-center gap-1.5 text-[11px]" data-health={h.next.state}>
@@ -348,6 +363,7 @@ export default function Pipeline({ biz }) {
   const cfg = PIPELINE[biz] || PIPELINE.bay
   // Same rules as Up Next, so a red card and an Up Next "Stuck" row agree.
   const { rules } = usePriorityQueue()
+  const now = useNow(30_000)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
@@ -385,6 +401,12 @@ export default function Pipeline({ biz }) {
 
   useEffect(() => {
     load()
+  }, [load])
+
+  // New leads and finished calls show up without a reload while the board is open.
+  useEffect(() => {
+    const id = setInterval(() => document.visibilityState === 'visible' && load({ quiet: true }), 60_000)
+    return () => clearInterval(id)
   }, [load])
 
   const moveTo = async (row, targetKey, stage) => {
@@ -442,7 +464,6 @@ export default function Pipeline({ biz }) {
   }
 
   // The draggable Bayway board shows every column, so empty stages take drops.
-  const now = Date.now()
   const columns = buildColumns(withPendingMoves(rows, pending), cfg.flowOrder, {
     showAllFlow: canDrag,
     sortCards: (cards) => sortByHealth(cards, rules, now),
