@@ -1,0 +1,72 @@
+// Pipeline card health: is this lead moving? Pure, no React, no I/O.
+// Spec: docs/superpowers/specs/2026-10-19-tier1-pipeline-flow-design.md (1, 2)
+//
+// Days are the rep's local calendar days, via the same helpers Up Next uses,
+// so a red card on the board and an Up Next row always agree.
+import { dueDayKey } from './tasks'
+import { calendarDaysSince, overdueDays, stuckDaysFor } from './priorityQueue'
+import { isLostStage } from './pipeline'
+import { sortByAttention } from './overview'
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+// Parked (Nurture / Credit Repair) and lost leads aren't expected to move.
+const isParked = (row) => /nurture/i.test(row.stage || '') || isLostStage(row.stage)
+
+function dayLabel(key) {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+// The lead's next step, from its oldest open task.
+// { state: 'overdue' | 'today' | 'scheduled' | 'none' | 'parked', text }
+export function nextStep(row, now = Date.now()) {
+  if (isParked(row)) return { state: 'parked', text: '' }
+  if (!(row.open_task_count > 0)) return { state: 'none', text: 'No next step' }
+  if (!row.oldest_open_due_at) return { state: 'scheduled', text: 'Task open · no date' }
+  const late = overdueDays(row.oldest_open_due_at, now)
+  if (late >= 1) return { state: 'overdue', text: `Follow-up ${plural(late, 'day')} overdue` }
+  if (late === 0) return { state: 'today', text: 'Due today' }
+  return { state: 'scheduled', text: `Next: ${dayLabel(dueDayKey(row.oldest_open_due_at))}` }
+}
+
+// { days, text } once the lead has sat in its stage for the stage's limit.
+// Unknown stage dates (stage predates tracking, 0029) are never stuck.
+export function stuckFor(row, rules, now = Date.now()) {
+  if (isParked(row)) return null
+  const limit = stuckDaysFor(row.stage, rules)
+  const days = calendarDaysSince(row.stage_since, now)
+  if (limit == null || days == null || days < limit) return null
+  return { days, text: `${days}d in ${row.stage}` }
+}
+
+export function cardHealth(row, rules, now = Date.now()) {
+  return { next: nextStep(row, now), stuck: stuckFor(row, rules, now) }
+}
+
+// Smaller sorts first: overdue, stuck, no next step, due today, scheduled.
+const NEXT_RANK = { overdue: 0, none: 2, today: 3, scheduled: 4, parked: 5 }
+export function healthRank(h) {
+  if (h.next.state === 'overdue') return 0
+  if (h.stuck) return 1
+  return NEXT_RANK[h.next.state]
+}
+
+// Board order inside a column. Ties keep the old oldest-touch-first order
+// (Array.prototype.sort is stable).
+export function sortByHealth(cards, rules, now = Date.now()) {
+  const rank = new Map(cards.map((r) => [r, healthRank(cardHealth(r, rules, now))]))
+  return sortByAttention(cards).sort((a, b) => rank.get(a) - rank.get(b))
+}
+
+// "4 overdue · 2 stuck" for a column header; '' when nothing needs saying.
+export function columnSummary(cards, rules, now = Date.now()) {
+  let overdue = 0
+  let stuck = 0
+  for (const r of cards) {
+    const h = cardHealth(r, rules, now)
+    if (h.next.state === 'overdue') overdue += 1
+    if (h.stuck) stuck += 1
+  }
+  return [overdue && `${overdue} overdue`, stuck && `${stuck} stuck`].filter(Boolean).join(' · ')
+}
