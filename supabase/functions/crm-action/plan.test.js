@@ -31,6 +31,14 @@ describe('planSteps', () => {
     expect(steps.at(-1)).toEqual({ step: 'set_stage', target: 'credit_repair' })
   })
 
+  it('writes the Lost reason as a note after the move', () => {
+    expect(planSteps({ action: 'set_stage', payload: { target: 'lost', reason: 'Went elsewhere' } })).toEqual([
+      { step: 'set_stage', target: 'lost' },
+      { step: 'add_note', subject: null, body: 'Marked Lost: Went elsewhere' },
+    ])
+    expect(planSteps({ action: 'set_stage', payload: { target: 'lost' } })).toEqual([{ step: 'set_stage', target: 'lost' }])
+  })
+
   it('plans a bare call as one step', () => {
     expect(planSteps({ action: 'log_call', payload: { outcome: 'Busy' } }).map((s) => s.step)).toEqual(['log_call'])
   })

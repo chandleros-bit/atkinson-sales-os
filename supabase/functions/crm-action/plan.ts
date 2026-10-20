@@ -35,8 +35,12 @@ export function planSteps(request) {
       return [{ step: 'complete_task', taskId: request.task_id }]
     case 'push_task':
       return [{ step: 'push_task', taskId: request.task_id, dueDate: p.due_date }]
-    case 'set_stage':
-      return [{ step: 'set_stage', target: p.target }]
+    case 'set_stage': {
+      const steps = [{ step: 'set_stage', target: p.target }]
+      // Marking Lost records why, as a note on the lead.
+      if (p.target === 'lost' && p.reason) steps.push({ step: 'add_note', subject: null, body: `Marked Lost: ${p.reason}` })
+      return steps
+    }
     case 'whoami':
       return [{ step: 'whoami' }]
     default:
