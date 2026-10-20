@@ -35,6 +35,12 @@ describe('bayStageFromTags', () => {
     expect(bayStageFromTags([], 'Pre-Qualified')).toBe('Application Received')
     expect(bayStageFromTags(['attempted'], 'Pre-Qualified')).toBe('Application Received')
   })
+  it('marks a Lost-tagged lead Lost, over Credit Repair and every other stage tag', () => {
+    expect(bayStageFromTags(['Lost', 'attempted'], 'Lead')).toBe('Lost')
+    expect(bayStageFromTags([' lost ', 'Credit Repair'], 'Lead')).toBe('Lost')
+    expect(bayStageFromTags(['Lost'], 'Pre-Qualified')).toBe('Lost')
+    expect(bayStageFromTags(['Lost'], 'Nurture')).toBe(null)
+  })
   it('keeps Nurture, Realtors, Closed and Lost off the board, whatever the tags', () => {
     for (const s of ['Nurture', 'Realtors', 'Closed', 'Lost', null]) {
       expect(bayStageFromTags(['estimate sent'], s)).toBe(null)
@@ -67,11 +73,16 @@ describe('retagForTarget', () => {
     expect(retagForTarget(['Credit Repair', 'DSCR'], 'attempted')).toEqual(['DSCR', 'attempted'])
     expect(retagForTarget(['credit repair'], 'credit_repair')).toEqual(['credit repair'])
   })
+  it('marks Lost by swapping out stage tags, and un-marks it on any move', () => {
+    expect(retagForTarget(['attempted', 'DSCR'], 'lost')).toEqual(['DSCR', 'Lost'])
+    expect(retagForTarget(['DSCR', 'Lost'], 'attempted')).toEqual(['DSCR', 'attempted'])
+    expect(retagForTarget(['Lost', 'Credit Repair'], 'new_lead')).toEqual([])
+  })
   it('rejects an unknown target', () => {
     expect(() => retagForTarget([], 'closed')).toThrow(/Unknown stage target/)
   })
-  it('lists seven targets', () => {
-    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'credit_repair'])
+  it('lists eight targets, Lost last', () => {
+    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'credit_repair', 'lost'])
   })
 })
 
@@ -81,5 +92,7 @@ describe('targetForStage', () => {
     expect(targetForStage(['estimate sent'], 'Lead')).toBe('estimate_sent')
     expect(targetForStage([], 'Lead')).toBe('new_lead')
     expect(targetForStage(['need docs'], 'Lead')).toBe('application_received')
+    expect(targetForStage(['Lost'], 'Lead')).toBe('lost')
+    expect(targetForStage(['estimate sent'], 'Nurture')).toBe(null)
   })
 })

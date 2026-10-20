@@ -18,6 +18,9 @@ export const BAY_STAGES = [
   'Nurture / Credit Repair',
 ]
 const PARKED = 'Nurture / Credit Repair'
+// Marked lost from the board (tag `Lost`). Not a column: v_active_pipeline
+// leaves these leads out, and Up Next skips the "Lost" stage name.
+export const LOST = 'Lost'
 
 // Workflow tags by column (lowercase). Furthest column wins.
 const STAGE_TAGS = {
@@ -26,6 +29,7 @@ const STAGE_TAGS = {
   'Application/Estimate Sent': ['estimate sent', 'application sent'],
   'Application Received': ['application received', 'need docs', 'under contract'],
   'Nurture / Credit Repair': ['credit repair'],
+  [LOST]: ['lost'],
 }
 const WORKFLOW = new Set(Object.values(STAGE_TAGS).flat())
 const ON_BOARD = new Set(['lead', 'pre-qualified'])
@@ -37,6 +41,8 @@ export function bayStageFromTags(tags, personStage) {
   const ps = norm(personStage)
   if (!ON_BOARD.has(ps)) return null
   const have = new Set((Array.isArray(tags) ? tags : []).map(norm))
+  // Lost beats everything, parked included.
+  if (STAGE_TAGS[LOST].some((t) => have.has(t))) return LOST
   // A parked lead stays parked whatever else it is tagged with.
   if (STAGE_TAGS[PARKED].some((t) => have.has(t))) return PARKED
   if (ps === 'pre-qualified') return 'Application Received'
@@ -63,6 +69,7 @@ export const STAGE_TARGETS = [
     keep: ['application received', 'need docs', 'under contract'],
   },
   { key: 'credit_repair', label: 'Nurture / Credit Repair', stage: PARKED, tag: 'Credit Repair', keep: ['credit repair'] },
+  { key: 'lost', label: 'Lost', stage: LOST, tag: 'Lost', keep: ['lost'] },
 ]
 const TARGET = Object.fromEntries(STAGE_TARGETS.map((t) => [t.key, t]))
 
@@ -84,5 +91,6 @@ export function targetForStage(tags, personStage) {
   if (stage === 'Application/Estimate Sent') {
     return (Array.isArray(tags) ? tags : []).map(norm).includes('application sent') ? 'application_sent' : 'estimate_sent'
   }
+  if (!stage) return null
   return STAGE_TARGETS.find((t) => t.stage === stage)?.key ?? null
 }
