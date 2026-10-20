@@ -266,6 +266,50 @@ function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
   )
 }
 
+// Off-flow moves while dragging, so parking a lead needs no scroll to the
+// far-right column. Slice 5 adds Lost here.
+const DROP_ZONES = [{ key: 'credit_repair', stage: 'Nurture / Credit Repair' }]
+
+function DropZones({ drag }) {
+  if (!drag?.draggingId) return null
+  const zones = DROP_ZONES.filter((z) => z.stage !== drag.draggingStage)
+  if (zones.length === 0) return null
+  return (
+    <div
+      className="fixed inset-x-0 bottom-0 z-40 flex flex-wrap justify-center gap-3 border-t border-line bg-panel/95 px-4 py-3 backdrop-blur"
+      data-drop-zones
+    >
+      {zones.map((z) => {
+        const over = drag.over === `zone:${z.key}`
+        return (
+          <div
+            key={z.key}
+            data-zone={z.key}
+            className="flex min-h-[56px] min-w-[240px] items-center justify-center rounded-card border-2 border-dashed px-4 text-[13px] font-semibold transition-colors"
+            style={{
+              borderColor: over ? 'var(--bay)' : 'var(--line2)',
+              background: over ? 'var(--bay-soft)' : undefined,
+              color: over ? 'var(--bay-ink)' : 'var(--muted)',
+            }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+              drag.onOver(`zone:${z.key}`)
+            }}
+            onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget) && drag.onOver(null)}
+            onDrop={(e) => {
+              e.preventDefault()
+              drag.onDropZone(z)
+            }}
+          >
+            Drop here: {z.stage}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const demoAge = (days) => new Date(Date.now() - days * 86_400_000).toISOString()
 
 const demoRows = [
@@ -458,6 +502,13 @@ export default function Pipeline({ biz }) {
           if (target.key) moveTo(row, target.key, stage)
           else setChoice({ row, stage, choices: target.choose })
         },
+        onDropZone: (zone) => {
+          const row = rows.find((r) => r.id === dragging)
+          setDragging(null)
+          setOver(null)
+          if (!row || row.stage === zone.stage || pending[row.id]) return
+          moveTo(row, zone.key, zone.stage)
+        },
       }
     : null
 
@@ -514,6 +565,7 @@ export default function Pipeline({ biz }) {
           now={now}
         />
       )}
+      <DropZones drag={drag} />
       {choice && (
         <ChooseTarget
           choice={choice}

@@ -147,6 +147,45 @@ describe('Pipeline drag between stages', () => {
   })
 })
 
+describe('Pipeline drop zones', () => {
+  const zone = () => document.querySelector('[data-zone="credit_repair"]')
+
+  it('shows the Nurture zone only while a card is dragged', async () => {
+    await mount()
+    expect(document.querySelector('[data-drop-zones]')).toBe(null)
+    await fire(cardEl('a'), 'dragstart')
+    expect(zone().textContent).toContain('Nurture / Credit Repair')
+    await fire(cardEl('a'), 'dragend')
+    expect(document.querySelector('[data-drop-zones]')).toBe(null)
+  })
+
+  it('parks the dragged lead in Nurture without asking for a next step', async () => {
+    let resolve
+    invoke.mockImplementation(() => new Promise((r) => { resolve = r }))
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'New Lead'), open_task_count: 0 }]
+    await mount()
+    await fire(cardEl('a'), 'dragstart')
+    await fire(zone(), 'dragover')
+    await fire(zone(), 'drop')
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a', payload: { target: 'credit_repair' } })
+    expect(cardsIn('Nurture / Credit Repair')).toEqual(['a'])
+    expect(document.querySelector('[data-drop-zones]')).toBe(null)
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'Nurture / Credit Repair'), open_task_count: 0 }]
+    await act(async () => resolve({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null }))
+    await act(async () => {})
+    expect(document.body.textContent).toContain('Ana Lead moved to Nurture / Credit Repair in FollowUpBoss')
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
+  it('offers no zone for a lead already in Nurture', async () => {
+    DATA.rows = [card('n', 'Nell Parked', 'Nurture / Credit Repair')]
+    await mount()
+    await fire(cardEl('n'), 'dragstart')
+    expect(document.querySelector('[data-drop-zones]')).toBe(null)
+  })
+})
+
 // Noon local N days ago, so whole-day maths can't flip at midnight or DST.
 const ago = (n) => {
   const d = new Date()
