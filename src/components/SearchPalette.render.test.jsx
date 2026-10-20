@@ -39,6 +39,7 @@ vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: 'all',
 
 const { default: SearchPalette, openSearch } = await import('./SearchPalette')
 const { resetWritebackFlags } = await import('../lib/writeback')
+const { default: Toaster } = await import('./Toaster')
 
 function Where() {
   return React.createElement('div', { 'data-where': true }, useLocation().pathname)
@@ -56,6 +57,7 @@ async function mount() {
         React.createElement('input', { id: 'other-field' }),
         React.createElement(SearchPalette),
         React.createElement(Where),
+        React.createElement(Toaster),
       ),
     )
   })
@@ -196,5 +198,49 @@ describe('SearchPalette', () => {
     await key(document.body, 'k', { metaKey: true })
     await key(input(), 'Escape')
     expect(document.activeElement).toBe(document.getElementById('opener'))
+  })
+})
+
+describe('SearchPalette: pick a person for an action', () => {
+  const noPhone = { ...jo, id: 'c3', name: 'Jo Nophone', phone: null }
+
+  it('asks who, lists people only, then opens that action for them', async () => {
+    rpc.mockImplementation(() => ok([jo]))
+    DATA.tasks = [{ id: 't1', title: 'Jo follow-up', contact_id: 'c1', contact_name: 'Jo Ramirez', business_id: 'bay', due_at: null }]
+    await mount()
+    await act(async () => openSearch({ pick: 'note' }))
+    expect(input().getAttribute('placeholder')).toBe('Who is this for?')
+    expect(palette().textContent).toContain('Add note')
+    await type('jo')
+    await settle()
+    expect(palette().textContent).toContain('Jo Ramirez')
+    expect(palette().textContent).not.toContain('Open tasks')
+    expect(palette().textContent).not.toContain('Go to')
+    await key(input(), 'Enter')
+    const sheet = document.querySelector('[role="dialog"][aria-label="Add note"]')
+    expect(sheet.textContent).toContain('Jo Ramirez · FollowUpBoss')
+    await act(async () => sheet.querySelector('[aria-label="Close"]').click())
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
+  it('will not log a call for a Bayway lead with no phone', async () => {
+    rpc.mockImplementation(() => ok([noPhone]))
+    await mount()
+    await act(async () => openSearch({ pick: 'call' }))
+    await type('jo')
+    await settle()
+    await key(input(), 'Enter')
+    expect(document.querySelector('[role="dialog"][aria-label="Log call"]')).toBe(null)
+    expect(document.body.textContent).toContain('No phone on file in FUB')
+  })
+
+  it('opens Schedule follow-up for the picked person', async () => {
+    rpc.mockImplementation(() => ok([kim]))
+    await mount()
+    await act(async () => openSearch({ pick: 'followup' }))
+    await type('jo')
+    await settle()
+    await key(input(), 'Enter')
+    expect(document.querySelector('[role="dialog"][aria-label="Schedule follow-up"]').textContent).toContain('Jo Kim · Zoho')
   })
 })
