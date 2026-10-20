@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Toaster from './Toaster'
+import SearchPalette, { openSearch } from './SearchPalette'
 import BusinessFilter from './BusinessFilter'
 import { useAuth } from '../context/AuthContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
@@ -32,6 +33,14 @@ function MobileBar({ onMenu }) {
       <div className="min-w-0 flex-1">
         <BusinessFilter />
       </div>
+      <button
+        type="button"
+        onClick={openSearch}
+        aria-label="Search"
+        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border border-line2 text-[17px] text-muted"
+      >
+        ⌕
+      </button>
     </div>
   )
 }
@@ -73,6 +82,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <Toaster />
+      <SearchPalette />
     </div>
   )
 }

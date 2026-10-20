@@ -4,6 +4,7 @@ import BusinessFilter from './BusinessFilter'
 import { useAuth } from '../context/AuthContext'
 import { useBusiness } from '../context/BusinessContext'
 import NewTaskDialog from './NewTaskDialog'
+import { openSearch } from './SearchPalette'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { urgentCount } from '../lib/priorityQueue'
 
@@ -108,6 +109,11 @@ export default function Sidebar({ onNavigate }) {
         <button
           className="h-[38px] w-[38px] rounded-[10px] border border-line2 text-[15px] text-muted"
           aria-label="Search"
+          title="Search (Ctrl+K)"
+          onClick={() => {
+            onNavigate?.()
+            openSearch()
+          }}
         >
           ⌕
         </button>
