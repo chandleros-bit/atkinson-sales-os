@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { shouldFullPeopleRefresh } from './fub.ts'
 
 describe('shouldFullPeopleRefresh', () => {
-  it('runs a full pass in the first 15 minutes of each hour', () => {
+  it('runs a full pass once an hour on the 2-minute schedule (the :00 run)', () => {
     expect(shouldFullPeopleRefresh(Date.UTC(2026, 9, 19, 14, 0, 5), 'https://x/fub-sync')).toBe(true)
-    expect(shouldFullPeopleRefresh(Date.UTC(2026, 9, 19, 14, 14, 59), 'https://x/fub-sync')).toBe(true)
-    expect(shouldFullPeopleRefresh(Date.UTC(2026, 9, 19, 14, 15, 0), 'https://x/fub-sync')).toBe(false)
+    expect(shouldFullPeopleRefresh(Date.UTC(2026, 9, 19, 14, 1, 59), 'https://x/fub-sync')).toBe(true)
+    expect(shouldFullPeopleRefresh(Date.UTC(2026, 9, 19, 14, 2, 0), 'https://x/fub-sync')).toBe(false)
+    expect(shouldFullPeopleRefresh(Date.UTC(2026, 9, 19, 14, 14, 0), 'https://x/fub-sync')).toBe(false)
     expect(shouldFullPeopleRefresh(Date.UTC(2026, 9, 19, 14, 45, 0), 'https://x/fub-sync')).toBe(false)
   })
   it('runs a full pass on demand with ?full=1', () => {

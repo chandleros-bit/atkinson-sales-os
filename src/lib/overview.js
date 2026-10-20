@@ -5,7 +5,8 @@ import { bucketByDue } from './tasks'
 
 export const NEW_LEAD = 'New Lead'
 export const STALE_TOUCH_DAYS = 7
-export const SYNC_STALE_MINUTES = 45
+// FUB syncs every 2 minutes (migration 0038): five missed runs is stuck.
+export const SYNC_STALE_MINUTES = 10
 
 const DAY_MS = 86_400_000
 
@@ -98,7 +99,7 @@ export function deriveAlert({ latestSync, tasks, now = Date.now() }) {
   if (ageMin > SYNC_STALE_MINUTES) {
     return {
       level: 'red',
-      text: `FollowUpBoss last synced ${ageMin} minutes ago — the 15-minute schedule may be stuck.`,
+      text: `FollowUpBoss last synced ${ageMin} minutes ago — the 2-minute schedule may be stuck.`,
     }
   }
   // What's actually actionable right now. Reuses bucketByDue so the banner and
