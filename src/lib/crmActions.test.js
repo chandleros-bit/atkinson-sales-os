@@ -6,6 +6,7 @@ import {
   needsNextStepPrompt,
   NO_NEXT_STEP_REASONS,
   LOST_REASONS,
+  newLeadProblem,
   defaultDurationMin,
   defaultFollowUpTitle,
   endOfTodayIso,
@@ -264,5 +265,25 @@ describe('Lost', () => {
     expect(buildActionRequest({ action: 'set_stage', contactId: 'c1', target: 'lost', reason: 'Went elsewhere' }).payload)
       .toEqual({ target: 'lost', reason: 'Went elsewhere' })
     expect(buildActionRequest({ action: 'set_stage', contactId: 'c1', target: 'attempted' }).payload).toEqual({ target: 'attempted' })
+  })
+})
+
+describe('create_contact (new lead)', () => {
+  it('builds the request for the chosen book, trimmed, blanks left out', () => {
+    expect(buildActionRequest({ action: 'create_contact', businessId: 'bay', firstName: ' Sam ', lastName: 'Lee', phone: '713 555 0100', email: ' ', note: '' }))
+      .toMatchObject({ action: 'create_contact', business_id: 'bay', payload: { first_name: 'Sam', last_name: 'Lee', phone: '713 555 0100' } })
+    expect(buildActionRequest({ action: 'create_contact', businessId: 'mpg', lastName: 'Ruiz', company: 'Ruiz Deli', note: 'Wants a quote' }).payload)
+      .toEqual({ last_name: 'Ruiz', company: 'Ruiz Deli', note: 'Wants a quote' })
+  })
+  it('says what is missing for each book', () => {
+    expect(newLeadProblem({ businessId: 'bay', phone: '713' })).toBe('Add a name')
+    expect(newLeadProblem({ businessId: 'bay', firstName: 'Sam' })).toBe('Add a phone or an email')
+    expect(newLeadProblem({ businessId: 'mpg', firstName: 'Ana', lastName: 'Ruiz' })).toBe('Zoho needs a company')
+    expect(newLeadProblem({ businessId: 'mpg', firstName: 'Ana', company: 'Deli' })).toBe('Zoho needs a last name')
+    expect(newLeadProblem({ businessId: 'bay', firstName: 'Sam', email: 's@example.com' })).toBe(null)
+    expect(() => buildActionRequest({ action: 'create_contact', businessId: 'bay', firstName: 'Sam' })).toThrow('Add a phone or an email')
+  })
+  it('reports a created lead', () => {
+    expect(summarizeResult({ status: 'ok', results: [{ step: 'create_contact', ok: true }] }, 'bay').text).toBe('Lead created in FollowUpBoss')
   })
 })

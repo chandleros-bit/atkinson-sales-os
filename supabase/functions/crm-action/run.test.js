@@ -410,3 +410,62 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     expect(bay.send.setStage).not.toHaveBeenCalled()
   })
 })
+
+describe('crm-action run: create_contact (new lead)', () => {
+  const createReq = (business_id, payload, n) => ({ client_action_id: uuid(n), action: 'create_contact', business_id, payload })
+  const fubPerson = (id) => ({ id, name: 'Sam Lee', firstName: 'Sam', lastName: 'Lee', stage: 'Lead', tags: [], phones: [{ value: '7135550100' }], emails: [], assignedUserId: 12 })
+  const zohoLead = (id) => ({ id, First_Name: 'Ana', Last_Name: 'Ruiz', Company: 'Ruiz Deli', Lead_Status: 'Not Contacted', Phone: null, Email: 'ana@example.com' })
+
+  beforeEach(() => {
+    db.tables.settings.push({ key: 'create_lead_enabled', value: { bay: true, mpg: true } })
+    bay.send.createContact = vi.fn(async () => ({ id: 6001 }))
+    bay.read.person = async (id) => fubPerson(id)
+    bay.read.note = async (id) => ({ id, personId: 6001, body: 'Met at open house', created: '2026-10-20T15:00:00Z' })
+    // id: the fake db doesn't generate one the way Postgres does.
+    bay.map.contact = (p) => ({ id: `c-${p.id}`, business_id: 'bay', source_crm: 'fub', external_id: String(p.id), name: p.name, phone: p.phones?.[0]?.value || null, person_stage: p.stage, raw: p })
+    mpg.send.createContact = vi.fn(async () => ({ id: 'Z-LEAD-9' }))
+    mpg.read.lead = async (id) => zohoLead(id)
+    mpg.map.contact = (r) => ({ id: `c-${r.id}`, business_id: 'mpg', source_crm: 'zoho', external_id: String(r.id), name: 'Ana Ruiz', company: r.Company, person_stage: r.Lead_Status, raw: r })
+  })
+
+  it('creates a Bayway lead, mirrors it, and attaches the note to it', async () => {
+    const res = await go(createReq('bay', { first_name: 'Sam', last_name: 'Lee', phone: '7135550100', email: '', note: 'Met at open house' }, 50))
+    expect(res.body.status).toBe('ok')
+    expect(bay.send.createContact).toHaveBeenCalledWith({ firstName: 'Sam', lastName: 'Lee', phone: '7135550100', email: '', company: '' })
+    const row = db.tables.contacts.find((c) => c.external_id === '6001')
+    expect(row).toMatchObject({ business_id: 'bay', name: 'Sam Lee', person_stage: 'Lead' })
+    expect(res.body.results[0]).toMatchObject({ step: 'create_contact', ok: true, contact_id: 'c-6001' })
+    expect(bay.send.addNote).toHaveBeenCalledWith({ externalId: '6001', subject: null, body: 'Met at open house' })
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'create_contact', business_id: 'bay', status: 'ok', contact_id: 'c-6001' })
+  })
+
+  it('creates an MPG lead through Zoho', async () => {
+    const res = await go(createReq('mpg', { first_name: 'Ana', last_name: 'Ruiz', company: 'Ruiz Deli', email: 'ana@example.com' }, 51))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.createContact).toHaveBeenCalledWith({ firstName: 'Ana', lastName: 'Ruiz', phone: '', email: 'ana@example.com', company: 'Ruiz Deli' })
+    expect(db.tables.contacts.find((c) => c.external_id === 'Z-LEAD-9')).toMatchObject({ business_id: 'mpg', company: 'Ruiz Deli' })
+  })
+
+  it('refuses a lead without the fields its CRM needs', async () => {
+    expect((await go(createReq('bay', { first_name: 'Sam', last_name: 'Lee' }, 52))).body).toEqual({ status: 'refused', error: 'A new Bayway lead needs a phone or an email' })
+    expect((await go(createReq('bay', { phone: '713' }, 53))).body.error).toBe('A new lead needs a name')
+    expect((await go(createReq('mpg', { last_name: 'Ruiz' }, 54))).body.error).toBe('Zoho needs a company for a new lead')
+    expect((await go(createReq('nope', { last_name: 'Ruiz' }, 55))).body.error).toBe('Unknown book: nope')
+    expect(bay.send.createContact).not.toHaveBeenCalled()
+  })
+
+  it('refuses when new-lead create is switched off for the book', async () => {
+    db.tables.settings.find((s) => s.key === 'create_lead_enabled').value = { bay: false, mpg: true }
+    const res = await go(createReq('bay', { first_name: 'Sam', phone: '713' }, 56))
+    expect(res.body).toEqual({ status: 'refused', error: 'New lead is off for Bayway' })
+    expect(bay.send.createContact).not.toHaveBeenCalled()
+  })
+
+  it('does not add the note when the create fails', async () => {
+    bay.send.createContact = vi.fn(async () => { throw new Error('Already in FollowUpBoss, assigned to another agent') })
+    const res = await go(createReq('bay', { first_name: 'Sam', phone: '713', note: 'x' }, 57))
+    expect(res.body.status).toBe('error')
+    expect(res.body.results).toEqual([{ step: 'create_contact', ok: false, error: 'Already in FollowUpBoss, assigned to another agent' }])
+    expect(bay.send.addNote).not.toHaveBeenCalled()
+  })
+})

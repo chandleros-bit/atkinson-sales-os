@@ -8,12 +8,12 @@
 
 import { fubGet, fubSend, mapContact } from '../_shared/fub.ts'
 import { retagForTarget, targetForStage } from '../_shared/bay-stages.ts'
-import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, FUB_TASK_TYPES } from '../_shared/fub-write.ts'
+import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, FUB_TASK_TYPES } from '../_shared/fub-write.ts'
 import { mapActivity as fubMapActivity } from '../_shared/fub-activity.ts'
 import { mapTask as fubMapTask } from '../_shared/fub-tasks.ts'
-import { getAccessToken, zohoGet, zohoSend } from '../_shared/zoho.ts'
+import { getAccessToken, zohoGet, zohoSend, mapContact as zohoMapContact } from '../_shared/zoho.ts'
 import {
-  buildZohoCall, buildZohoNote, buildZohoTask, buildZohoTaskUpdate, zohoCreatedId,
+  buildZohoCall, buildZohoNote, buildZohoTask, buildZohoTaskUpdate, buildZohoLead, zohoCreatedId,
 } from '../_shared/zoho-write.ts'
 import { mapActivity as zohoMapActivity } from '../_shared/zoho-activity.ts'
 import { mapTask as zohoMapTask } from '../_shared/zoho-tasks.ts'
@@ -47,6 +47,23 @@ export function fubAdapter(env) {
       completeTask: async ({ externalId }) => {
         await fubSend('PUT', `/tasks/${externalId}`, buildFubTaskUpdate({ complete: true }))
         return { id: externalId }
+      },
+      // New lead (dashboard "New lead…"). Sent as an event so FUB dedupes it
+      // and runs its lead flow. FUB can't assign in the same call, so a
+      // brand-new lead routed to someone else is reassigned to Chandler; a
+      // person that already existed is never taken from another agent.
+      createContact: async ({ firstName, lastName, phone, email }) => {
+        const started = Date.now()
+        const person = await fubSend('POST', '/events', buildFubLeadEvent({ firstName, lastName, phone, email }))
+        if (person?.id == null) throw new Error('FollowUpBoss ignored the lead (the lead flow for this source may be archived)')
+        const createdAt = Date.parse(person.created)
+        const existing = Number.isFinite(createdAt) && createdAt < started - 5 * 60_000
+        const mine = String(person.assignedUserId ?? '') === String(assignedUserId)
+        if (!mine) {
+          if (existing) throw new Error(`Already in FollowUpBoss as ${person.name || 'a lead'}, assigned to another agent`)
+          await fubSend('PUT', `/people/${person.id}`, { assignedUserId: Number(assignedUserId) })
+        }
+        return { id: person.id, existing }
       },
       // Move stage = swap workflow tags. PUT /people replaces the whole tag
       // list, so read the current tags and send the full new list.
@@ -174,8 +191,13 @@ export function zohoAdapter(env) {
         await send('PUT', 'Tasks', buildZohoTaskUpdate({ id: externalId, dueDate }))
         return { id: externalId }
       },
+      // New MPG lead (Zoho assigns the token's user: Chandler).
+      createContact: async ({ firstName, lastName, company, phone, email }) => ({
+        id: zohoCreatedId(await send('POST', 'Leads', buildZohoLead({ firstName, lastName, company, phone, email }))),
+      }),
     },
     read: {
+      lead: (id) => readOne(`Leads/${id}`),
       call: (id) => readOne(`Calls/${id}`),
       task: (id) => readOne(`Tasks/${id}`),
       // Some profiles can't read Notes (NOT_SUPPORTED). zoho-activity-sync never
@@ -195,6 +217,6 @@ export function zohoAdapter(env) {
         }
       },
     },
-    map: { activity: zohoMapActivity, task: zohoMapTask },
+    map: { activity: zohoMapActivity, task: zohoMapTask, contact: (rec) => zohoMapContact(rec, 'Leads') },
   }
 }

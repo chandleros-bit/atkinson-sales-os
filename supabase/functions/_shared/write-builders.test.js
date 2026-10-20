@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, FUB_OUTCOMES } from './fub-write.ts'
+import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, FUB_OUTCOMES } from './fub-write.ts'
 import {
   buildZohoCall, buildZohoNote, buildZohoTask, buildZohoTaskUpdate,
-  zohoDuration, zohoDateTime, zohoCallResult, zohoCreatedId,
+  zohoDuration, zohoDateTime, zohoCallResult, zohoCreatedId, buildZohoLead,
 } from './zoho-write.ts'
 
 describe('buildFubCall', () => {
@@ -109,5 +109,33 @@ describe('Zoho note / task bodies', () => {
   it('reads the created id', () => {
     expect(zohoCreatedId({ data: [{ code: 'SUCCESS', status: 'success', details: { id: '9001' } }] })).toBe('9001')
     expect(() => zohoCreatedId({ data: [] })).toThrow()
+  })
+})
+
+describe('buildFubLeadEvent', () => {
+  it('sends a Registration event from Atkinson Sales OS, trimmed', () => {
+    expect(buildFubLeadEvent({ firstName: ' Sam ', lastName: 'Lee ', phone: ' (713) 555-0100', email: ' sam@example.com ' })).toEqual({
+      source: 'Atkinson Sales OS',
+      system: 'Atkinson Sales OS',
+      type: 'Registration',
+      person: {
+        firstName: 'Sam',
+        lastName: 'Lee',
+        phones: [{ value: '(713) 555-0100' }],
+        emails: [{ value: 'sam@example.com' }],
+      },
+    })
+  })
+  it('leaves out an empty phone or email', () => {
+    expect(buildFubLeadEvent({ firstName: 'Sam', lastName: '', phone: '', email: 'sam@example.com' }).person)
+      .toEqual({ firstName: 'Sam', emails: [{ value: 'sam@example.com' }] })
+  })
+})
+
+describe('buildZohoLead', () => {
+  it('creates a Not Contacted lead, trimmed, leaving out blanks', () => {
+    expect(buildZohoLead({ firstName: ' Ana ', lastName: 'Ruiz', company: ' Ruiz Deli ', phone: '', email: 'ana@example.com' })).toEqual({
+      data: [{ First_Name: 'Ana', Last_Name: 'Ruiz', Company: 'Ruiz Deli', Email: 'ana@example.com', Lead_Status: 'Not Contacted' }],
+    })
   })
 })

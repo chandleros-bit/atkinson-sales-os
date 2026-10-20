@@ -63,3 +63,17 @@ describe('QuickAddMenu', () => {
     expect(onPick).not.toHaveBeenCalled()
   })
 })
+
+describe('QuickAddMenu: New lead', () => {
+  it('leads with New lead… when it is switched on', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    await act(async () => {
+      createRoot(host).render(React.createElement(QuickAddMenu, { onPick, showLead: true }))
+    })
+    await click(trigger())
+    expect(items().map((b) => b.textContent)).toEqual(['New lead…', 'Log call…', 'Note…', 'Follow-up…', 'Task…'])
+    await click(items()[0])
+    expect(onPick).toHaveBeenLastCalledWith('lead')
+  })
+})

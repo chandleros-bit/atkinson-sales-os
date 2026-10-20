@@ -15,7 +15,7 @@ export const FOLLOW_UP_PRESETS = [
   { key: 'pick', label: 'Pick a date' },
 ]
 
-const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage'])
+const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'create_contact'])
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -105,6 +105,20 @@ export function newClientActionId() {
 
 const trimmed = (s) => (typeof s === 'string' ? s.trim() : '')
 
+// What a new lead still needs before it can be created, or null when ready.
+// FUB takes a name plus a phone or email; Zoho requires Last_Name and Company.
+export function newLeadProblem(form) {
+  const has = (v) => trimmed(v) !== ''
+  if (!has(form.firstName) && !has(form.lastName)) return 'Add a name'
+  if (form.businessId === 'mpg') {
+    if (!has(form.lastName)) return 'Zoho needs a last name'
+    if (!has(form.company)) return 'Zoho needs a company'
+    return null
+  }
+  if (!has(form.phone) && !has(form.email)) return 'Add a phone or an email'
+  return null
+}
+
 // form -> the crm-action request body. Throws on a form the UI should not have
 // let through, so a bug surfaces as a message rather than a half-built write.
 export function buildActionRequest(form) {
@@ -151,6 +165,18 @@ export function buildActionRequest(form) {
     }
   }
   if (action === 'complete_task') return { ...base, task_id: form.taskId, payload: {} }
+  if (action === 'create_contact') {
+    if (!['bay', 'mpg'].includes(form.businessId)) throw new Error('Pick Bayway or MPG')
+    const problem = newLeadProblem(form)
+    if (problem) throw new Error(problem)
+    const payload = {}
+    const fields = [
+      ['first_name', form.firstName], ['last_name', form.lastName], ['phone', form.phone],
+      ['email', form.email], ['company', form.company], ['note', form.note],
+    ]
+    for (const [k, v] of fields) if (trimmed(v)) payload[k] = trimmed(v)
+    return { ...base, business_id: form.businessId, payload }
+  }
   if (action === 'set_stage') {
     const payload = { target: form.target }
     if (form.reason) payload.reason = form.reason
@@ -183,6 +209,7 @@ const DONE = {
   complete_task: 'task completed',
   push_task: 'task moved',
   set_stage: 'stage moved',
+  create_contact: 'lead created',
 }
 const LABEL = {
   log_call: 'Call',
@@ -191,6 +218,7 @@ const LABEL = {
   complete_task: 'Completing the task',
   push_task: 'Moving the task',
   set_stage: 'Moving the stage',
+  create_contact: 'Creating the lead',
 }
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)

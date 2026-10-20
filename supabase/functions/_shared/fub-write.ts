@@ -61,3 +61,16 @@ export function buildFubTaskUpdate({ complete, dueDate }) {
   if (complete) return { isCompleted: true }
   return { dueDate: dueDateOf(dueDate) }
 }
+
+const clean = (v) => (typeof v === 'string' ? v.trim() : '')
+
+// A new lead from the dashboard. Sent as an event (not POST /people) so FUB
+// dedupes it and runs its lead flow and action plans.
+export function buildFubLeadEvent({ firstName, lastName, phone, email }) {
+  const person = {}
+  if (clean(firstName)) person.firstName = clean(firstName)
+  if (clean(lastName)) person.lastName = clean(lastName)
+  if (clean(phone)) person.phones = [{ value: clean(phone) }]
+  if (clean(email)) person.emails = [{ value: clean(email) }]
+  return { source: 'Atkinson Sales OS', system: 'Atkinson Sales OS', type: 'Registration', person }
+}

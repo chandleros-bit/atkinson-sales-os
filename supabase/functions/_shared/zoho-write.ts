@@ -95,3 +95,16 @@ export function zohoCreatedId(json) {
   if (!id) throw new Error(`Zoho create returned no id: ${JSON.stringify(json).slice(0, 200)}`)
   return String(id)
 }
+
+// A new MPG lead from the dashboard. Zoho requires Last_Name and Company.
+export function buildZohoLead({ firstName, lastName, company, phone, email }) {
+  const t = (v) => (typeof v === 'string' ? v.trim() : '')
+  const lead = {}
+  if (t(firstName)) lead.First_Name = t(firstName)
+  lead.Last_Name = t(lastName)
+  lead.Company = t(company)
+  if (t(phone)) lead.Phone = t(phone)
+  if (t(email)) lead.Email = t(email)
+  lead.Lead_Status = 'Not Contacted'
+  return { data: [lead] }
+}

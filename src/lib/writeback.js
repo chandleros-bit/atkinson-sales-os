@@ -4,37 +4,45 @@
 import { useEffect, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 
-let flagsPromise = null
+const flagPromises = new Map()
 
-// settings.writeback_enabled -> { bay: bool, mpg: bool }. Read once per page
-// load; a failed read means "off" (actions hidden), never "on".
-export function loadWritebackFlags() {
+// settings[key] -> { bay: bool, mpg: bool } (writeback_enabled,
+// create_lead_enabled). Read once per page load; a failed read means "off"
+// (actions hidden), never "on".
+export function loadSettingFlags(key) {
   if (isDemoMode) return Promise.resolve({})
-  flagsPromise ??= Promise.resolve(
-    supabase.from('settings').select('value').eq('key', 'writeback_enabled').maybeSingle(),
-  ).then(
-      ({ data }) => data?.value || {},
-      () => ({}),
+  if (!flagPromises.has(key)) {
+    flagPromises.set(
+      key,
+      Promise.resolve(supabase.from('settings').select('value').eq('key', key).maybeSingle()).then(
+        ({ data }) => data?.value || {},
+        () => ({}),
+      ),
     )
-  return flagsPromise
+  }
+  return flagPromises.get(key)
 }
+
+export const loadWritebackFlags = () => loadSettingFlags('writeback_enabled')
 
 // Test hook: forget the cached flags.
 export function resetWritebackFlags() {
-  flagsPromise = null
+  flagPromises.clear()
 }
 
-export function useWritebackFlags() {
+export function useSettingFlags(key) {
   const [flags, setFlags] = useState({})
   useEffect(() => {
     let alive = true
-    loadWritebackFlags().then((f) => alive && setFlags(f))
+    loadSettingFlags(key).then((f) => alive && setFlags(f))
     return () => {
       alive = false
     }
-  }, [])
+  }, [key])
   return flags
 }
+
+export const useWritebackFlags = () => useSettingFlags('writeback_enabled')
 
 // Sends one request to crm-action. Always resolves to the function's body
 // shape ({ status, results } or { status, error }) so callers handle one form.
