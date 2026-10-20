@@ -148,7 +148,7 @@ describe('buildCombinedKpis', () => {
 })
 
 describe('deriveAlert', () => {
-  const okSync = { status: 'ok', ran_at: new Date(NOW - 10 * 60_000).toISOString(), message: null }
+  const okSync = { status: 'ok', ran_at: new Date(NOW - 3 * 60_000).toISOString(), message: null }
 
   it('is red when FUB has never synced', () => {
     const a = deriveAlert({ latestSync: null, tasks: [], now: NOW })
@@ -163,13 +163,16 @@ describe('deriveAlert', () => {
     expect(a.level).toBe('red')
     expect(a.text).toContain('FUB GET /people -> 401')
   })
-  it('is red when the last ok sync is older than 45 minutes', () => {
+  it('is red when the last ok sync is older than 10 minutes (five missed 2-minute runs)', () => {
     const a = deriveAlert({
-      latestSync: { ...okSync, ran_at: new Date(NOW - 50 * 60_000).toISOString() },
+      latestSync: { ...okSync, ran_at: new Date(NOW - 11 * 60_000).toISOString() },
       tasks: [],
       now: NOW,
     })
     expect(a.level).toBe('red')
+    expect(a.text).toBe('FollowUpBoss last synced 11 minutes ago — the 2-minute schedule may be stuck.')
+    const fresh = deriveAlert({ latestSync: { ...okSync, ran_at: new Date(NOW - 9 * 60_000).toISOString() }, tasks: [], now: NOW })
+    expect(fresh?.level).not.toBe('red')
   })
   // Deliberately NOT midnight UTC: bucketByDue treats a due_at sitting exactly
   // on midnight UTC as a date-only CRM value and reads it in UTC rather than
