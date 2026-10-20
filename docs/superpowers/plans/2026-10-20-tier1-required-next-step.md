@@ -212,5 +212,5 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
 - [ ] **Step 2: Live test on ZZ Test Sales OS only**, signed in at the preview:
   - Log call → Not Interested → No next step → Moving to Nurture. Expect "Call logged and stage moved in FollowUpBoss", and the card moves to Nurture / Credit Repair.
   - Move it back to New Lead with Move stage. The prompt appears; choose Skip.
-  - Check `crm_actions` for `no_next_step_reason`.
+  - Check `crm_actions.request.payload` for `no_next_step_reason`.
 - [ ] **Step 3: Push, open the PR, bind it** with `mcp__ccd_pr__get_status`.
