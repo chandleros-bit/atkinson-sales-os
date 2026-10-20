@@ -1,6 +1,10 @@
 // Global search (Ctrl+K / ⌘K, "/" outside a text field, the sidebar ⌕ and
 // the phone top bar). People across both books, open tasks, and pages. Picking
 // a person or a task opens PersonSheet. Mounted once in Layout.
+//
+// Pick mode (quick add: openSearch({ pick: 'call' | 'note' | 'followup' }))
+// asks "Who is this for?", lists people only, and opens that Quick Actions
+// sheet for the chosen person.
 // Spec: docs/superpowers/specs/2026-10-19-tier1-pipeline-flow-design.md (5)
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -10,11 +14,16 @@ import { cleanQuery, matchPages, MIN_QUERY } from '../lib/search'
 import { dueLabel } from '../lib/tasks'
 import BizBadge from './BizBadge'
 import PersonSheet from './PersonSheet'
+import QuickActions from './QuickActions'
+import { showToast } from './Toaster'
 
 const OPEN_EVENT = 'search:open'
-export function openSearch() {
-  window.dispatchEvent(new Event(OPEN_EVENT))
+// pick: 'call' | 'note' | 'followup' to choose a person for that action.
+export function openSearch({ pick = null } = {}) {
+  window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: { pick } }))
 }
+
+const PICK_LABEL = { call: 'Log call', note: 'Add note', followup: 'Schedule follow-up' }
 
 const isTyping = (el) =>
   !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
@@ -44,16 +53,21 @@ export default function SearchPalette() {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [person, setPerson] = useState(null)
+  const [pick, setPick] = useState(null)
+  // Quick add: { kind, person } once a person is picked.
+  const [action, setAction] = useState(null)
   const inputRef = useRef(null)
   const returnTo = useRef(null)
   const navigate = useNavigate()
   const { biz } = useBusiness() || { biz: 'all' }
   const { people, tasks, loading, error } = useSearch(open ? query : '', biz)
 
-  const pages = matchPages(query)
+  // Pick mode lists people only.
+  const shownTasks = pick ? [] : tasks
+  const pages = pick ? [] : matchPages(query)
   const items = [
     ...people.map((p) => ({ kind: 'person', key: `p:${p.id}`, p })),
-    ...tasks.map((t) => ({ kind: 'task', key: `t:${t.id}`, t })),
+    ...shownTasks.map((t) => ({ kind: 'task', key: `t:${t.id}`, t })),
     ...pages.map((g) => ({ kind: 'page', key: `g:${g.to}`, g })),
   ]
 
@@ -61,8 +75,9 @@ export default function SearchPalette() {
     const el = returnTo.current
     if (el && document.contains(el)) el.focus()
   }
-  const show = () => {
+  const show = (nextPick = null) => {
     returnTo.current = document.activeElement
+    setPick(PICK_LABEL[nextPick] ? nextPick : null)
     setQuery('')
     setActive(0)
     setOpen(true)
@@ -73,7 +88,7 @@ export default function SearchPalette() {
   }
 
   useEffect(() => {
-    const onOpen = () => show()
+    const onOpen = (e) => show(e?.detail?.pick)
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'k') {
         e.preventDefault()
@@ -104,6 +119,16 @@ export default function SearchPalette() {
     setOpen(false)
     if (it.kind === 'page') {
       navigate(it.g.to)
+      return
+    }
+    if (pick && it.kind === 'person') {
+      // FUB needs a phone on a call.
+      if (pick === 'call' && it.p.business_id === 'bay' && !it.p.phone) {
+        showToast({ tone: 'error', text: 'No phone on file in FUB', failed: [] })
+        restoreFocus()
+        return
+      }
+      setAction({ kind: pick, person: it.p })
       return
     }
     if (it.kind === 'task' && !it.t.contact_id) {
@@ -156,7 +181,7 @@ export default function SearchPalette() {
               <input
                 ref={inputRef}
                 aria-label="Search people, tasks and pages"
-                placeholder="Search people, tasks, pages…"
+                placeholder={pick ? 'Who is this for?' : 'Search people, tasks, pages…'}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onKeyDown}
@@ -166,6 +191,9 @@ export default function SearchPalette() {
                 Esc
               </button>
             </div>
+            {pick && (
+              <div className="px-4 pt-2 text-[12px] font-semibold text-muted">{PICK_LABEL[pick]} · choose a person</div>
+            )}
             <div role="listbox" aria-label="Results" className="flex-1 overflow-y-auto p-2">
               {short && <div className="px-2 py-3 text-[12.5px] text-muted">Type a name, phone, company or email.</div>}
               {!short && error && <div className="px-2 py-3 text-[12.5px]" style={{ color: 'var(--neg-ink)' }}>{error}</div>}
@@ -187,8 +215,8 @@ export default function SearchPalette() {
                   </>,
                 ),
               )}
-              {tasks.length > 0 && <Heading>Open tasks</Heading>}
-              {tasks.map((t) =>
+              {shownTasks.length > 0 && <Heading>Open tasks</Heading>}
+              {shownTasks.map((t) =>
                 row(
                   { kind: 'task', key: `t:${t.id}`, t },
                   <>
@@ -213,6 +241,20 @@ export default function SearchPalette() {
             </div>
           </div>
         </div>
+      )}
+      {action && (
+        <QuickActions
+          businessId={action.person.business_id}
+          contactId={action.person.id}
+          contactName={action.person.name}
+          hasPhone={!!action.person.phone}
+          only={[]}
+          autoOpen={action.kind}
+          onSheetClose={() => {
+            setAction(null)
+            restoreFocus()
+          }}
+        />
       )}
       {person && (
         <PersonSheet

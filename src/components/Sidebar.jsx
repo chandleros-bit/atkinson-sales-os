@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useBusiness } from '../context/BusinessContext'
 import NewTaskDialog from './NewTaskDialog'
 import { openSearch } from './SearchPalette'
+import QuickAddMenu from './QuickAddMenu'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { urgentCount } from '../lib/priorityQueue'
 
@@ -95,17 +96,21 @@ export default function Sidebar({ onNavigate }) {
         </div>
       </div>
 
-      {/* New task + search */}
+      {/* + New (quick add) + search */}
       <div className="mb-3.5 flex gap-2">
-        <button
-          className={`flex h-[38px] flex-1 items-center justify-center gap-1.5 rounded-[10px] text-[13px] font-semibold text-[#07120b] ${
-            biz === 'all' ? 'grad-dual' : ''
-          }`}
+        <QuickAddMenu
+          className={biz === 'all' ? 'grad-dual' : ''}
           style={newTaskStyle}
-          onClick={() => setNewTaskOpen(true)}
-        >
-          + New Task
-        </button>
+          onPick={(kind) => {
+            if (kind === 'task') {
+              setNewTaskOpen(true)
+              return
+            }
+            // Close the phone menu first, then ask who.
+            onNavigate?.()
+            openSearch({ pick: kind })
+          }}
+        />
         <button
           className="h-[38px] w-[38px] rounded-[10px] border border-line2 text-[15px] text-muted"
           aria-label="Search"

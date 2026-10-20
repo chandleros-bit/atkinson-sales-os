@@ -603,11 +603,23 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *                  offer a follow-up afterwards
  *   onNeedsNextStep  show that offer yourself (a board that redraws the card
  *                  in its new column would unmount ours); else we show it
+ *   autoOpen    'call' | 'note' | 'followup': open that sheet at once (quick
+ *               add, usually with only={[]} so no buttons show)
+ *   onSheetClose  called when that sheet closes (saved or dismissed)
  *   only        optional subset of ['call','note','followup','stage','done','push']
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, autoOpen = null, onSheetClose, className = '' }) {
   const flags = useWritebackFlags()
-  const [open, setOpen] = useState(null)
+  const [open, setOpen] = useState(autoOpen)
+  // Tell a quick-add caller when its sheet has closed.
+  const opened = useRef(!!autoOpen)
+  useEffect(() => {
+    if (open) opened.current = true
+    else if (opened.current) {
+      opened.current = false
+      onSheetClose?.()
+    }
+  }, [open, onSheetClose])
   const completing = useRef(false)
   const t = tone(businessId)
   const crm = CRM_LABEL[businessId]
