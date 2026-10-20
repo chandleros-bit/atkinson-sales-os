@@ -43,6 +43,8 @@ export const DEFAULT_RULES = {
     'Application Received': 14,
     'Nurture / Credit Repair': null,
   },
+  // Minutes before a new, uncalled lead's timer turns red (board + tab title).
+  speed_to_lead_minutes: 5,
   daily_cap: 15,
   use_crm_last_activity_fallback: true,
   mpg_active_statuses: ['Open', 'Pending', 'Initial lead follow up'],
