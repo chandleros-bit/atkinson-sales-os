@@ -3,6 +3,8 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
 import { buildColumns, MPG_LEAD_FLOW, dropTargetFor, withPendingMoves } from '../lib/pipeline'
+import { cardHealth, sortByHealth, columnSummary } from '../lib/cardHealth'
+import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { buildActionRequest, summarizeResult } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
@@ -81,7 +83,32 @@ function LastNote({ r }) {
   )
 }
 
-function Card({ r, lost, biz, onDone, drag }) {
+// Next-step dot + words. The colour is never the only signal.
+const DOT = { overdue: 'var(--neg-ink)', today: 'var(--bay-gold)', scheduled: 'var(--pos-ink)', none: 'var(--dim)' }
+
+function HealthLine({ h }) {
+  if (!h || h.next.state === 'parked') return null
+  const overdue = h.next.state === 'overdue'
+  return (
+    <div className="mt-1 flex items-center gap-1.5 text-[11px]" data-health={h.next.state}>
+      <span aria-hidden="true" className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: DOT[h.next.state] }} />
+      <span className={overdue ? 'font-semibold' : 'text-muted'} style={overdue ? { color: 'var(--neg-ink)' } : undefined}>
+        {h.next.text}
+      </span>
+    </div>
+  )
+}
+
+function StuckLine({ h }) {
+  if (!h?.stuck) return null
+  return (
+    <div className="mt-0.5 text-[11px] font-semibold" style={{ color: 'var(--neg-ink)' }} data-health="stuck">
+      {h.stuck.text}
+    </div>
+  )
+}
+
+function Card({ r, lost, biz, onDone, drag, health }) {
   const d = daysSince(r.last_touch_at)
   const stale = d === null || d >= STALE_TOUCH_DAYS
   const accent = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
@@ -109,7 +136,7 @@ function Card({ r, lost, biz, onDone, drag }) {
     >
       <span
         className="absolute bottom-2 left-0 top-2 w-[3px] rounded-sm"
-        style={{ background: lost ? 'var(--dim)' : accent }}
+        style={{ background: lost ? 'var(--dim)' : health?.stuck ? 'var(--neg-ink)' : accent }}
       />
       {r.moving && (
         <span className="absolute right-2 top-2 text-[10.5px] font-semibold text-dim">Moving…</span>
@@ -120,6 +147,8 @@ function Card({ r, lost, biz, onDone, drag }) {
       <div className="mt-0.5 truncate text-[11.5px] text-muted">
         {sub || 'no contact info'}
       </div>
+      <HealthLine h={health} />
+      <StuckLine h={health} />
       <div
         className={`mt-1 text-[11px] ${stale ? 'font-semibold' : 'text-dim'}`}
         style={stale ? { color: 'var(--bay-gold)' } : undefined}
@@ -145,8 +174,9 @@ function Card({ r, lost, biz, onDone, drag }) {
   )
 }
 
-function Column({ col, biz, onDone, drag }) {
+function Column({ col, biz, onDone, drag, rules, now }) {
   const isOver = drag?.over === col.stage
+  const summary = rules ? columnSummary(col.cards, rules, now) : ''
   return (
     <div
       className="w-[280px] flex-none rounded-card border bg-panel transition-colors"
@@ -181,11 +211,22 @@ function Column({ col, biz, onDone, drag }) {
         <span className={`text-[12.5px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>
           {col.stage}
         </span>
-        <span className="num text-[11px] text-muted">{col.cards.length}</span>
+        <span className="num text-[11px] text-muted" data-col-count>
+          {col.cards.length}
+          {summary ? ` · ${summary}` : ''}
+        </span>
       </div>
       <div className="flex min-h-[64px] flex-col gap-2 p-2.5">
         {col.cards.map((r) => (
-          <Card key={r.id} r={r} lost={col.isLost} biz={biz} onDone={onDone} drag={drag} />
+          <Card
+            key={r.id}
+            r={r}
+            lost={col.isLost}
+            biz={biz}
+            onDone={onDone}
+            drag={drag}
+            health={rules ? cardHealth(r, rules, now) : null}
+          />
         ))}
         {col.cards.length === 0 && (
           <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-[11.5px] text-dim">
@@ -197,11 +238,11 @@ function Column({ col, biz, onDone, drag }) {
   )
 }
 
-function Board({ columns, biz, onDone, drag }) {
+function Board({ columns, biz, onDone, drag, rules, now }) {
   return (
     <div className="mt-5 flex gap-3.5 overflow-x-auto pb-2">
       {columns.map((col) => (
-        <Column key={col.stage} col={col} biz={biz} onDone={onDone} drag={drag} />
+        <Column key={col.stage} col={col} biz={biz} onDone={onDone} drag={drag} rules={rules} now={now} />
       ))}
     </div>
   )
@@ -237,20 +278,22 @@ const demoRows = [
 // Per-business query + presentation config. MPG reads Zoho leads through
 // v_mpg_contacts (0 deals today — the pipeline lives on leads); Bayway reads
 // the FUB-derived v_active_pipeline. flowOrder curates the column order.
+const HEALTH_COLUMNS = ', stage_since, crm_created_at, last_outbound_call_at, open_task_count, oldest_open_due_at'
+
 const PIPELINE = {
   bay: {
     view: 'v_active_pipeline',
     columns:
       'id, business_id, name, email, phone, last_touch_at, stage, crm_profile_url, ' +
       'docs_tracked, docs_outstanding, docs_outstanding_count, docs_oldest_requested_at, ' +
-      'doc_notes, last_note_snippet, last_note_at',
+      'doc_notes, last_note_snippet, last_note_at' + HEALTH_COLUMNS,
     flowOrder: undefined, // default LOAN_FLOW_ORDER
     countLabel: 'active',
     empty: 'No active loans — add stages in FollowUpBoss.',
   },
   mpg: {
     view: 'v_mpg_contacts',
-    columns: 'id, name, company, email, phone, last_touch_at, stage, crm_profile_url',
+    columns: 'id, name, company, email, phone, last_touch_at, stage, crm_profile_url' + HEALTH_COLUMNS,
     flowOrder: MPG_LEAD_FLOW,
     countLabel: 'leads',
     empty: 'No MPG leads yet — add them in Zoho CRM.',
@@ -303,6 +346,8 @@ function ChooseTarget({ choice, onPick, onCancel }) {
 
 export default function Pipeline({ biz }) {
   const cfg = PIPELINE[biz] || PIPELINE.bay
+  // Same rules as Up Next, so a red card and an Up Next "Stuck" row agree.
+  const { rules } = usePriorityQueue()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
@@ -397,7 +442,11 @@ export default function Pipeline({ biz }) {
   }
 
   // The draggable Bayway board shows every column, so empty stages take drops.
-  const columns = buildColumns(withPendingMoves(rows, pending), cfg.flowOrder, { showAllFlow: canDrag })
+  const now = Date.now()
+  const columns = buildColumns(withPendingMoves(rows, pending), cfg.flowOrder, {
+    showAllFlow: canDrag,
+    sortCards: (cards) => sortByHealth(cards, rules, now),
+  })
 
   return (
     <div>
@@ -427,7 +476,7 @@ export default function Pipeline({ biz }) {
       )}
 
       {!loading && !error && rows.length > 0 && (
-        <Board columns={columns} biz={biz} onDone={() => load({ quiet: true })} drag={drag} />
+        <Board columns={columns} biz={biz} onDone={() => load({ quiet: true })} drag={drag} rules={rules} now={now} />
       )}
       {choice && (
         <ChooseTarget

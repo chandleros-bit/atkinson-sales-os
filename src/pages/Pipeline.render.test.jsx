@@ -14,7 +14,7 @@ const DATA = { rows: [] }
 
 function query(table) {
   const q = {}
-  for (const m of ['select', 'eq', 'order', 'range', 'lte', 'limit']) q[m] = () => q
+  for (const m of ['select', 'eq', 'order', 'range', 'lte', 'limit', 'gte', 'or']) q[m] = () => q
   q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { bay: true, mpg: false } } : null, error: null })
   q.then = (resolve) => resolve({ data: table.startsWith('v_') && table !== 'v_tasks' ? DATA.rows : [], error: null })
   return q
@@ -121,5 +121,29 @@ describe('Pipeline drag between stages', () => {
     await mount('mpg')
     expect(cardEl('m').getAttribute('draggable')).toBe('false')
     expect(document.body.textContent).not.toContain('Drop a lead here')
+  })
+})
+
+// Noon local N days ago, so whole-day maths can't flip at midnight or DST.
+const ago = (n) => {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  d.setHours(12, 0, 0, 0)
+  return d.toISOString()
+}
+
+describe('Pipeline card health', () => {
+  it('shows the next step, stuck days and a column summary, worst first', async () => {
+    DATA.rows = [
+      { ...card('b', 'Ben Quiet', 'Attempted'), open_task_count: 0, oldest_open_due_at: null, stage_since: ago(9) },
+      { ...card('a', 'Ana Late', 'Attempted'), open_task_count: 1, oldest_open_due_at: ago(3), stage_since: ago(1) },
+    ]
+    await mount()
+    expect(cardEl('a').querySelector('[data-health="overdue"]').textContent).toContain('Follow-up 3 days overdue')
+    expect(cardEl('b').querySelector('[data-health="none"]').textContent).toContain('No next step')
+    expect(cardEl('b').querySelector('[data-health="stuck"]').textContent).toBe('9d in Attempted')
+    expect(cardEl('a').querySelector('[data-health="stuck"]')).toBeNull()
+    expect(column('Attempted').querySelector('[data-col-count]').textContent).toBe('2 · 1 overdue · 1 stuck')
+    expect(cardsIn('Attempted')).toEqual(['a', 'b'])
   })
 })

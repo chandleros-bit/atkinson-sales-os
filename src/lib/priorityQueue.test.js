@@ -10,6 +10,7 @@ import {
   reasonText,
   lastCallLabel,
   urgentCount,
+  stuckDaysFor,
 } from './priorityQueue'
 
 // Local times (no Z): the queue thinks in the rep's local calendar days.
@@ -134,6 +135,11 @@ describe('bucket 6: stuck in stage', () => {
   it('never fires without an observed stage start', () => {
     expect(bucketsFor(base({ is_active: true, stage: 'App Sent', stage_since: null }), rules, NOW)).not.toContain('stuck')
   })
+  it('uses the per-stage limit: Attempted is stuck at 5 days', () => {
+    const lead = (n) => base({ is_active: true, stage: 'Attempted', stage_since: daysAgo(n), open_task_count: 1, oldest_open_due_at: daysAgo(-1) })
+    expect(bucketsFor(lead(5), rules, NOW)).toContain('stuck')
+    expect(bucketsFor(lead(4), rules, NOW)).not.toContain('stuck')
+  })
 })
 
 describe('bucket 7: gone quiet', () => {
@@ -253,5 +259,16 @@ describe('reasonText / lastCallLabel', () => {
     expect(lastCallLabel(base({ last_outbound_call_at: daysAgo(9) }), NOW)).toBe('Last call 9d ago')
     expect(lastCallLabel(base({ last_outbound_call_at: daysAgo(0, '08:00:00') }), NOW)).toBe('Last call today')
     expect(lastCallLabel(base({ last_outbound_call_at: null }), NOW)).toBe('No calls logged')
+  })
+})
+
+describe('stuckDaysFor', () => {
+  it('reads the per-stage limit, null for never, else the flat stuck_days', () => {
+    expect(stuckDaysFor('New Lead', rules)).toBe(2)
+    expect(stuckDaysFor('Attempted', rules)).toBe(5)
+    expect(stuckDaysFor('Application Received', rules)).toBe(14)
+    expect(stuckDaysFor('Nurture / Credit Repair', rules)).toBeNull()
+    expect(stuckDaysFor('Open', rules)).toBe(14)
+    expect(stuckDaysFor('Open', { ...rules, stuck_days_by_stage: undefined })).toBe(14)
   })
 })

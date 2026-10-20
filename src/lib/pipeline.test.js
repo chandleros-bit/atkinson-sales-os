@@ -136,3 +136,12 @@ describe('withPendingMoves', () => {
     expect(withPendingMoves(rows, {})).toBe(rows)
   })
 })
+
+describe('buildColumns sortCards', () => {
+  it('orders cards with the given sort, default oldest touch first', () => {
+    const rows = [row('a', 'Attempted', '2026-10-10T12:00:00Z'), row('b', 'Attempted', '2026-10-01T12:00:00Z')]
+    expect(buildColumns(rows)[0].cards.map((c) => c.id)).toEqual(['b', 'a'])
+    const byId = (cards) => [...cards].sort((x, y) => x.id.localeCompare(y.id))
+    expect(buildColumns(rows, undefined, { sortCards: byId })[0].cards.map((c) => c.id)).toEqual(['a', 'b'])
+  })
+})
