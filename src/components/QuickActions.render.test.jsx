@@ -228,6 +228,30 @@ describe('QuickActions: Move stage', () => {
     expect(document.body.textContent).toContain('Stage moved in FollowUpBoss')
   })
 
+  it('offers a follow-up when the move leaves nothing scheduled, and Skip closes it', async () => {
+    invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await mount({ ...bay, stage: 'New Lead', openTaskCount: 0 })
+    await click(byLabel('Move stage'))
+    await click(byText('Attempted'))
+    expect(document.querySelector('[role="dialog"]').getAttribute('aria-label')).toBe('Next step for Jo?')
+    expect(byText('Schedule follow-up')).toBeTruthy()
+    await click(byText('Skip'))
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
+  it('does not prompt when a task is already open or the lead is parked', async () => {
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await mount({ ...bay, stage: 'New Lead', openTaskCount: 2 })
+    await click(byLabel('Move stage'))
+    await click(byText('Attempted'))
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+    document.body.innerHTML = ''
+    await mount({ ...bay, stage: 'New Lead', openTaskCount: 0 })
+    await click(byLabel('Move stage'))
+    await click(byText('Nurture / Credit Repair'))
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
   it('is not offered for MPG or without a board stage', async () => {
     await mount({ ...bay, stage: null })
     expect(byLabel('Move stage')).toBe(null)

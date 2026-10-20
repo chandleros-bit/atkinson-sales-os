@@ -20,6 +20,7 @@ import {
   defaultNextStep,
   NO_NEXT_STEP_REASONS,
   PARK_REASON,
+  needsNextStepPrompt,
   defaultDurationMin,
   defaultFollowUpTitle,
   endOfTodayIso,
@@ -490,8 +491,14 @@ function PushForm({ businessId, task, t, onSuccess, onPending, onFailed }) {
 // crm-action set_stage (bay-stages.ts). Estimate Sent and Application Sent
 // share a column but are separate tags (Smart Lists 04 / 05).
 function StageForm({ businessId, contactId, stage, t, onSuccess }) {
-  const { busy, result, send, retry, setResult } = useSubmit({ businessId, onSuccess })
+  // Tell the caller which target moved, so it can offer a next step.
+  const sent = useRef(null)
+  const { busy, result, send, retry, setResult } = useSubmit({
+    businessId,
+    onSuccess: (summary, opts) => onSuccess(summary, { ...opts, target: sent.current }),
+  })
   const move = (target) => {
+    sent.current = target
     try {
       send(buildActionRequest({ action: 'set_stage', contactId, target }))
     } catch (e) {
@@ -525,6 +532,32 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
   )
 }
 
+// After a stage move leaves a lead with nothing scheduled: offer a follow-up.
+// Skip is fine; the lead then shows in Up Next as "No next step".
+export function NextStepPrompt({ businessId, contactId, contactName, onClose, onDone }) {
+  const t = tone(businessId)
+  const first = String(contactName || '').trim().split(/\s+/)[0]
+  const done = (summary, { keepOpen } = {}) => {
+    if (!keepOpen) {
+      showToast(summary)
+      onClose()
+    }
+    onDone?.(summary)
+  }
+  return (
+    <Sheet title={first ? `Next step for ${first}?` : 'Next step?'} subtitle="Nothing is scheduled for this lead" t={t} onClose={onClose}>
+      <FollowUpForm businessId={businessId} contactId={contactId} contactName={contactName} t={t} onSuccess={done} />
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-2 flex min-h-[42px] w-full items-center justify-center rounded-[10px] border border-line2 text-[13.5px] font-semibold text-muted"
+      >
+        Skip
+      </button>
+    </Sheet>
+  )
+}
+
 /**
  * Props:
  *   businessId  'bay' | 'mpg' (the ROW's business)
@@ -535,9 +568,11 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
  *   onDone      called after a write reached the CRM, so the page reloads
  *   onPending / onFailed  (kind, dueDate?) for optimistic task-row updates
  *   stage       the Bayway board column the lead is in; adds Move stage
+ *   openTaskCount  the lead's open tasks, when known; 0 makes Move stage
+ *                  offer a follow-up afterwards
  *   only        optional subset of ['call','note','followup','stage','done','push']
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, onDone, onPending, onFailed, only, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onDone, onPending, onFailed, only, className = '' }) {
   const flags = useWritebackFlags()
   const [open, setOpen] = useState(null)
   const completing = useRef(false)
@@ -552,6 +587,16 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
       showToast(summary)
     }
     onDone?.(summary)
+  }
+
+  const stageSuccess = (summary, opts = {}) => {
+    if (!opts.keepOpen && needsNextStepPrompt(opts.target, openTaskCount)) {
+      showToast(summary)
+      onDone?.(summary)
+      setOpen('nextstep')
+      return
+    }
+    success(summary, opts)
   }
 
   const complete = async () => {
@@ -614,8 +659,11 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
       )}
       {open === 'stage' && (
         <Sheet title="Move stage" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
-          <StageForm businessId={businessId} contactId={contactId} stage={stage} t={t} onSuccess={success} />
+          <StageForm businessId={businessId} contactId={contactId} stage={stage} t={t} onSuccess={stageSuccess} />
         </Sheet>
+      )}
+      {open === 'nextstep' && (
+        <NextStepPrompt businessId={businessId} contactId={contactId} contactName={contactName} onClose={() => setOpen(null)} onDone={onDone} />
       )}
       {open === 'push' && task && (
         <Sheet title="Push task" subtitle={[task.title, crm].filter(Boolean).join(' · ')} t={t} onClose={() => setOpen(null)}>

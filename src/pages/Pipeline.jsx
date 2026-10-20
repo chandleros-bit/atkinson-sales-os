@@ -7,10 +7,10 @@ import { cardHealth, sortByHealth, columnSummary } from '../lib/cardHealth'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
-import { buildActionRequest, summarizeResult } from '../lib/crmActions'
+import { buildActionRequest, summarizeResult, needsNextStepPrompt } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
-import QuickActions from '../components/QuickActions'
+import QuickActions, { NextStepPrompt } from '../components/QuickActions'
 import { showToast } from '../components/Toaster'
 
 function BizHeader({ biz, note }) {
@@ -183,6 +183,7 @@ function Card({ r, lost, biz, onDone, drag, health }) {
         contactName={r.name}
         hasPhone={!!r.phone}
         stage={biz === 'mpg' ? null : r.stage}
+        openTaskCount={r.open_task_count}
         onDone={onDone}
       />
     </div>
@@ -375,6 +376,8 @@ export default function Pipeline({ biz }) {
   const [dragging, setDragging] = useState(null)
   const [over, setOver] = useState(null)
   const [choice, setChoice] = useState(null)
+  // A drag that leaves the lead with nothing scheduled offers a follow-up.
+  const [prompt, setPrompt] = useState(null)
 
   // quiet: refresh after a Quick Action without swapping the board for the
   // loading state (which would unmount the card that fired it).
@@ -417,6 +420,7 @@ export default function Pipeline({ biz }) {
     const summary = summarizeResult(res, 'bay')
     if (summary.tone === 'ok') {
       showToast({ ...summary, text: `${row.name || 'Lead'} moved to ${stage} in FollowUpBoss` })
+      if (needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
       await load({ quiet: true })
     } else {
       showToast({ ...summary, retry: () => moveTo(row, targetKey, stage) })
@@ -508,6 +512,15 @@ export default function Pipeline({ biz }) {
             setChoice(null)
             moveTo(c.row, key, c.stage)
           }}
+        />
+      )}
+      {prompt && (
+        <NextStepPrompt
+          businessId="bay"
+          contactId={prompt.id}
+          contactName={prompt.name}
+          onClose={() => setPrompt(null)}
+          onDone={() => load({ quiet: true })}
         />
       )}
     </div>

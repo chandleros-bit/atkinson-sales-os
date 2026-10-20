@@ -116,6 +116,15 @@ describe('Pipeline drag between stages', () => {
     expect(invoke).not.toHaveBeenCalled()
   })
 
+  it('offers a follow-up after a move that leaves nothing scheduled', async () => {
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'New Lead'), open_task_count: 0 }]
+    await mount()
+    await dragTo('a', 'Attempted')
+    await act(async () => {})
+    expect(document.querySelector('[role="dialog"][aria-label="Next step for Ana?"]')).not.toBe(null)
+  })
+
   it('keeps the MPG board read-only', async () => {
     DATA.rows = [{ id: 'm', name: 'Ana', company: 'Deli', stage: 'Open', last_touch_at: null, crm_profile_url: '#' }]
     await mount('mpg')
