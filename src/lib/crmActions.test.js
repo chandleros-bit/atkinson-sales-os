@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   OUTCOMES,
   followUpDate,
-  defaultFollowUpOn,
+  defaultNextStep,
+  needsNextStepPrompt,
+  NO_NEXT_STEP_REASONS,
   defaultDurationMin,
   defaultFollowUpTitle,
   endOfTodayIso,
@@ -46,8 +48,13 @@ describe('outcome defaults', () => {
   it('lists FUB\'s six outcomes', () => {
     expect(OUTCOMES).toEqual(['Interested', 'Not Interested', 'Left Message', 'No Answer', 'Busy', 'Bad Number'])
   })
-  it('turns the follow-up on only for non-connects worth retrying', () => {
-    expect(OUTCOMES.filter(defaultFollowUpOn)).toEqual(['Left Message', 'No Answer', 'Busy'])
+  it('defaults to a follow-up for Interested and non-connects worth retrying', () => {
+    expect(OUTCOMES.filter((o) => defaultNextStep(o) === 'follow_up')).toEqual(['Interested', 'Left Message', 'No Answer', 'Busy'])
+  })
+  it('prefers the task already on the books, and preselects nothing for dead ends', () => {
+    expect(defaultNextStep('Left Message', true)).toBe('scheduled')
+    expect(defaultNextStep('Not Interested', true)).toBeNull()
+    expect(defaultNextStep('Bad Number')).toBeNull()
   })
   it('prefills 5 minutes for a conversation and 1 otherwise', () => {
     expect(defaultDurationMin('Interested')).toBe(5)
@@ -83,7 +90,8 @@ describe('buildActionRequest', () => {
       outcome: 'Left Message',
       note: '  call back after 3 ',
       durationMin: 1,
-      followUp: { on: true, dueDate: '2026-10-19', title: 'Follow up: Jessica', type: 'Follow Up' },
+      nextStep: 'follow_up',
+      followUp: { dueDate: '2026-10-19', title: 'Follow up: Jessica', type: 'Follow Up' },
       completeTaskId: 'task-1',
     }
     const a = buildActionRequest(form)
@@ -98,18 +106,35 @@ describe('buildActionRequest', () => {
         outcome: 'Left Message',
         note: 'call back after 3',
         duration_min: 1,
+        next_step: 'follow_up',
         follow_up: { due_date: '2026-10-19', title: 'Follow up: Jessica', type: 'Follow Up' },
         complete_task_id: 'task-1',
       },
     })
   })
 
-  it('drops an empty note, an off follow-up and no open task', () => {
+  it('drops an empty note, the follow-up when one is already scheduled, and no open task', () => {
     const r = buildActionRequest({
       action: 'log_call', contactId, outcome: 'Interested', note: '   ', durationMin: 5,
-      followUp: { on: false, dueDate: '2026-10-19', title: 'x' }, completeTaskId: null,
+      nextStep: 'scheduled', followUp: { dueDate: '2026-10-19', title: 'x' }, completeTaskId: null,
     })
-    expect(r.payload).toEqual({ outcome: 'Interested', duration_min: 5 })
+    expect(r.payload).toEqual({ outcome: 'Interested', duration_min: 5, next_step: 'scheduled' })
+  })
+
+  it('records why there is no next step, audit-only', () => {
+    const r = buildActionRequest({ action: 'log_call', contactId, outcome: 'Not Interested', durationMin: 5, nextStep: 'none', noNextStepReason: 'Not interested' })
+    expect(r.payload).toEqual({ outcome: 'Not Interested', duration_min: 5, next_step: 'none', no_next_step_reason: 'Not interested' })
+  })
+
+  it('parks the lead in Nurture when that is the reason', () => {
+    const r = buildActionRequest({ action: 'log_call', contactId, outcome: 'Interested', durationMin: 5, nextStep: 'none', noNextStepReason: 'Moving to Nurture' })
+    expect(r.payload).toMatchObject({ next_step: 'none', no_next_step_reason: 'Moving to Nurture', set_stage: 'credit_repair' })
+  })
+
+  it('requires a next step, and a reason when there is none', () => {
+    expect(() => buildActionRequest({ action: 'log_call', contactId, outcome: 'Busy', durationMin: 1 })).toThrow(/next step/i)
+    expect(() => buildActionRequest({ action: 'log_call', contactId, outcome: 'Busy', durationMin: 1, nextStep: 'none' })).toThrow(/why/i)
+    expect(NO_NEXT_STEP_REASONS).toEqual(['Not interested', 'Bad number', 'Moving to Nurture', 'Other'])
   })
 
   it('requires an outcome for a call and a body for a note', () => {
@@ -151,6 +176,10 @@ describe('retryRequestFor', () => {
       payload: { due_date: '2026-10-19', title: 'Follow up: Jo', type: 'Follow Up' },
     })
     expect(r.client_action_id).not.toBe('aaa')
+  })
+  it('retries only the failed Nurture move', () => {
+    const parked = { ...original, payload: { ...original.payload, set_stage: 'credit_repair' } }
+    expect(retryRequestFor('set_stage', parked)).toMatchObject({ action: 'set_stage', contact_id: 'c1', payload: { target: 'credit_repair' } })
   })
   it('retries only the failed task completion', () => {
     expect(retryRequestFor('complete_task', original)).toMatchObject({ action: 'complete_task', task_id: 't1' })
@@ -214,5 +243,15 @@ describe('summarizeWriteback', () => {
   })
   it('is empty for no rows', () => {
     expect(summarizeWriteback([])).toEqual({ ok: 0, partial: 0, error: 0, refused: 0, pending: 0, latestError: null, lastAt: null })
+  })
+})
+
+describe('needsNextStepPrompt', () => {
+  it('prompts after a move when nothing is scheduled, never for Nurture or unknown counts', () => {
+    expect(needsNextStepPrompt('attempted', 0)).toBe(true)
+    expect(needsNextStepPrompt('attempted', 2)).toBe(false)
+    expect(needsNextStepPrompt('credit_repair', 0)).toBe(false)
+    expect(needsNextStepPrompt('attempted', undefined)).toBe(false)
+    expect(needsNextStepPrompt('attempted', null)).toBe(false)
   })
 })

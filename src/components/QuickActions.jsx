@@ -11,12 +11,15 @@ import { supabase } from '../lib/supabase'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { showToast } from './Toaster'
 import { STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
+import { dueLabel } from '../lib/tasks'
 import {
   OUTCOMES,
   FOLLOW_UP_PRESETS,
   CRM_LABEL,
   followUpDate,
-  defaultFollowUpOn,
+  defaultNextStep,
+  NO_NEXT_STEP_REASONS,
+  PARK_REASON,
   defaultDurationMin,
   defaultFollowUpTitle,
   endOfTodayIso,
@@ -239,8 +242,11 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
   const [note, setNote] = useState('')
   const [duration, setDuration] = useState('')
   const [durationTouched, setDurationTouched] = useState(false)
-  const [followOn, setFollowOn] = useState(false)
-  const [followTouched, setFollowTouched] = useState(false)
+  // Required: 'follow_up' | 'scheduled' (a future task exists) | 'none' (+ reason).
+  const [nextStep, setNextStep] = useState(null)
+  const [nextTouched, setNextTouched] = useState(false)
+  const [reason, setReason] = useState(null)
+  const [futureTask, setFutureTask] = useState(null)
   const [preset, setPreset] = useState('tomorrow')
   const [picked, setPicked] = useState('')
   const [title, setTitle] = useState(defaultFollowUpTitle(contactName))
@@ -260,6 +266,16 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
         .order('due_at', { ascending: true })
         .limit(1),
     ).then(({ data }) => alive && setOpenTask(data?.[0] || null), () => {})
+    // Soonest task due after today: "Already scheduled" counts as a next step.
+    Promise.resolve(
+      supabase
+        .from('v_tasks')
+        .select('id, title, due_at')
+        .eq('contact_id', contactId)
+        .gt('due_at', endOfTodayIso())
+        .order('due_at', { ascending: true })
+        .limit(1),
+    ).then(({ data }) => alive && setFutureTask(data?.[0] || null), () => {})
     return () => {
       alive = false
     }
@@ -268,8 +284,16 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
   const pickOutcome = (o) => {
     setOutcome(o)
     if (!durationTouched) setDuration(String(defaultDurationMin(o)))
-    if (!followTouched) setFollowOn(defaultFollowUpOn(o))
+    if (!nextTouched) setNextStep(defaultNextStep(o, !!futureTask))
   }
+
+  const chooseNext = (k) => {
+    setNextStep(k)
+    setNextTouched(true)
+  }
+  const reasons = businessId === 'bay' ? NO_NEXT_STEP_REASONS : NO_NEXT_STEP_REASONS.filter((r) => r !== PARK_REASON)
+  const nextReady =
+    nextStep === 'follow_up' ? !!safeDate(preset, picked) : nextStep === 'scheduled' ? !!futureTask : nextStep === 'none' ? !!reason : false
 
   const submit = () => {
     try {
@@ -280,7 +304,9 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
           outcome,
           note,
           durationMin: Number(duration),
-          followUp: { on: followOn, dueDate: followOn ? followUpDate(preset, new Date(), picked) : null, title },
+          nextStep,
+          followUp: nextStep === 'follow_up' ? { dueDate: followUpDate(preset, new Date(), picked), title } : null,
+          noNextStepReason: nextStep === 'none' ? reason : null,
           completeTaskId: openTask && completeOpen ? openTask.id : null,
         }),
       )
@@ -319,24 +345,41 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
         />
       </label>
 
-      <label className="mt-3 flex min-h-[40px] items-center gap-2 text-[13px] font-semibold">
-        <input
-          type="checkbox"
-          checked={followOn}
-          onChange={(e) => {
-            setFollowOn(e.target.checked)
-            setFollowTouched(true)
-          }}
-          className="h-4 w-4"
-        />
-        Schedule follow-up
-      </label>
-      {followOn && (
-        <div className="ml-6">
+      <div className="mb-1.5 mt-3 text-[12px] font-semibold text-muted">Next step</div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Next step">
+        <Chip t={t} active={nextStep === 'follow_up'} onClick={() => chooseNext('follow_up')}>
+          Follow-up
+        </Chip>
+        {futureTask && (
+          <Chip t={t} active={nextStep === 'scheduled'} onClick={() => chooseNext('scheduled')}>
+            Already scheduled
+          </Chip>
+        )}
+        <Chip t={t} active={nextStep === 'none'} onClick={() => chooseNext('none')}>
+          No next step
+        </Chip>
+      </div>
+      {nextStep === 'follow_up' && (
+        <div className="mt-2">
           <DatePresets preset={preset} setPreset={setPreset} picked={picked} setPicked={setPicked} t={t} />
           <input aria-label="Follow-up title" value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputCls} mt-2`} />
         </div>
       )}
+      {nextStep === 'scheduled' && futureTask && (
+        <div className="mt-2 truncate text-[12.5px] text-muted">
+          <span className="font-semibold text-[color:var(--text)]">{futureTask.title || 'Task'}</span> · {dueLabel(futureTask.due_at)}
+        </div>
+      )}
+      {nextStep === 'none' && (
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Why no next step">
+          {reasons.map((r) => (
+            <Chip key={r} t={t} active={reason === r} onClick={() => setReason(r)}>
+              {r}
+            </Chip>
+          ))}
+        </div>
+      )}
+      {outcome && !nextReady && <div className="mt-2 text-[12px] text-muted">Pick a next step to save.</div>}
 
       {openTask && (
         <label className="mt-2 flex min-h-[40px] items-center gap-2 text-[13px]">
@@ -351,7 +394,7 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
       <SubmitButton
         t={t}
         busy={busy}
-        disabled={!outcome || (followOn && !safeDate(preset, picked)) || (businessId === 'mpg' && !(Number(duration) > 0))}
+        disabled={!outcome || !nextReady || (businessId === 'mpg' && !(Number(duration) > 0))}
         onClick={submit}
       >
         Log call

@@ -11,12 +11,19 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const invoke = vi.fn()
 const openTasks = { rows: [] }
+// Log call looks up two v_tasks slices: due by today (lte) and future (gt).
+const futureTasks = { rows: [] }
 
 function query(table) {
   const q = {}
+  let future = false
   for (const m of ['select', 'eq', 'lte', 'order', 'limit']) q[m] = () => q
+  q.gt = () => {
+    future = true
+    return q
+  }
   q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { bay: true, mpg: false } } : null, error: null })
-  q.then = (resolve) => resolve({ data: table === 'v_tasks' ? openTasks.rows : [], error: null })
+  q.then = (resolve) => resolve({ data: table === 'v_tasks' ? (future ? futureTasks.rows : openTasks.rows) : [], error: null })
   return q
 }
 
@@ -55,6 +62,7 @@ beforeEach(() => {
   document.body.innerHTML = ''
   invoke.mockReset()
   openTasks.rows = []
+  futureTasks.rows = []
   resetWritebackFlags()
 })
 
@@ -132,8 +140,8 @@ describe('QuickActions', () => {
     expect(document.body.textContent).toContain('Complete open task: Call Jo back')
     await click(byText('Interested'))
     await click(byText('Log call'))
-    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ complete_task_id: 't-open', duration_min: 5 })
-    expect(invoke.mock.calls[0][1].body.payload.follow_up).toBeUndefined()
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ complete_task_id: 't-open', duration_min: 5, next_step: 'follow_up' })
+    expect(invoke.mock.calls[0][1].body.payload.follow_up).toMatchObject({ title: 'Follow up: Jo' })
   })
 
   it('completes a task row and reports pending then done', async () => {
@@ -154,6 +162,53 @@ describe('QuickActions', () => {
     await click(byLabel('Complete task'))
     expect(onFailed).toHaveBeenCalledWith('complete')
     expect(document.body.textContent).toContain('Completing the task failed: FUB 500.')
+  })
+})
+
+describe('QuickActions: Log call next step', () => {
+  const save = () => byText('Log call')
+  const ok = () => invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'log_call', ok: true }] }, error: null })
+
+  it('makes a dead-end call say why there is no next step before it saves', async () => {
+    ok()
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('Not Interested'))
+    expect(save().disabled).toBe(true)
+    await click(byText('No next step'))
+    expect(save().disabled).toBe(true)
+    await click(byText('Not interested'))
+    expect(save().disabled).toBe(false)
+    await click(save())
+    const payload = invoke.mock.calls[0][1].body.payload
+    expect(payload).toMatchObject({ next_step: 'none', no_next_step_reason: 'Not interested' })
+    expect(payload.follow_up).toBeUndefined()
+    expect(payload.set_stage).toBeUndefined()
+  })
+
+  it('parks the lead in Nurture when that is the reason', async () => {
+    ok()
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('Interested'))
+    await click(byText('No next step'))
+    await click(byText('Moving to Nurture'))
+    await click(save())
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture', set_stage: 'credit_repair' })
+  })
+
+  it('uses the task already on the books instead of adding another', async () => {
+    futureTasks.rows = [{ id: 't-fut', title: 'Follow up: Jo', due_at: '2099-01-02T00:00:00Z' }]
+    ok()
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('Left Message'))
+    expect(byText('Already scheduled').getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Follow up: Jo')
+    await click(save())
+    const payload = invoke.mock.calls[0][1].body.payload
+    expect(payload.next_step).toBe('scheduled')
+    expect(payload.follow_up).toBeUndefined()
   })
 })
 
