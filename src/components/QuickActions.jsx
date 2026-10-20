@@ -570,9 +570,11 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *   stage       the Bayway board column the lead is in; adds Move stage
  *   openTaskCount  the lead's open tasks, when known; 0 makes Move stage
  *                  offer a follow-up afterwards
+ *   onNeedsNextStep  show that offer yourself (a board that redraws the card
+ *                  in its new column would unmount ours); else we show it
  *   only        optional subset of ['call','note','followup','stage','done','push']
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onDone, onPending, onFailed, only, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, className = '' }) {
   const flags = useWritebackFlags()
   const [open, setOpen] = useState(null)
   const completing = useRef(false)
@@ -592,8 +594,11 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
   const stageSuccess = (summary, opts = {}) => {
     if (!opts.keepOpen && needsNextStepPrompt(opts.target, openTaskCount)) {
       showToast(summary)
+      if (onNeedsNextStep) {
+        setOpen(null)
+        onNeedsNextStep()
+      } else setOpen('nextstep')
       onDone?.(summary)
-      setOpen('nextstep')
       return
     }
     success(summary, opts)

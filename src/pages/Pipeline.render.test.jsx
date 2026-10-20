@@ -125,6 +125,20 @@ describe('Pipeline drag between stages', () => {
     expect(document.querySelector('[role="dialog"][aria-label="Next step for Ana?"]')).not.toBe(null)
   })
 
+  it('keeps the follow-up offer open when Move stage redraws the card in its new column', async () => {
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'New Lead'), open_task_count: 0 }]
+    await mount()
+    await act(async () => cardEl('a').querySelector('[aria-label="Move stage"]').click())
+    const attempted = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')].find((b) => b.textContent.trim() === 'Attempted')
+    // The reload after the move finds the lead in its new column.
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'Attempted'), open_task_count: 0 }]
+    await act(async () => attempted.click())
+    await act(async () => {})
+    expect(cardsIn('Attempted')).toEqual(['a'])
+    expect(document.querySelector('[role="dialog"][aria-label="Next step for Ana?"]')).not.toBe(null)
+  })
+
   it('keeps the MPG board read-only', async () => {
     DATA.rows = [{ id: 'm', name: 'Ana', company: 'Deli', stage: 'Open', last_touch_at: null, crm_profile_url: '#' }]
     await mount('mpg')
