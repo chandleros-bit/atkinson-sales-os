@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextStep, stuckFor, cardHealth, healthRank, sortByHealth, columnSummary, speedToLead, formatElapsed } from './cardHealth'
+import { nextStep, stuckFor, cardHealth, healthRank, sortByHealth, columnSummary, speedToLead, formatElapsed, lateLeadCount, titleFor } from './cardHealth'
 import { DEFAULT_RULES } from './priorityQueue'
 
 // Local times (no Z), the same convention as priorityQueue.test.js.
@@ -123,5 +123,22 @@ describe('speed in health and ordering', () => {
     const overdue = row({ id: 'overdue', stage: 'New Lead', crm_created_at: daysAgo(30), open_task_count: 1, oldest_open_due_at: daysAgo(2) })
     expect(cardHealth(late, rules, NOW).speed).toMatchObject({ late: true })
     expect(sortByHealth([overdue, freshLead, late], rules, NOW).map((r) => r.id)).toEqual(['late', 'fresh', 'overdue'])
+  })
+})
+
+describe('tab title', () => {
+  it('counts late new leads across both books', () => {
+    const rows = [
+      row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:00:00') }),
+      row({ stage: 'Open', crm_created_at: daysAgo(0, '08:30:00') }),
+      row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:58:00') }),
+      row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:00:00'), last_outbound_call_at: daysAgo(0, '08:10:00') }),
+    ]
+    expect(lateLeadCount(rows, rules, NOW)).toBe(2)
+  })
+  it('prefixes the title only when someone is waiting', () => {
+    expect(titleFor(0)).toBe('Atkinson Sales OS')
+    expect(titleFor(1)).toBe('(1) New lead waiting · Atkinson Sales OS')
+    expect(titleFor(3)).toBe('(3) New leads waiting · Atkinson Sales OS')
   })
 })

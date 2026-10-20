@@ -403,6 +403,12 @@ export default function Pipeline({ biz }) {
     load()
   }, [load])
 
+  // New leads and finished calls show up without a reload while the board is open.
+  useEffect(() => {
+    const id = setInterval(() => document.visibilityState === 'visible' && load({ quiet: true }), 60_000)
+    return () => clearInterval(id)
+  }, [load])
+
   const moveTo = async (row, targetKey, stage) => {
     setPending((p) => ({ ...p, [row.id]: stage }))
     const res = await invokeCrmAction(

@@ -97,3 +97,14 @@ export function columnSummary(cards, rules, now = Date.now()) {
   }
   return [overdue && `${overdue} overdue`, stuck && `${stuck} stuck`].filter(Boolean).join(' · ')
 }
+
+// How many new, uncalled leads are past speed_to_lead_minutes (any book).
+export function lateLeadCount(rows, rules, now = Date.now()) {
+  return (rows || []).filter((r) => speedToLead(r, rules, now)?.late).length
+}
+
+export const APP_TITLE = 'Atkinson Sales OS'
+export function titleFor(late) {
+  if (!late) return APP_TITLE
+  return `(${late}) New lead${late === 1 ? '' : 's'} waiting · ${APP_TITLE}`
+}

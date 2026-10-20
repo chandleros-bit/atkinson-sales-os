@@ -71,7 +71,14 @@ export function usePriorityQueue(biz = 'all') {
     listeners.add(setSnap)
     if (!store.at && !inflight) refreshPriorityQueue()
     else setSnap(store)
-    return () => listeners.delete(setSnap)
+    // Keep new leads and callbacks current while the app is on screen.
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible' && Date.now() - store.at >= STALE_MS) refreshPriorityQueue()
+    }, STALE_MS)
+    return () => {
+      clearInterval(id)
+      listeners.delete(setSnap)
+    }
   }, [])
 
   return useMemo(() => {

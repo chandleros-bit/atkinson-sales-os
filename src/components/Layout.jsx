@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Toaster from './Toaster'
 import BusinessFilter from './BusinessFilter'
 import { useAuth } from '../context/AuthContext'
+import { usePriorityQueue } from '../lib/usePriorityQueue'
+import { useNow } from '../lib/useNow'
+import { lateLeadCount, titleFor } from '../lib/cardHealth'
 
 // Under 640px (phones) the sidebar becomes a slide-in menu behind a top bar,
 // so pages get the full width. Up Next is the first page built phone-first.
@@ -36,6 +39,15 @@ function MobileBar({ onMenu }) {
 export default function Layout() {
   const { isDemoMode } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  // "(1) New lead waiting · Atkinson Sales OS" while a new lead's timer is red.
+  // queue rows are v_lead_signals rows: they carry stage, crm_created_at and
+  // last_outbound_call_at for both books.
+  const { queue, rules } = usePriorityQueue('all')
+  const now = useNow(30_000)
+  const late = lateLeadCount(queue, rules, now)
+  useEffect(() => {
+    document.title = titleFor(late)
+  }, [late])
 
   return (
     <div className="flex min-h-screen">
