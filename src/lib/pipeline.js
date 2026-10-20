@@ -44,7 +44,9 @@ export function isLostStage(stage) {
 // Returns ordered [{ stage, isLost, cards }] for populated stages only, unless
 // showAllFlow: then every flowOrder stage gets a column (drop targets on the
 // draggable Bayway board).
-export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER, { showAllFlow = false } = {}) {
+// sortCards orders each column's cards (the board passes a health sort;
+// default oldest touch first).
+export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER, { showAllFlow = false, sortCards = sortByAttention } = {}) {
   const groups = new Map()
   if (showAllFlow) for (const stage of flowOrder) groups.set(stage, [])
   for (const r of rows) {
@@ -57,7 +59,7 @@ export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER, { showAllFlow = 
   const columns = [...groups.entries()].map(([stage, cards]) => ({
     stage,
     isLost: isLostStage(stage),
-    cards: sortByAttention(cards),
+    cards: sortCards(cards),
   }))
 
   // Sort key [group, secondary]. group: 0 known-active, 1 unknown-active, 2 lost.
