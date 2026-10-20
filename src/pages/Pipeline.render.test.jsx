@@ -178,11 +178,39 @@ describe('Pipeline drop zones', () => {
     expect(document.querySelector('[role="dialog"]')).toBe(null)
   })
 
+  it('marks a lead Lost with a reason, warns it is one-way, and drops it from the board', async () => {
+    invoke.mockResolvedValueOnce({
+      data: { status: 'ok', results: [{ step: 'set_stage', ok: true, previous_target: 'attempted' }, { step: 'add_note', ok: true }] },
+      error: null,
+    })
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'Attempted'), open_task_count: 0 }]
+    await mount()
+    await fire(cardEl('a'), 'dragstart')
+    const lost = document.querySelector('[data-zone="lost"]')
+    expect(document.querySelector('[data-zone="credit_repair"]')).not.toBe(null)
+    await fire(lost, 'dragover')
+    await fire(lost, 'drop')
+    expect(invoke).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Only the FUB account owner can move it back')
+    const why = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Went elsewhere')
+    DATA.rows = []
+    await act(async () => why.click())
+    await act(async () => {})
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a', payload: { target: 'lost', reason: 'Went elsewhere' } })
+    expect(cardEl('a')).toBe(null)
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+    expect(document.body.textContent).toContain('Ana Lead marked Lost in FollowUpBoss')
+    // FUB's Lost Leads plan moves the person stage, which the dashboard can't
+    // reverse, so there is no Undo.
+    expect([...document.querySelectorAll('[role="status"] button')].some((b) => b.textContent === 'Undo')).toBe(false)
+  })
+
   it('offers no zone for a lead already in Nurture', async () => {
     DATA.rows = [card('n', 'Nell Parked', 'Nurture / Credit Repair')]
     await mount()
     await fire(cardEl('n'), 'dragstart')
-    expect(document.querySelector('[data-drop-zones]')).toBe(null)
+    expect(document.querySelector('[data-zone="credit_repair"]')).toBe(null)
+    expect(document.querySelector('[data-zone="lost"]')).not.toBe(null)
   })
 })
 

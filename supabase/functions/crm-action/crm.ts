@@ -7,7 +7,7 @@
 // whether PUT /tasks/{id} accepts dueDate (FUB_PUSH_MODE).
 
 import { fubGet, fubSend, mapContact } from '../_shared/fub.ts'
-import { retagForTarget } from '../_shared/bay-stages.ts'
+import { retagForTarget, targetForStage } from '../_shared/bay-stages.ts'
 import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, FUB_TASK_TYPES } from '../_shared/fub-write.ts'
 import { mapActivity as fubMapActivity } from '../_shared/fub-activity.ts'
 import { mapTask as fubMapTask } from '../_shared/fub-tasks.ts'
@@ -54,7 +54,8 @@ export function fubAdapter(env) {
         const person = await fubGet(`/people/${externalId}`)
         const tags = retagForTarget(person.tags || [], target)
         await fubSend('PUT', `/people/${externalId}`, { tags })
-        return { id: externalId, tags }
+        // previous: the column it left, so an Undo can put it back.
+        return { id: externalId, tags, previous: targetForStage(person.tags || [], person.stage) }
       },
       pushTask: async ({ externalId, dueDate, contactExternalId, title, type }) => {
         if (pushMode === 'complete_and_recreate') {

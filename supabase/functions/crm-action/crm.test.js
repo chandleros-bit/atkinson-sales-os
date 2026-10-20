@@ -54,6 +54,18 @@ describe('fubAdapter', () => {
   })
 })
 
+describe('fubAdapter setStage', () => {
+  it('marks Lost by swapping tags, and reports the column the lead left', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(response(200, { id: 3486, stage: 'Lead', tags: ['DSCR', 'attempted'] }))
+      .mockResolvedValueOnce(response(200, {}))
+    const out = await fubAdapter(env()).send.setStage({ externalId: '3486', target: 'lost' })
+    expect(out).toEqual({ id: '3486', tags: ['DSCR', 'Lost'], previous: 'attempted' })
+    const [url, init] = globalThis.fetch.mock.calls[1]
+    expect([String(url), init.method, JSON.parse(init.body)]).toEqual(['https://api.followupboss.com/v1/people/3486', 'PUT', { tags: ['DSCR', 'Lost'] }])
+  })
+})
+
 describe('zohoAdapter', () => {
   const token = response(200, { access_token: 'tok' })
 

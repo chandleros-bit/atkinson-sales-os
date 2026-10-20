@@ -103,7 +103,7 @@ function stageRefusal(businessId, contact, key) {
   if (!STAGE_TARGETS.some((t) => t.key === key)) return `Unknown stage: ${key}`
   const ps = String(contact?.person_stage || '').trim().toLowerCase()
   // Pre-Qualified always reads as Application Received unless parked (Credit Repair).
-  if (ps === 'pre-qualified' && !['application_received', 'credit_repair'].includes(key)) {
+  if (ps === 'pre-qualified' && !['application_received', 'credit_repair', 'lost'].includes(key)) {
     return 'This lead is Pre-Qualified in FUB, which always shows as Application Received. Change the FUB stage first.'
   }
   if (ps !== 'lead' && ps !== 'pre-qualified') {
@@ -251,6 +251,8 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
       result.ok = true
       result.crm_id = out.id
       if (out.rescheduled) result.rescheduled = true
+      // Where a stage move came from, so the UI can undo it.
+      if (out.previous) result.previous_target = out.previous
       try {
         await mirror(db, adapter, step, out, target, now)
       } catch (e) {

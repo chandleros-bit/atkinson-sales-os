@@ -5,6 +5,7 @@ import {
   defaultNextStep,
   needsNextStepPrompt,
   NO_NEXT_STEP_REASONS,
+  LOST_REASONS,
   defaultDurationMin,
   defaultFollowUpTitle,
   endOfTodayIso,
@@ -251,7 +252,17 @@ describe('needsNextStepPrompt', () => {
     expect(needsNextStepPrompt('attempted', 0)).toBe(true)
     expect(needsNextStepPrompt('attempted', 2)).toBe(false)
     expect(needsNextStepPrompt('credit_repair', 0)).toBe(false)
+    expect(needsNextStepPrompt('lost', 0)).toBe(false)
     expect(needsNextStepPrompt('attempted', undefined)).toBe(false)
     expect(needsNextStepPrompt('attempted', null)).toBe(false)
+  })
+})
+
+describe('Lost', () => {
+  it('lists the reasons and carries one on a Lost move', () => {
+    expect(LOST_REASONS).toEqual(['Not interested', 'Went elsewhere', 'Unreachable', 'Not qualified'])
+    expect(buildActionRequest({ action: 'set_stage', contactId: 'c1', target: 'lost', reason: 'Went elsewhere' }).payload)
+      .toEqual({ target: 'lost', reason: 'Went elsewhere' })
+    expect(buildActionRequest({ action: 'set_stage', contactId: 'c1', target: 'attempted' }).payload).toEqual({ target: 'attempted' })
   })
 })

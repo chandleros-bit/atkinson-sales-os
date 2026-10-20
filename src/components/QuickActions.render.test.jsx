@@ -213,13 +213,13 @@ describe('QuickActions: Log call next step', () => {
 })
 
 describe('QuickActions: Move stage', () => {
-  it('shows seven targets with the current column marked, and sends set_stage', async () => {
+  it('shows eight targets with the current column marked, and sends set_stage', async () => {
     invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
     await mount({ ...bay, stage: 'Application/Estimate Sent' })
     await click(byLabel('Move stage'))
     const options = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')]
     expect(options.map((b) => b.textContent.replace('Now', ''))).toEqual([
-      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received', 'Nurture / Credit Repair',
+      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received', 'Nurture / Credit Repair', 'Lost',
     ])
     expect(options.filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent.replace('Now', '')))
       .toEqual(['Estimate Sent', 'Application Sent'])
@@ -249,6 +249,19 @@ describe('QuickActions: Move stage', () => {
     await mount({ ...bay, stage: 'New Lead', openTaskCount: 0 })
     await click(byLabel('Move stage'))
     await click(byText('Nurture / Credit Repair'))
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
+  it('asks why before marking Lost, then sends the reason', async () => {
+    invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }, { step: 'add_note', ok: true }] }, error: null })
+    await mount({ ...bay, stage: 'Attempted', openTaskCount: 0 })
+    await click(byLabel('Move stage'))
+    await click(byText('Lost'))
+    expect(invoke).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Why is this lead lost?')
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Only the FUB account owner can move it back')
+    await click(byText('Went elsewhere'))
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', payload: { target: 'lost', reason: 'Went elsewhere' } })
     expect(document.querySelector('[role="dialog"]')).toBe(null)
   })
 

@@ -362,6 +362,21 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     expect(res.body.error).toMatch(/Nurture/)
   })
 
+  it('marks Lost with the reason as a FUB note, and reports where the lead was', async () => {
+    bay.send.setStage = vi.fn(async ({ externalId }) => ({ id: externalId, tags: ['Lost'], previous: 'attempted' }))
+    bay.read.person = async (id) => ({ id, name: 'Lead One', stage: 'Lead', tags: ['Lost'] })
+    bay.read.note = async (id) => ({ id, personId: 5001, body: 'Marked Lost: Went elsewhere', created: '2026-10-20T15:00:00Z' })
+    const res = await go({ ...stageReq('c-lead', 'lost', 40), payload: { target: 'lost', reason: 'Went elsewhere' } })
+    expect(res.body.status).toBe('ok')
+    expect(res.body.results.map((r) => r.step)).toEqual(['set_stage', 'add_note'])
+    expect(res.body.results[0].previous_target).toBe('attempted')
+    expect(bay.send.addNote).toHaveBeenCalledWith({ externalId: '5001', subject: null, body: 'Marked Lost: Went elsewhere' })
+  })
+
+  it('lets a Pre-Qualified lead be marked Lost', async () => {
+    expect((await go(stageReq('c-pq', 'lost', 41))).body.status).toBe('ok')
+  })
+
   it('refuses MPG', async () => {
     const res = await go(stageReq('c-mpg', 'attempted', 25))
     expect(res.body.error).toMatch(/Bayway only/)
