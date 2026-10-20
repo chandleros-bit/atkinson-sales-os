@@ -198,6 +198,8 @@ export function reasonText(row, now = Date.now()) {
     case 'reached_out':
       return `Called you ${agoShort(row.last_inbound_at, now)} ago, no callback`
     case 'new_lead': {
+      const mins = Math.max(0, Math.floor((now - ms(row.crm_created_at)) / 60000))
+      if (mins < 60) return `New lead · ${mins}m, not called`
       const hrs = Math.max(0, Math.round((now - ms(row.crm_created_at)) / 3600000))
       return hrs < 48 ? `New lead · ${plural(hrs, 'hour')}, not called` : `New lead · ${plural(daysSince(row.crm_created_at, now), 'day')}, not called`
     }
