@@ -7,10 +7,10 @@ import { cardHealth, sortByHealth, columnSummary } from '../lib/cardHealth'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
-import { buildActionRequest, summarizeResult } from '../lib/crmActions'
+import { buildActionRequest, summarizeResult, needsNextStepPrompt } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
-import QuickActions from '../components/QuickActions'
+import QuickActions, { NextStepPrompt } from '../components/QuickActions'
 import { showToast } from '../components/Toaster'
 
 function BizHeader({ biz, note }) {
@@ -123,7 +123,7 @@ function StuckLine({ h }) {
   )
 }
 
-function Card({ r, lost, biz, onDone, drag, health }) {
+function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
   const d = daysSince(r.last_touch_at)
   const stale = d === null || d >= STALE_TOUCH_DAYS
   const accent = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
@@ -183,13 +183,15 @@ function Card({ r, lost, biz, onDone, drag, health }) {
         contactName={r.name}
         hasPhone={!!r.phone}
         stage={biz === 'mpg' ? null : r.stage}
+        openTaskCount={r.open_task_count}
+        onNeedsNextStep={onPrompt ? () => onPrompt(r) : undefined}
         onDone={onDone}
       />
     </div>
   )
 }
 
-function Column({ col, biz, onDone, drag, rules, now }) {
+function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
   const isOver = drag?.over === col.stage
   const summary = rules ? columnSummary(col.cards, rules, now) : ''
   return (
@@ -239,6 +241,7 @@ function Column({ col, biz, onDone, drag, rules, now }) {
             lost={col.isLost}
             biz={biz}
             onDone={onDone}
+            onPrompt={onPrompt}
             drag={drag}
             health={rules ? cardHealth(r, rules, now) : null}
           />
@@ -253,11 +256,11 @@ function Column({ col, biz, onDone, drag, rules, now }) {
   )
 }
 
-function Board({ columns, biz, onDone, drag, rules, now }) {
+function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
   return (
     <div className="mt-5 flex gap-3.5 overflow-x-auto pb-2">
       {columns.map((col) => (
-        <Column key={col.stage} col={col} biz={biz} onDone={onDone} drag={drag} rules={rules} now={now} />
+        <Column key={col.stage} col={col} biz={biz} onDone={onDone} onPrompt={onPrompt} drag={drag} rules={rules} now={now} />
       ))}
     </div>
   )
@@ -375,6 +378,9 @@ export default function Pipeline({ biz }) {
   const [dragging, setDragging] = useState(null)
   const [over, setOver] = useState(null)
   const [choice, setChoice] = useState(null)
+  // A move that leaves the lead with nothing scheduled offers a follow-up.
+  // Held here, not in the card: the reload redraws the card in its new column.
+  const [prompt, setPrompt] = useState(null)
 
   // quiet: refresh after a Quick Action without swapping the board for the
   // loading state (which would unmount the card that fired it).
@@ -417,6 +423,7 @@ export default function Pipeline({ biz }) {
     const summary = summarizeResult(res, 'bay')
     if (summary.tone === 'ok') {
       showToast({ ...summary, text: `${row.name || 'Lead'} moved to ${stage} in FollowUpBoss` })
+      if (needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
       await load({ quiet: true })
     } else {
       showToast({ ...summary, retry: () => moveTo(row, targetKey, stage) })
@@ -497,7 +504,15 @@ export default function Pipeline({ biz }) {
       )}
 
       {!loading && !error && rows.length > 0 && (
-        <Board columns={columns} biz={biz} onDone={() => load({ quiet: true })} drag={drag} rules={rules} now={now} />
+        <Board
+          columns={columns}
+          biz={biz}
+          onDone={() => load({ quiet: true })}
+          onPrompt={setPrompt}
+          drag={drag}
+          rules={rules}
+          now={now}
+        />
       )}
       {choice && (
         <ChooseTarget
@@ -508,6 +523,15 @@ export default function Pipeline({ biz }) {
             setChoice(null)
             moveTo(c.row, key, c.stage)
           }}
+        />
+      )}
+      {prompt && (
+        <NextStepPrompt
+          businessId="bay"
+          contactId={prompt.id}
+          contactName={prompt.name}
+          onClose={() => setPrompt(null)}
+          onDone={() => load({ quiet: true })}
         />
       )}
     </div>

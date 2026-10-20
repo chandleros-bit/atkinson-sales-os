@@ -11,12 +11,16 @@ import { supabase } from '../lib/supabase'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { showToast } from './Toaster'
 import { STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
+import { dueLabel } from '../lib/tasks'
 import {
   OUTCOMES,
   FOLLOW_UP_PRESETS,
   CRM_LABEL,
   followUpDate,
-  defaultFollowUpOn,
+  defaultNextStep,
+  NO_NEXT_STEP_REASONS,
+  PARK_REASON,
+  needsNextStepPrompt,
   defaultDurationMin,
   defaultFollowUpTitle,
   endOfTodayIso,
@@ -239,8 +243,11 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
   const [note, setNote] = useState('')
   const [duration, setDuration] = useState('')
   const [durationTouched, setDurationTouched] = useState(false)
-  const [followOn, setFollowOn] = useState(false)
-  const [followTouched, setFollowTouched] = useState(false)
+  // Required: 'follow_up' | 'scheduled' (a future task exists) | 'none' (+ reason).
+  const [nextStep, setNextStep] = useState(null)
+  const [nextTouched, setNextTouched] = useState(false)
+  const [reason, setReason] = useState(null)
+  const [futureTask, setFutureTask] = useState(null)
   const [preset, setPreset] = useState('tomorrow')
   const [picked, setPicked] = useState('')
   const [title, setTitle] = useState(defaultFollowUpTitle(contactName))
@@ -260,6 +267,16 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
         .order('due_at', { ascending: true })
         .limit(1),
     ).then(({ data }) => alive && setOpenTask(data?.[0] || null), () => {})
+    // Soonest task due after today: "Already scheduled" counts as a next step.
+    Promise.resolve(
+      supabase
+        .from('v_tasks')
+        .select('id, title, due_at')
+        .eq('contact_id', contactId)
+        .gt('due_at', endOfTodayIso())
+        .order('due_at', { ascending: true })
+        .limit(1),
+    ).then(({ data }) => alive && setFutureTask(data?.[0] || null), () => {})
     return () => {
       alive = false
     }
@@ -268,8 +285,16 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
   const pickOutcome = (o) => {
     setOutcome(o)
     if (!durationTouched) setDuration(String(defaultDurationMin(o)))
-    if (!followTouched) setFollowOn(defaultFollowUpOn(o))
+    if (!nextTouched) setNextStep(defaultNextStep(o, !!futureTask))
   }
+
+  const chooseNext = (k) => {
+    setNextStep(k)
+    setNextTouched(true)
+  }
+  const reasons = businessId === 'bay' ? NO_NEXT_STEP_REASONS : NO_NEXT_STEP_REASONS.filter((r) => r !== PARK_REASON)
+  const nextReady =
+    nextStep === 'follow_up' ? !!safeDate(preset, picked) : nextStep === 'scheduled' ? !!futureTask : nextStep === 'none' ? !!reason : false
 
   const submit = () => {
     try {
@@ -280,7 +305,9 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
           outcome,
           note,
           durationMin: Number(duration),
-          followUp: { on: followOn, dueDate: followOn ? followUpDate(preset, new Date(), picked) : null, title },
+          nextStep,
+          followUp: nextStep === 'follow_up' ? { dueDate: followUpDate(preset, new Date(), picked), title } : null,
+          noNextStepReason: nextStep === 'none' ? reason : null,
           completeTaskId: openTask && completeOpen ? openTask.id : null,
         }),
       )
@@ -319,24 +346,41 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
         />
       </label>
 
-      <label className="mt-3 flex min-h-[40px] items-center gap-2 text-[13px] font-semibold">
-        <input
-          type="checkbox"
-          checked={followOn}
-          onChange={(e) => {
-            setFollowOn(e.target.checked)
-            setFollowTouched(true)
-          }}
-          className="h-4 w-4"
-        />
-        Schedule follow-up
-      </label>
-      {followOn && (
-        <div className="ml-6">
+      <div className="mb-1.5 mt-3 text-[12px] font-semibold text-muted">Next step</div>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Next step">
+        <Chip t={t} active={nextStep === 'follow_up'} onClick={() => chooseNext('follow_up')}>
+          Follow-up
+        </Chip>
+        {futureTask && (
+          <Chip t={t} active={nextStep === 'scheduled'} onClick={() => chooseNext('scheduled')}>
+            Already scheduled
+          </Chip>
+        )}
+        <Chip t={t} active={nextStep === 'none'} onClick={() => chooseNext('none')}>
+          No next step
+        </Chip>
+      </div>
+      {nextStep === 'follow_up' && (
+        <div className="mt-2">
           <DatePresets preset={preset} setPreset={setPreset} picked={picked} setPicked={setPicked} t={t} />
           <input aria-label="Follow-up title" value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputCls} mt-2`} />
         </div>
       )}
+      {nextStep === 'scheduled' && futureTask && (
+        <div className="mt-2 truncate text-[12.5px] text-muted">
+          <span className="font-semibold text-[color:var(--text)]">{futureTask.title || 'Task'}</span> · {dueLabel(futureTask.due_at)}
+        </div>
+      )}
+      {nextStep === 'none' && (
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Why no next step">
+          {reasons.map((r) => (
+            <Chip key={r} t={t} active={reason === r} onClick={() => setReason(r)}>
+              {r}
+            </Chip>
+          ))}
+        </div>
+      )}
+      {outcome && !nextReady && <div className="mt-2 text-[12px] text-muted">Pick a next step to save.</div>}
 
       {openTask && (
         <label className="mt-2 flex min-h-[40px] items-center gap-2 text-[13px]">
@@ -351,7 +395,7 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
       <SubmitButton
         t={t}
         busy={busy}
-        disabled={!outcome || (followOn && !safeDate(preset, picked)) || (businessId === 'mpg' && !(Number(duration) > 0))}
+        disabled={!outcome || !nextReady || (businessId === 'mpg' && !(Number(duration) > 0))}
         onClick={submit}
       >
         Log call
@@ -447,8 +491,14 @@ function PushForm({ businessId, task, t, onSuccess, onPending, onFailed }) {
 // crm-action set_stage (bay-stages.ts). Estimate Sent and Application Sent
 // share a column but are separate tags (Smart Lists 04 / 05).
 function StageForm({ businessId, contactId, stage, t, onSuccess }) {
-  const { busy, result, send, retry, setResult } = useSubmit({ businessId, onSuccess })
+  // Tell the caller which target moved, so it can offer a next step.
+  const sent = useRef(null)
+  const { busy, result, send, retry, setResult } = useSubmit({
+    businessId,
+    onSuccess: (summary, opts) => onSuccess(summary, { ...opts, target: sent.current }),
+  })
   const move = (target) => {
+    sent.current = target
     try {
       send(buildActionRequest({ action: 'set_stage', contactId, target }))
     } catch (e) {
@@ -482,6 +532,32 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
   )
 }
 
+// After a stage move leaves a lead with nothing scheduled: offer a follow-up.
+// Skip is fine; the lead then shows in Up Next as "No next step".
+export function NextStepPrompt({ businessId, contactId, contactName, onClose, onDone }) {
+  const t = tone(businessId)
+  const first = String(contactName || '').trim().split(/\s+/)[0]
+  const done = (summary, { keepOpen } = {}) => {
+    if (!keepOpen) {
+      showToast(summary)
+      onClose()
+    }
+    onDone?.(summary)
+  }
+  return (
+    <Sheet title={first ? `Next step for ${first}?` : 'Next step?'} subtitle="Nothing is scheduled for this lead" t={t} onClose={onClose}>
+      <FollowUpForm businessId={businessId} contactId={contactId} contactName={contactName} t={t} onSuccess={done} />
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-2 flex min-h-[42px] w-full items-center justify-center rounded-[10px] border border-line2 text-[13.5px] font-semibold text-muted"
+      >
+        Skip
+      </button>
+    </Sheet>
+  )
+}
+
 /**
  * Props:
  *   businessId  'bay' | 'mpg' (the ROW's business)
@@ -492,9 +568,13 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
  *   onDone      called after a write reached the CRM, so the page reloads
  *   onPending / onFailed  (kind, dueDate?) for optimistic task-row updates
  *   stage       the Bayway board column the lead is in; adds Move stage
+ *   openTaskCount  the lead's open tasks, when known; 0 makes Move stage
+ *                  offer a follow-up afterwards
+ *   onNeedsNextStep  show that offer yourself (a board that redraws the card
+ *                  in its new column would unmount ours); else we show it
  *   only        optional subset of ['call','note','followup','stage','done','push']
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, onDone, onPending, onFailed, only, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, className = '' }) {
   const flags = useWritebackFlags()
   const [open, setOpen] = useState(null)
   const completing = useRef(false)
@@ -509,6 +589,19 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
       showToast(summary)
     }
     onDone?.(summary)
+  }
+
+  const stageSuccess = (summary, opts = {}) => {
+    if (!opts.keepOpen && needsNextStepPrompt(opts.target, openTaskCount)) {
+      showToast(summary)
+      if (onNeedsNextStep) {
+        setOpen(null)
+        onNeedsNextStep()
+      } else setOpen('nextstep')
+      onDone?.(summary)
+      return
+    }
+    success(summary, opts)
   }
 
   const complete = async () => {
@@ -571,8 +664,11 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
       )}
       {open === 'stage' && (
         <Sheet title="Move stage" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
-          <StageForm businessId={businessId} contactId={contactId} stage={stage} t={t} onSuccess={success} />
+          <StageForm businessId={businessId} contactId={contactId} stage={stage} t={t} onSuccess={stageSuccess} />
         </Sheet>
+      )}
+      {open === 'nextstep' && (
+        <NextStepPrompt businessId={businessId} contactId={contactId} contactName={contactName} onClose={() => setOpen(null)} onDone={onDone} />
       )}
       {open === 'push' && task && (
         <Sheet title="Push task" subtitle={[task.title, crm].filter(Boolean).join(' · ')} t={t} onClose={() => setOpen(null)}>

@@ -23,6 +23,8 @@ export function planSteps(request) {
           dueDate: p.follow_up.due_date,
         })
       }
+      // "No next step: Moving to Nurture" parks the lead after the call.
+      if (p.set_stage) steps.push({ step: 'set_stage', target: p.set_stage })
       return steps
     }
     case 'add_note':

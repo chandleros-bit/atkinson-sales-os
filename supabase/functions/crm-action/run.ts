@@ -97,6 +97,21 @@ async function finish(db, clientActionId, patch) {
   if (error) console.error(`crm_actions update failed for ${clientActionId}: ${error.message}`)
 }
 
+// Bayway stages are FUB tags (bay-stages.ts); MPG's come from Zoho.
+function stageRefusal(businessId, contact, key) {
+  if (businessId !== 'bay') return 'Move stage is Bayway only; MPG stages come from Zoho'
+  if (!STAGE_TARGETS.some((t) => t.key === key)) return `Unknown stage: ${key}`
+  const ps = String(contact?.person_stage || '').trim().toLowerCase()
+  // Pre-Qualified always reads as Application Received unless parked (Credit Repair).
+  if (ps === 'pre-qualified' && !['application_received', 'credit_repair'].includes(key)) {
+    return 'This lead is Pre-Qualified in FUB, which always shows as Application Received. Change the FUB stage first.'
+  }
+  if (ps !== 'lead' && ps !== 'pre-qualified') {
+    return `This lead's FUB stage is ${contact?.person_stage || 'empty'}, so it isn't on the board. Set it to Lead in FUB first.`
+  }
+  return null
+}
+
 function preflight(req, target) {
   const { businessId, contact, task } = target
   if (contact && contact.source_crm !== SOURCE_FOR[businessId]) return 'Contact is not from this book\'s CRM'
@@ -104,20 +119,9 @@ function preflight(req, target) {
   if (req.action === 'log_call' && businessId === 'bay' && !contact?.phone) return 'No phone on file in FUB'
   if (TASK_ACTIONS.has(req.action) && task?.is_completed) return 'Task is already completed'
   if (req.action === 'log_call' && task?.is_completed) return 'That task is already completed'
-  if (req.action === 'set_stage') {
-    // Bayway stages are FUB tags (bay-stages.ts); MPG's come from Zoho.
-    if (businessId !== 'bay') return 'Move stage is Bayway only; MPG stages come from Zoho'
-    const key = req.payload?.target
-    if (!STAGE_TARGETS.some((t) => t.key === key)) return `Unknown stage: ${key}`
-    const ps = String(contact?.person_stage || '').trim().toLowerCase()
-    // Pre-Qualified always reads as Application Received unless parked (Credit Repair).
-    if (ps === 'pre-qualified' && !['application_received', 'credit_repair'].includes(key)) {
-      return 'This lead is Pre-Qualified in FUB, which always shows as Application Received. Change the FUB stage first.'
-    }
-    if (ps !== 'lead' && ps !== 'pre-qualified') {
-      return `This lead's FUB stage is ${contact?.person_stage || 'empty'}, so it isn't on the board. Set it to Lead in FUB first.`
-    }
-  }
+  if (req.action === 'set_stage') return stageRefusal(businessId, contact, req.payload?.target)
+  // "No next step: Moving to Nurture" parks the lead after the call.
+  if (req.action === 'log_call' && req.payload?.set_stage) return stageRefusal(businessId, contact, req.payload.set_stage)
   return null
 }
 

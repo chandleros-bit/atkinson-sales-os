@@ -55,10 +55,30 @@ export function followUpDate(preset, now = new Date(), picked) {
   }
 }
 
-const FOLLOW_UP_ON = new Set(['Left Message', 'No Answer', 'Busy'])
+// Outcomes whose Next step defaults to a dated follow-up.
+const FOLLOW_UP_ON = new Set(['Interested', 'Left Message', 'No Answer', 'Busy'])
 const CONNECTED = new Set(['Interested', 'Not Interested'])
 
-export const defaultFollowUpOn = (outcome) => FOLLOW_UP_ON.has(outcome)
+// Why a call ends with no next step. Audit-only (crm_actions.request): nothing
+// extra is written to the CRM. "Moving to Nurture" also parks a Bayway lead.
+export const NO_NEXT_STEP_REASONS = ['Not interested', 'Bad number', 'Moving to Nurture', 'Other']
+export const PARK_REASON = 'Moving to Nurture'
+export const NEXT_STEPS = ['follow_up', 'scheduled', 'none']
+
+// The Next step the Log call form preselects. A task already on the books
+// beats a second follow-up; Not Interested / Bad Number preselect nothing so
+// the choice is deliberate.
+export function defaultNextStep(outcome, hasFutureTask = false) {
+  if (!FOLLOW_UP_ON.has(outcome)) return null
+  return hasFutureTask ? 'scheduled' : 'follow_up'
+}
+
+// After a stage move: offer a follow-up when nothing is scheduled. Parking in
+// Nurture needs none, and callers that don't know the open-task count never prompt.
+export function needsNextStepPrompt(targetKey, openTaskCount) {
+  if (targetKey === 'credit_repair' || openTaskCount == null) return false
+  return !(openTaskCount > 0)
+}
 export const defaultDurationMin = (outcome) => (CONNECTED.has(outcome) ? 5 : 1)
 
 export function defaultFollowUpTitle(name) {
@@ -91,12 +111,19 @@ export function buildActionRequest(form) {
     const note = trimmed(form.note)
     if (note) payload.note = note
     payload.duration_min = Number(form.durationMin) || defaultDurationMin(form.outcome)
-    if (form.followUp?.on) {
+    if (!NEXT_STEPS.includes(form.nextStep)) throw new Error('Pick a next step')
+    payload.next_step = form.nextStep
+    if (form.nextStep === 'follow_up') {
       payload.follow_up = {
-        due_date: form.followUp.dueDate,
-        title: trimmed(form.followUp.title) || 'Follow up',
-        type: form.followUp.type || 'Follow Up',
+        due_date: form.followUp?.dueDate,
+        title: trimmed(form.followUp?.title) || 'Follow up',
+        type: form.followUp?.type || 'Follow Up',
       }
+    }
+    if (form.nextStep === 'none') {
+      if (!NO_NEXT_STEP_REASONS.includes(form.noNextStepReason)) throw new Error('Pick why there is no next step')
+      payload.no_next_step_reason = form.noNextStepReason
+      if (form.noNextStepReason === PARK_REASON) payload.set_stage = 'credit_repair'
     }
     if (form.completeTaskId) payload.complete_task_id = form.completeTaskId
     return { ...base, contact_id: form.contactId, payload }
@@ -131,6 +158,9 @@ export function retryRequestFor(step, original) {
   }
   if (original.action === 'log_call' && step === 'complete_task') {
     return { client_action_id: id, action: 'complete_task', task_id: p.complete_task_id, payload: {} }
+  }
+  if (original.action === 'log_call' && step === 'set_stage') {
+    return { client_action_id: id, action: 'set_stage', contact_id: original.contact_id, payload: { target: p.set_stage } }
   }
   return { ...original, client_action_id: id }
 }
