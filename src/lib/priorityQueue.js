@@ -32,6 +32,17 @@ export const DEFAULT_RULES = {
   hot_cold_days: 3,
   quiet_days: 7,
   stuck_days: 14,
+  // Days in one Bayway column before a lead is "stuck" (board card turns red,
+  // Up Next bucket 6). null = never. Stages not listed (MPG, unknown) use
+  // stuck_days. Mirrored into settings by migration 0034.
+  stuck_days_by_stage: {
+    'New Lead': 2,
+    Attempted: 5,
+    'Contacted/Working': 7,
+    'Application/Estimate Sent': 7,
+    'Application Received': 14,
+    'Nurture / Credit Repair': null,
+  },
   daily_cap: 15,
   use_crm_last_activity_fallback: true,
   mpg_active_statuses: ['Open', 'Pending', 'Initial lead follow up'],
@@ -43,6 +54,12 @@ export const DEFAULT_RULES = {
 
 export function resolveRules(saved) {
   return { ...DEFAULT_RULES, ...(saved || {}) }
+}
+
+// Days in `stage` before a lead counts as stuck, or null for never.
+export function stuckDaysFor(stage, rules) {
+  const byStage = rules.stuck_days_by_stage || {}
+  return Object.prototype.hasOwnProperty.call(byStage, stage) ? byStage[stage] : rules.stuck_days
 }
 
 const ms = (iso) => (iso ? new Date(iso).getTime() : NaN)
@@ -98,7 +115,8 @@ export function bucketsFor(row, rules, now = Date.now()) {
   if (row.is_hot && untouchedFor(rules.hot_cold_days)) out.push('hot_cold')
   if (row.is_active && !(row.open_task_count > 0)) out.push('no_next_step')
   const stageDays = daysSince(row.stage_since, now)
-  if (row.is_active && stageDays != null && stageDays >= rules.stuck_days) out.push('stuck')
+  const stuckLimit = stuckDaysFor(row.stage, rules)
+  if (row.is_active && stuckLimit != null && stageDays != null && stageDays >= stuckLimit) out.push('stuck')
   if (row.is_active && untouchedFor(rules.quiet_days)) out.push('quiet')
   return out
 }
@@ -205,3 +223,6 @@ export function lastCallLabel(row, now = Date.now()) {
   if (d == null) return 'No calls logged'
   return d === 0 ? 'Last call today' : `Last call ${d}d ago`
 }
+
+// Shared with the board's card health (cardHealth.js) so both count days alike.
+export { daysSince as calendarDaysSince, overdueDays }
