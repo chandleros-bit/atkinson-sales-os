@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react'
 
 const listeners = new Set()
 
-// toast: { tone: 'ok' | 'partial' | 'error', text, retry?: () => void }
+// toast: { tone: 'ok' | 'partial' | 'error', text, retry?: () => void,
+//          action?: { label, run: () => void }, duration?: ms (ok toasts) }
 export function showToast(toast) {
   listeners.forEach((fn) => fn(toast))
 }
@@ -20,7 +21,7 @@ export default function Toaster() {
 
   useEffect(() => {
     if (!toast || toast.tone !== 'ok') return undefined
-    const id = setTimeout(() => setToast(null), 3200)
+    const id = setTimeout(() => setToast(null), toast.duration || 3200)
     return () => clearTimeout(id)
   }, [toast])
 
@@ -33,6 +34,18 @@ export default function Toaster() {
       style={{ background: bad ? 'var(--neg-ink)' : 'var(--text)', color: '#fff' }}
     >
       <span>{toast.text}</span>
+      {toast.action && (
+        <button
+          type="button"
+          onClick={() => {
+            setToast(null)
+            toast.action.run()
+          }}
+          className="min-h-[32px] rounded-md border border-white/60 px-2"
+        >
+          {toast.action.label}
+        </button>
+      )}
       {bad && toast.retry && (
         <button
           type="button"

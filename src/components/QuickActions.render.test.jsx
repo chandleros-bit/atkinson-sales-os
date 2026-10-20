@@ -252,6 +252,18 @@ describe('QuickActions: Move stage', () => {
     expect(document.querySelector('[role="dialog"]')).toBe(null)
   })
 
+  it('asks why before marking Lost, then sends the reason', async () => {
+    invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }, { step: 'add_note', ok: true }] }, error: null })
+    await mount({ ...bay, stage: 'Attempted', openTaskCount: 0 })
+    await click(byLabel('Move stage'))
+    await click(byText('Lost'))
+    expect(invoke).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Why is this lead lost?')
+    await click(byText('Went elsewhere'))
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', payload: { target: 'lost', reason: 'Went elsewhere' } })
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
   it('is not offered for MPG or without a board stage', async () => {
     await mount({ ...bay, stage: null })
     expect(byLabel('Move stage')).toBe(null)

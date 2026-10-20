@@ -7,7 +7,7 @@ import { cardHealth, sortByHealth, columnSummary } from '../lib/cardHealth'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
-import { buildActionRequest, summarizeResult, needsNextStepPrompt } from '../lib/crmActions'
+import { buildActionRequest, summarizeResult, needsNextStepPrompt, LOST_REASONS } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
 import QuickActions, { NextStepPrompt } from '../components/QuickActions'
@@ -267,8 +267,11 @@ function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
 }
 
 // Off-flow moves while dragging, so parking a lead needs no scroll to the
-// far-right column. Slice 5 adds Lost here.
-const DROP_ZONES = [{ key: 'credit_repair', stage: 'Nurture / Credit Repair' }]
+// far-right column. Lost asks why first and leaves the board.
+const DROP_ZONES = [
+  { key: 'credit_repair', stage: 'Nurture / Credit Repair' },
+  { key: 'lost', stage: 'Lost', needsReason: true },
+]
 
 function DropZones({ drag }) {
   if (!drag?.draggingId) return null
@@ -362,9 +365,9 @@ const PIPELINE = {
   },
 }
 
-// Drop on Application/Estimate Sent: that column holds two FUB tags
-// (Smart Lists 04 / 05), so ask which one was sent.
-function ChooseTarget({ choice, onPick, onCancel }) {
+// A small pick-one sheet: which tag was sent (Application/Estimate Sent holds
+// Smart Lists 04 / 05), or why a lead is lost.
+function PickSheet({ title, subtitle, options, onPick, onCancel }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onCancel()
     window.addEventListener('keydown', onKey)
@@ -377,17 +380,15 @@ function ChooseTarget({ choice, onPick, onCancel }) {
     >
       <div
         role="dialog"
-        aria-label="Which was sent?"
+        aria-label={title}
         className="w-full rounded-t-2xl border border-line bg-panel p-5 sm:max-w-sm sm:rounded-card"
         style={{ borderTop: '3px solid var(--bay)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-[15px] font-bold">Which was sent?</div>
-        <div className="mt-0.5 text-[12px] text-muted">
-          {choice.row.name || 'This lead'} · Application/Estimate Sent
-        </div>
+        <div className="text-[15px] font-bold">{title}</div>
+        <div className="mt-0.5 text-[12px] text-muted">{subtitle}</div>
         <div className="mt-3 flex flex-col gap-2">
-          {choice.choices.map((c) => (
+          {options.map((c) => (
             <button
               key={c.key}
               type="button"
@@ -425,6 +426,8 @@ export default function Pipeline({ biz }) {
   // A move that leaves the lead with nothing scheduled offers a follow-up.
   // Held here, not in the card: the reload redraws the card in its new column.
   const [prompt, setPrompt] = useState(null)
+  // A drop on the Lost zone: ask why before writing.
+  const [lostAsk, setLostAsk] = useState(null)
 
   // quiet: refresh after a Quick Action without swapping the board for the
   // loading state (which would unmount the card that fired it).
@@ -459,18 +462,31 @@ export default function Pipeline({ biz }) {
     return () => clearInterval(id)
   }, [load])
 
-  const moveTo = async (row, targetKey, stage) => {
+  // undo: putting a lead back after Lost; quiet, so no next-step offer.
+  const moveTo = async (row, targetKey, stage, { reason, undo = false } = {}) => {
     setPending((p) => ({ ...p, [row.id]: stage }))
     const res = await invokeCrmAction(
-      buildActionRequest({ action: 'set_stage', contactId: row.id, target: targetKey }),
+      buildActionRequest({ action: 'set_stage', contactId: row.id, target: targetKey, reason }),
     )
     const summary = summarizeResult(res, 'bay')
-    if (summary.tone === 'ok') {
-      showToast({ ...summary, text: `${row.name || 'Lead'} moved to ${stage} in FollowUpBoss` })
-      if (needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
+    const name = row.name || 'Lead'
+    // The tag move is what matters; a failed Lost note still counts as moved.
+    const moved = Array.isArray(res?.results) ? res.results.find((r) => r.step === 'set_stage') : null
+    if (moved?.ok) {
+      if (targetKey === 'lost') {
+        const back = moved.previous_target || dropTargetFor(row.stage)?.key
+        showToast({
+          ...summary,
+          text: summary.tone === 'ok' ? `${name} marked Lost in FollowUpBoss` : summary.text,
+          ...(back && { action: { label: 'Undo', run: () => moveTo(row, back, row.stage, { undo: true }) }, duration: 10_000 }),
+        })
+      } else {
+        showToast({ ...summary, text: summary.tone === 'ok' ? `${name} moved to ${stage} in FollowUpBoss` : summary.text })
+      }
+      if (!undo && needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
       await load({ quiet: true })
     } else {
-      showToast({ ...summary, retry: () => moveTo(row, targetKey, stage) })
+      showToast({ ...summary, retry: () => moveTo(row, targetKey, stage, { reason, undo }) })
     }
     // Drop the override last: on success the reload already shows the new
     // stage; on failure the card snaps back to where it was.
@@ -507,7 +523,8 @@ export default function Pipeline({ biz }) {
           setDragging(null)
           setOver(null)
           if (!row || row.stage === zone.stage || pending[row.id]) return
-          moveTo(row, zone.key, zone.stage)
+          if (zone.needsReason) setLostAsk(row)
+          else moveTo(row, zone.key, zone.stage)
         },
       }
     : null
@@ -522,7 +539,9 @@ export default function Pipeline({ biz }) {
   }
 
   // The draggable Bayway board shows every column, so empty stages take drops.
-  const columns = buildColumns(withPendingMoves(rows, pending), cfg.flowOrder, {
+  // A lead on its way to Lost leaves the board at once.
+  const visible = rows.filter((r) => pending[r.id] !== 'Lost')
+  const columns = buildColumns(withPendingMoves(visible, pending), cfg.flowOrder, {
     showAllFlow: canDrag,
     sortCards: (cards) => sortByHealth(cards, rules, now),
   })
@@ -567,13 +586,28 @@ export default function Pipeline({ biz }) {
       )}
       <DropZones drag={drag} />
       {choice && (
-        <ChooseTarget
-          choice={choice}
+        <PickSheet
+          title="Which was sent?"
+          subtitle={`${choice.row.name || 'This lead'} · Application/Estimate Sent`}
+          options={choice.choices}
           onCancel={() => setChoice(null)}
           onPick={(key) => {
             const c = choice
             setChoice(null)
             moveTo(c.row, key, c.stage)
+          }}
+        />
+      )}
+      {lostAsk && (
+        <PickSheet
+          title="Why is this lead lost?"
+          subtitle={`${lostAsk.name || 'This lead'} · leaves the board, tagged Lost in FollowUpBoss`}
+          options={LOST_REASONS.map((r) => ({ key: r, label: r }))}
+          onCancel={() => setLostAsk(null)}
+          onPick={(reason) => {
+            const row = lostAsk
+            setLostAsk(null)
+            moveTo(row, 'lost', 'Lost', { reason })
           }}
         />
       )}

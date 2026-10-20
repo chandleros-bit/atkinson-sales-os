@@ -20,6 +20,7 @@ import {
   defaultNextStep,
   NO_NEXT_STEP_REASONS,
   PARK_REASON,
+  LOST_REASONS,
   needsNextStepPrompt,
   defaultDurationMin,
   defaultFollowUpTitle,
@@ -497,13 +498,41 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
     businessId,
     onSuccess: (summary, opts) => onSuccess(summary, { ...opts, target: sent.current }),
   })
-  const move = (target) => {
+  // Lost asks why first; the reason is written to FUB as a note.
+  const [askLost, setAskLost] = useState(false)
+  const move = (target, reason) => {
     sent.current = target
     try {
-      send(buildActionRequest({ action: 'set_stage', contactId, target }))
+      send(buildActionRequest({ action: 'set_stage', contactId, target, reason }))
     } catch (e) {
       setResult({ tone: 'error', text: e.message, failed: [] })
     }
+  }
+  if (askLost) {
+    return (
+      <>
+        <div className="mb-2 text-[13px] font-semibold">Why is this lead lost?</div>
+        <div className="flex flex-col gap-2">
+          {LOST_REASONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              disabled={busy}
+              onClick={() => move('lost', r)}
+              className="flex min-h-[44px] items-center rounded-[10px] border px-3 text-left text-[13.5px] font-semibold disabled:opacity-50"
+              style={{ borderColor: 'var(--line2)' }}
+            >
+              {r}
+            </button>
+          ))}
+          <button type="button" disabled={busy} onClick={() => setAskLost(false)} className="min-h-[40px] text-[12.5px] text-muted">
+            Back
+          </button>
+        </div>
+        {busy && <div className="mt-3 text-[12.5px] text-muted">Updating tags in FollowUpBoss…</div>}
+        <ResultBox result={result} onRetry={retry} busy={busy} />
+      </>
+    )
   }
   return (
     <>
@@ -516,7 +545,7 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
               type="button"
               disabled={busy}
               aria-pressed={current}
-              onClick={() => move(target.key)}
+              onClick={() => (target.key === 'lost' ? setAskLost(true) : move(target.key))}
               className="flex min-h-[44px] items-center justify-between rounded-[10px] border px-3 text-left text-[13.5px] font-semibold disabled:opacity-50"
               style={current ? { borderColor: t.accent, background: t.soft, color: t.ink } : { borderColor: 'var(--line2)' }}
             >

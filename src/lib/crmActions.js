@@ -63,6 +63,8 @@ const CONNECTED = new Set(['Interested', 'Not Interested'])
 // extra is written to the CRM. "Moving to Nurture" also parks a Bayway lead.
 export const NO_NEXT_STEP_REASONS = ['Not interested', 'Bad number', 'Moving to Nurture', 'Other']
 export const PARK_REASON = 'Moving to Nurture'
+// Why a lead is marked Lost from the board; written to FUB as a note.
+export const LOST_REASONS = ['Not interested', 'Went elsewhere', 'Unreachable', 'Not qualified']
 export const NEXT_STEPS = ['follow_up', 'scheduled', 'none']
 
 // The Next step the Log call form preselects. A task already on the books
@@ -76,7 +78,7 @@ export function defaultNextStep(outcome, hasFutureTask = false) {
 // After a stage move: offer a follow-up when nothing is scheduled. Parking in
 // Nurture needs none, and callers that don't know the open-task count never prompt.
 export function needsNextStepPrompt(targetKey, openTaskCount) {
-  if (targetKey === 'credit_repair' || openTaskCount == null) return false
+  if (targetKey === 'credit_repair' || targetKey === 'lost' || openTaskCount == null) return false
   return !(openTaskCount > 0)
 }
 export const defaultDurationMin = (outcome) => (CONNECTED.has(outcome) ? 5 : 1)
@@ -144,7 +146,11 @@ export function buildActionRequest(form) {
     }
   }
   if (action === 'complete_task') return { ...base, task_id: form.taskId, payload: {} }
-  if (action === 'set_stage') return { ...base, contact_id: form.contactId, payload: { target: form.target } }
+  if (action === 'set_stage') {
+    const payload = { target: form.target }
+    if (form.reason) payload.reason = form.reason
+    return { ...base, contact_id: form.contactId, payload }
+  }
   return { ...base, task_id: form.taskId, payload: { due_date: form.dueDate } }
 }
 
