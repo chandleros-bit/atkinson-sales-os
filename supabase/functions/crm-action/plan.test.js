@@ -74,3 +74,18 @@ describe('overallStatus', () => {
     expect(overallStatus([{ ok: false }])).toBe('error')
   })
 })
+
+describe('planSteps: create_contact', () => {
+  const person = { first_name: 'Sam', last_name: 'Lee', phone: '713', email: '', company: '' }
+  it('creates, then adds the note when there is one', () => {
+    expect(planSteps({ action: 'create_contact', business_id: 'bay', payload: { ...person, note: 'Met at open house' } })).toEqual([
+      { step: 'create_contact', person: { firstName: 'Sam', lastName: 'Lee', phone: '713', email: '', company: '' } },
+      { step: 'add_note', subject: null, body: 'Met at open house' },
+    ])
+    expect(planSteps({ action: 'create_contact', business_id: 'bay', payload: person }).map((s) => s.step)).toEqual(['create_contact'])
+  })
+  it('stops after a failed create', () => {
+    expect(shouldStop('create_contact', false)).toBe(true)
+    expect(shouldStop('create_contact', true)).toBe(false)
+  })
+})

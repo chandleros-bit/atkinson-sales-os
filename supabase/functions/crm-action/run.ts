@@ -52,6 +52,11 @@ async function dealMapFor(db, task) {
 
 // Resolve the request onto our rows. Returns { target } or { refuse }.
 async function resolve(db, req) {
+  // A new lead: no contact yet; the book comes with the request.
+  if (req.action === 'create_contact') {
+    if (!SOURCE_FOR[req.business_id]) return { refuse: `Unknown book: ${req.business_id}` }
+    return { target: { businessId: req.business_id, contact: null, task: null } }
+  }
   if (CONTACT_ACTIONS.has(req.action)) {
     if (!req.contact_id) return { refuse: 'contact_id is required' }
     const contact = await loadContact(db, req.contact_id)
@@ -73,8 +78,9 @@ async function resolve(db, req) {
   return { refuse: `Unknown action: ${req.action}` }
 }
 
-async function writebackEnabled(db, businessId) {
-  const { data } = await db.from('settings').select('value').eq('key', 'writeback_enabled').maybeSingle()
+// settings[key] = { bay: bool, mpg: bool }; anything but true is off.
+async function settingOn(db, key, businessId) {
+  const { data } = await db.from('settings').select('value').eq('key', key).maybeSingle()
   return data?.value?.[businessId] === true
 }
 
@@ -117,6 +123,17 @@ function preflight(req, target) {
   if (contact && contact.source_crm !== SOURCE_FOR[businessId]) return 'Contact is not from this book\'s CRM'
   if (task && task.source_crm !== SOURCE_FOR[businessId]) return 'Task is not from this book\'s CRM'
   if (req.action === 'log_call' && businessId === 'bay' && !contact?.phone) return 'No phone on file in FUB'
+  if (req.action === 'create_contact') {
+    const p = req.payload || {}
+    const has = (k) => typeof p[k] === 'string' && p[k].trim() !== ''
+    if (businessId === 'bay') {
+      if (!has('first_name') && !has('last_name')) return 'A new lead needs a name'
+      if (!has('phone') && !has('email')) return 'A new Bayway lead needs a phone or an email'
+    } else {
+      if (!has('last_name')) return 'Zoho needs a last name for a new lead'
+      if (!has('company')) return 'Zoho needs a company for a new lead'
+    }
+  }
   if (TASK_ACTIONS.has(req.action) && task?.is_completed) return 'Task is already completed'
   if (req.action === 'log_call' && task?.is_completed) return 'That task is already completed'
   if (req.action === 'set_stage') return stageRefusal(businessId, contact, req.payload?.target)
@@ -135,7 +152,11 @@ async function send(adapter, step, target) {
         outcome: step.outcome, note: step.note, durationMin: step.durationMin,
       })
     case 'add_note':
+      // After a create, the lead must be mirrored before a note can attach.
+      if (!contact) throw new Error("The new lead isn't in the dashboard yet; add the note after the next sync")
       return adapter.send.addNote({ externalId: contact.external_id, subject: step.subject, body: step.body })
+    case 'create_contact':
+      return adapter.send.createContact(step.person)
     case 'create_task':
       return adapter.send.createTask({
         externalId: contact.external_id, title: step.title, type: step.type, dueDate: step.dueDate,
@@ -158,6 +179,22 @@ async function send(adapter, step, target) {
 async function mirror(db, adapter, step, out, target, now) {
   const { contact, task } = target
   const contactMap = contact ? new Map([[String(contact.external_id), contact.id]]) : new Map()
+  if (step.step === 'create_contact') {
+    // Read the new lead back and upsert it through the sync's own mapper, then
+    // make it the run's contact so the note step attaches to it.
+    const rec = target.businessId === 'bay' ? await adapter.read.person(out.id) : await adapter.read.lead(out.id)
+    const row = adapter.map.contact(rec)
+    const { error } = await db.from('contacts').upsert(row, ON_CONFLICT)
+    if (error) throw new Error(`contacts upsert: ${error.message}`)
+    const { data } = await db
+      .from('contacts')
+      .select('id, business_id, source_crm, external_id, name, phone, person_stage')
+      .eq('source_crm', row.source_crm)
+      .eq('external_id', row.external_id)
+      .maybeSingle()
+    target.contact = data || null
+    return
+  }
   if (step.step === 'set_stage') {
     // Re-read the person and upsert it through the people sync's own mapper;
     // the stage trigger then records the move (stage_key / stage_since).
@@ -236,7 +273,10 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
     await finish(db, req.client_action_id, { status: 'refused', results: [{ step: req.action, ok: false, error }] })
     return reply(200, { status: 'refused', error })
   }
-  if (!(await writebackEnabled(db, businessId))) return refuse(`Write-back is off for ${BOOK_LABEL[businessId]}`)
+  if (!(await settingOn(db, 'writeback_enabled', businessId))) return refuse(`Write-back is off for ${BOOK_LABEL[businessId]}`)
+  if (req.action === 'create_contact' && !(await settingOn(db, 'create_lead_enabled', businessId))) {
+    return refuse(`New lead is off for ${BOOK_LABEL[businessId]}`)
+  }
   const pre = preflight(req, target)
   if (pre) return refuse(pre)
 
@@ -253,12 +293,14 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
       if (out.rescheduled) result.rescheduled = true
       // Where a stage move came from, so the UI can undo it.
       if (out.previous) result.previous_target = out.previous
+      if (out.existing) result.existing = true
       try {
         await mirror(db, adapter, step, out, target, now)
       } catch (e) {
         // The CRM has it; the next sync heals the mirror. Report success.
         result.mirror_error = msg(e)
       }
+      if (step.step === 'create_contact' && target.contact) result.contact_id = target.contact.id
     } catch (e) {
       result.ok = false
       result.error = msg(e)
@@ -268,6 +310,9 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
   }
 
   const status = overallStatus(results)
-  await finish(db, req.client_action_id, { status, results })
+  const patch = { status, results }
+  // A new lead: point the audit row at the contact it made.
+  if (req.action === 'create_contact' && target.contact) patch.contact_id = target.contact.id
+  await finish(db, req.client_action_id, patch)
   return reply(200, { status, results })
 }

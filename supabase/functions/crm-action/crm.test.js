@@ -66,6 +66,46 @@ describe('fubAdapter setStage', () => {
   })
 })
 
+describe('fubAdapter createContact', () => {
+  const now = new Date().toISOString()
+  const old = '2024-01-01T00:00:00Z'
+
+  it('sends a lead event and reassigns a brand-new lead to Chandler', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(response(200, { id: 6001, created: now, assignedUserId: 3 }))
+      .mockResolvedValueOnce(response(200, {}))
+    const out = await fubAdapter(env()).send.createContact({ firstName: 'Sam', lastName: 'Lee', phone: '713', email: '' })
+    expect(out).toEqual({ id: 6001, existing: false })
+    const [url, init] = globalThis.fetch.mock.calls[0]
+    expect([String(url), init.method]).toEqual(['https://api.followupboss.com/v1/events', 'POST'])
+    expect(JSON.parse(init.body)).toMatchObject({ type: 'Registration', source: 'Atkinson Sales OS', person: { firstName: 'Sam', phones: [{ value: '713' }] } })
+    const [url2, init2] = globalThis.fetch.mock.calls[1]
+    expect([String(url2), init2.method, JSON.parse(init2.body)]).toEqual(['https://api.followupboss.com/v1/people/6001', 'PUT', { assignedUserId: 12 }])
+  })
+
+  it('leaves a lead already assigned to Chandler alone', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(response(200, { id: 6002, created: now, assignedUserId: 12 }))
+    expect(await fubAdapter(env()).send.createContact({ firstName: 'Sam', email: 's@example.com' })).toEqual({ id: 6002, existing: false })
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('never takes over someone else\'s existing lead', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(response(200, { id: 77, created: old, assignedUserId: 3, name: 'Sam Lee' }))
+    await expect(fubAdapter(env()).send.createContact({ firstName: 'Sam', phone: '713' })).rejects.toThrow('Already in FollowUpBoss as Sam Lee, assigned to another agent')
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an existing lead of Chandler\'s as existing', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(response(200, { id: 78, created: old, assignedUserId: 12 }))
+    expect(await fubAdapter(env()).send.createContact({ firstName: 'Sam', phone: '713' })).toEqual({ id: 78, existing: true })
+  })
+
+  it('treats an empty answer as FUB ignoring the lead', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({ ok: true, status: 204, headers: { get: () => null }, text: async () => '' })
+    await expect(fubAdapter(env()).send.createContact({ firstName: 'Sam', phone: '713' })).rejects.toThrow(/ignored the lead/)
+  })
+})
+
 describe('zohoAdapter', () => {
   const token = response(200, { access_token: 'tok' })
 
