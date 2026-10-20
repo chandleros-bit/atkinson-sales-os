@@ -121,3 +121,11 @@ if (STAGE_TAGS[LOST].some((t) => have.has(t))) return LOST
   - Drag to Lost and pick "Went elsewhere". The card leaves the board, the FUB note "Marked Lost: Went elsewhere" is written, and ZZ is tagged Lost.
   - Undo returns ZZ to New Lead with the Lost tag gone.
 - [ ] Push and open the PR. The PR description carries the Smart List step.
+
+---
+
+## Change after the live test (2026-10-20)
+
+Marking ZZ Test Sales OS Lost started Chandler's FUB action plan **"Lost Leads"**, which set the FUB **person stage to Lost**. Undo removed the tag but couldn't reset the stage, because only the FUB account owner can edit person stages. Decision (Chandler): **remove Undo.** The Lost reason sheet and the Move stage → Lost step now warn: "FollowUpBoss's Lost Leads plan will move this lead to stage Lost. Only the FUB account owner can move it back." `Toaster` stays as it was. crm-action still returns `previous_target`; it's harmless and unused.
+
+Because FUB moves the stage itself, Lost leads leave Smart Lists 01–09 without the "Tag is not Lost" filter change.

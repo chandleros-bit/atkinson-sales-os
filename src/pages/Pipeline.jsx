@@ -7,7 +7,7 @@ import { cardHealth, sortByHealth, columnSummary } from '../lib/cardHealth'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
-import { buildActionRequest, summarizeResult, needsNextStepPrompt, LOST_REASONS } from '../lib/crmActions'
+import { buildActionRequest, summarizeResult, needsNextStepPrompt, LOST_REASONS, LOST_WARNING } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
 import QuickActions, { NextStepPrompt } from '../components/QuickActions'
@@ -367,7 +367,7 @@ const PIPELINE = {
 
 // A small pick-one sheet: which tag was sent (Application/Estimate Sent holds
 // Smart Lists 04 / 05), or why a lead is lost.
-function PickSheet({ title, subtitle, options, onPick, onCancel }) {
+function PickSheet({ title, subtitle, note, options, onPick, onCancel }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onCancel()
     window.addEventListener('keydown', onKey)
@@ -387,6 +387,7 @@ function PickSheet({ title, subtitle, options, onPick, onCancel }) {
       >
         <div className="text-[15px] font-bold">{title}</div>
         <div className="mt-0.5 text-[12px] text-muted">{subtitle}</div>
+        {note && <div className="mt-2 text-[12px] font-semibold" style={{ color: 'var(--bay-gold)' }}>{note}</div>}
         <div className="mt-3 flex flex-col gap-2">
           {options.map((c) => (
             <button
@@ -462,8 +463,7 @@ export default function Pipeline({ biz }) {
     return () => clearInterval(id)
   }, [load])
 
-  // undo: putting a lead back after Lost; quiet, so no next-step offer.
-  const moveTo = async (row, targetKey, stage, { reason, undo = false } = {}) => {
+  const moveTo = async (row, targetKey, stage, { reason } = {}) => {
     setPending((p) => ({ ...p, [row.id]: stage }))
     const res = await invokeCrmAction(
       buildActionRequest({ action: 'set_stage', contactId: row.id, target: targetKey, reason }),
@@ -473,20 +473,12 @@ export default function Pipeline({ biz }) {
     // The tag move is what matters; a failed Lost note still counts as moved.
     const moved = Array.isArray(res?.results) ? res.results.find((r) => r.step === 'set_stage') : null
     if (moved?.ok) {
-      if (targetKey === 'lost') {
-        const back = moved.previous_target || dropTargetFor(row.stage)?.key
-        showToast({
-          ...summary,
-          text: summary.tone === 'ok' ? `${name} marked Lost in FollowUpBoss` : summary.text,
-          ...(back && { action: { label: 'Undo', run: () => moveTo(row, back, row.stage, { undo: true }) }, duration: 10_000 }),
-        })
-      } else {
-        showToast({ ...summary, text: summary.tone === 'ok' ? `${name} moved to ${stage} in FollowUpBoss` : summary.text })
-      }
-      if (!undo && needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
+      const done = targetKey === 'lost' ? `${name} marked Lost in FollowUpBoss` : `${name} moved to ${stage} in FollowUpBoss`
+      showToast({ ...summary, text: summary.tone === 'ok' ? done : summary.text })
+      if (needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
       await load({ quiet: true })
     } else {
-      showToast({ ...summary, retry: () => moveTo(row, targetKey, stage, { reason, undo }) })
+      showToast({ ...summary, retry: () => moveTo(row, targetKey, stage, { reason }) })
     }
     // Drop the override last: on success the reload already shows the new
     // stage; on failure the card snaps back to where it was.
@@ -602,6 +594,7 @@ export default function Pipeline({ biz }) {
         <PickSheet
           title="Why is this lead lost?"
           subtitle={`${lostAsk.name || 'This lead'} · leaves the board, tagged Lost in FollowUpBoss`}
+          note={LOST_WARNING}
           options={LOST_REASONS.map((r) => ({ key: r, label: r }))}
           onCancel={() => setLostAsk(null)}
           onPick={(reason) => {

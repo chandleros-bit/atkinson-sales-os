@@ -259,6 +259,7 @@ describe('QuickActions: Move stage', () => {
     await click(byText('Lost'))
     expect(invoke).not.toHaveBeenCalled()
     expect(document.querySelector('[role="dialog"]').textContent).toContain('Why is this lead lost?')
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Only the FUB account owner can move it back')
     await click(byText('Went elsewhere'))
     expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', payload: { target: 'lost', reason: 'Went elsewhere' } })
     expect(document.querySelector('[role="dialog"]')).toBe(null)

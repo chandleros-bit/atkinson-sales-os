@@ -178,7 +178,7 @@ describe('Pipeline drop zones', () => {
     expect(document.querySelector('[role="dialog"]')).toBe(null)
   })
 
-  it('marks a lead Lost with a reason, drops it from the board, and can undo', async () => {
+  it('marks a lead Lost with a reason, warns it is one-way, and drops it from the board', async () => {
     invoke.mockResolvedValueOnce({
       data: { status: 'ok', results: [{ step: 'set_stage', ok: true, previous_target: 'attempted' }, { step: 'add_note', ok: true }] },
       error: null,
@@ -191,6 +191,7 @@ describe('Pipeline drop zones', () => {
     await fire(lost, 'dragover')
     await fire(lost, 'drop')
     expect(invoke).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"]').textContent).toContain('Only the FUB account owner can move it back')
     const why = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Went elsewhere')
     DATA.rows = []
     await act(async () => why.click())
@@ -199,16 +200,9 @@ describe('Pipeline drop zones', () => {
     expect(cardEl('a')).toBe(null)
     expect(document.querySelector('[role="dialog"]')).toBe(null)
     expect(document.body.textContent).toContain('Ana Lead marked Lost in FollowUpBoss')
-
-    invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
-    DATA.rows = [{ ...card('a', 'Ana Lead', 'Attempted'), open_task_count: 0 }]
-    const undo = [...document.querySelectorAll('[role="status"] button')].find((b) => b.textContent === 'Undo')
-    await act(async () => undo.click())
-    await act(async () => {})
-    expect(invoke.mock.calls[1][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a', payload: { target: 'attempted' } })
-    expect(cardsIn('Attempted')).toEqual(['a'])
-    // Undo restores quietly: no next-step offer.
-    expect(document.querySelector('[role="dialog"]')).toBe(null)
+    // FUB's Lost Leads plan moves the person stage, which the dashboard can't
+    // reverse, so there is no Undo.
+    expect([...document.querySelectorAll('[role="status"] button')].some((b) => b.textContent === 'Undo')).toBe(false)
   })
 
   it('offers no zone for a lead already in Nurture', async () => {

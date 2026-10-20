@@ -65,6 +65,11 @@ export const NO_NEXT_STEP_REASONS = ['Not interested', 'Bad number', 'Moving to 
 export const PARK_REASON = 'Moving to Nurture'
 // Why a lead is marked Lost from the board; written to FUB as a note.
 export const LOST_REASONS = ['Not interested', 'Went elsewhere', 'Unreachable', 'Not qualified']
+// The `Lost` tag starts Chandler's "Lost Leads" action plan in FUB, which sets
+// the person stage to Lost. Only the FUB account owner can edit person stages,
+// so there is no Undo: say so before the write.
+export const LOST_WARNING =
+  "FollowUpBoss's Lost Leads plan will move this lead to stage Lost. Only the FUB account owner can move it back."
 export const NEXT_STEPS = ['follow_up', 'scheduled', 'none']
 
 // The Next step the Log call form preselects. A task already on the books

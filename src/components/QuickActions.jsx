@@ -21,6 +21,7 @@ import {
   NO_NEXT_STEP_REASONS,
   PARK_REASON,
   LOST_REASONS,
+  LOST_WARNING,
   needsNextStepPrompt,
   defaultDurationMin,
   defaultFollowUpTitle,
@@ -511,7 +512,8 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
   if (askLost) {
     return (
       <>
-        <div className="mb-2 text-[13px] font-semibold">Why is this lead lost?</div>
+        <div className="text-[13px] font-semibold">Why is this lead lost?</div>
+        <div className="mb-2 mt-1 text-[12px] text-muted">{LOST_WARNING}</div>
         <div className="flex flex-col gap-2">
           {LOST_REASONS.map((r) => (
             <button
