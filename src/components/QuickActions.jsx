@@ -75,7 +75,7 @@ function IconButton({ name, label, onClick, disabled, title, t }) {
 }
 
 // Desktop: a small centered panel. Under 640px: a bottom sheet.
-function Sheet({ title, subtitle, t, onClose, children }) {
+export function Sheet({ title, subtitle, t, onClose, children }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
