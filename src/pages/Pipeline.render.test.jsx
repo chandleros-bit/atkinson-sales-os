@@ -1,0 +1,125 @@
+// @vitest-environment jsdom
+// Drag between stages on the Bayway board: a drop writes the column's FUB tag
+// through crm-action set_stage, the shared Application/Estimate Sent column
+// asks which tag, a failed move snaps back, and MPG stays read-only.
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createRoot } from 'react-dom/client'
+import { act } from 'react'
+import React from 'react'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const invoke = vi.fn()
+const DATA = { rows: [] }
+
+function query(table) {
+  const q = {}
+  for (const m of ['select', 'eq', 'order', 'range', 'lte', 'limit']) q[m] = () => q
+  q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { bay: true, mpg: false } } : null, error: null })
+  q.then = (resolve) => resolve({ data: table.startsWith('v_') && table !== 'v_tasks' ? DATA.rows : [], error: null })
+  return q
+}
+
+vi.mock('../lib/supabase', () => ({
+  isDemoMode: false,
+  supabase: { from: (t) => query(t), functions: { invoke: (...a) => invoke(...a) } },
+}))
+
+const { default: Pipeline } = await import('./Pipeline')
+const { default: Toaster } = await import('../components/Toaster')
+const { resetWritebackFlags } = await import('../lib/writeback')
+
+const card = (id, name, stage) => ({ id, business_id: 'bay', name, phone: '1', email: null, last_touch_at: null, stage, crm_profile_url: '#' })
+
+async function mount(biz = 'bay') {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  await act(async () => {
+    createRoot(host).render(
+      React.createElement(React.Fragment, null, React.createElement(Pipeline, { biz }), React.createElement(Toaster)),
+    )
+  })
+  await act(async () => {})
+  return host
+}
+
+const fire = async (el, type) =>
+  act(async () => {
+    el.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }))
+  })
+const column = (stage) => document.querySelector(`[data-stage="${stage}"]`)
+const cardEl = (id) => document.querySelector(`[data-card-id="${id}"]`)
+const cardsIn = (stage) => [...column(stage).querySelectorAll('[data-card-id]')].map((e) => e.getAttribute('data-card-id'))
+
+async function dragTo(id, stage) {
+  await fire(cardEl(id), 'dragstart')
+  await fire(column(stage), 'dragover')
+  await fire(column(stage), 'drop')
+}
+
+beforeEach(() => {
+  document.body.innerHTML = ''
+  invoke.mockReset()
+  resetWritebackFlags()
+  DATA.rows = [card('a', 'Ana Lead', 'New Lead'), card('b', 'Ben Working', 'Contacted/Working')]
+})
+
+describe('Pipeline drag between stages', () => {
+  it('shows every Bayway column, empty ones as drop zones', async () => {
+    await mount()
+    expect([...document.querySelectorAll('[data-stage]')].map((e) => e.getAttribute('data-stage'))).toEqual([
+      'New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Nurture / Credit Repair',
+    ])
+    expect(column('Attempted').textContent).toContain('Drop a lead here')
+    expect(cardEl('a').getAttribute('draggable')).toBe('true')
+  })
+
+  it('moves a card and writes the column tag to FUB', async () => {
+    let resolve
+    invoke.mockImplementation(() => new Promise((r) => { resolve = r }))
+    await mount()
+    await dragTo('a', 'Attempted')
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a', payload: { target: 'attempted' } })
+    // Shown in the new column while the write is in flight.
+    expect(cardsIn('Attempted')).toEqual(['a'])
+    expect(cardEl('a').textContent).toContain('Moving…')
+    DATA.rows = [card('a', 'Ana Lead', 'Attempted'), card('b', 'Ben Working', 'Contacted/Working')]
+    await act(async () => resolve({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null }))
+    await act(async () => {})
+    expect(cardsIn('Attempted')).toEqual(['a'])
+    expect(document.body.textContent).toContain('Ana Lead moved to Attempted in FollowUpBoss')
+  })
+
+  it('asks Estimate Sent or Application Sent for the shared column', async () => {
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await mount()
+    await dragTo('a', 'Application/Estimate Sent')
+    expect(invoke).not.toHaveBeenCalled()
+    const pick = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Application Sent')
+    await act(async () => pick.click())
+    expect(invoke.mock.calls[0][1].body.payload).toEqual({ target: 'application_sent' })
+  })
+
+  it('snaps the card back and explains when FUB refuses', async () => {
+    invoke.mockResolvedValue({ data: { status: 'refused', error: 'This lead is Pre-Qualified in FUB' }, error: null })
+    await mount()
+    await dragTo('b', 'New Lead')
+    await act(async () => {})
+    expect(cardsIn('Contacted/Working')).toEqual(['b'])
+    expect(document.body.textContent).toContain('This lead is Pre-Qualified in FUB')
+  })
+
+  it('ignores a drop on the card\'s own column', async () => {
+    await mount()
+    await dragTo('a', 'New Lead')
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('keeps the MPG board read-only', async () => {
+    DATA.rows = [{ id: 'm', name: 'Ana', company: 'Deli', stage: 'Open', last_touch_at: null, crm_profile_url: '#' }]
+    await mount('mpg')
+    expect(cardEl('m').getAttribute('draggable')).toBe('false')
+    expect(document.body.textContent).not.toContain('Drop a lead here')
+  })
+})

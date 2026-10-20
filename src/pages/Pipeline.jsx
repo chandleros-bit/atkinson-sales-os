@@ -2,10 +2,13 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
-import { buildColumns, MPG_LEAD_FLOW } from '../lib/pipeline'
+import { buildColumns, MPG_LEAD_FLOW, dropTargetFor, withPendingMoves } from '../lib/pipeline'
+import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
+import { buildActionRequest, summarizeResult } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
 import QuickActions from '../components/QuickActions'
+import { showToast } from '../components/Toaster'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -78,7 +81,7 @@ function LastNote({ r }) {
   )
 }
 
-function Card({ r, lost, biz, onDone }) {
+function Card({ r, lost, biz, onDone, drag }) {
   const d = daysSince(r.last_touch_at)
   const stale = d === null || d >= STALE_TOUCH_DAYS
   const accent = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
@@ -86,11 +89,31 @@ function Card({ r, lost, biz, onDone }) {
   const headline = biz === 'mpg' ? r.company || r.name : r.name
   const sub = biz === 'mpg' ? r.name || r.phone || r.email : r.phone || r.email
   return (
-    <div className="relative rounded-lg border border-line bg-panel2 px-3 py-2.5 pl-3.5">
+    <div
+      className={`relative rounded-lg border border-line bg-panel2 px-3 py-2.5 pl-3.5 ${
+        drag && !r.moving ? 'cursor-grab active:cursor-grabbing' : ''
+      } ${r.moving ? 'opacity-60' : ''}`}
+      draggable={!!drag && !r.moving}
+      onDragStart={
+        drag
+          ? (e) => {
+              // Firefox only starts a drag when data is set.
+              e.dataTransfer?.setData('text/plain', r.id)
+              if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+              drag.onStart(r.id)
+            }
+          : undefined
+      }
+      onDragEnd={drag ? drag.onEnd : undefined}
+      data-card-id={r.id}
+    >
       <span
         className="absolute bottom-2 left-0 top-2 w-[3px] rounded-sm"
         style={{ background: lost ? 'var(--dim)' : accent }}
       />
+      {r.moving && (
+        <span className="absolute right-2 top-2 text-[10.5px] font-semibold text-dim">Moving…</span>
+      )}
       <CrmLink url={r.crm_profile_url} className="block truncate text-[13px] font-semibold">
         {headline || '(no name)'}
       </CrmLink>
@@ -122,29 +145,63 @@ function Card({ r, lost, biz, onDone }) {
   )
 }
 
-function Column({ col, biz, onDone }) {
+function Column({ col, biz, onDone, drag }) {
+  const isOver = drag?.over === col.stage
   return (
-    <div className="w-[280px] flex-none rounded-card border border-line bg-panel">
+    <div
+      className="w-[280px] flex-none rounded-card border bg-panel transition-colors"
+      style={{
+        borderColor: isOver ? 'var(--bay)' : 'var(--line)',
+        background: isOver ? 'var(--bay-soft)' : undefined,
+      }}
+      onDragOver={
+        drag
+          ? (e) => {
+              if (!drag.draggingId || drag.draggingStage === col.stage) return
+              e.preventDefault()
+              if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+              drag.onOver(col.stage)
+            }
+          : undefined
+      }
+      onDragLeave={
+        drag ? (e) => !e.currentTarget.contains(e.relatedTarget) && drag.onOver(null) : undefined
+      }
+      onDrop={
+        drag
+          ? (e) => {
+              e.preventDefault()
+              drag.onDrop(col.stage)
+            }
+          : undefined
+      }
+      data-stage={col.stage}
+    >
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
         <span className={`text-[12.5px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>
           {col.stage}
         </span>
         <span className="num text-[11px] text-muted">{col.cards.length}</span>
       </div>
-      <div className="flex flex-col gap-2 p-2.5">
+      <div className="flex min-h-[64px] flex-col gap-2 p-2.5">
         {col.cards.map((r) => (
-          <Card key={r.id} r={r} lost={col.isLost} biz={biz} onDone={onDone} />
+          <Card key={r.id} r={r} lost={col.isLost} biz={biz} onDone={onDone} drag={drag} />
         ))}
+        {col.cards.length === 0 && (
+          <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-[11.5px] text-dim">
+            {drag ? 'Drop a lead here' : 'Empty'}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function Board({ columns, biz, onDone }) {
+function Board({ columns, biz, onDone, drag }) {
   return (
     <div className="mt-5 flex gap-3.5 overflow-x-auto pb-2">
       {columns.map((col) => (
-        <Column key={col.stage} col={col} biz={biz} onDone={onDone} />
+        <Column key={col.stage} col={col} biz={biz} onDone={onDone} drag={drag} />
       ))}
     </div>
   )
@@ -200,11 +257,63 @@ const PIPELINE = {
   },
 }
 
+// Drop on Application/Estimate Sent: that column holds two FUB tags
+// (Smart Lists 04 / 05), so ask which one was sent.
+function ChooseTarget({ choice, onPick, onCancel }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onCancel()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-label="Which was sent?"
+        className="w-full rounded-t-2xl border border-line bg-panel p-5 sm:max-w-sm sm:rounded-card"
+        style={{ borderTop: '3px solid var(--bay)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-[15px] font-bold">Which was sent?</div>
+        <div className="mt-0.5 text-[12px] text-muted">
+          {choice.row.name || 'This lead'} · Application/Estimate Sent
+        </div>
+        <div className="mt-3 flex flex-col gap-2">
+          {choice.choices.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => onPick(c.key)}
+              className="min-h-[44px] rounded-[10px] border border-line2 text-[13.5px] font-semibold hover:bg-hoverbg"
+            >
+              {c.label}
+            </button>
+          ))}
+          <button type="button" onClick={onCancel} className="min-h-[40px] text-[12.5px] text-muted">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Pipeline({ biz }) {
   const cfg = PIPELINE[biz] || PIPELINE.bay
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
+  // Drag between stages: Bayway only, writes FUB tags via crm-action set_stage
+  // (same as Quick Actions' Move stage). Touch screens use Move stage instead.
+  const flags = useWritebackFlags()
+  const canDrag = biz === 'bay' && !isDemoMode && flags.bay === true
+  const [pending, setPending] = useState({})
+  const [dragging, setDragging] = useState(null)
+  const [over, setOver] = useState(null)
+  const [choice, setChoice] = useState(null)
 
   // quiet: refresh after a Quick Action without swapping the board for the
   // loading state (which would unmount the card that fired it).
@@ -233,6 +342,51 @@ export default function Pipeline({ biz }) {
     load()
   }, [load])
 
+  const moveTo = async (row, targetKey, stage) => {
+    setPending((p) => ({ ...p, [row.id]: stage }))
+    const res = await invokeCrmAction(
+      buildActionRequest({ action: 'set_stage', contactId: row.id, target: targetKey }),
+    )
+    const summary = summarizeResult(res, 'bay')
+    if (summary.tone === 'ok') {
+      showToast({ ...summary, text: `${row.name || 'Lead'} moved to ${stage} in FollowUpBoss` })
+      await load({ quiet: true })
+    } else {
+      showToast({ ...summary, retry: () => moveTo(row, targetKey, stage) })
+    }
+    // Drop the override last: on success the reload already shows the new
+    // stage; on failure the card snaps back to where it was.
+    setPending((p) => {
+      const next = { ...p }
+      delete next[row.id]
+      return next
+    })
+  }
+
+  const drag = canDrag
+    ? {
+        draggingId: dragging,
+        draggingStage: rows.find((r) => r.id === dragging)?.stage ?? null,
+        over,
+        onStart: (id) => setDragging(id),
+        onEnd: () => {
+          setDragging(null)
+          setOver(null)
+        },
+        onOver: (stage) => setOver(stage),
+        onDrop: (stage) => {
+          const row = rows.find((r) => r.id === dragging)
+          setDragging(null)
+          setOver(null)
+          if (!row || row.stage === stage || pending[row.id]) return
+          const target = dropTargetFor(stage)
+          if (!target) return
+          if (target.key) moveTo(row, target.key, stage)
+          else setChoice({ row, stage, choices: target.choose })
+        },
+      }
+    : null
+
   if (isDemoMode && biz !== 'mpg') {
     return (
       <div>
@@ -242,7 +396,8 @@ export default function Pipeline({ biz }) {
     )
   }
 
-  const columns = buildColumns(rows, cfg.flowOrder)
+  // The draggable Bayway board shows every column, so empty stages take drops.
+  const columns = buildColumns(withPendingMoves(rows, pending), cfg.flowOrder, { showAllFlow: canDrag })
 
   return (
     <div>
@@ -272,7 +427,18 @@ export default function Pipeline({ biz }) {
       )}
 
       {!loading && !error && rows.length > 0 && (
-        <Board columns={columns} biz={biz} onDone={() => load({ quiet: true })} />
+        <Board columns={columns} biz={biz} onDone={() => load({ quiet: true })} drag={drag} />
+      )}
+      {choice && (
+        <ChooseTarget
+          choice={choice}
+          onCancel={() => setChoice(null)}
+          onPick={(key) => {
+            const c = choice
+            setChoice(null)
+            moveTo(c.row, key, c.stage)
+          }}
+        />
       )}
     </div>
   )
