@@ -147,3 +147,18 @@ describe('Pipeline card health', () => {
     expect(cardsIn('Attempted')).toEqual(['a', 'b'])
   })
 })
+
+describe('Pipeline speed-to-lead', () => {
+  it('times a new, uncalled lead and marks it late after 5 minutes', async () => {
+    DATA.rows = [
+      { ...card('n', 'Nia New', 'New Lead'), crm_created_at: new Date(Date.now() - 10 * 60_000).toISOString(), last_outbound_call_at: null },
+      { ...card('c', 'Cal Called', 'New Lead'), crm_created_at: new Date(Date.now() - 10 * 60_000).toISOString(), last_outbound_call_at: new Date().toISOString() },
+    ]
+    await mount()
+    const timer = cardEl('n').querySelector('[data-health="speed"]')
+    expect(timer.textContent).toContain('10m · not called')
+    expect(timer.getAttribute('data-late')).toBe('true')
+    expect(cardEl('c').querySelector('[data-health="speed"]')).toBeNull()
+    expect(cardEl('c').querySelector('[data-health="none"]')).not.toBeNull()
+  })
+})
