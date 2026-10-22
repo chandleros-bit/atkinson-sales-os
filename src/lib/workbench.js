@@ -1,17 +1,28 @@
-// Workbench Work lane: the day's file work, from CRM state only (slice 2).
-// Pure, no React, no I/O. Spec: docs/superpowers/specs/2026-10-22-workbench-design.md
+// Workbench Work lane: the day's file work, from CRM state plus the app's own
+// work_items rows (migration 0041). Pure, no React, no I/O.
+// Spec: docs/superpowers/specs/2026-10-22-workbench-design.md
 //
 //   Estimates to Work (Bayway)        leads in Contacted/Working (tag Working Estimate)
 //   Applications to Review (Bayway)   leads in Application Received
 //   Statement/Proposal Review (MPG)   open Zoho tasks
+//   Other work                        your own "+ Work item" rows
+//   Waiting on others                 anything parked as Waiting until its check-back day
+//
+// A work_items row adds status, waiting on, check back and notes to the item
+// with the same key (source_key). Done hides an item: an estimate until the
+// lead re-enters the stage, an application for a week (the weekly review), an
+// MPG task for good (the Zoho task is closed anyway).
 import { nextStep, stuckFor } from './cardHealth'
 import { calendarDaysSince, overdueDays } from './priorityQueue'
+import { dayKey } from './calendar'
 import { dueLabel } from './tasks'
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 const time = (iso) => (iso ? new Date(iso).getTime() : Infinity)
 // Oldest stage start first; an unknown start goes last.
 const byStageSince = (a, b) => time(a.stage_since) - time(b.stage_since)
+const REVIEW_DAYS = 7
+const DAY_MS = 86400000
 
 function estimateItem(row, rules, now) {
   const next = nextStep(row, now)
@@ -20,6 +31,7 @@ function estimateItem(row, rules, now) {
   return {
     key: `estimate:${row.id}`,
     kind: 'estimate',
+    book: 'bay',
     contactId: row.id,
     name: row.name || '(no name)',
     title: 'Work estimate',
@@ -34,6 +46,7 @@ function applicationItem(row, rules, now) {
   return {
     key: `application:${row.id}`,
     kind: 'application',
+    book: 'bay',
     contactId: row.id,
     name: row.name || '(no name)',
     title: 'Review application',
@@ -47,6 +60,7 @@ function mpgTaskItem(task, now) {
   return {
     key: `mpg_task:${task.id}`,
     kind: 'mpg_task',
+    book: 'mpg',
     taskId: task.id,
     contactId: task.contact_id || null,
     name: [task.company, task.contact_name].filter(Boolean).join(' · ') || '(no lead)',
@@ -56,17 +70,102 @@ function mpgTaskItem(task, now) {
   }
 }
 
+function customItem(row, now) {
+  const days = calendarDaysSince(row.created_at, now)
+  return {
+    key: `custom:${row.id}`,
+    kind: 'custom',
+    book: row.business_id,
+    contactId: row.contact_id || null,
+    name: row.contact_name || '',
+    title: row.title,
+    why: days == null || days === 0 ? 'Added today' : `Added ${plural(days, 'day')} ago`,
+    late: false,
+  }
+}
+
+// Is a done row still in force? stageSince: when the lead entered the stage.
+function doneHides(item, row, stageSince, now) {
+  if (item.kind === 'mpg_task' || item.kind === 'custom') return true
+  const at = time(row.done_at)
+  if (stageSince && at < time(stageSince)) return false // re-entered the stage since
+  if (item.kind === 'application') return now - at < REVIEW_DAYS * DAY_MS
+  return true
+}
+
+// Merge an item with its row. Returns null when done hides it.
+function withRow(item, row, stageSince, now) {
+  if (!row) return { ...item, rowId: null, status: 'open', notes: null }
+  if (row.status === 'done' && doneHides(item, row, stageSince, now)) return null
+  return {
+    ...item,
+    rowId: row.id,
+    status: row.status === 'done' ? 'open' : row.status,
+    waitingOn: row.waiting_on || null,
+    checkBackOn: row.check_back_on || null,
+    notes: row.notes || null,
+  }
+}
+
+const backLabel = (day, now) => {
+  const l = dueLabel(day, now)
+  return l === 'Today' || l === 'Tomorrow' ? l.toLowerCase() : l
+}
+
 // pipeline: v_active_pipeline rows (Bayway). mpgTasks: open v_tasks rows for MPG.
-export function buildWorkGroups({ pipeline = [], mpgTasks = [], rules, now = Date.now() }) {
+// workItems: this user's work_items rows (open, plus recently done).
+export function buildWorkGroups({ pipeline = [], mpgTasks = [], workItems = [], rules, now = Date.now() }) {
+  const bySource = new Map(workItems.filter((w) => w.source_key).map((w) => [w.source_key, w]))
+  const merge = (item, stageSince) => withRow(item, bySource.get(item.key), stageSince, now)
   const inStage = (stage) => pipeline.filter((r) => r.stage === stage)
-  const estimates = inStage('Contacted/Working').sort(byStageSince).map((r) => estimateItem(r, rules, now))
+
+  const estimates = inStage('Contacted/Working').sort(byStageSince).map((r) => merge(estimateItem(r, rules, now), r.stage_since))
   const applications = inStage('Application Received')
     .sort((a, b) => (b.docs_outstanding_count || 0) - (a.docs_outstanding_count || 0) || byStageSince(a, b))
-    .map((r) => applicationItem(r, rules, now))
-  const statements = [...mpgTasks].sort((a, b) => time(a.due_at) - time(b.due_at)).map((t) => mpgTaskItem(t, now))
-  return [
-    { id: 'estimates', title: 'Estimates to Work', book: 'bay', items: estimates },
-    { id: 'applications', title: 'Applications to Review', book: 'bay', items: applications },
-    { id: 'statements', title: 'Statement/Proposal Review', book: 'mpg', items: statements },
+    .map((r) => merge(applicationItem(r, rules, now), r.stage_since))
+  const statements = [...mpgTasks].sort((a, b) => time(a.due_at) - time(b.due_at)).map((t) => merge(mpgTaskItem(t, now)))
+  const custom = workItems
+    .filter((w) => w.kind === 'custom' && w.status !== 'done')
+    .sort((a, b) => time(a.created_at) - time(b.created_at))
+    .map((w) => withRow(customItem(w, now), w, null, now))
+
+  // Waiting items sit in "Waiting on others" until their check-back day, then
+  // return to their own group, earliest check-back first, flagged.
+  const waiting = []
+  const settle = (items) => {
+    const back = []
+    const rest = []
+    for (const it of items) {
+      if (!it) continue
+      if (it.status !== 'waiting') {
+        rest.push(it)
+        continue
+      }
+      const late = it.checkBackOn ? overdueDays(it.checkBackOn, now) : null
+      const who = it.waitingOn || 'others'
+      if (late == null || late < 0) {
+        waiting.push({ ...it, why: `Waiting on ${who}${it.checkBackOn ? ` · check back ${backLabel(it.checkBackOn, now)}` : ''}` })
+      } else {
+        back.push({ ...it, why: `Check back ${late === 0 ? 'today' : `${plural(late, 'day')} late`} · ${who}`, late: late >= 1, lateDays: late })
+      }
+    }
+    back.sort((a, b) => b.lateDays - a.lateDays)
+    return [...back.map(({ lateDays, ...it }) => it), ...rest]
+  }
+
+  const groups = [
+    { id: 'estimates', title: 'Estimates to Work', book: 'bay', items: settle(estimates) },
+    { id: 'applications', title: 'Applications to Review', book: 'bay', items: settle(applications) },
+    { id: 'statements', title: 'Statement/Proposal Review', book: 'mpg', items: settle(statements) },
+    { id: 'custom', title: 'Other work', book: null, items: settle(custom) },
   ]
+  waiting.sort((a, b) => time(a.checkBackOn) - time(b.checkBackOn))
+  return [...groups, { id: 'waiting', title: 'Waiting on others', book: null, items: waiting }]
+}
+
+// Header "Work done / total": rows done today versus open items plus those.
+export function workProgress(workItems, openCount, now = Date.now()) {
+  const today = dayKey(new Date(now).toISOString())
+  const done = workItems.filter((w) => w.status === 'done' && w.done_at && dayKey(w.done_at) === today).length
+  return { done, total: openCount + done }
 }
