@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import { refreshPriorityQueue } from '../lib/usePriorityQueue'
 import { BUCKET_LABEL, reasonText, lastCallLabel } from '../lib/priorityQueue'
 import { followUpDate } from '../lib/crmActions'
+import { formatPhone, telHref } from '../lib/phone'
 import BizBadge from './BizBadge'
 import CrmLink from './CrmLink'
 import QuickActions from './QuickActions'
@@ -34,8 +35,6 @@ const SHORT = {
   stuck: 'Stuck',
   quiet: 'Quiet',
 }
-
-const telHref = (phone) => (phone ? `tel:${String(phone).replace(/[^\d+]/g, '')}` : null)
 
 function fmtDay(key) {
   const [y, m, d] = key.split('-').map(Number)
@@ -150,7 +149,7 @@ function ActionsSheet({ row, onClose }) {
           <div className="flex flex-col gap-2">
             {tel && (
               <a href={tel} className="flex min-h-[44px] items-center justify-center rounded-[10px] bg-[color:var(--text)] text-[14px] font-bold text-white">
-                Call {row.phone}
+                Call {formatPhone(row.phone)}
               </a>
             )}
             <div className="flex items-center justify-between rounded-[10px] border border-line px-2">
@@ -185,6 +184,7 @@ export default function UpNextRow({ row, compact = false }) {
   const mobile = useIsMobile()
   const [sheet, setSheet] = useState(false)
   const tel = telHref(row.phone)
+  const phone = formatPhone(row.phone)
   const others = row.reasons.filter((r) => r !== row.bucket)
 
   const body = (
@@ -197,6 +197,20 @@ export default function UpNextRow({ row, compact = false }) {
       <div className="mt-1 text-[13px] font-semibold" style={{ color: row.bucket === 'reached_out' || row.bucket === 'new_lead' ? 'var(--neg-ink)' : 'var(--text)' }}>
         {reasonText(row)}
       </div>
+      {/* The number to call through. On a phone the whole row already dials,
+          so it's plain text there (no link inside a link). */}
+      {phone &&
+        (mobile ? (
+          <div className="num mt-0.5 text-[13px] font-semibold text-muted">{phone}</div>
+        ) : (
+          <a
+            href={tel}
+            aria-label={`Call ${row.name || 'lead'} at ${phone}`}
+            className="num mt-0.5 inline-block text-[13px] font-semibold text-muted hover:text-[color:var(--text)] hover:underline"
+          >
+            {phone}
+          </a>
+        ))}
       {!compact && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
           {row.stage && <span className="rounded-full border border-line px-2 py-0.5 text-muted">{row.stage}</span>}
@@ -233,7 +247,7 @@ export default function UpNextRow({ row, compact = false }) {
       {!mobile && !compact && (
         <div className="hidden flex-none items-center gap-1 lg:flex">
           {tel && (
-            <a href={tel} className="grid h-10 place-items-center rounded-[10px] px-2.5 text-[12.5px] font-semibold text-muted hover:bg-hoverbg" title={`Call ${row.phone}`}>
+            <a href={tel} className="grid h-10 place-items-center rounded-[10px] px-2.5 text-[12.5px] font-semibold text-muted hover:bg-hoverbg" title={`Call ${phone}`}>
               Call
             </a>
           )}

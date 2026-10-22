@@ -92,6 +92,24 @@ describe('Up Next page', () => {
     expect(link.textContent).toContain('no callback')
   })
 
+  it('shows the phone number on the card, formatted, as a call link', async () => {
+    mobile = false
+    DATA.signals = [lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) })]
+    const host = await render()
+    const phone = host.querySelector('a[aria-label="Call Ana Inbound at (713) 555-0142"]')
+    expect(phone.textContent).toBe('(713) 555-0142')
+    expect(phone.getAttribute('href')).toBe('tel:7135550142')
+  })
+
+  it('shows the formatted number inside the tap-to-dial row on a phone', async () => {
+    mobile = true
+    DATA.signals = [lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) })]
+    const host = await render()
+    const row = host.querySelector('a[aria-label="Call Ana Inbound"]')
+    expect(row.textContent).toContain('(713) 555-0142')
+    expect(row.querySelector('a')).toBe(null)
+  })
+
   it('shows the empty state when nobody is slipping', async () => {
     mobile = false
     DATA.signals = [lead({ id: 'fine', name: 'All Good' })]
