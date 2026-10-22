@@ -17,7 +17,7 @@ Deno.serve(async () => {
   let upserted = 0
 
   try {
-    const { accessToken, apiHost } = await getAccessToken()
+    const { accessToken, apiHost } = await getAccessToken({ db })
 
     // Zoho record id -> our contacts.id, so activities resolve their contact.
     // Contacts are synced from both Zoho Leads and Contacts (see zoho.ts), so

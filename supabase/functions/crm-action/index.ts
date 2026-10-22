@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
   try {
     const out = await run(body, {
       db,
-      adapters: { bay: fubAdapter(env), mpg: zohoAdapter(env) },
+      adapters: { bay: fubAdapter(env), mpg: zohoAdapter(env, { db }) },
       allowedUserId: env('ALLOWED_USER_ID'),
       userId,
     })

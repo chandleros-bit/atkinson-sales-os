@@ -18,7 +18,7 @@ Deno.serve(async () => {
   let upserted = 0
 
   try {
-    const { accessToken, apiHost } = await getAccessToken()
+    const { accessToken, apiHost } = await getAccessToken({ db })
 
     // Zoho contact id -> our contacts.id, Zoho deal id -> our deals.id.
     // Paginate past the 1000-row cap and fail loud on error — see the

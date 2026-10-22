@@ -26,9 +26,30 @@ export function getCredentials(get) {
   }
 }
 
-// Refreshes the short-lived access token. Returns { accessToken, apiHost }.
-export async function getAccessToken() {
+// Refresh this long before a cached token expires.
+const TOKEN_MARGIN_MS = 5 * 60_000
+
+// An access token for every Zoho function. Returns { accessToken, apiHost }.
+//
+// Zoho caps refreshes at about 10 per 10 minutes (and limits live tokens per
+// refresh token), so with a db the token is shared through oauth_tokens
+// (migration 0039, service role only) and reused until TOKEN_MARGIN_MS before
+// it expires: about one refresh an hour instead of one per run or action.
+// `source` (the refresh token's last 6 characters) makes a re-authorization
+// mint a fresh token at once instead of reusing one from the old grant.
+export async function getAccessToken({ db = null, now = Date.now() } = {}) {
   const c = getCredentials((k) => Deno.env.get(k))
+  const source = c.refreshToken.slice(-6)
+  if (db) {
+    const { data } = await db
+      .from('oauth_tokens')
+      .select('access_token, api_host, expires_at, source')
+      .eq('provider', 'zoho')
+      .maybeSingle()
+    if (data?.access_token && data.source === source && Date.parse(data.expires_at) - now > TOKEN_MARGIN_MS) {
+      return { accessToken: data.access_token, apiHost: data.api_host || c.apiHost }
+    }
+  }
   const url = new URL(`${c.accountsHost}/oauth/v2/token`)
   url.searchParams.set('grant_type', 'refresh_token')
   url.searchParams.set('client_id', c.clientId)
@@ -38,6 +59,21 @@ export async function getAccessToken() {
   const json = await res.json().catch(() => ({}))
   if (!res.ok || !json.access_token) {
     throw new Error(`Zoho token refresh -> ${res.status}: ${JSON.stringify(json).slice(0, 300)}`)
+  }
+  if (db) {
+    const expiresIn = Number(json.expires_in) || 3600
+    // A failed cache write only costs an extra refresh next time.
+    await db.from('oauth_tokens').upsert(
+      {
+        provider: 'zoho',
+        access_token: json.access_token,
+        api_host: c.apiHost,
+        expires_at: new Date(now + expiresIn * 1000).toISOString(),
+        source,
+        updated_at: new Date(now).toISOString(),
+      },
+      { onConflict: 'provider' },
+    )
   }
   return { accessToken: json.access_token, apiHost: c.apiHost }
 }

@@ -20,6 +20,10 @@ describe('dueLabel', () => {
   it('labels other days by weekday and date', () => {
     expect(dueLabel('2026-07-22T09:00:00', now)).toBe('Wed · Jul 22')
   })
+  it('labels a date-only CRM due date (midnight UTC) by its calendar date, not the local day before', () => {
+    expect(dueLabel('2026-07-23T00:00:00Z', now)).toBe('Thu · Jul 23')
+    expect(dueLabel('2026-07-23T00:00:00+00:00', now)).toBe('Thu · Jul 23')
+  })
   it('handles a null due date', () => {
     expect(dueLabel(null, now)).toBe('No due date')
   })

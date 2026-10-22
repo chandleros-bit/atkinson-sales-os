@@ -155,9 +155,10 @@ export async function summarizeSmartLists(get, myUserId) {
   return { list_response_keys: Object.keys(json || {}), all_people_total: all?._metadata?.total ?? null, lists: out }
 }
 
-export function zohoAdapter(env) {
+// db: shares the cached Zoho access token (oauth_tokens) with the syncs.
+export function zohoAdapter(env, { db = null } = {}) {
   let session = null
-  const auth = async () => (session ??= await getAccessToken())
+  const auth = async () => (session ??= await getAccessToken({ db }))
   // Set ZOHO_CALL_RESULT=true once the live check confirms the org has the
   // stock Call_Result picklist.
   const callResult = env('ZOHO_CALL_RESULT') === 'true'

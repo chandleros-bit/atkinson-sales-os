@@ -89,7 +89,10 @@ export function dueLabel(iso, now = Date.now()) {
   if (key === todayKey) return 'Today'
   if (key === dayKey(tmr.toISOString())) return 'Tomorrow'
   if (key === dayKey(yst.toISOString())) return 'Yesterday'
-  const d = new Date(iso)
+  // Build from the day key, not the instant: a date-only CRM due date sits on
+  // midnight UTC, which is the evening before in Central time.
+  const [y, m, dd] = key.split('-').map(Number)
+  const d = new Date(y, m - 1, dd)
   return `${DAYS[d.getDay()]} · ${MONTHS[d.getMonth()]} ${d.getDate()}`
 }
 

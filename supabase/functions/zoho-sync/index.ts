@@ -19,7 +19,7 @@ Deno.serve(async () => {
   let upserted = 0
 
   try {
-    const { accessToken, apiHost } = await getAccessToken()
+    const { accessToken, apiHost } = await getAccessToken({ db })
 
     // 1. Deal stages first, so deals can resolve stage_id on insert.
     const stages = await fetchDealStages(apiHost, accessToken)
