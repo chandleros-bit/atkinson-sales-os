@@ -1,20 +1,24 @@
-// Data for the Workbench Work lane: Bayway leads in the two work stages and
-// open MPG Zoho tasks. Refreshes after any CRM write (crm-action:done) and
-// every minute while the tab is visible. Rules live in workbench.js.
+// Data for the Workbench Work lane: Bayway leads in the two work stages, open
+// MPG Zoho tasks and this user's work_items rows. Refreshes after any CRM
+// write (crm-action:done) and every minute while the tab is visible. Rules
+// live in workbench.js.
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 import { fetchAllSettled } from './fetchAll'
 
 const WORK_STAGES = ['Contacted/Working', 'Application Received']
+// Done rows older than this no longer change the lane (weekly review = 7).
+const WORK_ITEM_DAYS = 8
 
 export function useWorkLane() {
-  const [state, setState] = useState({ pipeline: [], tasks: [], loading: !isDemoMode, error: null })
+  const [state, setState] = useState({ pipeline: [], tasks: [], workItems: [], loading: !isDemoMode, error: null })
 
   const load = useCallback(async () => {
     if (isDemoMode) return
     try {
       // Paged past PostgREST's 1,000-row cap (fetchAll.js), ordered for stable pages.
-      const [p, t] = await Promise.all([
+      const since = new Date(Date.now() - WORK_ITEM_DAYS * 86400000).toISOString()
+      const [p, t, w] = await Promise.all([
         fetchAllSettled(() =>
           supabase
             .from('v_active_pipeline')
@@ -30,12 +34,22 @@ export function useWorkLane() {
             .eq('business_id', 'mpg')
             .order('id'),
         ),
+        // Open rows, plus rows done in the last week (the weekly review and
+        // today's progress). RLS returns only this user's rows.
+        fetchAllSettled(() =>
+          supabase
+            .from('work_items')
+            .select('id, business_id, source_key, kind, contact_id, title, status, waiting_on, check_back_on, notes, created_at, done_at, contact:contacts(name)')
+            .or(`status.neq.done,done_at.gte.${since}`)
+            .order('id'),
+        ),
       ])
       setState({
         pipeline: p.data || [],
         tasks: t.data || [],
+        workItems: (w.data || []).map(({ contact, ...row }) => ({ ...row, contact_name: contact?.name || null })),
         loading: false,
-        error: p.error?.message || t.error?.message || null,
+        error: p.error?.message || t.error?.message || w.error?.message || null,
       })
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: String(e?.message || e) }))

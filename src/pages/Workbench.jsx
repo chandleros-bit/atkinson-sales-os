@@ -1,14 +1,16 @@
 // Workbench: the day's calls and file work, side by side (one at a time on a
 // phone). Calls = the Up Next queue (Priority, embedded); Work = estimates,
-// applications and MPG tasks from CRM state (workbench.js).
+// applications and MPG tasks from CRM state plus your own work items, with
+// the app's status and notes on top (workbench.js, work_items).
 // Spec: docs/superpowers/specs/2026-10-22-workbench-design.md
 import { useState } from 'react'
 import { useBusiness } from '../context/BusinessContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useWorkLane } from '../lib/useWorkLane'
-import { buildWorkGroups } from '../lib/workbench'
+import { buildWorkGroups, workProgress } from '../lib/workbench'
 import { useIsMobile } from '../components/UpNextRow'
 import WorkLane from '../components/WorkLane'
+import AddWorkItem from '../components/AddWorkItem'
 import Priority from './Priority'
 
 function Progress({ label, value, pct }) {
@@ -31,13 +33,18 @@ export default function Workbench() {
   const work = useWorkLane()
   const mobile = useIsMobile()
   const [lane, setLane] = useState('calls')
+  const [adding, setAdding] = useState(false)
 
   const cap = rules.daily_cap || 15
   const toGo = Math.min(queue.length, cap)
-  const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, rules, now: Date.now() }).filter(
-    (g) => biz === 'all' || g.book === biz,
-  )
-  const openWork = groups.reduce((n, g) => n + g.items.length, 0)
+  const inBook = (book) => biz === 'all' || book === biz
+  const now = Date.now()
+  const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now })
+    .filter((g) => g.book == null || inBook(g.book))
+    .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
+  // Open = what's in front of you; waiting items are parked, not counted.
+  const openWork = groups.reduce((n, g) => n + (g.id === 'waiting' ? 0 : g.items.length), 0)
+  const progress = workProgress(work.workItems.filter((w) => inBook(w.business_id)), openWork, now)
   const showCalls = !mobile || lane === 'calls'
   const showWork = !mobile || lane === 'work'
 
@@ -50,10 +57,10 @@ export default function Workbench() {
         </div>
         <div className="flex flex-wrap items-center gap-5">
           <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
-          <div className="flex min-w-[120px] flex-col gap-1.5">
-            <div className="text-[13px] font-semibold">Work</div>
-            <div className="num text-[13px] text-muted">{openWork} open</div>
-          </div>
+          <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
+          <button type="button" onClick={() => setAdding(true)} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
+            + Work item
+          </button>
         </div>
       </header>
 
@@ -92,6 +99,16 @@ export default function Workbench() {
           </section>
         )}
       </div>
+      {adding && (
+        <AddWorkItem
+          defaultBook={biz === 'mpg' ? 'mpg' : 'bay'}
+          onClose={() => setAdding(false)}
+          onAdded={() => {
+            setAdding(false)
+            work.reload()
+          }}
+        />
+      )}
     </div>
   )
 }
