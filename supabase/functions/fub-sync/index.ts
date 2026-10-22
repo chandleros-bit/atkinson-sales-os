@@ -1,5 +1,5 @@
 // Scheduled FollowUpBoss sync.
-// Triggered every 15 minutes by pg_cron (see docs/phase2-fub-setup.md).
+// Triggered every 2 minutes by pg_cron (migration 0038; see docs/phase2-fub-setup.md).
 // Read-only against FUB: this function only GETs from FollowUpBoss and
 // writes to our own Supabase tables. It never writes back to FUB.
 // Also called from the browser (Sync Status "Run FollowUpBoss sync now"), so
@@ -8,7 +8,9 @@
 import { serviceClient, logSync, fetchAll, linkFubOrphans } from '../_shared/db.ts'
 import { withCors } from '../_shared/cors.ts'
 import { myFubUserId, partitionByOwner } from '../_shared/fub-owner.ts'
+import { backfillFirstNotes } from '../_shared/fub-first-note.ts'
 import {
+  fubGet,
   fetchPipelinesAndStages,
   fetchPeople,
   fetchDeals,
@@ -113,7 +115,17 @@ Deno.serve(withCors(async (req) => {
 
     // New people may be the missing link for activity / tasks synced earlier.
     const linked = await linkFubOrphans(db)
-    await logSync(db, 'fub', 'ok', upserted, [ownerNote, linked].filter(Boolean).join(' | '))
+
+    // Each lead's first note (what its source said), a few leads per run, for
+    // the Workbench call rows. Never fails the sync.
+    let firstNotes = ''
+    try {
+      const { checked, found } = await backfillFirstNotes(db, fubGet, { max: 30 })
+      if (checked) firstNotes = `first notes: ${found} of ${checked}`
+    } catch (e) {
+      firstNotes = `first notes skipped: ${String(e?.message || e).slice(0, 120)}`
+    }
+    await logSync(db, 'fub', 'ok', upserted, [ownerNote, linked, firstNotes].filter(Boolean).join(' | '))
     return new Response(JSON.stringify({ ok: true, upserted }), {
       headers: { 'content-type': 'application/json' },
     })
