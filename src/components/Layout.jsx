@@ -28,7 +28,7 @@ function MobileBar({ onMenu }) {
           `flex h-10 flex-none items-center rounded-[10px] px-3 text-[13px] font-semibold ${isActive ? 'grad-dual-soft' : 'text-muted'}`
         }
       >
-        Up Next
+        Workbench
       </NavLink>
       <div className="min-w-0 flex-1">
         <BusinessFilter />

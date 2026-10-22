@@ -20,7 +20,8 @@ function stuckNote(rules) {
   return `Stage tracking started ${fmt(start)}. "Stuck in stage" starts flagging around ${fmt(ready)}.`
 }
 
-export default function Priority() {
+// embedded: the Workbench's Calls lane (no page header or width of its own).
+export default function Priority({ embedded = false }) {
   const { biz } = useBusiness()
   const { queue, rules, touchedToday, loading, error } = usePriorityQueue(biz)
   const [showAll, setShowAll] = useState(false)
@@ -31,7 +32,9 @@ export default function Priority() {
   const note = stuckNote(rules)
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className={embedded ? '' : 'mx-auto max-w-3xl'}>
+      {!embedded && (
+      <>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-[26px] font-bold tracking-tight">Up Next</h2>
         {!loading && !error && (
@@ -44,6 +47,8 @@ export default function Priority() {
         Who to call next, worst first. A lead drops off when you call, log a note, or schedule a
         follow-up.
       </p>
+      </>
+      )}
 
       {isDemoMode && (
         <div className="mt-6 rounded-card border border-line bg-panel px-6 py-8 text-center text-sm text-muted">
@@ -63,7 +68,7 @@ export default function Priority() {
       )}
 
       {!loading && !error && groups.length > 0 && (
-        <div className="mt-5 flex flex-col gap-5">
+        <div className={`${embedded ? '' : 'mt-5 '}flex flex-col gap-5`}>
           {groups.map((g) => (
             <section key={g.id}>
               <div className="mb-1.5 flex items-center gap-2 px-1 text-[12px] font-bold uppercase tracking-wide text-muted">

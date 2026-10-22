@@ -149,7 +149,7 @@ export default function Sidebar({ onNavigate }) {
         <div>
           <GroupLabel>OVERVIEW</GroupLabel>
           <Item to="/priority" icon="◎" badge={urgent || null} badgeBiz={biz} onNavigate={onNavigate}>
-            Priority
+            Workbench
           </Item>
           <Item onNavigate={onNavigate} to="/" icon="▤">Overview</Item>
           <Item onNavigate={onNavigate} to="/calendar" icon="▦">Calendar</Item>
