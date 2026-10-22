@@ -8,6 +8,7 @@ import { refreshPriorityQueue } from '../lib/usePriorityQueue'
 import { BUCKET_LABEL, reasonText, lastCallLabel } from '../lib/priorityQueue'
 import { followUpDate } from '../lib/crmActions'
 import { formatPhone, telHref } from '../lib/phone'
+import { noteFacts } from '../lib/noteFacts'
 import BizBadge from './BizBadge'
 import CrmLink from './CrmLink'
 import QuickActions from './QuickActions'
@@ -185,6 +186,9 @@ export default function UpNextRow({ row, compact = false }) {
   const [sheet, setSheet] = useState(false)
   const tel = telHref(row.phone)
   const phone = formatPhone(row.phone)
+  // Quick read before the call: where the lead came from and what it said.
+  const source = row.lead_source && row.lead_source !== '<unspecified>' ? row.lead_source : null
+  const { facts, snippet } = noteFacts(row.first_note)
   const others = row.reasons.filter((r) => r !== row.bucket)
 
   const body = (
@@ -193,10 +197,26 @@ export default function UpNextRow({ row, compact = false }) {
         <BizBadge biz={row.business_id} />
         <span className="truncate text-[14px] font-semibold">{row.name || '(no name)'}</span>
         {row.business_id === 'mpg' && row.company && <span className="truncate text-[12px] text-muted">· {row.company}</span>}
+        {source && (
+          <span title="Lead source" className="flex-none rounded-full border border-line2 px-2 py-px text-[11px] font-semibold text-muted">
+            {source}
+          </span>
+        )}
       </div>
       <div className="mt-1 text-[13px] font-semibold" style={{ color: row.bucket === 'reached_out' || row.bucket === 'new_lead' ? 'var(--neg-ink)' : 'var(--text)' }}>
         {reasonText(row)}
       </div>
+      {(facts.length > 0 || snippet) && (
+        <div aria-label={`First note for ${row.name || 'lead'}`} className="mt-1 flex flex-wrap gap-1">
+          {facts.length > 0
+            ? facts.map((f) => (
+                <span key={f.k} data-fact className="rounded-md bg-panel2 px-1.5 py-0.5 text-[11.5px]">
+                  <span className="text-muted">{f.k}</span> {f.v}
+                </span>
+              ))
+            : <span className="truncate text-[12px] text-muted">“{snippet}”</span>}
+        </div>
+      )}
       {/* The number to call through. On a phone the whole row already dials,
           so it's plain text there (no link inside a link). */}
       {phone &&

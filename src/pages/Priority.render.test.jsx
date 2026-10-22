@@ -110,6 +110,26 @@ describe('Up Next page', () => {
     expect(row.querySelector('a')).toBe(null)
   })
 
+  it('shows the lead source and the first note as quick facts', async () => {
+    mobile = false
+    DATA.signals = [
+      lead({
+        id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1), lead_source: 'Lendingflow',
+        first_note: 'Credit: 660-699 / email: ana@example.com / loan type: DSCR Purchase / state: North Carolina / loan amount: $200K - $500K',
+      }),
+      lead({ id: 'b', name: 'Ben Overdue', open_task_count: 1, oldest_open_due_at: iso(3), lead_source: '<unspecified>', first_note: 'Wants to refi after rates drop' }),
+    ]
+    const host = await render()
+    const facts = host.querySelector('[aria-label="First note for Ana Inbound"]')
+    expect([...facts.querySelectorAll('span[data-fact]')].map((e) => e.textContent)).toEqual([
+      'Credit 660-699', 'Loan type DSCR Purchase', 'State North Carolina', 'Amount $200K - $500K',
+    ])
+    expect(facts.textContent).not.toContain('ana@example.com')
+    expect(host.querySelector('[title="Lead source"]').textContent).toBe('Lendingflow')
+    expect(host.querySelectorAll('[title="Lead source"]')).toHaveLength(1)
+    expect(host.querySelector('[aria-label="First note for Ben Overdue"]').textContent).toBe('“Wants to refi after rates drop”')
+  })
+
   it('shows the empty state when nobody is slipping', async () => {
     mobile = false
     DATA.signals = [lead({ id: 'fine', name: 'All Good' })]
