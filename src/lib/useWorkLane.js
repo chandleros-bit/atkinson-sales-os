@@ -7,7 +7,7 @@ import { supabase, isDemoMode } from './supabase'
 import { fetchAllSettled } from './fetchAll'
 
 const WORK_STAGES = ['Contacted/Working', 'Application Received']
-// Done rows older than this no longer change the lane (weekly review = 7).
+// Done rows older than this no longer change the lane (application review = 3 days).
 const WORK_ITEM_DAYS = 8
 
 export function useWorkLane() {
@@ -44,8 +44,14 @@ export function useWorkLane() {
             .order('id'),
         ),
       ])
+      // Estimate leads' FUB tags (a DSCR lead suggests "Estimate sent").
+      const estimateIds = (p.data || []).filter((r) => r.stage === 'Contacted/Working').map((r) => r.id)
+      const tagged = estimateIds.length
+        ? await fetchAllSettled(() => supabase.from('contacts').select('id, tags:raw->tags').in('id', estimateIds).order('id'))
+        : { data: [] }
+      const tagsById = new Map((tagged.data || []).map((c) => [c.id, c.tags]))
       setState({
-        pipeline: p.data || [],
+        pipeline: (p.data || []).map((r) => (tagsById.has(r.id) ? { ...r, tags: tagsById.get(r.id) } : r)),
         tasks: t.data || [],
         workItems: (w.data || []).map(({ contact, ...row }) => ({ ...row, contact_name: contact?.name || null })),
         loading: false,

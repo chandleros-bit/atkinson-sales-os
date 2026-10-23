@@ -61,7 +61,9 @@ The full call session (one lead at a time) and the lead side panel. The Workbenc
 
 ## Decisions (Chandler, 2026-10-22)
 
-1. **MPG Statement/Proposal Review = open Zoho tasks.** Every open Zoho task on an MPG lead (e.g. "3 Statements FU") is an MPG work item; completing it in the Workbench completes the Zoho task.
-2. **Applications to Review = weekly review.** Every Application Received file shows until it's marked reviewed, then comes back 7 days later.
+1. **MPG Statement/Proposal Review = statement/proposal Zoho tasks + your own MPG items.** An open Zoho task whose title mentions statements or a proposal (e.g. "3 Statements FU") is an MPG work item; completing it in the Workbench completes the Zoho task. Your own "+ Work item" rows on MPG land here too (Bayway ones stay in Other work). *(Updated 2026-10-22 from "every open Zoho task".)*
+2. **Applications to Review: back after 3 days, or sooner on a change.** Every Application Received file shows until it's marked reviewed. It comes back after 3 days, or sooner when its missing-docs count changes or the lead re-enters the stage. `work_items.review_docs` (migration 0042) keeps the count at review time. *(Updated 2026-10-22 from "weekly, 7 days".)*
 3. **No checklists in v1.** Work items get status (Working / Waiting on…), check-back date and notes; checklists can come later.
 4. **Rename** the Priority / Up Next nav item to **Workbench**; the Calls lane keeps the Up Next ranking.
+5. **Estimate Done suggests a choice.** The "What did you send?" box lists **Estimate sent** first, filled, for a lead tagged `DSCR` (investors comparing lenders), and **Application sent** first for everyone else (buyers who need a pre-approval). Both are always offered.
+6. **Rough time on every item:** estimate ~25m, application ~20m, statement/proposal ~20m, other ~15m.

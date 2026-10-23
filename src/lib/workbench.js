@@ -4,14 +4,18 @@
 //
 //   Estimates to Work (Bayway)        leads in Contacted/Working (tag Working Estimate)
 //   Applications to Review (Bayway)   leads in Application Received
-//   Statement/Proposal Review (MPG)   open Zoho tasks
-//   Other work                        your own "+ Work item" rows
+//   Statement/Proposal Review (MPG)   open Zoho tasks about statements or a
+//                                     proposal, plus your own MPG work items
+//   Other work                        your own Bayway "+ Work item" rows
 //   Waiting on others                 anything parked as Waiting until its check-back day
 //
 // A work_items row adds status, waiting on, check back and notes to the item
 // with the same key (source_key). Done hides an item: an estimate until the
-// lead re-enters the stage, an application for a week (the weekly review), an
-// MPG task for good (the Zoho task is closed anyway).
+// lead re-enters the stage; an application for 3 days, or until its missing
+// docs change or the lead re-enters the stage; an MPG task for good (the Zoho
+// task is closed anyway).
+//
+// Every item carries a rough time (minutes) for planning the day.
 import { nextStep, stuckFor } from './cardHealth'
 import { calendarDaysSince, overdueDays } from './priorityQueue'
 import { dayKey } from './calendar'
@@ -21,8 +25,19 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 const time = (iso) => (iso ? new Date(iso).getTime() : Infinity)
 // Oldest stage start first; an unknown start goes last.
 const byStageSince = (a, b) => time(a.stage_since) - time(b.stage_since)
-const REVIEW_DAYS = 7
+const REVIEW_DAYS = 3
 const DAY_MS = 86400000
+
+// Rough minutes per kind of work, shown as a chip.
+const MINUTES = { estimate: 25, application: 20, mpg_task: 20, custom: 15 }
+
+// Zoho tasks that belong in Statement/Proposal Review.
+const STATEMENT_TASK = /statement|proposal/i
+export const isStatementTask = (title) => STATEMENT_TASK.test(String(title || ''))
+
+// DSCR leads are usually investors comparing lenders (Estimate sent); the
+// rest are buyers who need a pre-approval (Application sent).
+const isDscr = (tags) => (Array.isArray(tags) ? tags : []).some((t) => String(t).trim().toLowerCase() === 'dscr')
 
 function estimateItem(row, rules, now) {
   const next = nextStep(row, now)
@@ -37,6 +52,8 @@ function estimateItem(row, rules, now) {
     title: 'Work estimate',
     why: overdue ? next.text : days == null ? `In ${row.stage}` : `Working ${plural(days, 'day')}`,
     late: overdue || !!stuckFor(row, rules, now),
+    minutes: MINUTES.estimate,
+    suggestedSent: isDscr(row.tags) ? 'estimate_sent' : 'application_sent',
   }
 }
 
@@ -52,6 +69,8 @@ function applicationItem(row, rules, now) {
     title: 'Review application',
     why: docs > 0 ? `${plural(docs, 'doc')} missing` : days == null ? `In ${row.stage}` : `In ${row.stage} ${plural(days, 'day')}`,
     late: docs > 0 || !!stuckFor(row, rules, now),
+    minutes: MINUTES.application,
+    docs,
   }
 }
 
@@ -67,6 +86,7 @@ function mpgTaskItem(task, now) {
     title: task.title || 'Zoho task',
     why: late == null ? 'No due date' : late >= 1 ? `Due ${plural(late, 'day')} ago` : late === 0 ? 'Due today' : `Due ${dueLabel(task.due_at, now)}`,
     late: late != null && late >= 1,
+    minutes: MINUTES.mpg_task,
   }
 }
 
@@ -81,6 +101,7 @@ function customItem(row, now) {
     title: row.title,
     why: days == null || days === 0 ? 'Added today' : `Added ${plural(days, 'day')} ago`,
     late: false,
+    minutes: MINUTES.custom,
   }
 }
 
@@ -89,7 +110,11 @@ function doneHides(item, row, stageSince, now) {
   if (item.kind === 'mpg_task' || item.kind === 'custom') return true
   const at = time(row.done_at)
   if (stageSince && at < time(stageSince)) return false // re-entered the stage since
-  if (item.kind === 'application') return now - at < REVIEW_DAYS * DAY_MS
+  if (item.kind === 'application') {
+    // A doc came in or a new one was asked for since the review: back now.
+    if (row.review_docs != null && row.review_docs !== item.docs) return false
+    return now - at < REVIEW_DAYS * DAY_MS
+  }
   return true
 }
 
@@ -123,11 +148,18 @@ export function buildWorkGroups({ pipeline = [], mpgTasks = [], workItems = [], 
   const applications = inStage('Application Received')
     .sort((a, b) => (b.docs_outstanding_count || 0) - (a.docs_outstanding_count || 0) || byStageSince(a, b))
     .map((r) => merge(applicationItem(r, rules, now), r.stage_since))
-  const statements = [...mpgTasks].sort((a, b) => time(a.due_at) - time(b.due_at)).map((t) => merge(mpgTaskItem(t, now)))
-  const custom = workItems
+  const own = workItems
     .filter((w) => w.kind === 'custom' && w.status !== 'done')
     .sort((a, b) => time(a.created_at) - time(b.created_at))
     .map((w) => withRow(customItem(w, now), w, null, now))
+  const statements = [
+    ...mpgTasks
+      .filter((t) => isStatementTask(t.title))
+      .sort((a, b) => time(a.due_at) - time(b.due_at))
+      .map((t) => merge(mpgTaskItem(t, now))),
+    ...own.filter((it) => it && it.book === 'mpg'),
+  ]
+  const custom = own.filter((it) => it && it.book !== 'mpg')
 
   // Waiting items sit in "Waiting on others" until their check-back day, then
   // return to their own group, earliest check-back first, flagged.

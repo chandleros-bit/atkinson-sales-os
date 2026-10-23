@@ -3,7 +3,8 @@
 // app's own work_items row) and a finishing button:
 //   estimate     Done -> "Estimate sent" / "Application sent" (FUB stage tag)
 //   mpg_task     Done -> completes the Zoho task
-//   application  Mark reviewed -> hidden for a week (the weekly review)
+//   application  Mark reviewed -> hidden for 3 days, or until its missing docs
+//                change or the lead re-enters the stage
 //   custom       Done
 // A CRM Done is also recorded in work_items, for the Work progress bar.
 import { useState } from 'react'
@@ -147,6 +148,11 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
           {showBook && <BizBadge biz={it.book} />}
           <span className="text-[14px] font-semibold">{it.title}</span>
           <StatusPill status={it.status} />
+          {it.minutes && (
+            <span className="num rounded-full bg-panel2 px-2 py-[1px] text-[11px] font-semibold text-muted" title="Rough time">
+              ~{it.minutes}m
+            </span>
+          )}
         </div>
         {it.name && <div className="truncate text-[12.5px] text-muted">{it.name}</div>}
         <div className={`text-[12.5px] font-semibold ${it.late ? '' : 'text-muted'}`} style={it.late ? { color: 'var(--neg-ink)' } : undefined}>
@@ -208,7 +214,7 @@ export default function WorkLane({ groups, onChanged }) {
     else if (item.kind === 'mpg_task') run(item, buildActionRequest({ action: 'complete_task', taskId: item.taskId }))
     else {
       setBusy(item.key)
-      await record(item, item.kind === 'application' ? `${item.name} reviewed. Back in 7 days.` : `Done: ${item.title}`)
+      await record(item, item.kind === 'application' ? `${item.name} reviewed. Back in 3 days, or sooner if docs change.` : `Done: ${item.title}`)
       setBusy(null)
       onChanged?.()
     }
@@ -269,12 +275,28 @@ export default function WorkLane({ groups, onChanged }) {
       })}
       {picking && (
         <Sheet title="What did you send?" subtitle={`${picking.name} · moves the lead in FollowUpBoss`} t={quickActionTone('bay')} onClose={() => setPicking(null)}>
+          {/* The suggested one (DSCR -> Estimate sent, else Application sent) comes first, filled. */}
           <div className="flex flex-col gap-2">
-            {SENT.map((s) => (
-              <button key={s.key} type="button" onClick={() => sent(s)} className="min-h-[44px] rounded-[10px] border border-line2 text-[13.5px] font-semibold">
-                {s.label}
-              </button>
-            ))}
+            {[...SENT]
+              .sort((a, b) => (b.key === picking.suggestedSent) - (a.key === picking.suggestedSent))
+              .map((s) => {
+                const suggested = s.key === picking.suggestedSent
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    aria-describedby={suggested ? 'sent-suggested' : undefined}
+                    onClick={() => sent(s)}
+                    className={`min-h-[44px] rounded-[10px] border text-[13.5px] font-semibold ${suggested ? 'border-transparent text-white' : 'border-line2'}`}
+                    style={suggested ? { background: 'var(--text)' } : undefined}
+                  >
+                    {s.label}
+                  </button>
+                )
+              })}
+            <div id="sent-suggested" className="text-[12px] text-muted">
+              {picking.suggestedSent === 'estimate_sent' ? 'Suggested: DSCR lead, usually comparing lenders.' : 'Suggested: buyer who needs a pre-approval.'}
+            </div>
           </div>
         </Sheet>
       )}
