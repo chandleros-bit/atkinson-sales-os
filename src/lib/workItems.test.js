@@ -41,6 +41,14 @@ describe('saveWorkItem', () => {
     expect(calls[0].body.done_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
   })
 
+  it('records the missing-docs count when an application is reviewed', async () => {
+    await saveWorkItem({ key: 'application:a', kind: 'application', book: 'bay', contactId: 'a', docs: 2 }, { status: 'done' })
+    expect(calls[0].body).toMatchObject({ status: 'done', review_docs: 2 })
+    calls.length = 0
+    await saveWorkItem({ key: 'estimate:e', kind: 'estimate', book: 'bay', contactId: 'e' }, { status: 'done' })
+    expect(calls[0].body.review_docs).toBeUndefined()
+  })
+
   it('updates a custom item by id', async () => {
     await saveWorkItem({ key: 'custom:c1', kind: 'custom', rowId: 'c1', book: 'bay' }, { status: 'waiting', waiting_on: 'Lender', check_back_on: '2026-10-26' })
     expect(calls[0]).toMatchObject({ op: 'update', eq: ['id', 'c1'], body: { status: 'waiting', waiting_on: 'Lender', check_back_on: '2026-10-26' } })

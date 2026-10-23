@@ -19,7 +19,7 @@ const iso = (daysAgo, hh = 12) => {
   d.setHours(hh, 0, 0, 0)
   return d.toISOString()
 }
-const DATA = { signals: [], pipeline: [], tasks: [], people: {}, workItems: [] }
+const DATA = { signals: [], pipeline: [], tasks: [], people: {}, workItems: [], contacts: [] }
 const writes = []
 
 function query(table) {
@@ -48,7 +48,8 @@ function query(table) {
           : table === 'v_active_pipeline' ? DATA.pipeline
             : table === 'v_tasks' ? DATA.tasks
               : table === 'work_items' ? DATA.workItems
-                : [],
+                : table === 'contacts' ? DATA.contacts
+                  : [],
       error: null,
     })
   return q
@@ -66,6 +67,7 @@ beforeEach(() => {
   invoke.mockReset()
   writes.length = 0
   DATA.workItems = []
+  DATA.contacts = []
   window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
   DATA.signals = [
     {
@@ -145,6 +147,30 @@ describe('Workbench', () => {
     expect(writes[0]).toMatchObject({ table: 'work_items', op: 'upsert', body: { source_key: 'estimate:e1', status: 'done' } })
   })
 
+  it('suggests Estimate sent first for a DSCR lead, and shows rough times', async () => {
+    mobile = false
+    DATA.contacts = [{ id: 'e1', tags: ['Active', 'DSCR'] }]
+    await render()
+    expect(workItem('Gil Estimate').textContent).toContain('~25m')
+    expect(workItem('Ivy Application').textContent).toContain('~20m')
+    await act(async () => button(workItem('Gil Estimate'), 'Done').click())
+    const dialog = document.querySelector('[role="dialog"]')
+    const choices = [...dialog.querySelectorAll('button')].map((b) => b.textContent.trim()).filter((t) => t.endsWith('sent'))
+    expect(choices).toEqual(['Estimate sent', 'Application sent'])
+    expect(dialog.textContent).toContain('Suggested: DSCR lead')
+  })
+
+  it('suggests Application sent first for a buyer', async () => {
+    mobile = false
+    DATA.contacts = [{ id: 'e1', tags: ['Active'] }]
+    await render()
+    await act(async () => button(workItem('Gil Estimate'), 'Done').click())
+    const dialog = document.querySelector('[role="dialog"]')
+    const choices = [...dialog.querySelectorAll('button')].map((b) => b.textContent.trim()).filter((t) => t.endsWith('sent'))
+    expect(choices).toEqual(['Application sent', 'Estimate sent'])
+    expect(dialog.textContent).toContain('Suggested: buyer who needs a pre-approval')
+  })
+
   it('completes an MPG Zoho task', async () => {
     mobile = false
     invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'complete_task', ok: true }] }, error: null })
@@ -201,12 +227,12 @@ describe('Workbench', () => {
     expect(writes[0].body.check_back_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('marks an application reviewed for the week', async () => {
+  it('marks an application reviewed for 3 days', async () => {
     mobile = false
     await render()
     await act(async () => button(workItem('Ivy Application'), 'Mark reviewed').click())
     expect(writes[0]).toMatchObject({ op: 'upsert', body: { source_key: 'application:a1', kind: 'application', status: 'done' } })
-    expect(document.body.textContent).toContain('Ivy Application reviewed. Back in 7 days.')
+    expect(document.body.textContent).toContain('Ivy Application reviewed. Back in 3 days, or sooner if docs change.')
   })
 
   it('adds a custom work item', async () => {

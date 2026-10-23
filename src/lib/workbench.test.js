@@ -85,11 +85,46 @@ describe('buildWorkGroups', () => {
     expect(back.map((i) => [i.key, i.status])).toEqual([['estimate:a', 'open']])
   })
 
-  it('hides a reviewed application for 7 days (the weekly review)', () => {
-    const app = [lead({ id: 'p', stage: 'Application Received', stage_since: daysAgo(30) })]
-    const reviewed = (n) => [{ id: 'w', source_key: 'application:p', kind: 'application', status: 'done', done_at: daysAgo(n) }]
-    expect(build(app, [], reviewed(6))[1].items).toEqual([])
-    expect(build(app, [], reviewed(7))[1].items.map((i) => i.status)).toEqual(['open'])
+  it('hides a reviewed application for 3 days, or until its missing docs change', () => {
+    const app = (docs) => [lead({ id: 'p', stage: 'Application Received', stage_since: daysAgo(30), docs_outstanding_count: docs })]
+    const reviewed = (n, docs = 2) => [{ id: 'w', source_key: 'application:p', kind: 'application', status: 'done', done_at: daysAgo(n), review_docs: docs }]
+    expect(build(app(2), [], reviewed(2))[1].items).toEqual([])
+    expect(build(app(2), [], reviewed(3))[1].items.map((i) => i.status)).toEqual(['open'])
+    // A doc came in (2 -> 1) or a new one was asked for (2 -> 3): back now.
+    expect(build(app(1), [], reviewed(1))[1].items.map((i) => i.key)).toEqual(['application:p'])
+    expect(build(app(3), [], reviewed(1))[1].items.map((i) => i.key)).toEqual(['application:p'])
+    // Reviewed before the docs count was recorded: only the 3 days apply.
+    expect(build(app(1), [], reviewed(1, null))[1].items).toEqual([])
+  })
+
+  it('brings a reviewed application back when the lead re-enters the stage', () => {
+    const app = [lead({ id: 'p', stage: 'Application Received', stage_since: daysAgo(0, '09:00:00') })]
+    const reviewed = [{ id: 'w', source_key: 'application:p', kind: 'application', status: 'done', done_at: daysAgo(1), review_docs: 0 }]
+    expect(build(app, [], reviewed)[1].items.map((i) => i.key)).toEqual(['application:p'])
+  })
+
+  it('suggests Estimate sent for a DSCR lead and Application sent otherwise', () => {
+    const [est] = build([lead({ id: 'inv', tags: ['Active', ' dscr '] }), lead({ id: 'buyer', tags: ['Active'] }), lead({ id: 'none' })])
+    expect(est.items.map((i) => [i.contactId, i.suggestedSent])).toEqual([
+      ['inv', 'estimate_sent'],
+      ['buyer', 'application_sent'],
+      ['none', 'application_sent'],
+    ])
+  })
+
+  it('gives every item a rough time: estimate 25m, application 20m, statement 20m, other 15m', () => {
+    const groups = build(
+      [lead({ id: 'e' }), lead({ id: 'a', stage: 'Application Received' })],
+      [{ id: 't', title: 'Proposal review', due_at: null, contact_id: 'm', business_id: 'mpg' }],
+      [{ id: 'c', kind: 'custom', business_id: 'bay', title: 'Call appraiser', status: 'open', created_at: daysAgo(0) }],
+    )
+    expect(['estimates', 'applications', 'statements', 'custom'].map((id) => byId(groups, id).items[0].minutes)).toEqual([25, 20, 20, 15])
+  })
+
+  it('keeps only statement / proposal Zoho tasks in Statement/Proposal Review', () => {
+    const task = (id, title) => ({ id, title, due_at: null, contact_id: 'm', business_id: 'mpg' })
+    const groups = build([], [task('t1', '3 Statements FU'), task('t2', 'Send proposal'), task('t3', 'Call back Tuesday'), task('t4', null)])
+    expect(byId(groups, 'statements').items.map((i) => i.key)).toEqual(['mpg_task:t1', 'mpg_task:t2'])
   })
 
   it('parks waiting items until their check-back day, then brings them back', () => {
@@ -105,14 +140,16 @@ describe('buildWorkGroups', () => {
     ])
   })
 
-  it('lists open custom items in Other work with their own book', () => {
+  it('puts your own MPG items in Statement/Proposal Review and the rest in Other work', () => {
     const groups = build([], [], [
-      { id: 'c1', kind: 'custom', business_id: 'mpg', title: 'Send ISO agreement', status: 'open', created_at: daysAgo(2) },
+      { id: 'c1', kind: 'custom', business_id: 'mpg', title: 'Review Deli statements', status: 'open', created_at: daysAgo(2) },
       { id: 'c2', kind: 'custom', business_id: 'bay', title: 'Fix appraisal', status: 'working', contact_id: 'x', created_at: daysAgo(0) },
       { id: 'c3', kind: 'custom', business_id: 'bay', title: 'Old', status: 'done', done_at: daysAgo(0), created_at: daysAgo(5) },
     ])
+    expect(byId(groups, 'statements').items.map((i) => [i.key, i.kind, i.book, i.title, i.why, i.status])).toEqual([
+      ['custom:c1', 'custom', 'mpg', 'Review Deli statements', 'Added 2 days ago', 'open'],
+    ])
     expect(byId(groups, 'custom').items.map((i) => [i.key, i.kind, i.book, i.title, i.why, i.status, i.contactId])).toEqual([
-      ['custom:c1', 'custom', 'mpg', 'Send ISO agreement', 'Added 2 days ago', 'open', null],
       ['custom:c2', 'custom', 'bay', 'Fix appraisal', 'Added today', 'working', 'x'],
     ])
   })

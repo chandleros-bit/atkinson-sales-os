@@ -15,6 +15,8 @@ export const WAITING_ON = ['Borrower', 'Lender', 'Processor', 'Underwriter', 'Me
 export async function saveWorkItem(item, patch) {
   const body = { ...patch }
   if (patch.status === 'done') body.done_at = new Date().toISOString()
+  // A reviewed application comes back early when its missing docs change.
+  if (patch.status === 'done' && item.kind === 'application') body.review_docs = item.docs ?? 0
   if (patch.status && patch.status !== 'waiting') {
     body.waiting_on = null
     body.check_back_on = null
