@@ -139,7 +139,7 @@ function ActionsSheet({ row, onClose }) {
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-bold">{row.name || '(no name)'}</div>
+            <div className="break-words text-[15px] font-bold">{row.name || '(no name)'}</div>
             <div className="truncate text-[12px] text-muted">{reasonText(row)}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
@@ -193,10 +193,11 @@ export default function UpNextRow({ row, compact = false }) {
 
   const body = (
     <div className="min-w-0 flex-1">
-      <div className="flex min-w-0 items-center gap-2">
+      {/* The whole name, always: it wraps in a narrow lane (Workbench) rather than cutting off. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
         <BizBadge biz={row.business_id} />
-        <span className="truncate text-[14px] font-semibold">{row.name || '(no name)'}</span>
-        {row.business_id === 'mpg' && row.company && <span className="truncate text-[12px] text-muted">· {row.company}</span>}
+        <span data-lead-name className="min-w-0 break-words text-[14px] font-semibold">{row.name || '(no name)'}</span>
+        {row.business_id === 'mpg' && row.company && <span className="min-w-0 break-words text-[12px] text-muted">· {row.company}</span>}
         {source && (
           <span title="Lead source" className="flex-none rounded-full border border-line2 px-2 py-px text-[11px] font-semibold text-muted">
             {source}
