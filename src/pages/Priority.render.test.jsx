@@ -130,6 +130,16 @@ describe('Up Next page', () => {
     expect(host.querySelector('[aria-label="First note for Ben Overdue"]').textContent).toBe('“Wants to refi after rates drop”')
   })
 
+  it('shows the whole name, wrapping instead of cutting it off', async () => {
+    mobile = false
+    DATA.signals = [lead({ id: 'a', name: 'Maria Guadalupe Hernandez-Villarreal', last_inbound_at: iso(0, 1) })]
+    const host = await render()
+    const name = host.querySelector('[data-lead-name]')
+    expect(name.textContent).toBe('Maria Guadalupe Hernandez-Villarreal')
+    expect(name.className).not.toContain('truncate')
+    expect(name.parentElement.className).toContain('flex-wrap')
+  })
+
   it('shows the empty state when nobody is slipping', async () => {
     mobile = false
     DATA.signals = [lead({ id: 'fine', name: 'All Good' })]
