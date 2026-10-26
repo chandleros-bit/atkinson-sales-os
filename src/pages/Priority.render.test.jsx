@@ -130,6 +130,21 @@ describe('Up Next page', () => {
     expect(host.querySelector('[aria-label="First note for Ben Overdue"]').textContent).toBe('“Wants to refi after rates drop”')
   })
 
+  it('shows a PrivateMortgageLeads note as the same quick facts', async () => {
+    mobile = false
+    DATA.signals = [
+      lead({
+        id: 'p', name: 'Pat Private', last_inbound_at: iso(0, 1), lead_source: 'PrivateMortgageLeads',
+        first_note: 'Loan Amount: $200K-$500K Credit Score: (740-799) Very Good State: GA Specific Property?: Purchase',
+      }),
+    ]
+    const host = await render()
+    const facts = host.querySelector('[aria-label="First note for Pat Private"]')
+    expect([...facts.querySelectorAll('span[data-fact]')].map((e) => e.textContent)).toEqual([
+      'Credit 740-799 Very Good', 'Loan type Purchase', 'State Georgia', 'Amount $200K - $500K',
+    ])
+  })
+
   it('shows the whole name, wrapping instead of cutting it off', async () => {
     mobile = false
     DATA.signals = [lead({ id: 'a', name: 'Maria Guadalupe Hernandez-Villarreal', last_inbound_at: iso(0, 1) })]
