@@ -14,6 +14,27 @@ describe('noteFacts', () => {
       snippet: '',
     })
   })
+  it('reads the PrivateMortgageLeads template the same way as LendingFlow', () => {
+    const text = 'Loan Amount: $150K - $300K Credit Score: (800-850) Excellent State: FL Specific Property?: Purchase'
+    expect(noteFacts(text)).toEqual({
+      facts: [
+        { k: 'Credit', v: '800-850 Excellent' },
+        { k: 'Loan type', v: 'Purchase' },
+        { k: 'State', v: 'Florida' },
+        { k: 'Amount', v: '$150K - $300K' },
+      ],
+      snippet: '',
+    })
+  })
+  it('tidies PrivateMortgageLeads amounts and keeps full state names', () => {
+    const text = 'Loan Amount: $200K-$500K Credit Score: (660-739) Good State: Pennsylvania Specific Property?: Refinance'
+    expect(noteFacts(text).facts).toEqual([
+      { k: 'Credit', v: '660-739 Good' },
+      { k: 'Loan type', v: 'Refinance' },
+      { k: 'State', v: 'Pennsylvania' },
+      { k: 'Amount', v: '$200K - $500K' },
+    ])
+  })
   it('reads one fact per line too, and drops phone numbers', () => {
     expect(noteFacts('Loan Purpose: Refinance\nPhone: 713-555-0100\nProperty Value: $450,000').facts).toEqual([
       { k: 'Loan purpose', v: 'Refinance' },
