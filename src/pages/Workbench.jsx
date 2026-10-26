@@ -11,6 +11,7 @@ import { buildWorkGroups, workProgress } from '../lib/workbench'
 import { useIsMobile } from '../components/UpNextRow'
 import WorkLane from '../components/WorkLane'
 import AddWorkItem from '../components/AddWorkItem'
+import VoiceTask from '../components/VoiceTask'
 import Priority from './Priority'
 
 function Progress({ label, value, pct }) {
@@ -58,9 +59,12 @@ export default function Workbench() {
         <div className="flex flex-wrap items-center gap-5">
           <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
           <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
-          <button type="button" onClick={() => setAdding(true)} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
-            + Work item
-          </button>
+          <div className="flex gap-2">
+            <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
+            <button type="button" onClick={() => setAdding(true)} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
+              + Work item
+            </button>
+          </div>
         </div>
       </header>
 

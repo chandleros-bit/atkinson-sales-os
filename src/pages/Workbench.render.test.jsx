@@ -19,7 +19,7 @@ const iso = (daysAgo, hh = 12) => {
   d.setHours(hh, 0, 0, 0)
   return d.toISOString()
 }
-const DATA = { signals: [], pipeline: [], tasks: [], people: {}, workItems: [], contacts: [] }
+const DATA = { signals: [], pipeline: [], tasks: [], people: {}, workItems: [], contacts: [], searchPeople: [] }
 const writes = []
 
 function query(table) {
@@ -57,9 +57,27 @@ function query(table) {
 
 vi.mock('../lib/supabase', () => ({
   isDemoMode: false,
-  supabase: { from: (t) => query(t), rpc: vi.fn(async () => ({ data: [], error: null })), functions: { invoke: (...a) => invoke(...a) } },
+  supabase: {
+    from: (t) => query(t),
+    rpc: vi.fn(async (fn) => ({ data: fn === 'search_people' ? DATA.searchPeople : [], error: null })),
+    functions: { invoke: (...a) => invoke(...a) },
+  },
 }))
 vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: 'all', matches: () => true }) }))
+
+// Stands in for the browser's speech recognition: say() delivers a final result.
+class FakeSpeech {
+  start() {
+    FakeSpeech.last = this
+  }
+  stop() {
+    this.onend?.()
+  }
+  abort() {}
+  say(text) {
+    this.onresult?.({ results: [Object.assign([{ transcript: text }], { isFinal: true })] })
+  }
+}
 
 let mobile = false
 beforeEach(() => {
@@ -68,6 +86,9 @@ beforeEach(() => {
   writes.length = 0
   DATA.workItems = []
   DATA.contacts = []
+  DATA.searchPeople = []
+  window.webkitSpeechRecognition = FakeSpeech
+  FakeSpeech.last = null
   window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
   DATA.signals = [
     {
@@ -292,5 +313,46 @@ describe('Workbench', () => {
     await act(async () => {})
     expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a1', payload: { target: 'lost', reason: 'Not qualified' } })
     expect(document.body.textContent).toContain('Ivy Application marked Lost in FollowUpBoss')
+  })
+  it('turns a spoken task into a dated Workbench item for the right book', async () => {
+    mobile = false
+    DATA.searchPeople = [{ id: 'v1', business_id: 'mpg', name: 'Vinay Patel', company: 'Patel Freight' }]
+    const host = await render()
+    await act(async () => host.querySelector('[aria-label="Say a task"]').click())
+    expect(dialog().textContent).toContain('Listening…')
+    await act(async () => FakeSpeech.last.say('MPG send Vinay picture of shipping receipt for reimbursement, today'))
+    await act(async () => {})
+    expect(dialog().textContent).toContain('Heard: “MPG send Vinay picture of shipping receipt for reimbursement, today”')
+    expect(document.querySelector('[aria-label="Work item title"]').value).toBe('Send Vinay picture of shipping receipt for reimbursement')
+    expect(button(dialog(), 'MPG').getAttribute('aria-pressed')).toBe('true')
+    expect(button(dialog(), 'Today').getAttribute('aria-pressed')).toBe('true')
+    // The spoken name is offered as a lead link; this one stays a Workbench item.
+    expect(button(dialog(), 'Link to Patel Freight · Vinay Patel?')).not.toBe(undefined)
+    await act(async () => button(dialog(), 'Add').click())
+    const today = new Date()
+    const key = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    expect(writes[0]).toMatchObject({
+      table: 'work_items',
+      op: 'insert',
+      body: { kind: 'custom', business_id: 'mpg', title: 'Send Vinay picture of shipping receipt for reimbursement', due_on: key, contact_id: null },
+    })
+  })
+
+  it('can save a spoken task as a CRM task once a lead is linked', async () => {
+    mobile = false
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'create_task', ok: true }] }, error: null })
+    DATA.searchPeople = [{ id: 'v1', business_id: 'mpg', name: 'Vinay Patel', company: 'Patel Freight' }]
+    const host = await render()
+    await act(async () => host.querySelector('[aria-label="Say a task"]').click())
+    await act(async () => FakeSpeech.last.say('MPG send Vinay the receipt tomorrow'))
+    await act(async () => {})
+    await act(async () => button(dialog(), 'Link to Patel Freight · Vinay Patel?').click())
+    await act(async () => button(dialog(), 'Zoho task').click())
+    await act(async () => button(dialog(), 'Add').click())
+    await act(async () => {})
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'create_task', contact_id: 'v1', payload: { title: 'Send Vinay the receipt' } })
+    expect(invoke.mock.calls[0][1].body.payload.due_date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(writes).toHaveLength(0)
+    expect(document.body.textContent).toContain('Task added in Zoho: Send Vinay the receipt')
   })
 })

@@ -39,7 +39,7 @@ export function useWorkLane() {
         fetchAllSettled(() =>
           supabase
             .from('work_items')
-            .select('id, business_id, source_key, kind, contact_id, title, status, waiting_on, check_back_on, notes, created_at, done_at, contact:contacts(name)')
+            .select('id, business_id, source_key, kind, contact_id, title, status, waiting_on, check_back_on, notes, due_on, review_docs, created_at, done_at, contact:contacts(name)')
             .or(`status.neq.done,done_at.gte.${since}`)
             .order('id'),
         ),
