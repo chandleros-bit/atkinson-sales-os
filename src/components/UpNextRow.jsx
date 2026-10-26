@@ -11,6 +11,7 @@ import { formatPhone, telHref } from '../lib/phone'
 import { noteFacts } from '../lib/noteFacts'
 import BizBadge from './BizBadge'
 import CrmLink from './CrmLink'
+import PersonLink from './PersonLink'
 import QuickActions from './QuickActions'
 import { showToast } from './Toaster'
 
@@ -196,7 +197,9 @@ export default function UpNextRow({ row, compact = false }) {
       {/* The whole name, always: it wraps in a narrow lane (Workbench) rather than cutting off. */}
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
         <BizBadge biz={row.business_id} />
-        <span data-lead-name className="min-w-0 break-words text-[14px] font-semibold">{row.name || '(no name)'}</span>
+        <PersonLink data-lead-name id={row.id} url={row.crm_profile_url} className="min-w-0 break-words text-[14px] font-semibold">
+          {row.name || '(no name)'}
+        </PersonLink>
         {row.business_id === 'mpg' && row.company && <span className="min-w-0 break-words text-[12px] text-muted">· {row.company}</span>}
         {source && (
           <span title="Lead source" className="flex-none rounded-full border border-line2 px-2 py-px text-[11px] font-semibold text-muted">

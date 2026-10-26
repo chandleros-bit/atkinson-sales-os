@@ -5,7 +5,7 @@ import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import { buildMyTasks } from '../lib/overview'
 import { dueLabel } from '../lib/tasks'
-import CrmLink from './CrmLink'
+import PersonLink from './PersonLink'
 import QuickActions from './QuickActions'
 
 // Overdue reads red, due-today amber — the same urgency ladder as the Overview
@@ -138,7 +138,7 @@ export default function MyTasks({ className = '' }) {
                       {isMpg ? 'MPG' : 'Bayway'}
                       {t.task_type ? ` · ${t.task_type}` : ''}
                       {t.contact_name ? ' · ' : ''}
-                      <CrmLink url={t.crm_profile_url}>{t.contact_name || ''}</CrmLink>
+                      <PersonLink id={t.contact_id} url={t.crm_profile_url}>{t.contact_name || ''}</PersonLink>
                     </span>
                   </div>
                 </div>

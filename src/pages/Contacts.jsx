@@ -4,6 +4,7 @@ import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel } from '../lib/overview'
 import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
 import { formatPhone, telHref } from '../lib/phone'
+import PersonLink from '../components/PersonLink'
 
 const PER_PAGE = 50
 
@@ -15,13 +16,9 @@ function MobileContactRow({ r, config }) {
     <div data-contact-row className="border-b border-line px-4 py-3 last:border-b-0 sm:hidden">
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0 truncate text-[14px] font-semibold">
-          {r.crm_profile_url ? (
-            <a href={r.crm_profile_url} target="_blank" rel="noreferrer" title="Open in CRM">
-              {name}
-            </a>
-          ) : (
-            name
-          )}
+          <PersonLink id={r.id} url={r.crm_profile_url}>
+            {name}
+          </PersonLink>
         </div>
         <div className="flex-none text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
       </div>
@@ -102,19 +99,9 @@ const COLUMNS = {
     sortKey: 'name',
     cell: (r) => (
       <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-        {r.crm_profile_url ? (
-          <a
-            href={r.crm_profile_url}
-            target="_blank"
-            rel="noreferrer"
-            className="hover:underline"
-            title="Open in CRM"
-          >
-            {r.name || '(no name)'}
-          </a>
-        ) : (
-          r.name || '(no name)'
-        )}
+        <PersonLink id={r.id} url={r.crm_profile_url}>
+          {r.name || '(no name)'}
+        </PersonLink>
       </div>
     ),
   },

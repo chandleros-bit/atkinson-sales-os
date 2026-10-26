@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Toaster from './Toaster'
 import SearchPalette, { openSearch } from './SearchPalette'
+import { PersonSheetHost } from './PersonSheet'
 import BusinessFilter from './BusinessFilter'
 import { useBusiness } from '../context/BusinessContext'
 import { useAuth } from '../context/AuthContext'
@@ -146,6 +147,7 @@ export default function Layout() {
       <BottomNav />
       <Toaster />
       <SearchPalette />
+      <PersonSheetHost />
     </div>
   )
 }

@@ -93,6 +93,8 @@ export function fubAdapter(env) {
     read: {
       call: (id) => fubGet(`/calls/${id}`),
       note: (id) => fubGet(`/notes/${id}`),
+      // Every note on one person, newest first (contact card).
+      notesFor: async (personId) => (await fubGet('/notes', { personId, sort: '-created', limit: 100 })).notes || [],
       task: (id) => fubGet(`/tasks/${id}`),
       person: (id) => fubGet(`/people/${id}`),
     },
@@ -201,6 +203,12 @@ export function zohoAdapter(env, { db = null } = {}) {
       lead: (id) => readOne(`Leads/${id}`),
       call: (id) => readOne(`Calls/${id}`),
       task: (id) => readOne(`Tasks/${id}`),
+      // Every note on one lead (contact card). Profiles without Notes access
+      // get NOT_SUPPORTED; the card then shows what the mirror has.
+      notesFor: async (leadId) => {
+        const { apiHost, accessToken } = await auth()
+        return (await zohoGet(apiHost, accessToken, `Leads/${leadId}/Notes`, { per_page: 100 })).data || []
+      },
       // Some profiles can't read Notes (NOT_SUPPORTED). zoho-activity-sync never
       // pulls notes, so a mirror built from what we just sent can't collide.
       note: async (id, ctx) => {

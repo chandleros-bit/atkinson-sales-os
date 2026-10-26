@@ -11,7 +11,7 @@ import {
   filterByPriority,
   normalizePriority,
 } from '../lib/tasks'
-import CrmLink from '../components/CrmLink'
+import PersonLink from '../components/PersonLink'
 import QuickActions from '../components/QuickActions'
 
 // One generous window; both books together are far under this today. If a book
@@ -228,7 +228,7 @@ export default function Tasks() {
                       </div>
                       {r.contact_name && (
                         <div className="mt-0.5 truncate text-[12.5px] text-muted sm:hidden">
-                          <CrmLink url={r.crm_profile_url}>{r.contact_name}</CrmLink>
+                          <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name}</PersonLink>
                         </div>
                       )}
                       <div className="mt-1 flex min-w-0 items-center gap-2 sm:hidden">
@@ -238,7 +238,7 @@ export default function Tasks() {
                       </div>
                     </div>
                     <div className="hidden w-40 flex-none truncate text-[12.5px] text-muted lg:block">
-                      <CrmLink url={r.crm_profile_url}>{r.contact_name || '—'}</CrmLink>
+                      <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name || '—'}</PersonLink>
                     </div>
                     {r.owner && (
                       <div className="hidden w-28 flex-none truncate text-right text-[11px] text-dim xl:block">
