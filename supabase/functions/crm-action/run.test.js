@@ -14,6 +14,10 @@ function fakeDb(seed) {
     tables,
     calls,
     failUpsertOn: (t) => failUpsert.add(t),
+    rpc: async (fn, args) => {
+      calls.push(['rpc', fn, args])
+      return { data: 1, error: null }
+    },
     from(table) {
       tables[table] ??= []
       const filters = []
@@ -377,6 +381,29 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     expect((await go(stageReq('c-lead', 'pre_approved', 42))).body.status).toBe('ok')
     expect((await go(stageReq('c-pq', 'disclosed', 43))).body.status).toBe('ok')
     expect(bay.send.setStage).toHaveBeenCalledWith({ externalId: '5002', target: 'disclosed' })
+  })
+
+  it('removes a lead deleted in FUB from the dashboard and stops', async () => {
+    bay.send.setStage = vi.fn(async () => {
+      throw new Error('FUB GET /people/5001 -> 404: {"errorMessage":"Requested resource was not found."}')
+    })
+    const res = await go({ ...stageReq('c-lead', 'lost', 44), payload: { target: 'lost', reason: 'Not interested' } })
+    expect(res.body.status).toBe('error')
+    expect(res.body.results).toEqual([
+      { step: 'set_stage', ok: false, contact_removed: true, error: 'This lead was deleted in FollowUpBoss, so it has been removed from the dashboard.' },
+    ])
+    expect(bay.send.addNote).not.toHaveBeenCalled()
+    expect(db.calls.filter((c) => c[0] === 'rpc')).toEqual([['rpc', 'remove_fub_contacts', { ext_ids: ['5001'] }]])
+  })
+
+  it('keeps the lead when a FUB 404 is about something else', async () => {
+    bay.send.setStage = vi.fn(async () => {
+      throw new Error('FUB GET /people/9999 -> 404: {"errorMessage":"Requested resource was not found."}')
+    })
+    const res = await go(stageReq('c-lead', 'working', 45))
+    expect(res.body.results[0]).toMatchObject({ ok: false })
+    expect(res.body.results[0].contact_removed).toBeUndefined()
+    expect(db.calls.some((c) => c[0] === 'rpc')).toBe(false)
   })
 
   it('lets a Pre-Qualified lead be marked Lost', async () => {

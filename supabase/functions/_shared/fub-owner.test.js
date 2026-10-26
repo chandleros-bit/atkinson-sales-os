@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isMine, partitionByOwner, unresolvedPersonIds, keepActivityRecord } from './fub-owner.ts'
+import { isMine, partitionByOwner, unresolvedPersonIds, keepActivityRecord, deletedInFub } from './fub-owner.ts'
 
 describe('isMine', () => {
   it('matches FUB assignedUserId against the configured user, as strings', () => {
@@ -52,5 +52,18 @@ describe('activity filtering', () => {
 
   it('keeps a person whose owner lookup failed rather than losing activity', () => {
     expect(keepActivityRecord({ personId: 902 }, map, new Map(), '6')).toBe(true)
+  })
+})
+
+describe('deletedInFub', () => {
+  const mirrored = Array.from({ length: 200 }, (_, i) => String(1000 + i))
+  it('lists mirrored people a full FUB read no longer has', () => {
+    const fetched = mirrored.filter((id) => id !== '1003' && id !== '1150').map((id) => ({ id: Number(id) }))
+    expect(deletedInFub(mirrored, fetched)).toEqual({ ids: ['1003', '1150'], skipped: null })
+  })
+  it('skips when the read looks incomplete rather than delete a big slice of the book', () => {
+    const fetched = mirrored.slice(0, 150).map((id) => ({ id }))
+    expect(deletedInFub(mirrored, fetched)).toEqual({ ids: [], skipped: '50 missing of 200, more than the 10 allowed' })
+    expect(deletedInFub(mirrored, [])).toEqual({ ids: [], skipped: 'FUB returned no people' })
   })
 })

@@ -12,7 +12,7 @@
 // store activities as `${type}-${id}`; writing anything else here would make
 // the next sync insert a second copy and double the call counts.
 
-import { planSteps, shouldStop, overallStatus, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS } from './plan.ts'
+import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS } from './plan.ts'
 import { isStageTarget } from '../_shared/bay-stages.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -304,6 +304,17 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
     } catch (e) {
       result.ok = false
       result.error = msg(e)
+      // Deleted in FUB: drop our copy (and what hangs off it) and stop.
+      if (businessId === 'bay' && target.contact && fubPersonGone(result.error, target.contact.external_id)) {
+        const { error } = await db.rpc('remove_fub_contacts', { ext_ids: [String(target.contact.external_id)] })
+        if (!error) {
+          result.contact_removed = true
+          result.error = PERSON_GONE
+          results.push(result)
+          break
+        }
+        console.error(`remove_fub_contacts failed for ${target.contact.external_id}: ${error.message}`)
+      }
     }
     results.push(result)
     if (shouldStop(step.step, result.ok)) break

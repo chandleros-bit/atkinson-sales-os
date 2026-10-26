@@ -195,6 +195,11 @@ describe('retryRequestFor', () => {
 })
 
 describe('summarizeResult', () => {
+  it('says plainly when the lead was deleted in FUB and removed here, with nothing to retry', () => {
+    const msg = 'This lead was deleted in FollowUpBoss, so it has been removed from the dashboard.'
+    const res = { status: 'error', results: [{ step: 'set_stage', ok: false, contact_removed: true, error: msg }] }
+    expect(summarizeResult(res, 'bay')).toEqual({ tone: 'partial', text: msg, failed: [] })
+  })
   it('names the CRM on success', () => {
     expect(summarizeResult({ status: 'ok', results: [{ step: 'log_call', ok: true }] }, 'bay'))
       .toEqual({ tone: 'ok', text: 'Call logged in FollowUpBoss', failed: [] })
