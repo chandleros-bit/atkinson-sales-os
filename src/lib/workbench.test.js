@@ -162,6 +162,21 @@ describe('buildWorkGroups', () => {
       ['custom:c2', 'custom', 'bay', 'Fix appraisal', 'Added today', 'working', 'x'],
     ])
   })
+
+  it('shows a due day on your own items, overdue ones late and first', () => {
+    const groups = build([], [], [
+      { id: 'n', kind: 'custom', business_id: 'bay', title: 'No date', status: 'open', created_at: daysAgo(3) },
+      { id: 'f', kind: 'custom', business_id: 'bay', title: 'Friday', status: 'open', due_on: dayOnly(-1), created_at: daysAgo(0) },
+      { id: 'l', kind: 'custom', business_id: 'bay', title: 'Late', status: 'open', due_on: dayOnly(2), created_at: daysAgo(0) },
+      { id: 't', kind: 'custom', business_id: 'bay', title: 'Today', status: 'open', due_on: dayOnly(0), created_at: daysAgo(0) },
+    ])
+    expect(byId(groups, 'custom').items.map((i) => [i.title, i.why, i.late])).toEqual([
+      ['Late', 'Due 2 days ago', true],
+      ['Today', 'Due today', false],
+      ['Friday', 'Due tomorrow', false],
+      ['No date', 'Added 3 days ago', false],
+    ])
+  })
 })
 
 describe('workProgress', () => {

@@ -98,6 +98,8 @@ function mpgTaskItem(task, now) {
 
 function customItem(row, now) {
   const days = calendarDaysSince(row.created_at, now)
+  const late = row.due_on ? overdueDays(row.due_on, now) : null
+  const due = late == null ? null : late >= 1 ? `Due ${plural(late, 'day')} ago` : late === 0 ? 'Due today' : `Due ${backLabel(row.due_on, now)}`
   return {
     key: `custom:${row.id}`,
     kind: 'custom',
@@ -105,8 +107,8 @@ function customItem(row, now) {
     contactId: row.contact_id || null,
     name: row.contact_name || '',
     title: row.title,
-    why: days == null || days === 0 ? 'Added today' : `Added ${plural(days, 'day')} ago`,
-    late: false,
+    why: due || (days == null || days === 0 ? 'Added today' : `Added ${plural(days, 'day')} ago`),
+    late: late != null && late >= 1,
     minutes: MINUTES.custom,
   }
 }
@@ -157,7 +159,8 @@ export function buildWorkGroups({ pipeline = [], mpgTasks = [], workItems = [], 
     .map((r) => merge(applicationItem(r, rules, now), r.stage_since))
   const own = workItems
     .filter((w) => w.kind === 'custom' && w.status !== 'done')
-    .sort((a, b) => time(a.created_at) - time(b.created_at))
+    // Earliest due first; undated after, oldest first.
+    .sort((a, b) => time(a.due_on) - time(b.due_on) || time(a.created_at) - time(b.created_at))
     .map((w) => withRow(customItem(w, now), w, null, now))
   const statements = [
     ...mpgTasks

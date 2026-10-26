@@ -58,6 +58,10 @@ describe('saveWorkItem', () => {
 describe('addWorkItem', () => {
   it('inserts a trimmed custom row', async () => {
     await addWorkItem({ book: 'bay', title: '  Order appraisal ', contactId: 'c9', notes: ' ' })
-    expect(calls[0]).toMatchObject({ op: 'insert', body: { kind: 'custom', business_id: 'bay', title: 'Order appraisal', contact_id: 'c9', notes: null } })
+    expect(calls[0]).toMatchObject({ op: 'insert', body: { kind: 'custom', business_id: 'bay', title: 'Order appraisal', contact_id: 'c9', notes: null, due_on: null } })
+  })
+  it('carries a due day', async () => {
+    await addWorkItem({ book: 'mpg', title: 'Send receipt', dueOn: '2026-10-26' })
+    expect(calls[0].body).toMatchObject({ business_id: 'mpg', due_on: '2026-10-26' })
   })
 })

@@ -36,9 +36,15 @@ export async function saveWorkItem(item, patch) {
   )
 }
 
-// "+ Work item": a custom row. contactId is optional.
-export async function addWorkItem({ book, title, contactId = null, notes = null }) {
-  return supabase
-    .from('work_items')
-    .insert({ kind: 'custom', business_id: book, title: title.trim(), contact_id: contactId, notes: notes?.trim() || null })
+// "+ Work item" and the voice quick-add: a custom row. contactId and dueOn
+// ('YYYY-MM-DD', migration 0043) are optional.
+export async function addWorkItem({ book, title, contactId = null, notes = null, dueOn = null }) {
+  return supabase.from('work_items').insert({
+    kind: 'custom',
+    business_id: book,
+    title: title.trim(),
+    contact_id: contactId,
+    notes: notes?.trim() || null,
+    due_on: dueOn || null,
+  })
 }
