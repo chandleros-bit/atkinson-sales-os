@@ -12,6 +12,7 @@ import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import CrmLink from '../components/CrmLink'
 import QuickActions, { NextStepPrompt } from '../components/QuickActions'
 import { showToast } from '../components/Toaster'
+import { useIsMobile } from '../components/UpNextRow'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -191,12 +192,12 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
   )
 }
 
-function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
+function Column({ col, biz, onDone, onPrompt, drag, rules, now, wide = false }) {
   const isOver = drag?.over === col.stage
   const summary = rules ? columnSummary(col.cards, rules, now) : ''
   return (
     <div
-      className="w-[280px] flex-none rounded-card border bg-panel transition-colors"
+      className={`${wide ? 'w-full' : 'w-[280px] flex-none'} rounded-card border bg-panel transition-colors`}
       style={{
         borderColor: isOver ? 'var(--bay)' : 'var(--line)',
         background: isOver ? 'var(--bay-soft)' : undefined,
@@ -256,9 +257,50 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
   )
 }
 
-function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
+// Phones: one stage at a time, picked from a row of stage chips, instead of
+// side-by-side columns (every one as tall as the longest). Moves go through
+// each card's Move stage action; there is no drag on touch.
+function StageTabs({ columns, current, onPick }) {
   return (
-    <div className="mt-5 flex gap-3.5 overflow-x-auto pb-2">
+    <div role="tablist" aria-label="Stage" className="sticky top-[57px] z-20 -mx-4 flex gap-2 overflow-x-auto bg-panel2/95 px-4 py-2 backdrop-blur">
+
+      {columns.map((c) => {
+        const on = c.stage === current.stage
+        return (
+          <button
+            key={c.stage}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => onPick(c.stage)}
+            className="flex min-h-[36px] flex-none items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12.5px] font-semibold"
+            style={on ? { borderColor: 'var(--text)', color: 'var(--text)', background: 'var(--panel)' } : { borderColor: 'var(--line2)', color: 'var(--muted)' }}
+          >
+            {c.stage}
+            <span className="num text-[11px] opacity-70">{c.cards.length}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
+  const mobile = useIsMobile()
+  const [picked, setPicked] = useState(null)
+  if (mobile && columns.length > 0) {
+    const current = columns.find((c) => c.stage === picked) || columns.find((c) => c.cards.length > 0) || columns[0]
+    return (
+      <div className="mt-4">
+        <StageTabs columns={columns} current={current} onPick={setPicked} />
+        <div className="mt-2">
+          <Column wide col={current} biz={biz} onDone={onDone} onPrompt={onPrompt} rules={rules} now={now} />
+        </div>
+      </div>
+    )
+  }
+  return (
+    <div className="mt-5 flex items-start gap-3.5 overflow-x-auto pb-2">
       {columns.map((col) => (
         <Column key={col.stage} col={col} biz={biz} onDone={onDone} onPrompt={onPrompt} drag={drag} rules={rules} now={now} />
       ))}

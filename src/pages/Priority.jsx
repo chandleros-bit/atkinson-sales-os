@@ -43,7 +43,7 @@ export default function Priority({ embedded = false }) {
           </div>
         )}
       </div>
-      <p className="mt-1 text-sm text-muted">
+      <p className="mt-1 hidden text-sm text-muted sm:block">
         Who to call next, worst first. A lead drops off when you call, log a note, or schedule a
         follow-up.
       </p>

@@ -1,17 +1,37 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Toaster from './Toaster'
 import SearchPalette, { openSearch } from './SearchPalette'
 import BusinessFilter from './BusinessFilter'
+import { useBusiness } from '../context/BusinessContext'
 import { useAuth } from '../context/AuthContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
 import { lateLeadCount, titleFor } from '../lib/cardHealth'
 
 // Under 640px (phones) the sidebar becomes a slide-in menu behind a top bar,
-// so pages get the full width. Up Next is the first page built phone-first.
+// and the pages used most get a bottom tab bar, so pages get the full width.
+const TITLES = [
+  [/^\/$/, 'Overview'],
+  [/^\/(priority|workbench)/, 'Workbench'],
+  [/^\/calendar/, 'Calendar'],
+  [/^\/reports/, 'Reports'],
+  [/^\/tasks/, 'Tasks'],
+  [/^\/mpg\/pipeline/, 'Pipeline'],
+  [/^\/mpg\/activity/, 'Activity'],
+  [/^\/mpg\/contacts/, 'Contacts'],
+  [/^\/bayway\/pipeline/, 'Pipeline'],
+  [/^\/bayway\/priority-leads/, 'Priority Leads'],
+  [/^\/bayway\/activity/, 'Activity'],
+  [/^\/bayway\/contacts/, 'Contacts'],
+  [/^\/sync/, 'Sync Status'],
+  [/^\/settings/, 'Settings'],
+]
+export const pageTitle = (path) => TITLES.find(([re]) => re.test(path))?.[1] || 'Atkinson Sales OS'
+
 function MobileBar({ onMenu }) {
+  const { pathname } = useLocation()
   return (
     <div className="sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-2 border-b border-line bg-panel2/95 px-4 py-2 backdrop-blur sm:hidden">
       <button
@@ -22,15 +42,10 @@ function MobileBar({ onMenu }) {
       >
         ☰
       </button>
-      <NavLink
-        to="/priority"
-        className={({ isActive }) =>
-          `flex h-10 flex-none items-center rounded-[10px] px-3 text-[13px] font-semibold ${isActive ? 'grad-dual-soft' : 'text-muted'}`
-        }
-      >
-        Workbench
-      </NavLink>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 truncate text-[14px] font-bold" data-page-title>
+        {pageTitle(pathname)}
+      </div>
+      <div className="w-[150px] flex-none">
         <BusinessFilter />
       </div>
       <button
@@ -42,6 +57,53 @@ function MobileBar({ onMenu }) {
         ⌕
       </button>
     </div>
+  )
+}
+
+const Icon = ({ d }) => (
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    {d.map((x) => (
+      <path key={x} d={x} />
+    ))}
+  </svg>
+)
+const ICONS = {
+  home: ['M3 11l9-7 9 7', 'M5 10v10h14V10'],
+  bench: ['M4 6h16', 'M4 12h16', 'M4 18h10'],
+  pipeline: ['M4 5h4v14H4z', 'M10 5h4v9h-4z', 'M16 5h4v6h-4z'],
+  tasks: ['M9 11l3 3 8-8', 'M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h11'],
+  calendar: ['M4 6h16v14H4z', 'M4 10h16', 'M8 3v4', 'M16 3v4'],
+}
+
+// Phone tab bar: the five pages used on the go. Pipeline follows the book
+// filter (MPG when MPG is picked, else Bayway).
+function BottomNav() {
+  const { biz } = useBusiness() || { biz: 'all' }
+  const { pathname } = useLocation()
+  const items = [
+    { to: '/', label: 'Home', icon: 'home', on: pathname === '/' },
+    { to: '/workbench', label: 'Workbench', icon: 'bench', on: /^\/(priority|workbench)/.test(pathname) },
+    { to: biz === 'mpg' ? '/mpg/pipeline' : '/bayway/pipeline', label: 'Pipeline', icon: 'pipeline', on: /\/pipeline$/.test(pathname) },
+    { to: '/tasks', label: 'Tasks', icon: 'tasks', on: pathname.startsWith('/tasks') },
+    { to: '/calendar', label: 'Calendar', icon: 'calendar', on: pathname.startsWith('/calendar') },
+  ]
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
+    >
+      {items.map((it) => (
+        <NavLink
+          key={it.label}
+          to={it.to}
+          aria-current={it.on ? 'page' : undefined}
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[10.5px] font-semibold ${it.on ? 'text-[color:var(--text)]' : 'text-muted'}`}
+        >
+          <Icon d={ICONS[it.icon]} />
+          {it.label}
+        </NavLink>
+      ))}
+    </nav>
   )
 }
 
@@ -71,7 +133,7 @@ export default function Layout() {
           <div className="flex-1 bg-black/40" />
         </div>
       )}
-      <main className="min-w-0 flex-1 px-4 pb-6 sm:p-[26px]">
+      <main className="min-w-0 flex-1 px-4 pb-[calc(84px+env(safe-area-inset-bottom))] sm:p-[26px]">
         <MobileBar onMenu={() => setMenuOpen(true)} />
         {isDemoMode && (
           <div className="mb-5 rounded-[11px] border border-line bg-panel px-4 py-2.5 text-xs text-muted">
@@ -81,6 +143,7 @@ export default function Layout() {
         )}
         <Outlet />
       </main>
+      <BottomNav />
       <Toaster />
       <SearchPalette />
     </div>

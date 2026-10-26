@@ -29,7 +29,7 @@ export default function Toaster() {
   return (
     <div
       role="status"
-      className="fixed bottom-4 left-1/2 z-[60] flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-[12px] px-4 py-3 text-[13px] font-semibold shadow-lg"
+      className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-1/2 z-[60] sm:bottom-4 flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-[12px] px-4 py-3 text-[13px] font-semibold shadow-lg"
       style={{ background: bad ? 'var(--neg-ink)' : 'var(--text)', color: '#fff' }}
     >
       <span>{toast.text}</span>

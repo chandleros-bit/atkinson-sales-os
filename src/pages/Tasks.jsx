@@ -45,18 +45,18 @@ function BizTag({ business_id }) {
 // Overdue and Upcoming span many days, so a bare time is ambiguous there — two
 // rows both reading "9:00a" could be a week apart. Those buckets show the day;
 // Today and Tomorrow already have it in the section header, so they show time.
-function DueCell({ bucketKey, due_at }) {
+function DueCell({ bucketKey, due_at, className = 'w-24' }) {
   const spansDays = bucketKey === 'overdue' || bucketKey === 'upcoming'
   return (
-    <div className="num w-24 flex-none text-[12px] text-muted">
+    <div className={`num flex-none text-[12px] text-muted ${className}`}>
       {spansDays ? dueLabel(due_at) : dueTimeOfDay(due_at)}
     </div>
   )
 }
 
-function PriorityTag({ priority }) {
+function PriorityTag({ priority, compact = false }) {
   const key = normalizePriority(priority)
-  if (!key) return <span className="w-12 flex-none" />
+  if (!key) return compact ? null : <span className="w-12 flex-none" />
   const m = PRIORITY_META[key]
   return (
     <span
@@ -149,17 +149,17 @@ export default function Tasks() {
         <h2 className="text-[26px] font-bold tracking-tight">Tasks</h2>
         {!loading && !error && <span className="num text-[12px] text-muted">{total} open</span>}
       </div>
-      <p className="mt-1 text-sm text-muted">
+      <p className="mt-1 hidden text-sm text-muted sm:block">
         Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Complete or
         push a task here and it changes in the CRM too.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-1">
+      <div className="-mx-4 mt-3 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:flex-wrap sm:px-0">
         {PRIORITY_CHIPS.map((c) => (
           <button
             key={c.key}
             onClick={() => setPriorityFilter(c.key)}
-            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+            className={`min-h-[36px] flex-none rounded-lg px-3 py-1.5 text-xs font-semibold sm:min-h-0 sm:px-2.5 ${
               priorityFilter === c.key ? 'bg-hoverbg text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
             }`}
           >
@@ -213,14 +213,29 @@ export default function Tasks() {
                     className="flex items-center gap-3 border-b border-line px-4 py-3 transition-opacity last:border-b-0 hover:bg-hoverbg"
                     style={pending[r.id] ? { opacity: 0.35 } : undefined}
                   >
-                    <BizTag business_id={r.business_id} />
-                    <DueCell bucketKey={g.key} due_at={r.due_at} />
-                    <PriorityTag priority={r.priority} />
-                    <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-                      {r.title || '(untitled task)'}
-                      {r.task_type && (
-                        <span className="ml-2 text-[11px] font-normal text-dim">{r.task_type}</span>
+                    {/* Phones: title first, then book · due · priority · who on a second line. */}
+                    <div className="hidden sm:contents">
+                      <BizTag business_id={r.business_id} />
+                      <DueCell bucketKey={g.key} due_at={r.due_at} />
+                      <PriorityTag priority={r.priority} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="line-clamp-2 text-[13.5px] font-semibold sm:line-clamp-1 sm:text-[13px]">
+                        {r.title || '(untitled task)'}
+                        {r.task_type && (
+                          <span className="ml-2 text-[11px] font-normal text-dim">{r.task_type}</span>
+                        )}
+                      </div>
+                      {r.contact_name && (
+                        <div className="mt-0.5 truncate text-[12.5px] text-muted sm:hidden">
+                          <CrmLink url={r.crm_profile_url}>{r.contact_name}</CrmLink>
+                        </div>
                       )}
+                      <div className="mt-1 flex min-w-0 items-center gap-2 sm:hidden">
+                        <BizTag business_id={r.business_id} />
+                        <DueCell bucketKey={g.key} due_at={r.due_at} className="w-auto" />
+                        <PriorityTag priority={r.priority} compact />
+                      </div>
                     </div>
                     <div className="hidden w-40 flex-none truncate text-[12.5px] text-muted lg:block">
                       <CrmLink url={r.crm_profile_url}>{r.contact_name || '—'}</CrmLink>

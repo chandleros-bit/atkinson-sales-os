@@ -182,7 +182,7 @@ export default function Calendar() {
           </span>
         )}
       </div>
-      <p className="mt-1 text-sm text-muted">
+      <p className="mt-1 hidden text-sm text-muted sm:block">
         {biz === 'mpg'
           ? 'MPG calendar — merchant meetings.'
           : biz === 'bay'

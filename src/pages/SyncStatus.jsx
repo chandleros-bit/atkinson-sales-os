@@ -130,7 +130,7 @@ export default function SyncStatus() {
           </button>
         )}
       </div>
-      <p className="mt-1 text-sm text-muted">
+      <p className="mt-1 hidden text-sm text-muted sm:block">
         Per-source health for FollowUpBoss, Zoho, and both Outlook calendars. The source rows show what synced in;
         the Write-back row shows Quick Actions sent to FollowUpBoss and Zoho.
       </p>

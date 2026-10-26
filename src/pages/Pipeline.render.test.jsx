@@ -252,3 +252,22 @@ describe('Pipeline speed-to-lead', () => {
     expect(cardEl('c').querySelector('[data-health="none"]')).not.toBeNull()
   })
 })
+
+describe('Pipeline on a phone', () => {
+  it('shows one stage at a time, picked from the stage chips', async () => {
+    window.matchMedia = (q) => ({ matches: q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
+    try {
+      await mount()
+      const tabs = [...document.querySelectorAll('[role="tablist"][aria-label="Stage"] [role="tab"]')]
+      expect(tabs.map((t) => t.textContent)).toEqual([
+        'New Lead1', 'Attempted0', 'Contacted/Working1', 'Application/Estimate Sent0', 'Application Received0', 'Nurture / Credit Repair0',
+      ])
+      expect([...document.querySelectorAll('[data-stage]')].map((e) => e.getAttribute('data-stage'))).toEqual(['New Lead'])
+      await act(async () => tabs[2].click())
+      expect([...document.querySelectorAll('[data-stage]')].map((e) => e.getAttribute('data-stage'))).toEqual(['Contacted/Working'])
+      expect(cardsIn('Contacted/Working')).toEqual(['b'])
+    } finally {
+      delete window.matchMedia
+    }
+  })
+})
