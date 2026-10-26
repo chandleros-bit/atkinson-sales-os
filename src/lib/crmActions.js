@@ -237,6 +237,10 @@ export function summarizeResult(res, businessId) {
     }
     return { tone: 'error', text: res?.error || 'Something went wrong', failed: [] }
   }
+  // Deleted in FollowUpBoss: crm-action removed our copy. Nothing to retry;
+  // 'partial' so the page refreshes and the card goes away.
+  const removed = res.results.find((r) => r.contact_removed)
+  if (removed) return { tone: 'partial', text: removed.error, failed: [] }
   const okSteps = res.results.filter((r) => r.ok)
   const failed = res.results.filter((r) => !r.ok)
   const phrases = okSteps.map((r) => (r.step === 'push_task' && r.rescheduled ? 'task rescheduled' : DONE[r.step]))

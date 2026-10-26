@@ -7,7 +7,7 @@
 
 import { serviceClient, logSync, fetchAll, linkFubOrphans } from '../_shared/db.ts'
 import { withCors } from '../_shared/cors.ts'
-import { myFubUserId, partitionByOwner } from '../_shared/fub-owner.ts'
+import { myFubUserId, partitionByOwner, deletedInFub } from '../_shared/fub-owner.ts'
 import { backfillFirstNotes } from '../_shared/fub-first-note.ts'
 import {
   fubGet,
@@ -82,12 +82,26 @@ Deno.serve(withCors(async (req) => {
       if (error) throw new Error(`remove other owners' contacts: ${error.message}`)
       removed = n || 0
     }
+    // Leads deleted in FUB: only a full read can tell (see deletedInFub).
+    let deletedNote = null
+    if (fullPeople) {
+      const mirrored = await fetchAll(() => db.from('contacts').select('external_id').eq('source_crm', 'fub').order('id'))
+      const gone = deletedInFub(mirrored.map((r) => r.external_id), people)
+      if (gone.ids.length) {
+        const { data: n, error } = await db.rpc('remove_fub_contacts', { ext_ids: gone.ids })
+        if (error) throw new Error(`remove deleted contacts: ${error.message}`)
+        deletedNote = `deleted in FUB: removed ${n || 0}`
+      } else if (gone.skipped) {
+        deletedNote = `deleted-in-FUB check skipped: ${gone.skipped}`
+      }
+    }
     const ownerNote = [
       fullPeople ? 'full people refresh' : 'incremental',
       myId
         ? `people: kept ${mine.length} of ${people.length} (FUB user ${myId}), removed ${removed}`
         : 'people: owner filter off (FUB_USER_ID unset)',
-    ].join(' | ')
+      deletedNote,
+    ].filter(Boolean).join(' | ')
 
     // Paginate: past 1000 contacts a bare .select() truncates silently and
     // every deal beyond the cap resolves a null contact_id. fetchAll throws on

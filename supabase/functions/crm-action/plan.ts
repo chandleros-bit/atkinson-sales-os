@@ -65,6 +65,17 @@ export function shouldStop(step, ok) {
   return (step === 'log_call' || step === 'create_contact') && !ok
 }
 
+// FollowUpBoss answers 404 on /people/<id> (and "Contact not found" on a note)
+// once a lead is deleted there. Only an error about THIS lead counts.
+export function fubPersonGone(error, externalId) {
+  const e = String(error || '')
+  if (!externalId) return false
+  const id = String(externalId).replace(/\D/g, '')
+  if (!id) return false
+  return new RegExp(String.raw`^FUB \w+ /people/${id}(\?|\s|$).*-> 404`).test(e) || /-> 400: .*Contact not found/i.test(e)
+}
+export const PERSON_GONE = 'This lead was deleted in FollowUpBoss, so it has been removed from the dashboard.'
+
 // Overall status from per-step results.
 export function overallStatus(results) {
   const ok = results.filter((r) => r.ok).length

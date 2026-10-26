@@ -50,3 +50,21 @@ export function keepActivityRecord(rec, contactIdByExternal, ownerByPersonId, my
   if (!ownerByPersonId.has(pid)) return true
   return ownerByPersonId.get(pid) === String(myId)
 }
+
+// People deleted in FollowUpBoss never show up in an updatedAfter read; they
+// just stop appearing. After a FULL people read (every owner), any FUB contact
+// we still hold that FUB didn't return was deleted there. A read that comes
+// back short (an outage, a paging bug) would look like mass deletion, so more
+// than MAX_DELETED (or 5% of the book, if larger) missing at once is skipped
+// and reported instead of acted on.
+const MAX_DELETED = 10
+
+// mirroredIds: our FUB contacts' external_ids. people: the full FUB read.
+export function deletedInFub(mirroredIds, people) {
+  if (!people?.length) return { ids: [], skipped: 'FUB returned no people' }
+  const have = new Set(people.map((p) => String(p.id)))
+  const ids = (mirroredIds || []).map(String).filter((id) => !have.has(id))
+  const limit = Math.max(MAX_DELETED, Math.floor((mirroredIds?.length || 0) * 0.05))
+  if (ids.length > limit) return { ids: [], skipped: `${ids.length} missing of ${mirroredIds.length}, more than the ${limit} allowed` }
+  return { ids, skipped: null }
+}

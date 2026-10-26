@@ -51,7 +51,8 @@ export async function invokeCrmAction(request) {
     const { data, error } = await supabase.functions.invoke('crm-action', { body: request })
     if (!error) {
       // Lets other views (the Up Next queue and its badge) refresh.
-      if (data?.status === 'ok' || data?.status === 'partial') {
+      // A lead removed because FUB deleted it counts too: its card must go.
+      if (data?.status === 'ok' || data?.status === 'partial' || data?.results?.some?.((r) => r.contact_removed)) {
         window.dispatchEvent(new CustomEvent('crm-action:done', { detail: data }))
       }
       return data
