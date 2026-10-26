@@ -71,7 +71,18 @@ export const STAGE_TARGETS = [
   { key: 'credit_repair', label: 'Nurture / Credit Repair', stage: PARKED, tag: 'Credit Repair', keep: ['credit repair'] },
   { key: 'lost', label: 'Lost', stage: LOST, tag: 'Lost', keep: ['lost'] },
 ]
-const TARGET = Object.fromEntries(STAGE_TARGETS.map((t) => [t.key, t]))
+// Review outcomes for an Application Received file (Workbench "Review
+// complete"). Not moves: the tag is added and every other tag stays, so the
+// lead keeps its column. Not in STAGE_TARGETS, so they never show in the Move
+// stage menu or as a board drop target. A file with one of these tags is done
+// with review (REVIEWED_TAGS).
+export const TAG_TARGETS = [
+  { key: 'pre_approved', label: 'Pre-Approved', tag: 'Pre-Approved', additive: true },
+  { key: 'disclosed', label: 'Disclosed', tag: 'Disclosed', additive: true },
+]
+export const REVIEWED_TAGS = TAG_TARGETS.map((t) => t.tag.toLowerCase())
+const TARGET = Object.fromEntries([...STAGE_TARGETS, ...TAG_TARGETS].map((t) => [t.key, t]))
+export const isStageTarget = (key) => Object.hasOwn(TARGET, key)
 
 // New full tag list for a Move stage: drop workflow tags that don't belong to
 // the target, keep everything else, add the target tag if nothing already
@@ -80,6 +91,7 @@ export function retagForTarget(tags, targetKey) {
   const target = TARGET[targetKey]
   if (!target) throw new Error(`Unknown stage target: ${targetKey}`)
   const list = Array.isArray(tags) ? tags : []
+  if (target.additive) return list.some((t) => norm(t) === norm(target.tag)) ? list : [...list, target.tag]
   const kept = list.filter((t) => !WORKFLOW.has(norm(t)) || target.keep.includes(norm(t)))
   if (target.tag && !kept.some((t) => target.keep.includes(norm(t)))) kept.push(target.tag)
   return kept

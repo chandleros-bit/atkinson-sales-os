@@ -51,6 +51,12 @@ describe('bayStageFromTags', () => {
 describe('retagForTarget', () => {
   const others = ['DSCR', 'Active', 'HOT']
 
+  it('adds a review outcome tag (Pre-Approved, Disclosed) without moving the lead', () => {
+    expect(retagForTarget(['DSCR', 'application received', 'need docs'], 'pre_approved')).toEqual(['DSCR', 'application received', 'need docs', 'Pre-Approved'])
+    expect(retagForTarget(['application received'], 'disclosed')).toEqual(['application received', 'Disclosed'])
+    expect(retagForTarget(['application received', 'pre-approved'], 'pre_approved')).toEqual(['application received', 'pre-approved'])
+  })
+
   it('adds the target tag and removes other columns\' workflow tags, keeping the rest', () => {
     expect(retagForTarget([...others, 'attempted'], 'working')).toEqual([...others, 'Working Estimate'])
   })

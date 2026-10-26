@@ -44,10 +44,11 @@ export function useWorkLane() {
             .order('id'),
         ),
       ])
-      // Estimate leads' FUB tags (a DSCR lead suggests "Estimate sent").
-      const estimateIds = (p.data || []).filter((r) => r.stage === 'Contacted/Working').map((r) => r.id)
-      const tagged = estimateIds.length
-        ? await fetchAllSettled(() => supabase.from('contacts').select('id, tags:raw->tags').in('id', estimateIds).order('id'))
+      // The work leads' FUB tags: a DSCR estimate suggests "Estimate sent"; a
+      // Pre-Approved or Disclosed application is done with review.
+      const leadIds = (p.data || []).map((r) => r.id)
+      const tagged = leadIds.length
+        ? await fetchAllSettled(() => supabase.from('contacts').select('id, tags:raw->tags').in('id', leadIds).order('id'))
         : { data: [] }
       const tagsById = new Map((tagged.data || []).map((c) => [c.id, c.tags]))
       setState({
