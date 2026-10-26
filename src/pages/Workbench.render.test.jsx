@@ -257,4 +257,40 @@ describe('Workbench', () => {
     await act(async () => bar.click())
     expect(workItem('Gil Estimate').textContent).toContain('Waiting on Borrower')
   })
+
+  it('sends a Review complete outcome to FUB and takes the file off review', async () => {
+    mobile = false
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await render()
+    await act(async () => button(workItem('Gil Estimate'), 'Update').click())
+    expect(button(dialog(), 'Review complete')).toBe(undefined) // applications only
+    await act(async () => dialog().querySelector('[aria-label="Close"]').click())
+    await act(async () => button(workItem('Ivy Application'), 'Update').click())
+    await act(async () => button(dialog(), 'Review complete').click())
+    await act(async () => button(dialog(), 'Pre-Approved').click())
+    await type('Work notes', 'Sent PA letter')
+    await act(async () => button(dialog(), 'Save').click())
+    await act(async () => {})
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a1', payload: { target: 'pre_approved' } })
+    expect(document.body.textContent).toContain('Ivy Application tagged Pre-Approved in FollowUpBoss')
+    expect(writes.at(-1)).toMatchObject({ op: 'upsert', body: { source_key: 'application:a1', status: 'done', notes: 'Sent PA letter' } })
+  })
+
+  it('asks why before trashing a file, then marks it Lost in FUB', async () => {
+    mobile = false
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }, { step: 'add_note', ok: true }] }, error: null })
+    await render()
+    await act(async () => button(workItem('Ivy Application'), 'Update').click())
+    await act(async () => button(dialog(), 'Review complete').click())
+    await act(async () => button(dialog(), 'Trash').click())
+    expect(dialog().textContent).toContain('Only the FUB account owner can move it back')
+    await act(async () => button(dialog(), 'Save').click())
+    expect(invoke).not.toHaveBeenCalled()
+    expect(dialog().textContent).toContain('Pick why it goes to the trash.')
+    await act(async () => button(dialog(), 'Not qualified').click())
+    await act(async () => button(dialog(), 'Save').click())
+    await act(async () => {})
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a1', payload: { target: 'lost', reason: 'Not qualified' } })
+    expect(document.body.textContent).toContain('Ivy Application marked Lost in FollowUpBoss')
+  })
 })

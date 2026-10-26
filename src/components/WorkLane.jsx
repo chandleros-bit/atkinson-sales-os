@@ -4,12 +4,14 @@
 //   estimate     Done -> "Estimate sent" / "Application sent" (FUB stage tag)
 //   mpg_task     Done -> completes the Zoho task
 //   application  Mark reviewed -> hidden for 3 days, or until its missing docs
-//                change or the lead re-enters the stage
+//                change or the lead re-enters the stage. Update > Review
+//                complete sends the outcome to FUB: Pre-Approved or Disclosed
+//                (tag; off review for good), Credit Repair (Nurture), Trash (Lost)
 //   custom       Done
 // A CRM Done is also recorded in work_items, for the Work progress bar.
 import { useState } from 'react'
 import { invokeCrmAction, useWritebackFlags } from '../lib/writeback'
-import { buildActionRequest, followUpDate, summarizeResult } from '../lib/crmActions'
+import { buildActionRequest, followUpDate, summarizeResult, LOST_REASONS, LOST_WARNING } from '../lib/crmActions'
 import { saveWorkItem, WAITING_ON } from '../lib/workItems'
 import BizBadge from './BizBadge'
 import PersonSheet from './PersonSheet'
@@ -24,6 +26,13 @@ const STATUS = [
   ['open', 'Open'],
   ['working', 'Working'],
   ['waiting', 'Waiting on…'],
+]
+// Review complete outcomes (applications): crm-action set_stage targets.
+const OUTCOMES = [
+  { key: 'pre_approved', label: 'Pre-Approved', done: (n) => `${n} tagged Pre-Approved in FollowUpBoss` },
+  { key: 'disclosed', label: 'Disclosed', done: (n) => `${n} tagged Disclosed in FollowUpBoss` },
+  { key: 'credit_repair', label: 'Credit Repair', done: (n) => `${n} moved to Nurture / Credit Repair in FollowUpBoss` },
+  { key: 'lost', label: 'Trash', done: (n) => `${n} marked Lost in FollowUpBoss` },
 ]
 const BACK = [
   ['tomorrow', 'Tomorrow'],
@@ -43,8 +52,14 @@ function StatusPill({ status }) {
   )
 }
 
-function UpdateSheet({ item, onClose, onSaved }) {
+// canReview: write-back to FUB is on (Review complete writes there).
+// onReview(outcome, reason, notes): runs the CRM step; the lane records done.
+function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
   const [status, setStatus] = useState(item.status === 'waiting' || item.status === 'working' ? item.status : 'open')
+  const [outcome, setOutcome] = useState(null)
+  const [reason, setReason] = useState(null)
+  const reviewable = item.kind === 'application'
+  const statuses = reviewable ? [...STATUS, ['review', 'Review complete']] : STATUS
   const [who, setWho] = useState(item.waitingOn || '')
   const [back, setBack] = useState(item.checkBackOn ? 'pick' : 'tomorrow')
   const [picked, setPicked] = useState(item.checkBackOn || '')
@@ -54,6 +69,13 @@ function UpdateSheet({ item, onClose, onSaved }) {
 
   const save = async () => {
     if (busy) return
+    if (status === 'review') {
+      if (!outcome) return setError('Pick the review outcome.')
+      if (outcome === 'lost' && !reason) return setError('Pick why it goes to the trash.')
+      setError(null)
+      onReview(OUTCOMES.find((o) => o.key === outcome), reason, notes.trim() || null)
+      return
+    }
     let patch = { status, notes: notes.trim() || null }
     if (status === 'waiting') {
       let day
@@ -80,8 +102,8 @@ function UpdateSheet({ item, onClose, onSaved }) {
   return (
     <Sheet title="Update work item" subtitle={[item.title, item.name].filter(Boolean).join(' · ')} t={quickActionTone(item.book)} onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-3 gap-2">
-          {STATUS.map(([k, label]) => (
+        <div className={`grid gap-2 ${reviewable ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {statuses.map(([k, label]) => (
             <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)} className="min-h-[40px] rounded-[10px] border text-[12.5px] font-semibold" style={chip(status === k)}>
               {label}
             </button>
@@ -120,6 +142,32 @@ function UpdateSheet({ item, onClose, onSaved }) {
             </div>
           </>
         )}
+        {status === 'review' && (
+          <div>
+            <div className="mb-1.5 text-[12px] font-semibold text-muted">Outcome</div>
+            <div className="grid grid-cols-2 gap-2">
+              {OUTCOMES.map((o) => (
+                <button key={o.key} type="button" aria-pressed={outcome === o.key} onClick={() => setOutcome(o.key)} className="min-h-[40px] rounded-[10px] border text-[12.5px] font-semibold" style={chip(outcome === o.key)}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {outcome === 'lost' && (
+              <div className="mt-3">
+                <div className="mb-1.5 text-[12px] font-semibold text-muted">Why?</div>
+                <div className="flex flex-wrap gap-2">
+                  {LOST_REASONS.map((r) => (
+                    <button key={r} type="button" aria-pressed={reason === r} onClick={() => setReason(r)} className="min-h-[36px] rounded-[10px] border px-3 text-[12.5px] font-semibold" style={chip(reason === r)}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 text-[12px] text-muted">{LOST_WARNING}</div>
+              </div>
+            )}
+            {!canReview && <div className="mt-2 text-[12px] text-[color:var(--neg-ink)]">Write-back to FollowUpBoss is off, so the outcome can't be sent.</div>}
+          </div>
+        )}
         <textarea
           aria-label="Work notes"
           placeholder="Notes: what's done, what's next"
@@ -128,9 +176,17 @@ function UpdateSheet({ item, onClose, onSaved }) {
           onChange={(e) => setNotes(e.target.value)}
           className="w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px]"
         />
-        <div className="text-[11.5px] text-muted">Saved in the dashboard only, not in {item.book === 'mpg' ? 'Zoho' : 'FollowUpBoss'}.</div>
+        <div className="text-[11.5px] text-muted">
+          {status === 'review' ? 'The outcome goes to FollowUpBoss; notes stay in the dashboard.' : `Saved in the dashboard only, not in ${item.book === 'mpg' ? 'Zoho' : 'FollowUpBoss'}.`}
+        </div>
         {error && <div className="text-[12px] text-[color:var(--neg-ink)]">{error}</div>}
-        <button type="button" disabled={busy} onClick={save} className="min-h-[44px] rounded-[10px] text-[13.5px] font-semibold text-white disabled:opacity-50" style={{ background: 'var(--text)' }}>
+        <button
+          type="button"
+          disabled={busy || (status === 'review' && !canReview)}
+          onClick={save}
+          className="min-h-[44px] rounded-[10px] text-[13.5px] font-semibold text-white disabled:opacity-50"
+          style={{ background: 'var(--text)' }}
+        >
           Save
         </button>
       </div>
@@ -193,18 +249,18 @@ export default function WorkLane({ groups, onChanged }) {
   const [busy, setBusy] = useState(null)
   const [showWaiting, setShowWaiting] = useState(false)
 
-  const record = async (item, okText) => {
-    const { error } = await saveWorkItem(item, { status: 'done' })
+  const record = async (item, okText, extra) => {
+    const { error } = await saveWorkItem(item, { ...extra, status: 'done' })
     if (error) showToast({ tone: 'error', text: `Couldn't save in the dashboard: ${error.message}` })
     else if (okText) showToast({ tone: 'ok', text: okText })
   }
 
-  const run = async (item, request, okText) => {
+  const run = async (item, request, okText, extra) => {
     setBusy(item.key)
     const res = await invokeCrmAction(request)
     const summary = summarizeResult(res, item.book)
     showToast(summary.tone === 'ok' && okText ? { ...summary, text: okText } : summary)
-    if (summary.tone === 'ok') await record(item)
+    if (summary.tone === 'ok') await record(item, null, extra)
     setBusy(null)
     if (summary.tone !== 'error') onChanged?.()
   }
@@ -303,6 +359,17 @@ export default function WorkLane({ groups, onChanged }) {
       {updating && (
         <UpdateSheet
           item={updating}
+          canReview={flags.bay === true}
+          onReview={(outcome, reason, notes) => {
+            const item = updating
+            setUpdating(null)
+            run(
+              item,
+              buildActionRequest({ action: 'set_stage', contactId: item.contactId, target: outcome.key, reason }),
+              outcome.done(item.name),
+              notes ? { notes } : undefined,
+            )
+          }}
           onClose={() => setUpdating(null)}
           onSaved={() => {
             setUpdating(null)

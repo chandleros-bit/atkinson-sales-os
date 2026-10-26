@@ -13,7 +13,7 @@
 // the next sync insert a second copy and double the call counts.
 
 import { planSteps, shouldStop, overallStatus, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS } from './plan.ts'
-import { STAGE_TARGETS } from '../_shared/bay-stages.ts'
+import { isStageTarget } from '../_shared/bay-stages.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SOURCE_FOR = { bay: 'fub', mpg: 'zoho' }
@@ -106,10 +106,10 @@ async function finish(db, clientActionId, patch) {
 // Bayway stages are FUB tags (bay-stages.ts); MPG's come from Zoho.
 function stageRefusal(businessId, contact, key) {
   if (businessId !== 'bay') return 'Move stage is Bayway only; MPG stages come from Zoho'
-  if (!STAGE_TARGETS.some((t) => t.key === key)) return `Unknown stage: ${key}`
+  if (!isStageTarget(key)) return `Unknown stage: ${key}`
   const ps = String(contact?.person_stage || '').trim().toLowerCase()
   // Pre-Qualified always reads as Application Received unless parked (Credit Repair).
-  if (ps === 'pre-qualified' && !['application_received', 'credit_repair', 'lost'].includes(key)) {
+  if (ps === 'pre-qualified' && !['application_received', 'credit_repair', 'lost', 'pre_approved', 'disclosed'].includes(key)) {
     return 'This lead is Pre-Qualified in FUB, which always shows as Application Received. Change the FUB stage first.'
   }
   if (ps !== 'lead' && ps !== 'pre-qualified') {

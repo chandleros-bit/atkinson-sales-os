@@ -373,6 +373,12 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     expect(bay.send.addNote).toHaveBeenCalledWith({ externalId: '5001', subject: null, body: 'Marked Lost: Went elsewhere' })
   })
 
+  it('adds the Pre-Approved and Disclosed review tags, Pre-Qualified leads included', async () => {
+    expect((await go(stageReq('c-lead', 'pre_approved', 42))).body.status).toBe('ok')
+    expect((await go(stageReq('c-pq', 'disclosed', 43))).body.status).toBe('ok')
+    expect(bay.send.setStage).toHaveBeenCalledWith({ externalId: '5002', target: 'disclosed' })
+  })
+
   it('lets a Pre-Qualified lead be marked Lost', async () => {
     expect((await go(stageReq('c-pq', 'lost', 41))).body.status).toBe('ok')
   })

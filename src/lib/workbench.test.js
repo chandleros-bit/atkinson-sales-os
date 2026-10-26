@@ -59,6 +59,15 @@ describe('buildWorkGroups', () => {
     ])
   })
 
+  it('drops files whose review is complete (Pre-Approved or Disclosed tag in FUB)', () => {
+    const [, apps] = build([
+      lead({ id: 'open', stage: 'Application Received', tags: ['DSCR', 'application received'] }),
+      lead({ id: 'pa', stage: 'Application Received', tags: ['application received', 'Pre-Approved'] }),
+      lead({ id: 'disc', stage: 'Application Received', tags: ['DISCLOSED'] }),
+    ])
+    expect(apps.items.map((i) => i.contactId)).toEqual(['open'])
+  })
+
   it('turns open MPG Zoho tasks into statement/proposal work, earliest due first', () => {
     const [, , mpg] = build([], [
       { id: 't2', title: 'Proposal review', due_at: daysAgo(-2), contact_id: 'm2', contact_name: 'Ana', company: 'Deli' },

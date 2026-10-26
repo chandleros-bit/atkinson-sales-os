@@ -3,7 +3,9 @@
 // Spec: docs/superpowers/specs/2026-10-22-workbench-design.md
 //
 //   Estimates to Work (Bayway)        leads in Contacted/Working (tag Working Estimate)
-//   Applications to Review (Bayway)   leads in Application Received
+//   Applications to Review (Bayway)   leads in Application Received, until
+//                                     Review complete tags them Pre-Approved
+//                                     or Disclosed in FUB
 //   Statement/Proposal Review (MPG)   open Zoho tasks about statements or a
 //                                     proposal, plus your own MPG work items
 //   Other work                        your own Bayway "+ Work item" rows
@@ -20,6 +22,7 @@ import { nextStep, stuckFor } from './cardHealth'
 import { calendarDaysSince, overdueDays } from './priorityQueue'
 import { dayKey } from './calendar'
 import { dueLabel } from './tasks'
+import { REVIEWED_TAGS } from '../../supabase/functions/_shared/bay-stages.ts'
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 const time = (iso) => (iso ? new Date(iso).getTime() : Infinity)
@@ -37,7 +40,10 @@ export const isStatementTask = (title) => STATEMENT_TASK.test(String(title || ''
 
 // DSCR leads are usually investors comparing lenders (Estimate sent); the
 // rest are buyers who need a pre-approval (Application sent).
-const isDscr = (tags) => (Array.isArray(tags) ? tags : []).some((t) => String(t).trim().toLowerCase() === 'dscr')
+const lowerTags = (tags) => (Array.isArray(tags) ? tags : []).map((t) => String(t).trim().toLowerCase())
+const isDscr = (tags) => lowerTags(tags).includes('dscr')
+// Review complete: Pre-Approved or Disclosed in FUB takes a file off review.
+const reviewDone = (tags) => lowerTags(tags).some((t) => REVIEWED_TAGS.includes(t))
 
 function estimateItem(row, rules, now) {
   const next = nextStep(row, now)
@@ -146,6 +152,7 @@ export function buildWorkGroups({ pipeline = [], mpgTasks = [], workItems = [], 
 
   const estimates = inStage('Contacted/Working').sort(byStageSince).map((r) => merge(estimateItem(r, rules, now), r.stage_since))
   const applications = inStage('Application Received')
+    .filter((r) => !reviewDone(r.tags))
     .sort((a, b) => (b.docs_outstanding_count || 0) - (a.docs_outstanding_count || 0) || byStageSince(a, b))
     .map((r) => merge(applicationItem(r, rules, now), r.stage_since))
   const own = workItems
