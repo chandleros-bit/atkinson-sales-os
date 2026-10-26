@@ -74,7 +74,11 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
   const [lead, setLead] = useState(null)
   const [notes, setNotes] = useState('')
   const today = localDateKey(new Date())
-  const [due, setDue] = useState(!initial?.dueOn ? 'none' : initial.dueOn === today ? 'today' : 'pick')
+  const [due, setDue] = useState(() => {
+    if (!initial?.dueOn) return 'none'
+    if (initial.dueOn === today) return 'today'
+    return initial.dueOn === followUpDate('tomorrow', new Date()) ? 'tomorrow' : 'pick'
+  })
   const [picked, setPicked] = useState(initial?.dueOn || '')
   const [saveTo, setSaveTo] = useState('workbench')
   const [busy, setBusy] = useState(false)
