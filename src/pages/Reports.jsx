@@ -309,7 +309,7 @@ export default function Reports() {
   return (
     <div>
       <h2 className="text-[28px] font-bold tracking-tight">Reports</h2>
-      <p className="mt-1 text-sm text-muted">
+      <p className="mt-1 hidden text-sm text-muted sm:block">
         Your scoreboard against the Atkinson KPI targets. Live where data is wired; manual otherwise.
       </p>
 

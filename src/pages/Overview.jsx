@@ -88,7 +88,7 @@ function PhoneIcon() {
 // ---- Chrome ------------------------------------------------------------------
 
 function Card({ className = '', children }) {
-  return <section className={`cc-card p-[20px] ${className}`}>{children}</section>
+  return <section className={`cc-card p-4 sm:p-[20px] ${className}`}>{children}</section>
 }
 
 function CardHead({ title, sub, right }) {
@@ -176,7 +176,7 @@ function KpiCard({ card }) {
   return (
     <Card className="col-span-1 flex flex-col xl:col-span-3">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[13px] font-medium text-muted">{card.label}</span>
+        <span className="line-clamp-2 text-[12.5px] font-medium leading-snug text-muted sm:truncate sm:text-[13px]">{card.label}</span>
         {card.delta && (
           <span
             className="flex-none rounded-[7px] px-2 py-[3px] text-[11.5px] font-bold"
@@ -187,8 +187,8 @@ function KpiCard({ card }) {
         )}
       </div>
 
-      <div className="mt-4 flex items-end gap-2">
-        <span className="num text-[31px] font-extrabold leading-none tracking-[-0.8px]">
+      <div className="mt-2 flex items-end gap-2 sm:mt-4">
+        <span className="num text-[26px] font-extrabold leading-none tracking-[-0.8px] sm:text-[31px]">
           {card.value}
         </span>
         {arrow && (
@@ -198,7 +198,7 @@ function KpiCard({ card }) {
         )}
       </div>
 
-      <div className="num mt-3 text-[12.5px] font-medium text-dim">
+      <div className="num mt-2 text-[12px] font-medium text-dim sm:mt-3 sm:text-[12.5px]">
         {card.value} of {card.goal} goal
       </div>
     </Card>
@@ -1203,8 +1203,8 @@ export default function Overview() {
 
   return (
     <div>
-      <h2 className="text-[28px] font-bold tracking-tight">{greeting()}, Chandler</h2>
-      <p className="mt-1 text-sm text-muted">{subtitle}</p>
+      <h2 className="text-[22px] font-bold tracking-tight sm:text-[28px]">{greeting()}, Chandler</h2>
+      <p className="mt-1 hidden text-sm text-muted sm:block">{subtitle}</p>
       <ErrorNote error={error} />
       {isDemoMode && (
         <div className="mt-4 rounded-xl border border-line bg-panel px-3.5 py-2.5 text-xs text-muted">
@@ -1222,7 +1222,7 @@ export default function Overview() {
               accent vars make the chart marker/tick green in All + Bayway, blue
               in MPG. */}
           <div
-            className="mt-5 grid grid-cols-2 items-stretch gap-[18px] xl:grid-cols-12"
+            className="mt-4 grid grid-cols-2 items-stretch gap-3 sm:mt-5 sm:gap-[18px] xl:grid-cols-12"
             style={
               biz === 'mpg'
                 ? { '--accent': 'var(--mpg)', '--accent-soft': 'var(--mpg-soft)', '--accent-ink': 'var(--mpg-ink)' }

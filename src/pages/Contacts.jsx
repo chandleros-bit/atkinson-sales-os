@@ -3,8 +3,50 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel } from '../lib/overview'
 import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
+import { formatPhone, telHref } from '../lib/phone'
 
 const PER_PAGE = 50
+
+// Phones: one card per contact (name and last touch, then company · stage,
+// then a tappable phone) instead of a five-column table.
+function MobileContactRow({ r, config }) {
+  const name = r.name || '(no name)'
+  return (
+    <div data-contact-row className="border-b border-line px-4 py-3 last:border-b-0 sm:hidden">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0 truncate text-[14px] font-semibold">
+          {r.crm_profile_url ? (
+            <a href={r.crm_profile_url} target="_blank" rel="noreferrer" title="Open in CRM">
+              {name}
+            </a>
+          ) : (
+            name
+          )}
+        </div>
+        <div className="flex-none text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
+      </div>
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        {r.company && <span className="min-w-0 truncate text-[12.5px] text-muted">{r.company}</span>}
+        {r.stage && (
+          <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={config.stagePill(r.stage)}>
+            {r.stage}
+          </span>
+        )}
+      </div>
+      {(r.phone || r.email) && (
+        <div className="mt-1 truncate text-[12.5px]">
+          {r.phone ? (
+            <a href={telHref(r.phone)} className="font-semibold" style={{ color: 'var(--text)' }}>
+              {formatPhone(r.phone)}
+            </a>
+          ) : (
+            <span className="text-muted">{r.email}</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function bayStagePill(stage) {
   if (stage === NURTURE) return { background: 'transparent', color: 'var(--dim)' }
@@ -211,7 +253,7 @@ export default function Contacts({ biz }) {
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Search name, company, email, or phone…"
-          className="w-64 rounded-lg border border-line bg-panel2 px-3 py-1.5 text-[13px] outline-none placeholder:text-dim focus:border-line2"
+          className="min-h-[40px] w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-[13px] outline-none sm:min-h-0 sm:w-64 placeholder:text-dim focus:border-line2"
         />
         {config.filters.length > 0 && (
           <div className="flex gap-1">
@@ -219,7 +261,7 @@ export default function Contacts({ biz }) {
               <button
                 key={f.key}
                 onClick={() => onFilter(f.key)}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+                className={`min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold sm:min-h-0 sm:px-2.5 ${
                   stageFilter === f.key ? 'bg-hoverbg text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
                 }`}
               >
@@ -240,7 +282,7 @@ export default function Contacts({ biz }) {
 
       {!loading && !error && (
         <div className="mt-4 overflow-hidden rounded-card border border-line bg-panel">
-          <div className="flex items-center gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-dim">
+          <div className="hidden items-center gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-dim sm:flex">
             {config.columns.map((colKey) => {
               const col = COLUMNS[colKey]
               return col.sortKey ? (
@@ -265,14 +307,14 @@ export default function Contacts({ biz }) {
           )}
 
           {pageRows.map((r) => (
-            <div
-              key={r.id}
-              className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-hoverbg"
-            >
-              {config.columns.map((colKey) => (
-                <Fragment key={colKey}>{COLUMNS[colKey].cell(r, config)}</Fragment>
-              ))}
-            </div>
+            <Fragment key={r.id}>
+              <div className="hidden items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 hover:bg-hoverbg sm:flex">
+                {config.columns.map((colKey) => (
+                  <Fragment key={colKey}>{COLUMNS[colKey].cell(r, config)}</Fragment>
+                ))}
+              </div>
+              <MobileContactRow r={r} config={config} />
+            </Fragment>
           ))}
         </div>
       )}

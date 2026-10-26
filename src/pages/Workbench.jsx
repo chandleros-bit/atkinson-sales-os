@@ -54,7 +54,7 @@ export default function Workbench() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-bold tracking-tight">Workbench</h1>
-          <p className="mt-1 text-sm text-muted">Calls to make and files to move, both books.</p>
+          <p className="mt-1 hidden text-sm text-muted sm:block">Calls to make and files to move, both books.</p>
         </div>
         <div className="flex flex-wrap items-center gap-5">
           <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />

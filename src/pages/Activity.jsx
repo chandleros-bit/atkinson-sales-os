@@ -127,14 +127,14 @@ export default function Activity({ biz }) {
         </span>
         {!loading && !error && <span className="num text-[12px] text-muted">{total} shown</span>}
       </div>
-      <p className="mt-1 text-sm text-muted">{config.copy}</p>
+      <p className="mt-1 hidden text-sm text-muted sm:block">{config.copy}</p>
 
-      <div className="mt-4 flex flex-wrap gap-1">
+      <div className="-mx-4 mt-3 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:flex-wrap sm:px-0">
         {TYPE_CHIPS.map((c) => (
           <button
             key={c.key}
             onClick={() => setTypeFilter(c.key)}
-            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
+            className={`min-h-[36px] flex-none rounded-lg px-3 py-1.5 text-xs font-semibold sm:min-h-0 sm:px-2.5 ${
               typeFilter === c.key ? 'bg-hoverbg text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
             }`}
           >
@@ -174,16 +174,17 @@ export default function Activity({ biz }) {
                 {g.rows.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center gap-3 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg"
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg sm:flex-nowrap"
                   >
                     <TypeTag type={r.type} accent={config.accent} />
                     <div className="num w-14 flex-none text-[12px] text-muted">{timeOfDay(r.occurred_at)}</div>
-                    <div className="w-40 flex-none truncate text-[13px] font-semibold">
+                    <div className="min-w-0 flex-1 truncate text-[13px] font-semibold sm:w-40 sm:flex-none">
                       <CrmLink url={r.crm_profile_url}>{r.contact_name || '(unknown)'}</CrmLink>
                     </div>
-                    <div className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{r.snippet || '—'}</div>
+                    {/* Phones: the detail wraps onto its own line instead of being cut off. */}
+                    <div className="line-clamp-2 basis-full text-[12.5px] text-muted sm:line-clamp-1 sm:min-w-0 sm:flex-1 sm:basis-auto">{r.snippet || '—'}</div>
                     {r.owner && (
-                      <div className="w-28 flex-none truncate text-right text-[11px] text-dim">{r.owner}</div>
+                      <div className="hidden w-28 flex-none truncate text-right text-[11px] text-dim sm:block">{r.owner}</div>
                     )}
                   </div>
                 ))}
