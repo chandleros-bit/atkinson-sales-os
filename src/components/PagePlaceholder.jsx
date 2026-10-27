@@ -8,7 +8,7 @@ export default function PagePlaceholder({ title, phase, biz, children }) {
   return (
     <div>
       <PageHeader
-        eyebrow={biz === 'mpg' ? 'MPG' : biz === 'bay' ? 'BAYWAY' : 'MANAGE'}
+        eyebrow={biz === 'mpg' ? 'MPG · Zoho' : biz === 'bay' ? 'Bayway · FollowUpBoss' : undefined}
         eyebrowColor={biz ? accent : undefined}
         title={title}
       />

@@ -62,7 +62,56 @@ beforeEach(() => {
   document.body.innerHTML = ''
   invoke.mockReset()
   resetWritebackFlags()
+  // The board tests below open on the Board view; the views block resets this.
+  localStorage.setItem('pipeline-view', 'board')
   DATA.rows = [card('a', 'Ana Lead', 'New Lead'), card('b', 'Ben Working', 'Contacted/Working')]
+})
+
+describe('Pipeline views', () => {
+  const rowIds = () => [...document.querySelectorAll('[data-row-id]')].map((e) => e.getAttribute('data-row-id'))
+  const viewButton = (label) => [...document.querySelectorAll('[aria-label="View"] button')].find((b) => b.textContent.trim() === label)
+
+  beforeEach(() => {
+    localStorage.removeItem('pipeline-view')
+    DATA.rows = [
+      { ...card('a', 'Ana Lead', 'New Lead'), email: 'ana@x.co' },
+      { ...card('b', 'Ben Working', 'Contacted/Working'), open_task_count: 1, oldest_open_due_at: ago(3) },
+      { ...card('c', 'Cy Applied', 'Application Received'), docs_tracked: true, docs_outstanding_count: 2, docs_outstanding: ['W2', 'Paystubs'], docs_oldest_requested_at: ago(9) },
+    ]
+  })
+
+  it('opens on List: KPI cards, then one row per lead, most urgent first', async () => {
+    await mount()
+    expect(document.querySelector('[data-view="list"]')).not.toBeNull()
+    expect(document.querySelector('[data-kpi="active"]').textContent).toContain('3')
+    expect(document.querySelector('[data-kpi="received"]').textContent).toContain('1 with docs aging')
+    expect(rowIds()[0]).toBe('b')
+    const cy = document.querySelector('[data-row-id="c"]')
+    expect(cy.textContent).toContain('2 missing · 9d')
+    expect(cy.querySelector('[data-stage-step]').getAttribute('data-stage-step')).toBe('5')
+  })
+
+  it('search narrows every view; the cards still count the whole board', async () => {
+    await mount()
+    const input = document.querySelector('[aria-label="Search this pipeline"]')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'ana@')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(rowIds()).toEqual(['a'])
+    expect(document.querySelector('[data-kpi="active"]').textContent).toContain('3')
+  })
+
+  it('By stage groups the rows under their stage; the choice is remembered', async () => {
+    await mount()
+    await act(async () => viewButton('By stage').click())
+    expect([...document.querySelectorAll('[data-group]')].map((e) => e.getAttribute('data-group'))).toEqual([
+      'New Lead', 'Contacted/Working', 'Application Received',
+    ])
+    expect(localStorage.getItem('pipeline-view')).toBe('grouped')
+    await act(async () => viewButton('Board').click())
+    expect(column('New Lead')).not.toBeNull()
+  })
 })
 
 describe('Pipeline drag between stages', () => {

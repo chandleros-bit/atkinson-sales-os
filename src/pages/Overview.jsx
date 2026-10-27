@@ -10,6 +10,7 @@ import UpNextRow from '../components/UpNextRow'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { urgentCount } from '../lib/priorityQueue'
 import CrmLink from '../components/CrmLink'
+import Icon from '../components/Icon'
 import PageHeader from '../components/PageHeader'
 import {
   deriveAlert,
@@ -147,15 +148,11 @@ function AlertBanner({ alert }) {
   const red = alert.level === 'red'
   return (
     <div
-      className="mt-4 rounded-xl border px-3.5 py-2.5 text-xs font-semibold"
+      className="mt-5 rounded-xl border px-4 py-3 text-[13.5px] font-semibold"
       style={
         red
-          ? { borderColor: '#FECACA', background: '#FEF2F2', color: '#B91C1C' }
-          : {
-              borderColor: 'rgba(176,122,31,.35)',
-              background: 'rgba(232,180,95,.14)',
-              color: 'var(--bay-gold)',
-            }
+          ? { borderColor: 'var(--neg-line)', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }
+          : { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }
       }
     >
       {alert.text}
@@ -169,40 +166,35 @@ function EmptyRow({ children }) {
 
 // ---- 1. KPI scoreboard --------------------------------------------------------
 
+const KPI_ICON = { calls: 'phone', live_conversations: 'chat', followups: 'tasks', new_contacts: 'userPlus' }
+
+// Icon tile, label, today's number against its goal, then a footer strip with
+// the change from yesterday.
 function KpiCard({ card }) {
   const up = card.delta?.up
-  const arrow = up === true ? '▲' : up === false ? '▼' : ''
-  const arrowColor =
-    up === true ? 'var(--pos-ink)' : up === false ? 'var(--neg-ink)' : 'var(--dim)'
+  const deltaInk = up === true ? 'var(--pos-ink)' : up === false ? 'var(--neg-ink)' : 'var(--dim)'
   return (
-    <Card className="col-span-1 flex flex-col xl:col-span-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="line-clamp-2 text-[12.5px] font-medium leading-snug text-muted sm:truncate sm:text-[13px]">{card.label}</span>
-        {card.delta && (
-          <span
-            className="flex-none rounded-[7px] px-2 py-[3px] text-[11.5px] font-bold"
-            style={deltaStyle(card.delta.up)}
-          >
-            {card.delta.text}
-          </span>
-        )}
+    <section className="cc-card col-span-1 flex flex-col overflow-hidden xl:col-span-3">
+      <div className="flex-1 p-4 sm:p-5">
+        <div className="grid h-10 w-10 place-items-center rounded-[10px] border border-line" style={{ color: card.ink }}>
+          <Icon name={card.icon || 'phone'} size={20} />
+        </div>
+        <div className="mt-4 line-clamp-2 text-[13.5px] text-muted sm:mt-5 sm:text-[14px]">{card.label}</div>
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+          <span className="num text-[26px] font-semibold tracking-[-0.6px] sm:text-[28px]">{card.value}</span>
+          <span className="num text-[13px] text-dim sm:text-[14px]">of {card.goal} goal</span>
+        </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-hoverbg">
+          <div className="h-full rounded-full" style={{ width: `${goalPct(card.value, card.goal)}%`, background: card.accent }} />
+        </div>
       </div>
-
-      <div className="mt-2 flex items-end gap-2 sm:mt-4">
-        <span className="num text-[26px] font-extrabold leading-none tracking-[-0.8px] sm:text-[31px]">
-          {card.value}
+      <div className="flex items-center justify-between gap-2 border-t border-line bg-panel2 px-4 py-2.5 text-[13px] sm:px-5">
+        <span className="num font-semibold" style={{ color: deltaInk }}>
+          {card.delta ? card.delta.text : '—'}
         </span>
-        {arrow && (
-          <span className="mb-[3px] text-[15px] leading-none" style={{ color: arrowColor }}>
-            {arrow}
-          </span>
-        )}
+        <span className="text-dim">vs yesterday</span>
       </div>
-
-      <div className="num mt-2 text-[12px] font-medium text-dim sm:mt-3 sm:text-[12.5px]">
-        {card.value} of {card.goal} goal
-      </div>
-    </Card>
+    </section>
   )
 }
 
@@ -388,7 +380,7 @@ function GaugeCard({ title, sub, value, target, unit, subs }) {
             style={
               on
                 ? { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
-                : { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }
+                : { background: 'var(--warn-bg)', color: 'var(--warn-ink)' }
             }
           >
             {on ? 'On track' : 'Behind'}
@@ -525,7 +517,7 @@ function StatusPill({ onPace, palette }) {
   return (
     <span
       className="flex-none rounded-lg px-2.5 py-1 text-[11.5px] font-bold"
-      style={onPace ? ok : { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }}
+      style={onPace ? ok : { background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
     >
       {onPace ? 'On track' : 'Behind'}
     </span>
@@ -964,6 +956,7 @@ function buildKpiCards(biz, metrics, targets) {
 
   const card = (label, key, accent, ink, goal, todayVals = today, yVals = yesterday) => ({
     label,
+    icon: KPI_ICON[key],
     value: Number(todayVals[key] || 0),
     goal,
     accent,
@@ -1204,7 +1197,7 @@ export default function Overview() {
 
   return (
     <div>
-      <PageHeader eyebrow="OVERVIEW" title={`${greeting()}, Chandler`} subtitle={subtitle} />
+      <PageHeader eyebrow="Command center" title={`${greeting()}, Chandler`} subtitle={subtitle} />
       <ErrorNote error={error} />
       {isDemoMode && (
         <div className="mt-4 rounded-xl border border-line bg-panel px-3.5 py-2.5 text-xs text-muted">

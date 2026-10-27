@@ -21,7 +21,7 @@ const SOURCE_LABELS = {
 function WritebackRow({ wb }) {
   const failed = wb.error + wb.partial
   const total = wb.ok + wb.partial + wb.error + wb.refused + wb.pending
-  const dotColor = total === 0 ? 'var(--dim)' : failed ? '#e8785f' : 'var(--bay)'
+  const dotColor = total === 0 ? 'var(--dim)' : failed ? 'var(--neg-ink)' : 'var(--bay)'
   return (
     <div className="mt-4 rounded-card border border-line bg-panel">
       <div className="flex items-center gap-3 px-4 py-3.5">
@@ -110,7 +110,6 @@ export default function SyncStatus() {
   return (
     <div>
       <PageHeader
-        eyebrow="MANAGE"
         title="Sync Status"
         subtitle="Per-source health for FollowUpBoss, Zoho, and both Outlook calendars. The source rows show what synced in; the Write-back row shows Quick Actions sent to FollowUpBoss and Zoho."
         actions={
@@ -144,7 +143,7 @@ export default function SyncStatus() {
             const meta = SOURCE_LABELS[source]
             const row = bySource.get(source)
             const ok = row?.status === 'ok'
-            const dotColor = !row ? 'var(--dim)' : ok ? 'var(--bay)' : '#e8785f'
+            const dotColor = !row ? 'var(--dim)' : ok ? 'var(--bay)' : 'var(--neg-ink)'
             return (
               <div
                 key={source}

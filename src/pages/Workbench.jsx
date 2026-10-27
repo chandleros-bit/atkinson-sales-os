@@ -56,7 +56,6 @@ export default function Workbench() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        eyebrow="OVERVIEW"
         title="Workbench"
         subtitle="Calls to make and files to move, both books."
         actions={

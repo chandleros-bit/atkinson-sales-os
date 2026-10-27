@@ -60,7 +60,7 @@ describe('Activity', () => {
     const host = await mount()
     expect(shown(host)).toEqual(['bay:Ana', 'mpg:Bo', 'bay:Cy', 'mpg:Di'])
     expect(host.querySelector('[data-activity="mpg"]').textContent).toContain('MPG')
-    expect(host.querySelector('header').textContent).toContain('OVERVIEW')
+    expect(host.querySelector('header').textContent).toContain('Both books')
   })
 
   it('follows the business filter', async () => {

@@ -3,6 +3,7 @@
 // dialog. The caller decides what each kind does.
 // Spec: docs/superpowers/specs/2026-10-19-tier1-pipeline-flow-design.md (5)
 import { useEffect, useRef, useState } from 'react'
+import Icon from './Icon'
 
 export const QUICK_ADD = [
   { kind: 'call', label: 'Log call…' },
@@ -14,7 +15,7 @@ export const QUICK_ADD = [
 const NEW_LEAD = { kind: 'lead', label: 'New lead…' }
 
 // showLead: offer "New lead…" (settings.create_lead_enabled plus write-back).
-export default function QuickAddMenu({ onPick, showLead = false, className = '', style }) {
+export default function QuickAddMenu({ onPick, showLead = false, className = 'btn-primary', style }) {
   const [open, setOpen] = useState(false)
   const items = showLead ? [NEW_LEAD, ...QUICK_ADD] : QUICK_ADD
   const box = useRef(null)
@@ -32,22 +33,23 @@ export default function QuickAddMenu({ onPick, showLead = false, className = '',
   }, [open])
 
   return (
-    <div ref={box} className="relative flex-1">
+    <div ref={box} className="relative">
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-[38px] w-full items-center justify-center gap-1.5 rounded-[10px] text-[13px] font-semibold text-[#07120b] ${className}`}
+        className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] px-4 text-[14px] font-semibold ${className}`}
         style={style}
       >
-        + New
+        <Icon name="plus" size={16} strokeWidth={2.2} />
+        New
       </button>
       {open && (
         <div
           role="menu"
           aria-label="New"
-          className="absolute left-0 right-0 top-[42px] z-30 rounded-[10px] border border-line bg-panel p-1 shadow-lg"
+          className="absolute right-0 top-[46px] z-30 w-[200px] rounded-xl border border-line bg-panel p-1 shadow-lg"
         >
           {items.map((it) => (
             <button

@@ -16,16 +16,308 @@ import StageProgress from '../components/StageProgress'
 import QuickActions, { NextStepPrompt } from '../components/QuickActions'
 import { showToast } from '../components/Toaster'
 import { useIsMobile } from '../components/UpNextRow'
+import Icon from '../components/Icon'
+import { openPerson } from '../components/PersonSheet'
+import { formatPhone } from '../lib/phone'
+import { VIEWS, SORTS, filterRows, sortRows, pipelineKpis } from '../lib/pipelineView'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
   return (
     <PageHeader
-      eyebrow={isMpg ? 'MPG' : 'BAYWAY'}
+      eyebrow={isMpg ? 'MPG · Zoho' : 'Bayway · FollowUpBoss'}
       eyebrowColor={isMpg ? 'var(--mpg-ink)' : 'var(--bay-ink)'}
-      title="Pipeline"
+      title={isMpg ? 'Merchant Pipeline' : 'Mortgage Pipeline'}
       note={note}
+      subtitle={isMpg ? 'Every open Zoho lead, by lead status.' : 'Every active Bayway lead, from first call to application received.'}
     />
+  )
+}
+
+// ---- Views: KPI cards, toolbar, List, By stage ---------------------------------
+
+const VIEW_KEY = 'pipeline-view'
+function savedView() {
+  try {
+    const v = localStorage.getItem(VIEW_KEY)
+    return VIEWS.some((x) => x.id === v) ? v : 'list'
+  } catch {
+    return 'list'
+  }
+}
+
+const ink = (biz) => (biz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)')
+const soft = (biz) => (biz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)')
+// MPG rows are merchant-first (the company is the deal); Bayway is person-first.
+const headline = (r, biz) => (biz === 'mpg' ? r.company || r.name : r.name) || '(no name)'
+const initials = (s) =>
+  String(s || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+function Avatar({ r, biz, size = 38 }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="grid flex-none place-items-center rounded-full text-[12.5px] font-bold"
+      style={{ width: size, height: size, background: soft(biz), color: ink(biz) }}
+    >
+      {initials(headline(r, biz))}
+    </div>
+  )
+}
+
+function KpiCards({ kpis, biz }) {
+  return (
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-4">
+      {kpis.map((k) => (
+        <section key={k.id} data-kpi={k.id} className="cc-card flex flex-col overflow-hidden">
+          <div className="flex-1 p-4 sm:p-5">
+            <div
+              className="grid h-10 w-10 place-items-center rounded-[10px] border border-line"
+              style={{ color: k.tone === 'neg' ? 'var(--neg-ink)' : ink(biz) }}
+            >
+              <Icon name={k.icon} size={20} />
+            </div>
+            <div className="mt-4 text-[13.5px] text-muted sm:mt-5 sm:text-[14px]">{k.label}</div>
+            <div className="num mt-1 text-[26px] font-semibold tracking-[-0.6px] sm:text-[28px]">{k.value}</div>
+          </div>
+          <div className="border-t border-line bg-panel2 px-4 py-2.5 text-[13px] text-dim sm:px-5">{k.foot}</div>
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function Toolbar({ view, onView, sort, onSort, query, onQuery }) {
+  return (
+    <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div role="group" aria-label="View" className="flex gap-0.5 rounded-[11px] border border-line2 bg-panel p-[3px]">
+          {VIEWS.map((v) => {
+            const on = v.id === view
+            return (
+              <button
+                key={v.id}
+                type="button"
+                aria-pressed={on}
+                onClick={() => onView(v.id)}
+                className={`flex min-h-[36px] items-center gap-2 rounded-lg px-3 text-[14px] ${
+                  on ? 'btn-primary font-semibold' : 'font-medium text-muted hover:text-[color:var(--text)]'
+                }`}
+              >
+                <Icon name={v.icon} size={16} />
+                {v.label}
+              </button>
+            )
+          })}
+        </div>
+        <label className="flex h-[42px] items-center gap-2 rounded-[10px] border border-line2 bg-panel px-3 text-muted">
+          <Icon name="list" size={16} />
+          <select
+            aria-label="Sort"
+            value={sort}
+            onChange={(e) => onSort(e.target.value)}
+            className="bg-transparent text-[14px] font-medium text-[#344054] outline-none"
+          >
+            {SORTS.map((o) => (
+              <option key={o.id} value={o.id}>
+                Sort: {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="flex h-[42px] w-full items-center gap-2.5 rounded-[10px] border border-line2 bg-panel px-3 text-dim sm:w-[280px]">
+        <Icon name="search" />
+        <input
+          aria-label="Search this pipeline"
+          placeholder="Search name, company, phone"
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          className="min-w-0 flex-1 bg-transparent text-[14px] text-[color:var(--text)] outline-none"
+        />
+      </label>
+    </div>
+  )
+}
+
+function Touch({ r }) {
+  const d = daysSince(r.last_touch_at)
+  const stale = d === null || d >= STALE_TOUCH_DAYS
+  return (
+    <span className={`num text-[14px] ${stale ? 'font-semibold' : ''}`} style={{ color: stale ? 'var(--warn-ink)' : '#344054' }}>
+      {lastTouchLabel(r.last_touch_at)}
+    </span>
+  )
+}
+
+function DocsCell({ r }) {
+  const state = docsState(r)
+  if (state === 'untracked') return <span className="text-[13.5px] text-dim">Not tracked</span>
+  if (state === 'clear') return <span className="text-[13.5px] font-semibold" style={{ color: 'var(--pos-ink)' }}>✓ All in</span>
+  const aging = isDocAging(r.docs_oldest_requested_at)
+  const days = daysSince(r.docs_oldest_requested_at)
+  return (
+    <span className="text-[13.5px] font-semibold" style={{ color: aging ? 'var(--warn-ink)' : '#344054' }} title={docSummary(r.docs_outstanding)}>
+      {r.docs_outstanding_count} missing{days !== null ? ` · ${days}d` : ''}
+    </span>
+  )
+}
+
+function StageCell({ r, biz }) {
+  return (
+    <div className="min-w-0">
+      <div className="truncate text-[14.5px]">{r.stage || '—'}</div>
+      {biz !== 'mpg' && <StageProgress stage={r.stage} className="mt-1.5" />}
+    </div>
+  )
+}
+
+function MoreButton({ r, biz }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Open ${headline(r, biz)}`}
+      onClick={() => openPerson(r.id)}
+      className="grid h-9 w-9 place-items-center rounded-lg text-muted hover:bg-hoverbg"
+    >
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="5" cy="12" r="1.7" />
+        <circle cx="12" cy="12" r="1.7" />
+        <circle cx="19" cy="12" r="1.7" />
+      </svg>
+    </button>
+  )
+}
+
+// Every column shares one set of proportional tracks, so the header and each
+// row (separate grids) always line up.
+const LIST_COLS = {
+  bay: 'minmax(0,2.1fr) minmax(0,1.7fr) minmax(0,1.7fr) minmax(0,1.1fr) minmax(0,1fr) minmax(0,0.9fr) 40px',
+  mpg: 'minmax(0,2.3fr) minmax(0,1.5fr) minmax(0,1.8fr) minmax(0,1.2fr) minmax(0,0.9fr) 40px',
+}
+const LIST_HEAD = {
+  bay: [['Lead name', 'user'], ['Stage', 'layers'], ['Health', 'pulse'], ['Contact', 'phone'], ['Docs', 'doc'], ['Last touch', 'clock']],
+  mpg: [['Merchant', 'user'], ['Status', 'layers'], ['Health', 'pulse'], ['Contact', 'phone'], ['Last touch', 'clock']],
+}
+
+function ListView({ rows, biz, rules, now }) {
+  const mobile = useIsMobile()
+  const health = (r) => (rules ? cardHealth(r, rules, now) : null)
+  if (mobile) {
+    return (
+      <div className="mt-4 flex flex-col gap-2.5" data-view="list">
+        {rows.map((r) => (
+          <article key={r.id} data-row-id={r.id} className="cc-card p-3.5">
+            <div className="flex items-center gap-3">
+              <Avatar r={r} biz={biz} size={36} />
+              <div className="min-w-0 flex-1">
+                <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[15px] font-semibold">
+                  {headline(r, biz)}
+                </PersonLink>
+                <div className="truncate text-[13px] text-muted">{formatPhone(r.phone) || r.email || 'no contact info'}</div>
+              </div>
+              <Touch r={r} />
+            </div>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <span className="text-[13px] text-muted">{r.stage}</span>
+              {biz !== 'mpg' && <StageProgress stage={r.stage} />}
+            </div>
+            <HealthPills h={health(r)} className="mt-2" />
+          </article>
+        ))}
+      </div>
+    )
+  }
+  const cols = LIST_COLS[biz] || LIST_COLS.bay
+  return (
+    <div className="mt-5 overflow-x-auto" data-view="list">
+      <div className="min-w-[980px]">
+        <div
+          className="grid h-[50px] items-center gap-3 rounded-xl border border-line bg-panel2 px-4 text-[14px] text-muted"
+          style={{ gridTemplateColumns: cols }}
+        >
+          {(LIST_HEAD[biz] || LIST_HEAD.bay).map(([label, icon]) => (
+            <span key={label} className="flex items-center gap-2">
+              <Icon name={icon} size={16} strokeWidth={1.7} />
+              {label}
+            </span>
+          ))}
+          <span />
+        </div>
+        <div className="mt-2.5 flex flex-col gap-2.5">
+          {rows.map((r) => (
+            <div
+              key={r.id}
+              data-row-id={r.id}
+              className="grid min-h-[72px] items-center gap-3 rounded-xl border border-line bg-panel px-4 py-2.5 shadow-[var(--card-shadow)]"
+              style={{ gridTemplateColumns: cols }}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar r={r} biz={biz} />
+                <div className="min-w-0">
+                  <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[15px] font-semibold">
+                    {headline(r, biz)}
+                  </PersonLink>
+                  <div className="truncate text-[13px] text-muted">{(biz === 'mpg' ? r.name : r.email) || '—'}</div>
+                </div>
+              </div>
+              <StageCell r={r} biz={biz} />
+              <HealthPills h={health(r)} />
+              <span className="num whitespace-nowrap text-[14.5px]">{formatPhone(r.phone) || '—'}</span>
+              {biz !== 'mpg' && <DocsCell r={r} />}
+              <Touch r={r} />
+              <MoreButton r={r} biz={biz} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GroupedView({ columns, biz, rules, now }) {
+  return (
+    <div className="mt-5 flex flex-col gap-4" data-view="grouped">
+      {columns
+        .filter((c) => c.cards.length > 0)
+        .map((col) => {
+          const summary = rules ? columnSummary(col.cards, rules, now) : ''
+          return (
+            <section key={col.stage} aria-label={col.stage} data-group={col.stage} className="cc-card overflow-hidden">
+              <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel2 px-4 py-3 sm:px-5">
+                <h2 className={`text-[16px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>{col.stage}</h2>
+                {biz !== 'mpg' && <StageProgress stage={col.stage} />}
+                {summary && <span className="text-[13px] font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</span>}
+                <span className="num ml-auto rounded-full border border-line2 bg-panel px-2.5 text-[13px] font-semibold text-[#344054]">
+                  {col.cards.length} {col.cards.length === 1 ? 'lead' : 'leads'}
+                </span>
+              </div>
+              {col.cards.map((r) => (
+                <div key={r.id} data-row-id={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 sm:px-5">
+                  <div className="flex min-w-0 flex-[1_1_240px] items-center gap-3">
+                    <Avatar r={r} biz={biz} size={34} />
+                    <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[15px] font-semibold">
+                      {headline(r, biz)}
+                    </PersonLink>
+                  </div>
+                  <span className="num flex-[0_1_160px] whitespace-nowrap text-[14px]">{formatPhone(r.phone) || '—'}</span>
+                  <HealthPills h={rules ? cardHealth(r, rules, now) : null} className="flex-[1_1_220px]" />
+                  <span className="flex-[0_0_96px] text-right">
+                    <Touch r={r} />
+                  </span>
+                  <MoreButton r={r} biz={biz} />
+                </div>
+              ))}
+            </section>
+          )
+        })}
+    </div>
   )
 }
 
@@ -86,10 +378,10 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
   const accent = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
   // MPG cards are merchant-first (the company is the deal); Bayway is person-first.
   const headline = biz === 'mpg' ? r.company || r.name : r.name
-  const sub = biz === 'mpg' ? r.name || r.phone || r.email : r.phone || r.email
+  const sub = biz === 'mpg' ? r.name || formatPhone(r.phone) || r.email : formatPhone(r.phone) || r.email
   return (
     <div
-      className={`relative rounded-lg border border-line bg-panel2 px-3 py-2.5 pl-3.5 ${
+      className={`relative rounded-xl border border-line bg-panel px-3.5 py-3 shadow-[var(--card-shadow)] ${
         drag && !r.moving ? 'cursor-grab active:cursor-grabbing' : ''
       } ${r.moving ? 'opacity-60' : ''}`}
       draggable={!!drag && !r.moving}
@@ -122,7 +414,7 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
       <HealthPills h={health} className="mt-1.5" />
       <div
         className={`mt-1 text-[11px] ${stale ? 'font-semibold' : 'text-dim'}`}
-        style={stale ? { color: 'var(--bay-gold)' } : undefined}
+        style={stale ? { color: 'var(--warn-ink)' } : undefined}
       >
         {lastTouchLabel(r.last_touch_at)}
       </div>
@@ -152,10 +444,10 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now, wide = false }) 
   const summary = rules ? columnSummary(col.cards, rules, now) : ''
   return (
     <div
-      className={`${wide ? 'w-full' : 'w-[280px] flex-none'} rounded-card border bg-panel transition-colors`}
+      className={`${wide ? 'w-full' : 'w-[286px] flex-none'} overflow-hidden rounded-card border transition-colors`}
       style={{
         borderColor: isOver ? 'var(--bay)' : 'var(--line)',
-        background: isOver ? 'var(--bay-soft)' : undefined,
+        background: isOver ? 'var(--bay-soft)' : 'var(--panel2)',
       }}
       onDragOver={
         drag
@@ -180,19 +472,19 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now, wide = false }) 
       }
       data-stage={col.stage}
     >
-      <div className="border-b border-line px-3.5 py-2.5">
-        <div className="flex items-center justify-between">
-          <span className={`text-[12.5px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>
+      <div className="border-b border-line bg-panel px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className={`text-[14.5px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>
             {col.stage}
           </span>
-          <span className="num text-[11px] text-muted" data-col-count>
+          <span className="num text-[12px] text-muted" data-col-count>
             {col.cards.length}
             {summary ? ` · ${summary}` : ''}
           </span>
         </div>
         {biz !== 'mpg' && <StageProgress stage={col.stage} className="mt-1.5" />}
       </div>
-      <div className="flex min-h-[64px] flex-col gap-2 p-2.5">
+      <div className="flex min-h-[64px] flex-col gap-2.5 p-2.5">
         {col.cards.map((r) => (
           <Card
             key={r.id}
@@ -258,7 +550,7 @@ function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
     )
   }
   return (
-    <div className="mt-5 flex items-start gap-3.5 overflow-x-auto pb-2">
+    <div className="mt-5 flex items-start gap-4 overflow-x-auto pb-2" data-view="board">
       {columns.map((col) => (
         <Column key={col.stage} col={col} biz={biz} onDone={onDone} onPrompt={onPrompt} drag={drag} rules={rules} now={now} />
       ))}
@@ -429,6 +721,19 @@ export default function Pipeline({ biz }) {
   const [prompt, setPrompt] = useState(null)
   // A drop on the Lost zone: ask why before writing.
   const [lostAsk, setLostAsk] = useState(null)
+  // List / Board / By stage, remembered in this browser; sort and search
+  // apply to every view (the board keeps its health order inside a column).
+  const [view, setView] = useState(savedView)
+  const [sort, setSort] = useState('urgent')
+  const [query, setQuery] = useState('')
+  const pickView = (v) => {
+    setView(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // Private window or blocked storage: the choice lasts until reload.
+    }
+  }
 
   // quiet: refresh after a Quick Action without swapping the board for the
   // loading state (which would unmount the card that fired it).
@@ -533,10 +838,15 @@ export default function Pipeline({ biz }) {
   // The draggable Bayway board shows every column, so empty stages take drops.
   // A lead on its way to Lost leaves the board at once.
   const visible = rows.filter((r) => pending[r.id] !== 'Lost')
-  const columns = buildColumns(withPendingMoves(visible, pending), cfg.flowOrder, {
-    showAllFlow: canDrag,
+  const shown = withPendingMoves(filterRows(visible, query), pending)
+  const columns = buildColumns(shown, cfg.flowOrder, {
+    // While searching, empty columns would only be noise.
+    showAllFlow: canDrag && !query.trim(),
     sortCards: (cards) => sortByHealth(cards, rules, now),
   })
+  const groups = buildColumns(shown, cfg.flowOrder, { sortCards: (cards) => sortRows(cards, sort, rules, now) })
+  // The cards count the whole board, not the search.
+  const kpis = pipelineKpis(visible, rules, biz, now)
 
   return (
     <div>
@@ -566,15 +876,29 @@ export default function Pipeline({ biz }) {
       )}
 
       {!loading && !error && rows.length > 0 && (
-        <Board
-          columns={columns}
-          biz={biz}
-          onDone={() => load({ quiet: true })}
-          onPrompt={setPrompt}
-          drag={drag}
-          rules={rules}
-          now={now}
-        />
+        <>
+          <KpiCards kpis={kpis} biz={biz} />
+          <Toolbar view={view} onView={pickView} sort={sort} onSort={setSort} query={query} onQuery={setQuery} />
+          {shown.length === 0 ? (
+            <div className="mt-5 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
+              No leads match “{query.trim()}”.
+            </div>
+          ) : view === 'list' ? (
+            <ListView rows={sortRows(shown, sort, rules, now)} biz={biz} rules={rules} now={now} />
+          ) : view === 'grouped' ? (
+            <GroupedView columns={groups} biz={biz} rules={rules} now={now} />
+          ) : (
+            <Board
+              columns={columns}
+              biz={biz}
+              onDone={() => load({ quiet: true })}
+              onPrompt={setPrompt}
+              drag={drag}
+              rules={rules}
+              now={now}
+            />
+          )}
+        </>
       )}
       <DropZones drag={drag} />
       {choice && (

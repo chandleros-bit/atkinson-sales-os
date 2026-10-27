@@ -3,47 +3,53 @@
 @tailwind utilities;
 
 :root {
-  /* Neutral chrome (light) */
-  --bg: #EDEFF3;
+  /* Neutral chrome (light). White pages, a pale sidebar, thin borders. */
+  --bg: #FFFFFF;
   --panel: #FFFFFF;
-  --panel2: #F6F7F9;
-  --hover: #F1F3F6;
-  --line: #E6E8ED;
-  --line2: #D9DDE4;
-  --text: #14181C;
-  --muted: #6B7280;
-  --dim: #9AA1AC;
+  --panel2: #F8F9FB; /* sidebar, card footers, inner wells */
+  --hover: #F2F4F7;
+  --line: #EAECF0;
+  --line2: #DDE1E7;
+  --text: #101828;
+  --muted: #475467;
+  --dim: #667085;
+
+  /* Buttons and selected states: navy, so no control reads as one book. */
+  --chrome: #1F2A5C;
+  --chrome-soft: #EDEFF3; /* active sidebar item */
 
   /* MPG (blue) — brand hue unchanged */
   --mpg: #26ABE0;
-  --mpg-ink: #1483B4; /* colored text on white */
-  --mpg-soft: rgba(38, 171, 224, 0.12);
-  --mpg-line: rgba(38, 171, 224, 0.35);
+  --mpg-ink: #0F7AA8; /* colored text on white */
+  --mpg-soft: #E8F6FC;
+  --mpg-line: #B9E3F5;
 
   /* Bayway (green) — brand hue unchanged */
   --bay: #7CAD44;
-  --bay-ink: #5F8A2E; /* colored text on white */
+  --bay-ink: #4F7A22; /* colored text on white */
   --bay-deep: #0B5E42;
-  --bay-soft: rgba(124, 173, 68, 0.16);
-  --bay-line: rgba(124, 173, 68, 0.4);
-  --bay-gold: #B07A1F; /* deepened from #C9A052 for contrast on white */
+  --bay-soft: #F1F7E9;
+  --bay-line: #CFE3B6;
+  --bay-gold: #B54708; /* aging docs / stale touch: the warn ink */
 
-  /* Delta pills — day-over-day up/down/flat (handoff tokens) */
-  --pos-bg: #E7F5EC;
-  --pos-ink: #2E9E52;
-  --neg-bg: #FCEBEA;
-  --neg-ink: #DC4B43;
-  /* Due-today / stale: amber, the same gold Bayway uses for aging docs */
-  --warn-bg: #FBF1DF;
-  --warn-ink: #B07A1F;
+  /* Status: good / due / late, as outlined pills and deltas */
+  --pos-bg: #ECFDF3;
+  --pos-ink: #067647;
+  --pos-line: #ABEFC6;
+  --neg-bg: #FEF3F2;
+  --neg-ink: #B42318;
+  --neg-line: #FECDCA;
+  --warn-bg: #FFFAEB;
+  --warn-ink: #B54708;
+  --warn-line: #FEDF89;
 
-  /* Card chrome shared by the Overview command center */
-  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 30px rgba(16, 24, 40, 0.05);
+  /* Card chrome */
+  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
 
   /* Active accent - defaults to blue; BusinessContext swaps these */
   --accent: #26ABE0;
-  --accent-soft: rgba(38, 171, 224, 0.12);
-  --accent-ink: #1483B4;
+  --accent-soft: #E8F6FC;
+  --accent-ink: #0F7AA8;
 }
 
 [data-biz='mpg'] {
@@ -66,7 +72,8 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Work Sans', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'cv11' 1;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -74,23 +81,32 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Dual-brand gradient used only in All mode */
+/* Dual-brand gradient: the All-books marker on small swatches only. */
 .grad-dual {
   background: linear-gradient(135deg, var(--mpg), var(--bay));
 }
 .grad-dual-soft {
-  background: linear-gradient(90deg, rgba(38, 171, 224, 0.12), rgba(124, 173, 68, 0.14));
+  background: linear-gradient(90deg, var(--mpg-soft), var(--bay-soft));
 }
 
-/* Overview command-center card chrome. */
+/* Card chrome (Overview command center and the shared cards). */
 .cc-card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: 16px;
   box-shadow: var(--card-shadow);
 }
 
+/* Primary button: navy chrome. */
+.btn-primary {
+  background: var(--chrome);
+  color: #FFFFFF;
+}
+.btn-primary:hover {
+  background: #18214A;
+}
+
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--chrome);
   outline-offset: 2px;
 }
