@@ -12,6 +12,7 @@ import Calendar from './pages/Calendar'
 import Activity from './pages/Activity'
 import PriorityLeads from './pages/PriorityLeads'
 import Reports from './pages/Reports'
+import Analytics from './pages/Analytics'
 import Tasks from './pages/Tasks'
 import PagePlaceholder from './components/PagePlaceholder'
 
@@ -47,6 +48,7 @@ export default function App() {
               <Route path="/workbench" element={<Workbench />} />
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="/tasks" element={<Tasks />} />
               {/* Follows the business filter; All merges both books. */}
               <Route path="/activity" element={<Activity />} />

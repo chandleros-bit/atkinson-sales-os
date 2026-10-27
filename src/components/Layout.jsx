@@ -18,6 +18,7 @@ const TITLES = [
   [/^\/(priority|workbench)/, 'Workbench'],
   [/^\/calendar/, 'Calendar'],
   [/^\/reports/, 'Reports'],
+  [/^\/analytics/, 'Analytics'],
   [/^\/tasks/, 'Tasks'],
   [/^\/activity/, 'Activity'],
   [/^\/mpg\/pipeline/, 'Pipeline'],
