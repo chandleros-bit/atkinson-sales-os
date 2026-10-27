@@ -155,6 +155,26 @@ describe('Workbench', () => {
     expect(host.querySelector('header').textContent).toContain('0 / 3')
   })
 
+  it('shows the alerts rail: what is slipping, with names', async () => {
+    mobile = false
+    DATA.pipeline[1].docs_oldest_requested_at = iso(10)
+    DATA.signals.push({ ...DATA.signals[0], id: 'a1', name: 'Ivy Application', stage: 'Application Received', last_inbound_at: null, last_outbound_at: iso(9), last_outbound_call_at: iso(9) })
+    const host = await render()
+    const rail = host.querySelector('[aria-label="Alerts"]')
+    const card = (id) => rail.querySelector(`[data-alert="${id}"]`)
+    expect([...rail.querySelectorAll('[data-alert]')].map((e) => e.getAttribute('data-alert'))).toEqual(['quiet_apps', 'docs_aging', 'statements_late'])
+    expect(card('quiet_apps').textContent).toContain('Ivy Application')
+    expect(card('docs_aging').querySelector('[data-alert-count]').textContent).toBe('1')
+    expect(card('statements_late').textContent).toContain('Lending Flow')
+  })
+
+  it('shows no rail when nothing is slipping', async () => {
+    mobile = false
+    DATA.tasks = []
+    const host = await render()
+    expect(host.querySelector('[aria-label="Alerts"]')).toBeNull()
+  })
+
   it('marks an estimate sent, which moves the FUB stage', async () => {
     mobile = false
     invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })

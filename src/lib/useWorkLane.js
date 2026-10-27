@@ -22,7 +22,7 @@ export function useWorkLane() {
         fetchAllSettled(() =>
           supabase
             .from('v_active_pipeline')
-            .select('id, name, stage, stage_since, open_task_count, oldest_open_due_at, docs_outstanding_count')
+            .select('id, name, stage, stage_since, open_task_count, oldest_open_due_at, docs_outstanding_count, docs_oldest_requested_at')
             .eq('business_id', 'bay')
             .in('stage', WORK_STAGES)
             .order('id'),

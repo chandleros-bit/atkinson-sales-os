@@ -19,6 +19,7 @@ const TITLES = [
   [/^\/calendar/, 'Calendar'],
   [/^\/reports/, 'Reports'],
   [/^\/tasks/, 'Tasks'],
+  [/^\/activity/, 'Activity'],
   [/^\/mpg\/pipeline/, 'Pipeline'],
   [/^\/mpg\/activity/, 'Activity'],
   [/^\/mpg\/contacts/, 'Contacts'],

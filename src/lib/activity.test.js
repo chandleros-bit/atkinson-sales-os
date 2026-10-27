@@ -1,5 +1,34 @@
 import { describe, it, expect } from 'vitest'
-import { filterByType, groupByDay, activityDayLabel, timeOfDay } from './activity'
+import { filterByType, groupByDay, activityDayLabel, timeOfDay, mergeFeeds } from './activity'
+
+describe('mergeFeeds', () => {
+  const at = (h) => `2026-07-13T${String(h).padStart(2, '0')}:00:00`
+  it('interleaves both books newest first and tags each row', () => {
+    const { rows, hasMore } = mergeFeeds([
+      { biz: 'bay', rows: [{ id: 1, occurred_at: at(11) }, { id: 2, occurred_at: at(8) }], hasMore: false },
+      { biz: 'mpg', rows: [{ id: 1, occurred_at: at(10) }], hasMore: false },
+    ])
+    expect(rows.map((r) => r.key)).toEqual(['bay:1', 'mpg:1', 'bay:2'])
+    expect(rows.map((r) => r.business_id)).toEqual(['bay', 'mpg', 'bay'])
+    expect(hasMore).toBe(false)
+  })
+  it('holds back rows older than a feed that has more pages', () => {
+    const { rows, hasMore } = mergeFeeds([
+      { biz: 'bay', rows: [{ id: 1, occurred_at: at(11) }, { id: 2, occurred_at: at(9) }], hasMore: true },
+      { biz: 'mpg', rows: [{ id: 1, occurred_at: at(10) }, { id: 2, occurred_at: at(6) }], hasMore: false },
+    ])
+    // Bayway rows before 9:00 aren't loaded yet, so MPG's 6:00 row waits.
+    expect(rows.map((r) => r.key)).toEqual(['bay:1', 'mpg:1', 'bay:2'])
+    expect(hasMore).toBe(true)
+  })
+  it('one feed alone shows everything it loaded', () => {
+    const { rows } = mergeFeeds([{ biz: 'mpg', rows: [{ id: 1, occurred_at: at(10) }, { id: 2, occurred_at: at(6) }], hasMore: true }])
+    expect(rows).toHaveLength(2)
+  })
+  it('drops rows without a time', () => {
+    expect(mergeFeeds([{ biz: 'bay', rows: [{ id: 1, occurred_at: null }], hasMore: false }]).rows).toEqual([])
+  })
+})
 
 describe('filterByType', () => {
   const rows = [{ type: 'call' }, { type: 'text' }, { type: 'call' }]

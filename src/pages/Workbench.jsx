@@ -8,6 +8,8 @@ import { useBusiness } from '../context/BusinessContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useWorkLane } from '../lib/useWorkLane'
 import { buildWorkGroups, workProgress } from '../lib/workbench'
+import { buildAlerts } from '../lib/alerts'
+import AlertsRail from '../components/AlertsRail'
 import { useIsMobile } from '../components/UpNextRow'
 import WorkLane from '../components/WorkLane'
 import AddWorkItem from '../components/AddWorkItem'
@@ -31,7 +33,7 @@ function Progress({ label, value, pct }) {
 
 export default function Workbench() {
   const { biz } = useBusiness() || { biz: 'all' }
-  const { queue, rules, touchedToday } = usePriorityQueue(biz)
+  const { queue, signals, rules, touchedToday } = usePriorityQueue(biz)
   const work = useWorkLane()
   const mobile = useIsMobile()
   const [lane, setLane] = useState('calls')
@@ -47,6 +49,7 @@ export default function Workbench() {
   // Open = what's in front of you; waiting items are parked, not counted.
   const openWork = groups.reduce((n, g) => n + (g.id === 'waiting' ? 0 : g.items.length), 0)
   const progress = workProgress(work.workItems.filter((w) => inBook(w.business_id)), openWork, now)
+  const alerts = buildAlerts({ queue, signals, pipeline: work.pipeline, tasks: work.tasks, workItems: work.workItems, rules, inBook, now })
   const showCalls = !mobile || lane === 'calls'
   const showWork = !mobile || lane === 'work'
 
@@ -69,6 +72,8 @@ export default function Workbench() {
           </div>
         }
       />
+
+      <AlertsRail alerts={alerts} showBook={biz === 'all'} />
 
       {mobile && (
         <div role="tablist" aria-label="Lane" className="grid grid-cols-2 rounded-xl bg-panel2 p-1">
