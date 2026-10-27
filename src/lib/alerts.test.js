@@ -76,7 +76,7 @@ describe('buildAlerts', () => {
     ]
     expect(ids(byId(buildAlerts({ workItems, rules, now: NOW }), 'check_backs'))).toEqual(['x'])
     workItems[0].waiting_on = 'Borrower'
-    expect(byId(buildAlerts({ workItems, rules, now: NOW }), 'check_backs').people[0].detail).toBe('Waiting on Borrower · due today')
+    expect(byId(buildAlerts({ workItems, rules, now: NOW }), 'check_backs').people[0].detail).toBe('Borrower · due today')
   })
 
   it('follows the business filter and shows three names plus a count', () => {

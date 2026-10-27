@@ -12,10 +12,11 @@ function Person({ p, badge }) {
   return (
     <li className="flex min-w-0 items-center gap-2 text-[12.5px] leading-5">
       {badge && p.book && <BizBadge biz={p.book} />}
-      <PersonLink id={p.id} className="min-w-0 truncate font-semibold text-[color:var(--text)]">
+      {/* The name keeps its room; the why gives way first. */}
+      <PersonLink id={p.id} className="max-w-[65%] flex-none truncate text-[13px] font-semibold text-[color:var(--text)]">
         {p.name}
       </PersonLink>
-      {p.detail && <span className="ml-auto max-w-[55%] flex-none truncate text-muted">{p.detail}</span>}
+      {p.detail && <span className="ml-auto min-w-0 truncate text-right text-dim">{p.detail}</span>}
     </li>
   )
 }
