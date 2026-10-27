@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { TYPE_META, TYPE_CHIPS, filterByType, groupByDay, timeOfDay } from '../lib/activity'
 import PersonLink from '../components/PersonLink'
+import PageHeader from '../components/PageHeader'
 
 const PER_PAGE = 150
 
@@ -117,17 +118,13 @@ export default function Activity({ biz }) {
 
   return (
     <div>
-      <div className="flex items-center gap-3">
-        <h2 className="text-[26px] font-bold tracking-tight">Activity</h2>
-        <span
-          className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
-          style={{ color: `var(--${config.accent})`, background: `var(--${config.accent}-soft)` }}
-        >
-          {config.label}
-        </span>
-        {!loading && !error && <span className="num text-[12px] text-muted">{total} shown</span>}
-      </div>
-      <p className="mt-1 hidden text-sm text-muted sm:block">{config.copy}</p>
+      <PageHeader
+        eyebrow={config.label}
+        eyebrowColor={`var(--${config.accent}-ink)`}
+        title="Activity"
+        note={!loading && !error && <span className="num text-[12px] text-muted">{total} shown</span>}
+        subtitle={config.copy}
+      />
 
       <div className="-mx-4 mt-3 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:flex-wrap sm:px-0">
         {TYPE_CHIPS.map((c) => (

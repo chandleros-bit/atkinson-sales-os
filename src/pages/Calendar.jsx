@@ -4,6 +4,7 @@ import { useBusiness } from '../context/BusinessContext'
 import { sourceToBiz, timeLabel, eventDayKey, dayLabel } from '../lib/calendar'
 import { isSyncStale, eventsForDay } from '../lib/calendarRail'
 import { monthCells, monthLabel, eventDots, todayKey, WEEKDAYS } from '../lib/overviewCards'
+import PageHeader from '../components/PageHeader'
 
 const OUTLOOK_SOURCES = ['outlook-mpg', 'outlook-bayway']
 
@@ -170,25 +171,28 @@ export default function Calendar() {
 
   return (
     <div>
-      <div className="flex items-center gap-3">
-        <h2 className="text-[26px] font-bold tracking-tight">Calendar</h2>
-        {stale && (
-          <span
-            className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
-            style={{ background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }}
-            title="Outlook sync is behind — showing the last synced data."
-          >
-            Stale
-          </span>
-        )}
-      </div>
-      <p className="mt-1 hidden text-sm text-muted sm:block">
-        {biz === 'mpg'
-          ? 'MPG calendar — merchant meetings.'
-          : biz === 'bay'
-            ? 'Bayway calendar — closings and appointments.'
-            : 'Monthly view across both Outlook calendars, colored by source.'}
-      </p>
+      <PageHeader
+        eyebrow="OVERVIEW"
+        title="Calendar"
+        note={
+          stale && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
+              style={{ background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
+              title="Outlook sync is behind — showing the last synced data."
+            >
+              Stale
+            </span>
+          )
+        }
+        subtitle={
+          biz === 'mpg'
+            ? 'MPG calendar — merchant meetings.'
+            : biz === 'bay'
+              ? 'Bayway calendar — closings and appointments.'
+              : 'Monthly view across both Outlook calendars, colored by source.'
+        }
+      />
 
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

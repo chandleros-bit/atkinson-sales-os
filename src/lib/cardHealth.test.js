@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextStep, stuckFor, cardHealth, healthRank, sortByHealth, columnSummary, speedToLead, formatElapsed, lateLeadCount, titleFor } from './cardHealth'
+import { nextStep, stuckFor, cardHealth, healthPills, healthRank, sortByHealth, columnSummary, speedToLead, formatElapsed, lateLeadCount, titleFor } from './cardHealth'
 import { DEFAULT_RULES } from './priorityQueue'
 
 // Local times (no Z), the same convention as priorityQueue.test.js.
@@ -140,5 +140,27 @@ describe('tab title', () => {
     expect(titleFor(0)).toBe('Atkinson Sales OS')
     expect(titleFor(1)).toBe('(1) New lead waiting · Atkinson Sales OS')
     expect(titleFor(3)).toBe('(3) New leads waiting · Atkinson Sales OS')
+  })
+})
+
+describe('healthPills', () => {
+  const h = (o) => ({ next: { state: 'none', text: 'No next step' }, stuck: null, speed: null, ...o })
+  it('nothing without health', () => {
+    expect(healthPills(null)).toEqual([])
+  })
+  it('next step with its tone', () => {
+    expect(healthPills(h({ next: { state: 'overdue', text: 'Follow-up 2 days overdue' } }))).toEqual([
+      { key: 'overdue', tone: 'neg', text: 'Follow-up 2 days overdue' },
+    ])
+    expect(healthPills(h({ next: { state: 'today', text: 'Due today' } }))[0].tone).toBe('warn')
+    expect(healthPills(h({ next: { state: 'scheduled', text: 'Next: Mon' } }))[0].tone).toBe('pos')
+    expect(healthPills(h())[0].tone).toBe('neutral')
+  })
+  it('speed-to-lead replaces the next step; stuck rides along', () => {
+    const pills = healthPills(h({ speed: { late: true, text: '9m · not called' }, stuck: { days: 3, text: '3d in New Lead' } }))
+    expect(pills.map((p) => [p.key, p.tone])).toEqual([['speed', 'neg'], ['stuck', 'neg']])
+  })
+  it('parked leads get no next-step pill', () => {
+    expect(healthPills(h({ next: { state: 'parked', text: '' } }))).toEqual([])
   })
 })

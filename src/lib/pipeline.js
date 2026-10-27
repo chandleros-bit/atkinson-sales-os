@@ -38,6 +38,16 @@ export function isLostStage(stage) {
   return LOST_KEYWORDS.some((k) => s.includes(k))
 }
 
+// How far a Bayway lead is through the dashboard's part of the loan: New Lead
+// is step 1, Application Received step 5 (the LOS takes it from there).
+// Nurture, Lost and unknown stages aren't on the path: null.
+const BAY_PATH = BAY_STAGES.slice(0, BAY_STAGES.indexOf('Application Received') + 1)
+export function stageProgress(stage) {
+  const i = BAY_PATH.indexOf(stage)
+  if (i < 0) return null
+  return { step: i + 1, of: BAY_PATH.length, pct: Math.round(((i + 1) / BAY_PATH.length) * 100) }
+}
+
 // rows: pipeline rows ({ id, stage, last_touch_at, ... }) from v_active_pipeline
 // (Bayway) or v_mpg_contacts (MPG). flowOrder curates the left-to-right column
 // order for known stages; unknown-active stages follow alphabetically, lost last.

@@ -143,7 +143,7 @@ describe('Workbench', () => {
   it('shows the Calls and Work lanes with counts', async () => {
     mobile = false
     const host = await render()
-    expect(host.querySelector('h1').textContent).toBe('Workbench')
+    expect(host.querySelector('header h2').textContent).toBe('Workbench')
     expect(host.querySelector('[aria-label="Calls"]').textContent).toContain('Ana Inbound')
     const work = host.querySelector('[aria-label="Work"]')
     expect(work.textContent).toContain('Estimates to Work')

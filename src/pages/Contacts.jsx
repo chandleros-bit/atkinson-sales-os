@@ -5,6 +5,7 @@ import { lastTouchLabel } from '../lib/overview'
 import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
 import { formatPhone, telHref } from '../lib/phone'
 import PersonLink from '../components/PersonLink'
+import PageHeader from '../components/PageHeader'
 
 const PER_PAGE = 50
 
@@ -143,16 +144,7 @@ const COLUMNS = {
 
 function BizHeader({ config, note }) {
   return (
-    <div className="flex items-center gap-3">
-      <h2 className="text-[26px] font-bold tracking-tight">Contacts</h2>
-      <span
-        className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
-        style={{ color: `var(--${config.accent})`, background: `var(--${config.accent}-soft)` }}
-      >
-        {config.label}
-      </span>
-      {note}
-    </div>
+    <PageHeader eyebrow={config.label} eyebrowColor={`var(--${config.accent}-ink)`} title="Contacts" note={note} />
   )
 }
 

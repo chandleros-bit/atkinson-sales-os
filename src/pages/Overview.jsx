@@ -10,6 +10,7 @@ import UpNextRow from '../components/UpNextRow'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { urgentCount } from '../lib/priorityQueue'
 import CrmLink from '../components/CrmLink'
+import PageHeader from '../components/PageHeader'
 import {
   deriveAlert,
   lastTouchLabel,
@@ -1203,8 +1204,7 @@ export default function Overview() {
 
   return (
     <div>
-      <h2 className="text-[22px] font-bold tracking-tight sm:text-[28px]">{greeting()}, Chandler</h2>
-      <p className="mt-1 hidden text-sm text-muted sm:block">{subtitle}</p>
+      <PageHeader eyebrow="OVERVIEW" title={`${greeting()}, Chandler`} subtitle={subtitle} />
       <ErrorNote error={error} />
       {isDemoMode && (
         <div className="mt-4 rounded-xl border border-line bg-panel px-3.5 py-2.5 text-xs text-muted">

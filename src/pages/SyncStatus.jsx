@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { runSyncFunction } from '../lib/syncRun'
 import { summarizeWriteback } from '../lib/crmActions'
+import { timeAgo } from '../lib/syncHealth'
+import PageHeader from '../components/PageHeader'
 
 const SOURCE_LABELS = {
   fub: { label: 'FollowUpBoss (Bayway)', biz: 'bay' },
@@ -13,17 +15,6 @@ const SOURCE_LABELS = {
   'zoho-activity': { label: 'Zoho activity (MPG)', biz: 'mpg' },
   'outlook-mpg': { label: 'Outlook — MPG', biz: 'mpg' },
   'outlook-bayway': { label: 'Outlook — Bayway', biz: 'bay' },
-}
-
-function timeAgo(iso) {
-  if (!iso) return 'never'
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const mins = Math.round(diffMs / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.round(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.round(hrs / 24)}d ago`
 }
 
 // Quick Actions write-back health (crm_actions, last 24 hours).
@@ -118,22 +109,22 @@ export default function SyncStatus() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h2 className="text-[26px] font-bold tracking-tight">Sync Status</h2>
-        {!isDemoMode && (
-          <button
-            onClick={runNow}
-            disabled={running}
-            className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-muted hover:text-[color:var(--text)] disabled:opacity-50"
-          >
-            {running ? 'Running…' : 'Run FollowUpBoss sync now'}
-          </button>
-        )}
-      </div>
-      <p className="mt-1 hidden text-sm text-muted sm:block">
-        Per-source health for FollowUpBoss, Zoho, and both Outlook calendars. The source rows show what synced in;
-        the Write-back row shows Quick Actions sent to FollowUpBoss and Zoho.
-      </p>
+      <PageHeader
+        eyebrow="MANAGE"
+        title="Sync Status"
+        subtitle="Per-source health for FollowUpBoss, Zoho, and both Outlook calendars. The source rows show what synced in; the Write-back row shows Quick Actions sent to FollowUpBoss and Zoho."
+        actions={
+          !isDemoMode && (
+            <button
+              onClick={runNow}
+              disabled={running}
+              className="rounded-lg border border-line2 px-3 py-1.5 text-xs font-semibold text-muted hover:text-[color:var(--text)] disabled:opacity-50"
+            >
+              {running ? 'Running…' : 'Run FollowUpBoss sync now'}
+            </button>
+          )
+        }
+      />
 
       {isDemoMode && (
         <div className="mt-6 rounded-card border border-line bg-panel px-6 py-8 text-center text-sm text-muted">

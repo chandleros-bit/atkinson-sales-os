@@ -12,6 +12,7 @@ import { useIsMobile } from '../components/UpNextRow'
 import WorkLane from '../components/WorkLane'
 import AddWorkItem from '../components/AddWorkItem'
 import VoiceTask from '../components/VoiceTask'
+import PageHeader from '../components/PageHeader'
 import Priority from './Priority'
 
 function Progress({ label, value, pct }) {
@@ -51,22 +52,23 @@ export default function Workbench() {
 
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-tight">Workbench</h1>
-          <p className="mt-1 hidden text-sm text-muted sm:block">Calls to make and files to move, both books.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-5">
-          <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
-          <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
-          <div className="flex gap-2">
-            <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
-            <button type="button" onClick={() => setAdding(true)} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
-              + Work item
-            </button>
+      <PageHeader
+        eyebrow="OVERVIEW"
+        title="Workbench"
+        subtitle="Calls to make and files to move, both books."
+        actions={
+          <div className="flex flex-wrap items-center gap-5">
+            <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
+            <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
+            <div className="flex gap-2">
+              <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
+              <button type="button" onClick={() => setAdding(true)} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
+                + Work item
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       {mobile && (
         <div role="tablist" aria-label="Lane" className="grid grid-cols-2 rounded-xl bg-panel2 p-1">
