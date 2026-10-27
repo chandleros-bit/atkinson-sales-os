@@ -1,60 +1,59 @@
+// The Overview dashboard: this month at a glance across MPG and Bayway.
+//   Row 1  KPI cards: gross commission (MPG view: residual), closed this
+//          month, calls this month, pipeline value (MPG view: open leads)
+//   Row 2  Activity & Production (30 days) · Monthly goals gauge
+//   Row 3  Today's events · Pipeline mix · Lead sources
+//   Row 4  Income mix · Up Next · 90-day sprints
+// Numbers come from overviewDash.js; this file fetches and draws.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
-import CalendarCard from '../components/CalendarCard'
-import MyTasks from '../components/MyTasks'
 import TodayAgenda from '../components/TodayAgenda'
-import UpNextRow from '../components/UpNextRow'
-import { usePriorityQueue } from '../lib/usePriorityQueue'
-import { urgentCount } from '../lib/priorityQueue'
-import CrmLink from '../components/CrmLink'
+import BizBadge from '../components/BizBadge'
+import PersonLink from '../components/PersonLink'
 import Icon from '../components/Icon'
 import PageHeader from '../components/PageHeader'
+import { usePriorityQueue } from '../lib/usePriorityQueue'
+import { urgentCount, reasonText } from '../lib/priorityQueue'
+import { deriveAlert } from '../lib/overview'
+import { MPG_LEAD_FLOW } from '../lib/pipeline'
+import { pipelineKpis } from '../lib/pipelineView'
+import { formatPhone, telHref } from '../lib/phone'
+import { DEFAULT_TARGETS, resolveTargets, monthWindow, formatValue, MPG_SPRINT } from '../lib/reports'
+import { todayKey } from '../lib/overviewCards'
+import { BAY_STAGES } from '../../supabase/functions/_shared/bay-stages.ts'
 import {
-  deriveAlert,
-  lastTouchLabel,
-  daysSince,
-  isMpgOpen,
-} from '../lib/overview'
-import { LOAN_FLOW_ORDER } from '../lib/pipeline'
-import { tierMeta, sortByScore } from '../lib/priorityLeads'
-import {
-  DEFAULT_TARGETS,
-  resolveTargets,
-  rollupMetrics,
-  dailySeries,
-  deriveStageCounts,
-  sumWon,
-  countWon,
-  monthWindow,
-  pace,
-  formatValue,
-  sprintRows,
-  weeksRemaining,
-  neededPerWeek,
-  MPG_SPRINT,
-} from '../lib/reports'
-import {
-  todayKey,
-  daysAgoKey,
-  deltaPill,
-  goalPct,
-  buildChartModel,
-  gaugeArcs,
-  compactCurrency,
-  initials,
-  CHART,
-} from '../lib/overviewCards'
+  CHART_DAYS,
+  ACT_CHART,
+  prevMonthWindow,
+  monthValues,
+  kpiCards,
+  activitySeries,
+  activityChart,
+  monthlyGoals,
+  gaugeSegments,
+  pipelineMix,
+  topSources,
+  incomeMix,
+  sprintPace,
+  fmtMoney,
+} from '../lib/overviewDash'
 
-const CHART_DAYS = 14
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
-const DEMO_TODAY = todayKey()
-const DEMO_MONTH = DEMO_TODAY.slice(0, 8) + '01'
+const BAY_MIX_STAGES = BAY_STAGES.slice(0, 5)
+const BAY_MIX_COLORS = ['#C5DDA6', '#A4C97A', '#7CAD44', '#4F7A22', '#1F2A5C']
+// Shorter names for the legend, which sits beside the donut.
+const SHORT_STAGE = { 'Application/Estimate Sent': 'App/Estimate Sent', 'Application Received': 'App Received', 'Attempted to Contact': 'Attempted', 'Contact in Future': 'Contact later' }
+const MPG_MIX_COLORS = ['#CDEBF8', '#A6DCF2', '#7CCBEB', '#4FB8E3', '#26ABE0', '#0F7AA8', '#1F2A5C']
+const STATUS_COLOR = { hit: 'var(--chrome)', pace: 'var(--bay)', behind: '#F79009' }
+const STATUS_LABEL = { hit: 'Hit', pace: 'On pace', behind: 'Behind' }
+const DELTA_INK = { up: 'var(--pos-ink)', down: 'var(--neg-ink)', flat: 'var(--text)' }
+const KPI_INK = { bay: 'var(--bay-ink)', mpg: 'var(--mpg-ink)', chrome: 'var(--chrome)', neutral: '#344054' }
+const KPI_BAR = { bay: 'var(--bay)', mpg: 'var(--mpg)', chrome: 'var(--chrome)', neutral: 'var(--muted)' }
+const HEALTH_COLUMNS = ', stage_since, crm_created_at, last_outbound_call_at, open_task_count, oldest_open_due_at'
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 function greeting() {
   const h = new Date().getHours()
@@ -63,84 +62,50 @@ function greeting() {
   return 'Good evening'
 }
 
-// Colored text on white: the bright brand hues fail contrast at small sizes,
-// so numbers and labels use the deepened *-ink variants while fills stay bright.
-function bizColor(biz) {
-  return biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
-}
-function bizInk(biz) {
-  return biz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)'
+function dateLine(d = new Date()) {
+  return `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`
 }
 
-// Day-over-day pill palette: green up, red down, neutral flat (handoff tokens).
-function deltaStyle(up) {
-  if (up === true) return { background: 'var(--pos-bg)', color: 'var(--pos-ink)' }
-  if (up === false) return { background: 'var(--neg-bg)', color: 'var(--neg-ink)' }
-  return { background: 'var(--panel2)', color: 'var(--muted)' }
-}
-
-function PhoneIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-      <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0122 16.92z" />
-    </svg>
-  )
-}
+const toLead = (c) => ({
+  business_id: c.business_id,
+  person_stage: c.person_stage,
+  tags: c.tags,
+  source: c.business_id === 'bay' ? c.bay_source : c.mpg_source,
+  created: c.business_id === 'bay' ? c.bay_created : c.mpg_created,
+})
 
 // ---- Chrome ------------------------------------------------------------------
 
-function Card({ className = '', children }) {
-  return <section className={`cc-card p-4 sm:p-[20px] ${className}`}>{children}</section>
-}
-
-function CardHead({ title, sub, right }) {
+function Card({ title, sub, link, className = '', label, children }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h3 className="text-[18px] font-bold tracking-tight">{title}</h3>
-        {sub && <div className="mt-[3px] text-[12.5px] text-dim">{sub}</div>}
+    <section aria-label={label || title} className={`cc-card flex min-w-0 flex-col overflow-hidden ${className}`}>
+      <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+        <div className="min-w-0">
+          <h3 className="text-[17px] font-semibold tracking-[-0.2px]">{title}</h3>
+          {sub && <div className="mt-0.5 text-[13px] text-muted">{sub}</div>}
+        </div>
+        {link && (
+          <Link to={link.to} className="flex-none text-[13px] font-semibold text-[color:var(--chrome)] hover:underline">
+            {link.label} ↗
+          </Link>
+        )}
       </div>
-      {right}
-    </div>
-  )
-}
-
-function IconLink({ to, label, children }) {
-  return (
-    <Link
-      to={to}
-      aria-label={label}
-      title={label}
-      className="grid h-9 w-9 flex-none place-items-center rounded-[10px] bg-panel2 text-muted hover:bg-hoverbg"
-    >
       {children}
-    </Link>
+    </section>
   )
 }
 
-function ArrowOut() {
+function Bar({ pct, color, h = 6 }) {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-      <path d="M7 17L17 7M17 7H8M17 7v9" />
-    </svg>
-  )
-}
-
-function Chevron() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-      <path d="M9 18l6-6-6-6" />
-    </svg>
+    <div className="overflow-hidden rounded-full bg-hoverbg" style={{ height: h }}>
+      <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
+    </div>
   )
 }
 
 function ErrorNote({ error }) {
   if (!error) return null
-  return (
-    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-      {error}
-    </div>
-  )
+  return <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
 }
 
 function AlertBanner({ alert }) {
@@ -148,7 +113,7 @@ function AlertBanner({ alert }) {
   const red = alert.level === 'red'
   return (
     <div
-      className="mt-5 rounded-xl border px-4 py-3 text-[13.5px] font-semibold"
+      className="mt-4 rounded-xl border px-4 py-3 text-[13.5px] font-semibold"
       style={
         red
           ? { borderColor: 'var(--neg-line)', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }
@@ -160,549 +125,363 @@ function AlertBanner({ alert }) {
   )
 }
 
-function EmptyRow({ children }) {
-  return <div className="px-2 py-10 text-center text-sm text-muted">{children}</div>
-}
+// ---- Row 1: KPI cards ------------------------------------------------------------
 
-// ---- 1. KPI scoreboard --------------------------------------------------------
-
-const KPI_ICON = { calls: 'phone', live_conversations: 'chat', followups: 'tasks', new_contacts: 'userPlus' }
-
-// Icon tile, label, today's number against its goal, then a footer strip with
-// the change from yesterday.
 function KpiCard({ card }) {
-  const up = card.delta?.up
-  const deltaInk = up === true ? 'var(--pos-ink)' : up === false ? 'var(--neg-ink)' : 'var(--dim)'
+  const value = card.unit === 'currency' ? formatValue(card.value, 'currency') : Number(card.value || 0).toLocaleString()
   return (
-    <section className="cc-card col-span-1 flex flex-col overflow-hidden xl:col-span-3">
-      <div className="flex-1 p-4 sm:p-5">
-        <div className="grid h-10 w-10 place-items-center rounded-[10px] border border-line" style={{ color: card.ink }}>
-          <Icon name={card.icon || 'phone'} size={20} />
+    <section data-kpi={card.id} className="cc-card flex min-w-0 flex-col overflow-hidden">
+      <div className="px-[18px] pb-3.5 pt-4">
+        <div className="flex items-center justify-between">
+          <span className="grid h-10 w-10 place-items-center rounded-[10px] border border-line" style={{ color: KPI_INK[card.tone] }}>
+            <Icon name={card.icon} size={20} />
+          </span>
+          {card.tag && (
+            <span
+              className="rounded-md border px-[7px] py-px text-[11px] font-semibold"
+              title={card.tag === 'Entered' ? 'Typed into Reports' : 'From synced CRM data'}
+              style={card.tag === 'Entered' ? { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' } : { borderColor: 'var(--line2)', background: 'var(--panel2)', color: 'var(--muted)' }}
+            >
+              {card.tag}
+            </span>
+          )}
         </div>
-        <div className="mt-4 line-clamp-2 text-[13.5px] text-muted sm:mt-5 sm:text-[14px]">{card.label}</div>
-        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-          <span className="num text-[26px] font-semibold tracking-[-0.6px] sm:text-[28px]">{card.value}</span>
-          <span className="num text-[13px] text-dim sm:text-[14px]">of {card.goal} goal</span>
-        </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-hoverbg">
-          <div className="h-full rounded-full" style={{ width: `${goalPct(card.value, card.goal)}%`, background: card.accent }} />
+        <div className="mt-3.5 text-[14px] text-muted">{card.label}</div>
+        <div className="num mt-1 text-[28px] font-semibold tracking-[-0.6px]">{value}</div>
+        <div className="mt-2.5">
+          <Bar pct={card.pct} color={KPI_BAR[card.tone]} />
         </div>
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-line bg-panel2 px-4 py-2.5 text-[13px] sm:px-5">
-        <span className="num font-semibold" style={{ color: deltaInk }}>
-          {card.delta ? card.delta.text : '—'}
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-line bg-panel2 px-[18px] py-2.5 text-[13px]">
+        <span className="flex-none font-semibold" style={{ color: DELTA_INK[card.delta.tone] }}>
+          {card.delta.text}
         </span>
-        <span className="text-dim">vs yesterday</span>
+        <span className="truncate text-muted">{card.foot}</span>
       </div>
     </section>
   )
 }
 
-// ---- 2. Performance chart -----------------------------------------------------
+// ---- Row 2: Activity & Production, Monthly goals -------------------------------------
 
-function HeadMetric({ m }) {
+const DAY_FMT = { weekday: 'short', month: 'short', day: 'numeric' }
+
+function ActivityCard({ series, showProduction }) {
+  const chart = useMemo(() => activityChart(series.points), [series])
+  const [hover, setHover] = useState(series.points.length - 1)
+  const p = series.points[hover] || series.points.at(-1)
+  const pt = chart.points[hover] || chart.points.at(-1)
+  const onMove = (e) => {
+    const box = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - box.left) / box.width) * ACT_CHART.width
+    const n = series.points.length
+    const i = Math.round(((x - ACT_CHART.x0) / (ACT_CHART.x1 - ACT_CHART.x0)) * (n - 1))
+    setHover(Math.max(0, Math.min(n - 1, i)))
+  }
+  const delta = (now, before) => {
+    if (!before) return { text: now ? 'new' : '—', ink: 'var(--dim)' }
+    const pct = Math.round(((now - before) / before) * 100)
+    return { text: `${pct >= 0 ? '↑' : '↓'} ${Math.abs(pct)}%`, ink: pct >= 0 ? 'var(--pos-ink)' : 'var(--neg-ink)' }
+  }
+  const stats = [
+    { label: 'Touchpoints', now: series.totals.touch, before: series.prev.touch },
+    { label: 'Calls', now: series.totals.calls, before: series.prev.calls },
+    showProduction && { label: 'Apps & estimates', now: series.totals.apps, before: series.prev.apps },
+    showProduction && { label: 'Closings', now: series.totals.closings, before: series.prev.closings },
+  ].filter(Boolean)
+  // The tip sits right of the hovered day, or left of it past the middle.
+  const at = pt ? (pt.x / ACT_CHART.width) * 100 : 0
+  const tipPos = at > 55 ? { right: `${100 - at + 3}%` } : { left: `${at + 3}%` }
+
   return (
-    <div>
-      <div className="flex items-center gap-[7px] text-[12px] font-semibold text-muted">
-        <span className="h-2 w-2 rounded-full" style={{ background: m.color }} />
-        {m.label}
-      </div>
-      <div className="mt-1.5 flex items-center gap-2">
-        <span className="num text-[26px] font-extrabold tracking-[-0.5px]">{m.value}</span>
-        {m.delta && (
-          <span
-            className="rounded-[7px] px-[7px] py-[3px] text-[11px] font-bold"
-            style={deltaStyle(m.delta.up)}
-          >
-            {m.delta.text}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PerformanceCard({ model, showBay, showMpg, headMetrics, caption, markerLabel }) {
-  return (
-    <Card className="col-span-2 flex flex-col xl:col-span-6">
-      <div className="flex items-start justify-between gap-5">
-        <div className="min-w-0">
-          <h3 className="text-[17px] font-bold tracking-tight">Performance</h3>
-          <div className="mt-[5px] text-[12.5px] text-muted">{caption}</div>
-        </div>
-        <div className="flex flex-none gap-[26px]">
-          {headMetrics.map((m) => (
-            <HeadMetric key={m.label} m={m} />
-          ))}
-        </div>
-      </div>
-
-      {model.empty ? (
-        <EmptyRow>No call activity logged yet — log a day on Reports.</EmptyRow>
-      ) : (
-        <svg
-          viewBox={`0 0 ${CHART.width} ${CHART.height}`}
-          width="100%"
-          className="mt-2 block overflow-visible"
-          role="img"
-          aria-label={`Daily outbound calls, last ${CHART_DAYS} days`}
-        >
+    <Card
+      title="Activity & Production"
+      label="Activity and production"
+      className="xl:col-span-2"
+      sub={
+        <span className="flex flex-wrap gap-x-4 gap-y-1">
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ background: 'var(--chrome)' }} />Activity · calls, texts, emails</span>
+          {showProduction && <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ background: 'var(--bay)' }} />Production · apps, estimates, closings</span>}
+        </span>
+      }
+    >
+      <div className="relative px-5 pb-1 pt-4">
+        <svg viewBox={`0 0 ${ACT_CHART.width} ${ACT_CHART.height}`} className="block h-auto w-full" role="img" aria-label={`Daily activity${showProduction ? ' and production' : ''}, last ${CHART_DAYS} days`} onMouseMove={onMove} onMouseLeave={() => setHover(series.points.length - 1)}>
           <defs>
-            <linearGradient id="bayFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#7CAD44" stopOpacity="0.18" />
-              <stop offset="1" stopColor="#7CAD44" stopOpacity="0" />
+            <linearGradient id="actFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#1F2A5C" stopOpacity=".14" />
+              <stop offset="1" stopColor="#1F2A5C" stopOpacity="0" />
             </linearGradient>
           </defs>
-          {model.gridY.map((g) => (
-            <g key={g.label}>
-              <line
-                x1={CHART.x0}
-                x2={CHART.x1}
-                y1={g.y}
-                y2={g.y}
-                stroke="var(--line)"
-                strokeWidth="1.5"
-                strokeDasharray="4 5"
-              />
-              <text x="12" y={g.ty} fontSize="11" fontWeight="600" fill="var(--dim)">
-                {g.label}
-              </text>
+          {chart.ticks.map((t) => (
+            <g key={t.y}>
+              <line x1={ACT_CHART.x0} x2={ACT_CHART.x1} y1={t.y} y2={t.y} stroke={t.label === 0 ? '#EAECF0' : '#F2F4F7'} />
+              <text x="0" y={t.y + 4} fontSize="11" fill="#667085">{t.label}</text>
             </g>
           ))}
-          {showBay && model.area && <path d={model.area} fill="url(#bayFill)" />}
-          {showMpg && (
-            <path
-              d={model.mpg}
-              fill="none"
-              stroke="var(--mpg)"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-          {showBay && (
-            <path
-              d={model.bay}
-              fill="none"
-              stroke="var(--bay)"
-              strokeWidth="3.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-          {model.marker && (
-            <>
-              <line
-                x1={model.marker.x}
-                x2={model.marker.x}
-                y1={model.marker.y}
-                y2={CHART.bottom + 4}
-                stroke="var(--dim)"
-                strokeWidth="1.3"
-                strokeDasharray="3 4"
-              />
-              <circle
-                cx={model.marker.x}
-                cy={model.marker.y}
-                r="6"
-                fill="var(--panel)"
-                stroke="var(--accent)"
-                strokeWidth="3.5"
-              />
-              {/* The marker sits on the newest point, hard against the right
-                  edge, so the 120-wide tooltip is clamped into the plot area
-                  instead of hanging off the card. A white card with a hairline
-                  border, per the handoff — label over value. */}
-              <g
-                transform={`translate(${Math.min(model.marker.x, CHART.x1 - 60)} ${model.marker.y})`}
-              >
-                <rect
-                  x="-60"
-                  y="-60"
-                  width="120"
-                  height="46"
-                  rx="11"
-                  fill="var(--panel)"
-                  stroke="var(--line2)"
-                  strokeWidth="1.2"
-                />
-                <text x="-46" y="-40" fontSize="11.5" fontWeight="600" fill="var(--muted)">
-                  {markerLabel}
-                </text>
-                <text x="-46" y="-23" fontSize="14" fontWeight="800" fill="var(--text)">
-                  {model.marker.value} calls
-                </text>
-              </g>
-            </>
-          )}
-          {model.xticks.map((t) => (
-            <text
-              key={t.x}
-              x={t.x}
-              y={CHART.bottom + 24}
-              textAnchor="middle"
-              fontSize="11.5"
-              fontWeight={t.last ? 800 : 600}
-              fill={t.last ? 'var(--accent-ink)' : 'var(--dim)'}
-            >
-              {t.label}
+          {pt && <rect x={pt.x - 12} y={ACT_CHART.top - 6} width="24" height={ACT_CHART.bottom - ACT_CHART.top + 6} rx="4" fill="#1F2A5C" fillOpacity=".07" />}
+          <path d={chart.fill} fill="url(#actFill)" />
+          <path d={chart.act} fill="none" stroke="#1F2A5C" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+          {showProduction && <path d={chart.prod} fill="none" stroke="#7CAD44" strokeWidth="2.2" strokeDasharray="6 5" strokeLinejoin="round" strokeLinecap="round" />}
+          {pt && <circle cx={pt.x} cy={pt.ay} r="4.5" fill="#FFFFFF" stroke="#1F2A5C" strokeWidth="2" />}
+          {pt && showProduction && <circle cx={pt.x} cy={pt.py} r="4.5" fill="#FFFFFF" stroke="#7CAD44" strokeWidth="2" />}
+          {chart.labels.map((l) => (
+            <text key={l.i} x={l.x} y={ACT_CHART.height - 4} fontSize="11.5" fill="#667085" textAnchor={l.i === series.points.length - 1 ? 'end' : l.i === 0 ? 'start' : 'middle'}>
+              {l.label}
             </text>
           ))}
         </svg>
-      )}
-    </Card>
-  )
-}
-
-// NOTE: GaugeCard and FunnelCard (and their buildView gauge/funnel props) are
-// intentionally retained but no longer mounted — the reorganized Overview drops
-// them per the handoff. Kept in place so they can be restored without
-// reconstructing the data wiring. (Needs Attention was removed outright: Up
-// Next replaced it.)
-
-// ---- 3. Revenue gauge ---------------------------------------------------------
-
-// Narrow column (~280px at 1600), so the dial sits above its sub-stats rather
-// than beside them, and the goal figure rides in the sub-label.
-function GaugeCard({ title, sub, value, target, unit, subs }) {
-  const pct = target > 0 ? Math.round((value / target) * 100) : 0
-  const arcs = gaugeArcs(pct)
-  const on = pace(value, target) === 'on'
-  const goalText = unit === 'currency' ? compactCurrency(target) : formatValue(target, unit)
-  return (
-    <Card className="col-span-2 xl:col-span-4">
-      <CardHead
-        title={title}
-        sub={`${sub} · goal ${goalText}`}
-        right={
-          <span
-            className="flex-none rounded-full px-[11px] py-[5px] text-[11.5px] font-bold"
-            style={
-              on
-                ? { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
-                : { background: 'var(--warn-bg)', color: 'var(--warn-ink)' }
-            }
-          >
-            {on ? 'On track' : 'Behind'}
-          </span>
-        }
-      />
-      <div className="mt-1 flex flex-col items-center">
-        <svg viewBox="0 0 220 150" width="100%" className="max-w-[210px]">
-          <path d={arcs.trackD} fill="none" stroke="var(--line)" strokeWidth="16" strokeLinecap="round" />
-          {arcs.valD && (
-            <path
-              d={arcs.valD}
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="16"
-              strokeLinecap="round"
-            />
-          )}
-          <text
-            x="110"
-            y="104"
-            textAnchor="middle"
-            fontSize="42"
-            fontWeight="800"
-            fill="var(--text)"
-            letterSpacing="-2"
-          >
-            {pct}%
-          </text>
-          <text x="110" y="126" textAnchor="middle" fontSize="12.5" fontWeight="600" fill="var(--dim)">
-            of {MONTH_NAMES[new Date().getMonth()]} goal
-          </text>
-        </svg>
-        <div
-          className="mt-2 grid w-full gap-1.5 border-t border-line pt-3.5"
-          style={{ gridTemplateColumns: `repeat(${subs.length}, minmax(0,1fr))` }}
-        >
-          {subs.map((s) => (
-            <div key={s.label} className="min-w-0 text-center">
-              <div className="num text-[17px] font-extrabold tracking-tight">{s.val}</div>
-              <div className="mt-0.5 break-words text-[10.5px] font-semibold leading-tight text-dim">
-                {s.label}
+        {p && (
+          <div data-chart-tip className="pointer-events-none absolute top-6 w-[210px] rounded-[10px] border border-line bg-panel px-3 py-2.5 text-[12.5px] shadow-[0_8px_20px_rgba(16,24,40,.1)]" style={tipPos}>
+            <div className="font-semibold">{new Date(`${p.key}T12:00:00`).toLocaleDateString(undefined, DAY_FMT)}</div>
+            <div className="mt-1.5 flex justify-between text-muted">Touchpoints<span className="num font-semibold text-[color:var(--chrome)]">{p.touch}</span></div>
+            <div className="mt-0.5 flex justify-between text-muted">Calls<span className="num font-semibold text-[color:var(--text)]">{p.calls}</span></div>
+            {showProduction && (
+              <div className="mt-0.5 flex justify-between text-muted">Apps &amp; closings<span className="num font-semibold text-[color:var(--bay-ink)]">{p.prod}</span></div>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="mt-auto grid border-t border-line" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
+        {stats.map((s) => {
+          const d = delta(s.now, s.before)
+          return (
+            <div key={s.label} className="border-r border-hoverbg px-5 py-3 last:border-r-0">
+              <div className="text-[12.5px] text-dim">{s.label}</div>
+              <div className="mt-0.5 text-[18px] font-semibold">
+                <span className="num">{s.now.toLocaleString()}</span>{' '}
+                <span className="text-[12.5px] font-semibold" style={{ color: d.ink }} title={`vs the ${CHART_DAYS} days before`}>{d.text}</span>
               </div>
             </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+function GoalsCard({ model }) {
+  const segs = gaugeSegments(model.counts)
+  return (
+    <Card title="Monthly Goals" link={{ to: '/reports', label: 'Reports' }}>
+      <div className="flex justify-center px-5 pt-4">
+        <svg width="260" height="146" viewBox="0 0 260 146" role="img" aria-label={`Monthly goals: ${model.onPace}% on pace`}>
+          <path d="M20 130 A110 110 0 0 1 240 130" pathLength="100" fill="none" stroke="#F2F4F7" strokeWidth="26" />
+          {segs.map((s) => (
+            <path key={s.status} d="M20 130 A110 110 0 0 1 240 130" pathLength="100" fill="none" stroke={STATUS_COLOR[s.status]} strokeWidth="26" strokeDasharray={s.dash} strokeDashoffset={s.offset} />
           ))}
-        </div>
+          <text x="130" y="108" textAnchor="middle" fontSize="30" fontWeight="600" fill="#101828">{model.onPace}%</text>
+          <text x="130" y="130" textAnchor="middle" fontSize="12.5" fill="#475467">of monthly goals on pace</text>
+        </svg>
       </div>
-    </Card>
-  )
-}
-
-// ---- 4. Funnel card (Bayway pre-approvals / MPG lead pipeline) ----------------
-
-function FunnelCard({ title, sub, to, fillPct, left, right, stats }) {
-  return (
-    <Card className="col-span-2 xl:col-span-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-[18px] font-bold tracking-tight">{title}</h3>
-          <div className="mt-[2px] text-[12.5px] text-dim">{sub}</div>
-        </div>
-        <IconLink to={to} label={`Open ${title}`}>
-          <Chevron />
-        </IconLink>
-      </div>
-
-      <div
-        className="mt-[18px] flex h-[22px] overflow-hidden rounded-full"
-        style={{ background: 'var(--line)' }}
-      >
-        <div
-          className="rounded-full transition-[width] duration-300 ease-out"
-          style={{ width: `${fillPct}%`, background: 'var(--accent)' }}
-        />
-      </div>
-
-      <div className="mt-3.5 flex justify-between">
-        <div>
-          <div
-            className="num text-[24px] font-extrabold tracking-tight"
-            style={{ color: 'var(--accent-ink)' }}
-          >
-            {left.n}
-          </div>
-          <div className="text-[12px] font-semibold text-dim">{left.label}</div>
-        </div>
-        <div className="text-right">
-          <div className="num text-[24px] font-extrabold tracking-tight">{right.n}</div>
-          <div className="text-[12px] font-semibold text-dim">{right.label}</div>
-        </div>
-      </div>
-
-      {/* Equal fractional tracks, not flex: a flex child will not shrink below
-          its longest word, which pushed the last stat past the card edge in the
-          3-column layout. Labels wrap instead. */}
-      <div
-        className="mt-4 grid gap-1.5 border-t border-line pt-4"
-        style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0,1fr))` }}
-      >
-        {stats.map((s) => (
-          <div key={s.label} className="min-w-0 text-center">
-            <div className="num text-[16px] font-extrabold">{s.n}</div>
-            <div className="mt-0.5 hyphens-auto break-words text-[10.5px] font-semibold leading-tight text-dim">
-              {s.label}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  )
-}
-
-function SprintProgress({ label, value, target, color = 'var(--mpg)' }) {
-  const pct = goalPct(value, target)
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[12px] font-semibold text-muted">{label}</span>
-        <span className="num flex-none text-[12px] font-bold">{value}/{target}</span>
-      </div>
-      <div className="mt-1.5 h-[6px] overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
-      </div>
-    </div>
-  )
-}
-
-// A "Behind"/"On track" status pill for the sprint headers.
-function StatusPill({ onPace, palette }) {
-  const ok =
-    palette === 'mpg'
-      ? { background: 'var(--mpg-soft)', color: 'var(--mpg-ink)' }
-      : { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
-  return (
-    <span
-      className="flex-none rounded-lg px-2.5 py-1 text-[11.5px] font-bold"
-      style={onPace ? ok : { background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
-    >
-      {onPace ? 'On track' : 'Behind'}
-    </span>
-  )
-}
-
-// Row 3 sprint tracker. `span` is the grid-span class; `cols` (1|2) sets how many
-// columns the progress bars wrap into — 1 at span-3, 2 at span-6 (handoff).
-function MpgSprintCard({ sprint, span, cols = 1 }) {
-  return (
-    <Card className={`${span} flex flex-col`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-[17px] font-bold tracking-tight">MPG Sprint</h3>
-          <div className="mt-[5px] text-[12.5px] text-muted">This month · base 8, stretch 10 signed</div>
-        </div>
-        <StatusPill onPace={sprint.onPace} palette="mpg" />
-      </div>
-
-      <div
-        className="mt-[18px] grid gap-x-6 gap-y-[15px]"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}
-      >
-        <SprintProgress label="Activated + processing" value={sprint.activated} target={sprint.activatedTarget} />
-        <SprintProgress label="Merchants signed" value={sprint.signed} target={sprint.signedTarget} />
-        <SprintProgress label="Statements analyzed" value={sprint.statements} target={sprint.statementTarget} />
-        <SprintProgress label="Discovery meetings" value={sprint.discovery} target={sprint.discoveryTarget} />
-      </div>
-
-      <div className="mt-auto grid grid-cols-3 gap-1.5 border-t border-line pt-[18px]">
-        <div className="min-w-0 text-center">
-          <div className="num text-[16px] font-extrabold">{sprint.weeksLeft}</div>
-          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Weeks left</div>
-        </div>
-        <div className="min-w-0 text-center">
-          <div className="num text-[16px] font-extrabold">{sprint.activatedPerWeek}</div>
-          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Activated / wk</div>
-        </div>
-        <div className="min-w-0 text-center">
-          <div className="num text-[16px] font-extrabold">{sprint.signedPerWeek}</div>
-          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Signed / wk</div>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-function BaySprintCard({ sprint, span, cols = 1 }) {
-  return (
-    <Card className={`${span} flex flex-col`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-[17px] font-bold tracking-tight">Bayway Sprint</h3>
-          <div className="mt-[5px] text-[12.5px] text-muted">This month · base 10, stretch 12</div>
-        </div>
-        <StatusPill onPace={sprint.onPace} palette="bay" />
-      </div>
-
-      <div
-        className="mt-[18px] grid gap-x-6 gap-y-[15px]"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}
-      >
-        <SprintProgress label="Funded loans" value={sprint.funded} target={sprint.fundedTarget} color="var(--bay)" />
-        <SprintProgress label="Completed applications" value={sprint.applications} target={sprint.applicationTarget} color="var(--bay)" />
-        <SprintProgress label="Qualified pre-approvals" value={sprint.preapprovals} target={sprint.preapprovalTarget} color="var(--bay)" />
-        <SprintProgress label="Contracts/refi opps" value={sprint.contracts} target={sprint.contractTarget} color="var(--bay)" />
-      </div>
-
-      <div className="mt-auto grid grid-cols-3 gap-1.5 border-t border-line pt-[18px]">
-        <div className="min-w-0 text-center">
-          <div className="num text-[16px] font-extrabold">{sprint.underContract}</div>
-          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Under contract</div>
-        </div>
-        <div className="min-w-0 text-center">
-          <div className="num text-[16px] font-extrabold">{sprint.baselinePreapproved}</div>
-          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Pre-approved</div>
-        </div>
-        <div className="min-w-0 text-center">
-          <div className="num text-[16px] font-extrabold">{sprint.waitingDocs}</div>
-          <div className="mt-0.5 text-[10.5px] font-semibold leading-tight text-dim">Waiting docs</div>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-// ---- 5. Up Next ----------------------------------------------------------------
-
-// The top of the Up Next queue (src/lib/priorityQueue.js): the same first rows
-// /priority shows, from the same shared fetch. It replaced Needs Attention
-// (HOT / Open + 7-day stale), a subset of the "Hot, going cold" and "Gone
-// quiet" buckets, which would have listed the same people under other rules.
-function UpNextCard({ biz }) {
-  const { queue, loading, error } = usePriorityQueue(biz)
-  const top = queue.slice(0, 5)
-  const urgent = urgentCount(queue)
-  return (
-    <Card className="col-span-2 xl:col-span-12">
-      <CardHead
-        title="Up Next"
-        sub={loading ? 'Loading…' : `${queue.length} to work · ${urgent} need action now`}
-        right={
-          <IconLink to="/priority" label="See all of Up Next">
-            <ArrowOut />
-          </IconLink>
-        }
-      />
-      {error && <EmptyRow>{error}</EmptyRow>}
-      {!loading && !error && top.length === 0 && <EmptyRow>Nobody slipping. Nice work.</EmptyRow>}
-      {top.length > 0 && (
-        <div className="mt-2">
-          {top.map((r) => (
-            <UpNextRow key={r.id} row={r} compact />
-          ))}
-        </div>
-      )}
-      {queue.length > top.length && (
-        <Link to="/priority" className="mt-2 inline-block text-[13px] font-semibold text-muted hover:text-[color:var(--text)]">
-          See all {queue.length} →
-        </Link>
-      )}
-    </Card>
-  )
-}
-
-// ---- 6. Priority Leads --------------------------------------------------------
-
-// Ranked lead list per book. `rows` are pre-normalized to a common shape
-// ({ id, name, sub, avatarBg, initials, url }) by buildBayPriority /
-// buildMpgPriority, so this component is book-agnostic — only the accent chrome
-// (dot, label, call button) switches on `biz`. The round button opens the
-// contact's CRM profile (neither source carries a phone number to dial).
-function PriorityLeadsCard({ biz, rows, span, to }) {
-  const color = biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
-  const ink = biz === 'mpg' ? 'var(--mpg-ink)' : 'var(--bay-ink)'
-  const soft = biz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)'
-  const label = biz === 'mpg' ? 'MPG' : 'Bayway'
-  return (
-    <Card className={`${span} flex flex-col`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-[17px] font-bold tracking-tight">Priority Leads</h3>
-          <div
-            className="mt-[5px] flex items-center gap-1.5 text-[12.5px] font-semibold"
-            style={{ color: ink }}
-          >
-            <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-            {label}
-          </div>
-        </div>
-        <IconLink to={to} label={`Open ${label} priority leads`}>
-          <ArrowOut />
-        </IconLink>
-      </div>
-      <div className="mt-1.5 flex flex-col">
-        {rows.length === 0 && <EmptyRow>No scored leads yet.</EmptyRow>}
-        {rows.map((l) => (
-          <div
-            key={l.id}
-            className="flex items-center gap-3 border-b border-line py-3 last:border-b-0"
-          >
-            <span
-              className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full text-[13px] font-extrabold text-white"
-              style={{ background: l.avatarBg }}
-            >
-              {l.initials}
-            </span>
-            <div className="min-w-0 flex-1">
-              <CrmLink url={l.url} className="block truncate text-[13.5px] font-semibold">
-                {l.name}
-              </CrmLink>
-              <div className="truncate text-[12px] text-dim">{l.sub}</div>
-            </div>
-            <CrmLink
-              url={l.url}
-              title="Open in CRM"
-              className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px]"
-            >
-              <span
-                className="grid h-[34px] w-[34px] place-items-center rounded-[10px]"
-                style={{ background: soft, color: ink }}
-              >
-                <PhoneIcon />
+      <div className="flex flex-col gap-[11px] px-5 pb-4 pt-2.5">
+        {model.goals.map((g) => (
+          <div key={g.id} data-goal={g.id} data-status={g.status}>
+            <div className="flex items-center gap-2 text-[13.5px]">
+              <span className="h-[9px] w-[9px] flex-none rounded-full" style={{ background: STATUS_COLOR[g.status] }} title={STATUS_LABEL[g.status]} />
+              <span className="flex-1 font-medium">{g.label}</span>
+              <span className="num text-muted">
+                {g.unit === 'currency' ? `${fmtMoney(g.value)} / ${fmtMoney(g.target)}` : `${g.value.toLocaleString()} / ${g.target.toLocaleString()}`}
               </span>
-            </CrmLink>
+            </div>
+            <div className="ml-[17px] mt-[5px]">
+              <Bar pct={g.pct} color={STATUS_COLOR[g.status]} h={5} />
+            </div>
+          </div>
+        ))}
+        <div className="mt-0.5 flex gap-3.5 text-[12px] text-dim">
+          {['hit', 'pace', 'behind'].map((s) => (
+            <span key={s} className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[s] }} />
+              {STATUS_LABEL[s]} {model.counts[s]}
+            </span>
+          ))}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// ---- Row 3: Pipeline mix, Lead sources ---------------------------------------------
+
+function Donut({ slices, size = 150, center, sub, label }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 150 150" role="img" aria-label={label} className="flex-none">
+      <circle cx="75" cy="75" r="56" fill="none" stroke="#F2F4F7" strokeWidth="22" />
+      {slices.map((s) => (
+        <circle
+          key={s.key}
+          cx="75"
+          cy="75"
+          r="56"
+          fill="none"
+          stroke={s.color}
+          strokeWidth="22"
+          pathLength="100"
+          strokeDasharray={`${Math.max(0, s.pct - (slices.length > 1 ? 0.6 : 0))} ${100 - Math.max(0, s.pct - (slices.length > 1 ? 0.6 : 0))}`}
+          strokeDashoffset={s.offset}
+          transform="rotate(-90 75 75)"
+        />
+      ))}
+      <text x="75" y={sub ? 74 : 81} textAnchor="middle" fontSize={String(center).length > 6 ? 18 : 24} fontWeight="600" fill="#101828">{center}</text>
+      {sub && <text x="75" y="93" textAnchor="middle" fontSize="11.5" fill="#475467">{sub}</text>}
+    </svg>
+  )
+}
+
+function PipelineMixCard({ biz, rows, rules }) {
+  const mpg = biz === 'mpg'
+  const stages = mpg ? MPG_LEAD_FLOW : BAY_MIX_STAGES
+  const colors = mpg ? MPG_MIX_COLORS : BAY_MIX_COLORS
+  const mix = pipelineMix(rows, stages)
+  const kpis = pipelineKpis(rows.filter((r) => stages.includes(r.stage)), rules, mpg ? 'mpg' : 'bay')
+  const stuck = kpis[3]
+  const slices = mix.slices.map((s) => ({ key: s.stage, pct: s.pct, offset: s.offset, color: colors[stages.indexOf(s.stage)] }))
+  return (
+    <Card
+      title="Pipeline Mix"
+      sub={mpg ? 'MPG leads by stage' : 'Bayway active leads by stage'}
+      link={{ to: mpg ? '/mpg/pipeline' : '/bayway/pipeline', label: 'Pipeline' }}
+    >
+      <div className="flex items-center gap-5 px-5 py-[18px]">
+        <Donut slices={slices} size={128} center={mix.total} sub="active" label="Pipeline by stage" />
+        <div className="flex min-w-0 flex-1 flex-col gap-[9px]">
+          {mix.slices.map((s) => (
+            <div key={s.stage} data-mix={s.stage} className="flex items-center gap-2 text-[13px]">
+              <span className="h-[9px] w-[9px] flex-none rounded-[3px]" style={{ background: colors[stages.indexOf(s.stage)] }} />
+              <span className="flex-1 truncate" title={s.stage}>{SHORT_STAGE[s.stage] || s.stage}</span>
+              <span className="num font-semibold">{s.n}</span>
+            </div>
+          ))}
+          {mix.total === 0 && <div className="text-[13px] text-muted">No active leads.</div>}
+        </div>
+      </div>
+      <div className="mx-5 mb-4 mt-auto rounded-[10px] bg-panel2 px-3 py-2.5 text-[12.5px] text-muted">
+        <b className="text-[color:var(--text)]">{stuck.value}</b> stuck in stage · {stuck.foot}
+      </div>
+    </Card>
+  )
+}
+
+function SourcesCard({ biz, sources }) {
+  const max = Math.max(1, ...sources.map((s) => s.leads))
+  const rateWord = biz === 'mpg' ? 'qualified' : biz === 'bay' ? 'reached app' : 'reached app / qualified'
+  return (
+    <Card title="Lead Sources" sub={`New leads this month · % ${rateWord}`} link={{ to: '/analytics', label: 'Analytics' }}>
+      <div className="flex flex-col gap-[13px] px-5 pb-[18px] pt-3.5">
+        {sources.map((s) => (
+          <div key={`${s.book}-${s.source}`} data-source={s.source}>
+            <div className="flex items-center gap-2 text-[13.5px]">
+              {biz === 'all' && <BizBadge biz={s.book} />}
+              <span className="flex-1 truncate font-medium">{s.source}</span>
+              <span className="num font-semibold">{s.leads}</span>
+              <span className="num w-11 text-right text-[12.5px] text-dim">{s.rate}%</span>
+            </div>
+            <div className="mt-[5px]">
+              <Bar pct={(s.leads / max) * 100} color={s.book === 'mpg' ? 'var(--mpg)' : 'var(--bay)'} h={8} />
+            </div>
+          </div>
+        ))}
+        {sources.length === 0 && <div className="py-6 text-center text-[13px] text-muted">No new leads this month yet.</div>}
+      </div>
+    </Card>
+  )
+}
+
+// ---- Row 4: Income mix, Up Next, Sprints --------------------------------------------
+
+function IncomeCard({ model, biz }) {
+  const slices = []
+  if (model.total > 0) {
+    if (model.commission > 0) slices.push({ key: 'bay', pct: model.share * 100, offset: 0, color: 'var(--bay)' })
+    if (model.residual > 0) slices.push({ key: 'mpg', pct: (1 - model.share) * 100, offset: -model.share * 100, color: 'var(--mpg)' })
+  }
+  const rows = [
+    biz !== 'mpg' && { key: 'bay', label: 'Bayway commission', value: model.commission, color: 'var(--bay)' },
+    biz !== 'bay' && { key: 'mpg', label: 'MPG residual', value: model.residual, color: 'var(--mpg)' },
+  ].filter(Boolean)
+  return (
+    <Card title="Income Mix" sub={`This month · ${model.pct}% of ${fmtMoney(model.goal)} goal`} link={{ to: '/reports', label: 'Reports' }}>
+      <div className="flex items-center gap-5 px-5 py-[18px]">
+        <Donut slices={slices} size={130} center={fmtMoney(model.total)} label="Income by book" />
+        <div className="flex flex-1 flex-col gap-3 text-[13.5px]">
+          {rows.map((r) => (
+            <div key={r.key}>
+              <div className="flex items-center gap-2">
+                <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: r.color }} />
+                {r.label}
+              </div>
+              <div className="num ml-[17px] mt-0.5 text-[17px] font-semibold">{formatValue(r.value, 'currency')}</div>
+            </div>
+          ))}
+          <div className="text-[12.5px] text-muted">Annualized {fmtMoney(model.annualized)}</div>
+        </div>
+      </div>
+      <div className="mx-5 mb-4 mt-auto text-[12px] text-dim">Entered in Reports</div>
+    </Card>
+  )
+}
+
+function UpNextCard({ queue, loading, error }) {
+  const top = queue.slice(0, 4)
+  return (
+    <Card
+      title="Up Next"
+      sub={loading ? 'Loading…' : `${queue.length} to work · ${urgentCount(queue)} need action now`}
+      link={{ to: '/workbench', label: 'Workbench' }}
+    >
+      {error && <div className="px-5 py-6 text-center text-[13px] text-muted">{error}</div>}
+      {!loading && !error && top.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-muted">Nobody slipping. Nice work.</div>}
+      <div className="pb-2 pt-1">
+        {top.map((r) => {
+          const tel = telHref(r.phone)
+          const urgent = r.bucket === 'reached_out' || r.bucket === 'new_lead'
+          return (
+            <div key={r.id} data-up-next className="flex items-center gap-2.5 border-b border-hoverbg px-5 py-[9px] last:border-b-0">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <BizBadge biz={r.business_id} />
+                  <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[14px] font-semibold">
+                    {r.name || '(no name)'}
+                  </PersonLink>
+                </div>
+                <div className="mt-0.5 truncate text-[12.5px] font-semibold" style={{ color: urgent ? 'var(--neg-ink)' : 'var(--text)' }}>
+                  {reasonText(r)}
+                </div>
+              </div>
+              {tel && (
+                <a href={tel} aria-label={`Call ${r.name || 'lead'}`} title={`Call ${formatPhone(r.phone)}`} className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[9px] bg-[color:var(--chrome)] text-white hover:opacity-90">
+                  <Icon name="phone" size={15} strokeWidth={1.9} />
+                </a>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
+function SprintCard({ model }) {
+  return (
+    <Card title="90-Day Sprints" sub={`${model.label} · ${model.weeksLeft} ${model.weeksLeft === 1 ? 'week' : 'weeks'} left`} link={{ to: '/reports', label: 'Reports' }}>
+      <div className="flex flex-col gap-[13px] px-5 pb-[18px] pt-3.5">
+        {model.items.map((s) => (
+          <div key={s.key} data-sprint={s.key}>
+            <div className="flex items-center gap-2 text-[13.5px]">
+              <span className="h-2 w-2 flex-none rounded-full" style={{ background: s.book === 'mpg' ? 'var(--mpg)' : 'var(--bay)' }} />
+              <span className="flex-1 truncate font-medium">{s.label}</span>
+              <span className="num text-muted">{s.value} / {s.target}</span>
+              <span
+                className="flex-none rounded-md border px-[7px] py-px text-[11px] font-semibold"
+                style={s.onPace ? { borderColor: 'var(--pos-line)', background: 'var(--pos-bg)', color: 'var(--pos-ink)' } : { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
+              >
+                {s.onPace ? 'On pace' : 'Behind'}
+              </span>
+            </div>
+            <div className="ml-4 mt-[5px]">
+              <Bar pct={s.pct} color={s.book === 'mpg' ? 'var(--mpg)' : 'var(--bay)'} />
+            </div>
           </div>
         ))}
       </div>
@@ -710,63 +489,10 @@ function PriorityLeadsCard({ biz, rows, span, to }) {
   )
 }
 
-// Bayway priority leads → the common card shape. FUB is the only scored book,
-// so tier/score are real here.
-function buildBayPriority(leads) {
-  return sortByScore(leads || [])
-    .slice(0, 5)
-    .map((l) => {
-      const meta = tierMeta(l.tier)
-      return {
-        id: l.id,
-        name: l.name || '(no name)',
-        initials: initials(l.name),
-        avatarBg: meta.color,
-        url: l.fub_profile_url,
-        sub:
-          `${meta.label} · ${lastTouchLabel(l.last_activity_at)}` +
-          (l.score != null ? ` · score ${Math.round(l.score)}` : ''),
-      }
-    })
-}
+// ---- Data -------------------------------------------------------------------------
 
-// MPG has no lead scoring (v_priority_leads is FUB/Bayway only). Derive a ranked
-// list from v_mpg_contacts: open leads first, then most-recently touched.
-// Recency stands in for a score and drives a pseudo-tier avatar tint (hot ≤2d,
-// warm ≤7d, else cool) so the card reads like its Bayway sibling.
-function buildMpgPriority(rows) {
-  const open = (rows || []).filter((r) => isMpgOpen(r.stage))
-  const pool = open.length ? open : rows || []
-  return [...pool]
-    .sort((a, b) => {
-      const at = a.last_touch_at ? new Date(a.last_touch_at).getTime() : 0
-      const bt = b.last_touch_at ? new Date(b.last_touch_at).getTime() : 0
-      return bt - at
-    })
-    .slice(0, 5)
-    .map((r) => {
-      const d = daysSince(r.last_touch_at)
-      const avatarBg =
-        d !== null && d <= 2 ? '#DC6B2F' : d !== null && d <= 7 ? 'var(--mpg)' : 'var(--dim)'
-      const name = r.company || r.name || '(no name)'
-      return {
-        id: r.id,
-        name,
-        initials: initials(name),
-        avatarBg,
-        url: r.crm_profile_url,
-        sub: `${r.stage || '—'} · ${lastTouchLabel(r.last_touch_at)}`,
-      }
-    })
-}
-
-// ---- Data ---------------------------------------------------------------------
-
-// One fetch for every card, scoped to the active book. Bayway-only sources
-// (pipeline, deals, priority leads) are skipped in the MPG view and vice versa,
-// so a single-book view never pays for the other book's queries.
-function useCommandCenter(biz) {
-  const [data, setData] = useState(() => (isDemoMode ? demoCommandData() : null))
+function useOverviewData(biz) {
+  const [data, setData] = useState(() => (isDemoMode ? demoData() : null))
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
 
@@ -782,27 +508,20 @@ function useCommandCenter(biz) {
       try {
         const wantsBay = biz !== 'mpg'
         const wantsMpg = biz !== 'bay'
-        const { from: monthStart } = monthWindow()
-        // One metrics read covers every window the cards need: today, yesterday
-        // (delta pills), the 14-day chart, and month-to-date manual revenue rows
-        // — plus sprint rows, which can fall outside both windows.
-        const metricsFrom = [daysAgoKey(CHART_DAYS - 1), monthStart, MPG_SPRINT.from].sort()[0]
+        const prev = prevMonthWindow()
+        // Metrics: last month (compares), this month, and the sprint window.
+        const metricsFrom = [prev.from, monthWindow().from, MPG_SPRINT.from].sort()[0]
+        // Activities: the chart's 30 days and the 30 before, and last month to date.
+        const back = new Date()
+        back.setHours(0, 0, 0, 0)
+        back.setDate(back.getDate() - 2 * CHART_DAYS + 1)
+        const actFrom = new Date(Math.min(back.getTime(), new Date(`${prev.from}T00:00:00`).getTime())).toISOString()
 
         const q = {
-          // metricsFrom reaches back to MPG_SPRINT.from, so this window holds
-          // ~90 days x 2 books x every metric key: page it.
           metrics: fetchAllSettled(() =>
-            supabase
-              .from('metrics_daily')
-              .select('date, business_id, metric_key, value')
-              .gte('date', metricsFrom)
-              .order('id'),
+            supabase.from('metrics_daily').select('date, business_id, metric_key, value').gte('date', metricsFrom).order('id'),
           ),
-          settings: supabase
-            .from('settings')
-            .select('value')
-            .eq('key', 'metric_targets')
-            .maybeSingle(),
+          settings: supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
           sync: supabase
             .from('sync_log')
             .select('ran_at, status, message')
@@ -810,47 +529,37 @@ function useCommandCenter(biz) {
             .order('ran_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
-          // v_tasks is open-only. The combined view counts both books; a
-          // single-book view scopes the banner to that book, as before.
           tasks: fetchAllSettled(() => {
             const t = supabase.from('v_tasks').select('id, business_id, due_at').order('id')
             return biz === 'all' ? t : t.eq('business_id', biz)
           }),
+          // Outbound calls, texts and emails: two months across both books passes 1,000.
+          activities: fetchAllSettled(() =>
+            supabase
+              .from('activities')
+              .select('occurred_at, type, business_id')
+              .eq('direction', 'outbound')
+              .in('type', ['call', 'text', 'email'])
+              .gte('occurred_at', actFrom)
+              .order('id'),
+          ),
+          contacts: fetchAllSettled(() =>
+            supabase
+              .from('contacts')
+              .select('business_id, person_stage, bay_source:raw->>source, mpg_source:raw->>Lead_Source, bay_created:raw->>created, mpg_created:raw->>Created_Time, tags:raw->tags')
+              .order('id'),
+          ),
         }
         if (wantsBay) {
           q.bayPipe = fetchAllSettled(() =>
-            supabase
-              .from('v_active_pipeline')
-              .select('id, business_id, name, email, phone, last_touch_at, stage')
-              .eq('business_id', 'bay')
-              .order('id'),
+            supabase.from('v_active_pipeline').select(`id, business_id, name, stage, last_touch_at${HEALTH_COLUMNS}`).eq('business_id', 'bay').order('id'),
           )
-          q.bayCount = supabase
-            .from('contacts')
-            .select('id', { count: 'exact', head: true })
-            .eq('business_id', 'bay')
           q.deals = fetchAllSettled(() =>
-            supabase
-              .from('deals')
-              .select('status, value, expected_close, business_id')
-              .eq('business_id', 'bay')
-              .order('id'),
-          )
-          q.leads = fetchAllSettled(() =>
-            supabase
-              .from('v_priority_leads')
-              .select('id, name, score, tier, last_activity_at, fub_profile_url')
-              .eq('business_id', 'bay')
-              .order('id'),
+            supabase.from('deals').select('status, value, expected_close, business_id').eq('business_id', 'bay').order('id'),
           )
         }
         if (wantsMpg) {
-          q.mpgLeads = fetchAllSettled(() =>
-            supabase
-              .from('v_mpg_contacts')
-              .select('id, name, company, email, phone, last_touch_at, stage, crm_profile_url')
-              .order('id'),
-          )
+          q.mpgRows = fetchAllSettled(() => supabase.from('v_mpg_contacts').select(`id, name, company, stage, last_touch_at${HEALTH_COLUMNS}`).order('id'))
         }
 
         const keys = Object.keys(q)
@@ -862,18 +571,16 @@ function useCommandCenter(biz) {
           setError(err.message)
           return
         }
-
-        const bayPipe = res.bayPipe?.data || []
         setData({
           metrics: res.metrics.data || [],
           targets: resolveTargets(DEFAULT_TARGETS, res.settings.data?.value),
           latestSync: res.sync.data,
           tasks: res.tasks.data || [],
-          bayPipe,
-          bayContacts: res.bayCount?.count || 0,
+          activities: res.activities.data || [],
+          leads: (res.contacts.data || []).map(toLead),
+          bayPipe: res.bayPipe?.data || [],
           deals: res.deals?.data || [],
-          leads: res.leads?.data || [],
-          mpgRows: (res.mpgLeads?.data || []).map((r) => ({ ...r, business_id: 'mpg' })),
+          mpgRows: (res.mpgRows?.data || []).map((r) => ({ ...r, business_id: 'mpg' })),
         })
       } catch (e) {
         if (alive) setError(String(e?.message || e))
@@ -889,383 +596,136 @@ function useCommandCenter(biz) {
   return { data, loading, error }
 }
 
-function demoCommandData() {
-  return {
-    metrics: [
-      { date: DEMO_TODAY, business_id: 'bay', metric_key: 'calls', value: 24 },
-      { date: DEMO_TODAY, business_id: 'bay', metric_key: 'live_conversations', value: 5 },
-      { date: DEMO_TODAY, business_id: 'mpg', metric_key: 'calls', value: 18 },
-      { date: DEMO_TODAY, business_id: 'mpg', metric_key: 'live_conversations', value: 4 },
-      { date: DEMO_MONTH, business_id: 'mpg', metric_key: 'rev_monthly_residual', value: 640 },
-      { date: DEMO_MONTH, business_id: 'mpg', metric_key: 'rev_active_merchants', value: 2 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_outbound_attempts', value: 210 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_live_conversations', value: 42 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_completed_applications', value: 8 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_qualified_preapprovals', value: 5 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_contracts_refis', value: 2 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_funded_loans', value: 1 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_referral_touches', value: 38 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_under_contract', value: 1 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_preapproved', value: 3 },
-      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_pipeline_waiting_docs', value: 8 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_targeted_contacts', value: 120 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_owner_conversations', value: 32 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_discovery_meetings', value: 9 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_statements_received', value: 7 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_statements_analyzed', value: 6 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_proposals_sent', value: 4 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_signed', value: 2 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_activated', value: 1 },
-      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_qualified_future_pipeline', value: 5 },
-    ],
-    targets: resolveTargets(DEFAULT_TARGETS, null),
-    latestSync: { ran_at: new Date().toISOString(), status: 'ok', message: null },
-    tasks: [],
-    bayPipe: [
-      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', phone: '(713) 555-0142', stage: 'Application Received', last_touch_at: null },
-      { id: 'b2', business_id: 'bay', name: 'Nguyen Refi', phone: '(281) 555-0195', stage: 'Application/Estimate Sent', last_touch_at: new Date().toISOString() },
-      { id: 'b3', business_id: 'bay', name: 'Okafor Purchase', phone: '(832) 555-0110', stage: 'Application/Estimate Sent', last_touch_at: new Date().toISOString() },
-    ],
-    bayContacts: 826,
-    deals: [
-      { status: 'won', value: 340000, expected_close: DEMO_TODAY, business_id: 'bay' },
-      { status: 'open', value: 625000, expected_close: null, business_id: 'bay' },
-    ],
-    leads: [
-      { id: 'l1', name: 'Jessica Chen', score: 92, tier: 'hot', last_activity_at: null, fub_profile_url: '#' },
-    ],
-    mpgRows: [
-      { id: 'm1', business_id: 'mpg', name: 'Ana Torres', company: 'Riverside Deli', phone: '(832) 555-0191', stage: 'Open', last_touch_at: null },
-      { id: 'm2', business_id: 'mpg', name: 'Chris Lee', company: 'Heights Auto', phone: '(713) 555-0108', stage: 'Contacted', last_touch_at: new Date().toISOString() },
-      { id: 'm3', business_id: 'mpg', name: 'Priya Shah', company: 'Oak Spa', phone: '(281) 555-0133', stage: 'Qualified', last_touch_at: new Date().toISOString() },
-    ],
-  }
-}
-
-// The daily activity scoreboard. The combined view splits calls by book; a
-// single-book view shows that book's four daily metrics instead.
-// Per-book call goals are half the combined `calls` target, so the two book
-// cards always add up to the combined card's goal.
-function buildKpiCards(biz, metrics, targets) {
-  const tKey = todayKey()
-  const yKey = daysAgoKey(1)
-  const forDay = (key, b) =>
-    rollupMetrics(metrics.filter((r) => r.date === key && (!b || r.business_id === b)))
-  const today = forDay(tKey, null)
-  const yesterday = forDay(yKey, null)
-
-  const card = (label, key, accent, ink, goal, todayVals = today, yVals = yesterday) => ({
-    label,
-    icon: KPI_ICON[key],
-    value: Number(todayVals[key] || 0),
-    goal,
-    accent,
-    ink,
-    delta: deltaPill(todayVals[key], yVals[key]),
-  })
-
-  if (biz === 'all') {
-    const bayToday = forDay(tKey, 'bay')
-    const bayYest = forDay(yKey, 'bay')
-    const mpgToday = forDay(tKey, 'mpg')
-    const mpgYest = forDay(yKey, 'mpg')
-    const half = Math.round(targets.calls / 2)
-    return [
-      card('Outbound Calls · Today', 'calls', 'var(--text)', 'var(--text)', targets.calls),
-      card('Bayway Calls · Today', 'calls', 'var(--bay)', 'var(--bay-ink)', half, bayToday, bayYest),
-      card('MPG Calls · Today', 'calls', 'var(--mpg)', 'var(--mpg-ink)', half, mpgToday, mpgYest),
-      card(
-        'Live Conversations · Today',
-        'live_conversations',
-        'var(--bay)',
-        'var(--bay-ink)',
-        targets.live_conversations,
-      ),
-    ]
-  }
-
-  const accent = bizColor(biz)
-  const ink = bizInk(biz)
-  const bookToday = forDay(tKey, biz)
-  const bookYest = forDay(yKey, biz)
-  const one = (label, key, goal) => card(label, key, accent, ink, goal, bookToday, bookYest)
-  return [
-    one('Outbound Calls · Today', 'calls', targets.calls),
-    one('Live Conversations · Today', 'live_conversations', targets.live_conversations),
-    one('Follow-ups · Today', 'followups', targets.followups),
-    one('New Contacts · Today', 'new_contacts', targets.new_contacts),
-  ]
-}
-
-// Assembles every card's props from one fetch. Pure over `data`, so the whole
-// screen re-derives from a single memo.
 function buildView(biz, data) {
-  const { metrics, targets, deals, bayPipe, mpgRows, bayContacts } = data
-  const tKey = todayKey()
-  const win = monthWindow()
-
-  const seriesFor = (b) =>
-    dailySeries(metrics.filter((r) => r.business_id === b), 'calls', tKey, CHART_DAYS)
-  const chart = buildChartModel(
-    {
-      bay: biz === 'mpg' ? [] : seriesFor('bay'),
-      mpg: biz === 'bay' ? [] : seriesFor('mpg'),
-    },
-    tKey,
-    biz === 'mpg' ? 'mpg' : 'bay',
-  )
-
-  // Inline chart-head metrics: today's calls per visible book + the day-over-day
-  // pill (same source as the KPI scoreboard, so the two never disagree).
-  const yKey = daysAgoKey(1)
-  const callsOn = (b, key) =>
-    Number(rollupMetrics(metrics.filter((r) => r.date === key && r.business_id === b)).calls || 0)
-  const headMetric = (label, color, b) => ({
-    label,
-    color,
-    value: callsOn(b, tKey),
-    delta: deltaPill(callsOn(b, tKey), callsOn(b, yKey)),
-  })
-  const headMetrics =
-    biz === 'mpg' ? [headMetric('MPG', 'var(--mpg)', 'mpg')]
-    : biz === 'bay' ? [headMetric('Bayway', 'var(--bay)', 'bay')]
-    : [headMetric('Bayway', 'var(--bay)', 'bay'), headMetric('MPG', 'var(--mpg)', 'mpg')]
-  const chartCaption =
-    biz === 'mpg' ? 'Daily outbound calls · MPG'
-    : biz === 'bay' ? 'Daily outbound calls · Bayway'
-    : 'Daily outbound calls · Bayway & MPG'
-
-  const monthRows = metrics.filter((r) => r.date >= win.from && r.date < win.to)
-  const mpgMonth = rollupMetrics(monthRows.filter((r) => r.business_id === 'mpg'))
-  const mpgSprintRows = sprintRows(metrics.filter((r) => r.business_id === 'mpg'))
-  const mpgSprint = rollupMetrics(mpgSprintRows)
-  const baySprintRows = sprintRows(metrics.filter((r) => r.business_id === 'bay'))
-  const baySprint = rollupMetrics(baySprintRows)
-  const weeksLeft = weeksRemaining()
-  const activatedPerWeek = neededPerWeek(
-    mpgSprint.mpg_merchants_activated,
-    targets.mpg_merchants_activated,
-    weeksLeft,
-  )
-  const signedPerWeek = neededPerWeek(
-    mpgSprint.mpg_merchants_signed,
-    targets.mpg_merchants_signed,
-    weeksLeft,
-  )
-  const fundedPerWeek = neededPerWeek(
-    baySprint.bay_funded_loans,
-    targets.bay_funded_loans,
-    weeksLeft,
-  )
-  const applicationsPerWeek = neededPerWeek(
-    baySprint.bay_completed_applications,
-    targets.bay_completed_applications,
-    weeksLeft,
-  )
-
-  // The (unmounted) MPG funnel card still reads the Open count.
-  const mpgOpen = mpgRows.filter((r) => isMpgOpen(r.stage))
-
-  // MPG revenue is a manual monthly residual; Bayway is live closed volume.
-  // Each book's gauge tracks its own unit rather than summing dollars that mean
-  // different things — the other book's number rides along as a sub-stat.
-  const bayVolume = sumWon(deals, win)
-  const gauge =
-    biz === 'mpg'
-      ? {
-          title: 'Revenue Goal',
-          sub: 'Monthly residual · MPG',
-          value: Number(mpgMonth.rev_monthly_residual || 0),
-          target: targets.rev_monthly_residual,
-          unit: 'currency',
-          subs: [
-            { label: 'Monthly residual', val: compactCurrency(mpgMonth.rev_monthly_residual) },
-            { label: 'Active merchants', val: String(mpgMonth.rev_active_merchants || 0) },
-          ],
-        }
-      : {
-          title: 'Revenue Goal',
-          sub: 'Loan volume MTD · Bayway',
-          value: bayVolume,
-          target: targets.loan_volume,
-          unit: 'currency',
-          subs: [
-            { label: 'Bayway volume', val: compactCurrency(bayVolume) },
-            biz === 'all'
-              ? { label: 'MPG residual', val: compactCurrency(mpgMonth.rev_monthly_residual) }
-              : { label: 'Contacts', val: String(bayContacts) },
-            { label: 'Deals in play', val: String(deals.filter((d) => d.status === 'open').length) },
-          ],
-        }
-
-  let funnel
-  if (biz === 'mpg') {
-    const stageCounts = [
-      ...mpgRows.reduce((m, l) => {
-        const s = l.stage || '—'
-        return m.set(s, (m.get(s) || 0) + 1)
-      }, new Map()),
-    ].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    funnel = {
-      title: 'Lead Pipeline',
-      sub: 'MPG · Zoho lead stages',
-      to: '/mpg/pipeline',
-      fillPct: goalPct(mpgOpen.length, mpgRows.length || 1),
-      left: { n: mpgOpen.length, label: 'Open' },
-      right: { n: mpgRows.length, label: 'All leads' },
-      stats: stageCounts.slice(0, 4).map(([label, n]) => ({ label, n })),
-    }
-  } else {
-    // The Bayway board has no underwriting/CTC/funded stage — the funnel footer
-    // uses the real v_active_pipeline stages plus funded loans from `deals`.
-    const counts = deriveStageCounts(bayPipe, LOAN_FLOW_ORDER)
-    const received = counts['Application Received'] || 0
-    funnel = {
-      title: 'Applications',
-      sub: 'Bayway · active pipeline',
-      to: '/bayway/pipeline',
-      fillPct: goalPct(received, bayPipe.length || 1),
-      left: { n: received, label: 'App Received' },
-      right: { n: bayPipe.length, label: 'In Pipeline' },
-      stats: [
-        { label: 'Contacted', n: counts['Contacted/Working'] || 0 },
-        { label: 'App/Est. Sent', n: counts['Application/Estimate Sent'] || 0 },
-        { label: 'App Received', n: received },
-        { label: 'Funded MTD', n: countWon(deals, win) },
-      ],
-    }
-  }
-
+  const inBook = (b) => biz === 'all' || b === biz
+  const now = Date.now()
+  const activities = data.activities.filter((a) => inBook(a.business_id))
+  const values = monthValues({ biz, metrics: data.metrics, deals: data.deals, activities: data.activities, pipeline: data.bayPipe, now })
   return {
-    alert: deriveAlert({ latestSync: data.latestSync, tasks: data.tasks }),
-    kpis: buildKpiCards(biz, metrics, targets),
-    chart,
-    headMetrics,
-    chartCaption,
-    gauge,
-    funnel,
-    sprint: {
-      mpg: {
-        activated: Number(mpgSprint.mpg_merchants_activated || 0),
-        signed: Number(mpgSprint.mpg_merchants_signed || 0),
-        statements: Number(mpgSprint.mpg_statements_analyzed || 0),
-        discovery: Number(mpgSprint.mpg_discovery_meetings || 0),
-        activatedTarget: targets.mpg_merchants_activated,
-        signedTarget: targets.mpg_merchants_signed,
-        statementTarget: targets.mpg_statements_analyzed,
-        discoveryTarget: targets.mpg_discovery_meetings,
-        weeksLeft,
-        activatedPerWeek,
-        signedPerWeek,
-        onPace: activatedPerWeek <= 0.75 && signedPerWeek <= 1,
-      },
-      bay: {
-        funded: Number(baySprint.bay_funded_loans || 0),
-        applications: Number(baySprint.bay_completed_applications || 0),
-        preapprovals: Number(baySprint.bay_qualified_preapprovals || 0),
-        contracts: Number(baySprint.bay_contracts_refis || 0),
-        fundedTarget: targets.bay_funded_loans,
-        applicationTarget: targets.bay_completed_applications,
-        preapprovalTarget: targets.bay_qualified_preapprovals,
-        contractTarget: targets.bay_contracts_refis,
-        underContract: Number(baySprint.bay_pipeline_under_contract || 0),
-        baselinePreapproved: Number(baySprint.bay_pipeline_preapproved || 0),
-        waitingDocs: Number(baySprint.bay_pipeline_waiting_docs || 0),
-        fundedPerWeek,
-        applicationsPerWeek,
-        onPace: fundedPerWeek <= 1 && applicationsPerWeek <= 4,
-      },
-    },
-    leads: sortByScore(data.leads).slice(0, 5),
-    bayLeads: buildBayPriority(data.leads),
-    mpgLeads: buildMpgPriority(mpgRows),
+    alert: deriveAlert({ latestSync: data.latestSync, tasks: data.tasks, now }),
+    kpis: kpiCards({ biz, values, targets: data.targets, mpgRows: data.mpgRows }),
+    series: activitySeries({ activities, pipeline: biz === 'mpg' ? [] : data.bayPipe, deals: biz === 'mpg' ? [] : data.deals, now }),
+    goals: monthlyGoals({ biz, values, targets: data.targets, now }),
+    sources: topSources(data.leads, biz, new Date(`${monthWindow(now).from}T00:00:00`).getTime()),
+    income: incomeMix({ values, targets: data.targets }),
+    sprint: sprintPace({ biz, metrics: data.metrics, targets: data.targets, now }),
   }
 }
-
-// ---- Screen -------------------------------------------------------------------
 
 export default function Overview() {
   const { biz } = useBusiness()
-  const { data, loading, error } = useCommandCenter(biz)
+  const { data, loading, error } = useOverviewData(biz)
+  const pq = usePriorityQueue(biz)
+  const view = useMemo(() => (data ? buildView(biz, data) : null), [biz, data])
 
   const subtitle =
     biz === 'bay' ? 'Bayway view — mortgage only.'
     : biz === 'mpg' ? 'MPG view — merchant services only.'
-    : 'Here is what is happening across MPG and Bayway today.'
-
-  const view = useMemo(() => (data ? buildView(biz, data) : null), [biz, data])
+    : 'This month across MPG and Bayway.'
 
   return (
     <div>
-      <PageHeader eyebrow="Command center" title={`${greeting()}, Chandler`} subtitle={subtitle} />
+      <PageHeader
+        eyebrow={dateLine()}
+        title={`${greeting()}, Chandler`}
+        subtitle={subtitle}
+        actions={
+          <span className="flex min-h-[36px] items-center gap-2 rounded-[9px] border border-line2 px-3 text-[13px] font-medium text-[#344054]">
+            <Icon name="calendar" size={16} />
+            {MONTH_NAMES[new Date().getMonth()]}
+          </span>
+        }
+      />
       <ErrorNote error={error} />
       {isDemoMode && (
         <div className="mt-4 rounded-xl border border-line bg-panel px-3.5 py-2.5 text-xs text-muted">
-          Demo mode — connect Supabase to see live command-center data.
+          Demo mode — connect Supabase to see live numbers.
         </div>
       )}
-      {loading && <div className="mt-6 text-sm text-muted">Loading command center…</div>}
+      {loading && <div className="mt-6 text-sm text-muted">Loading overview…</div>}
 
       {!loading && !error && view && (
         <>
           <AlertBanner alert={view.alert} />
 
-          {/* One 12-column grid, no side rail (handoff). `items-stretch` lets the
-              shorter cards in a row match the tallest card's height, and the
-              accent vars make the chart marker/tick green in All + Bayway, blue
-              in MPG. */}
-          <div
-            className="mt-4 grid grid-cols-2 items-stretch gap-3 sm:mt-5 sm:gap-[18px] xl:grid-cols-12"
-            style={
-              biz === 'mpg'
-                ? { '--accent': 'var(--mpg)', '--accent-soft': 'var(--mpg-soft)', '--accent-ink': 'var(--mpg-ink)' }
-                : { '--accent': 'var(--bay)', '--accent-soft': 'var(--bay-soft)', '--accent-ink': 'var(--bay-ink)' }
-            }
-          >
-            {/* Row 1 — KPI scoreboard */}
+          <div className="mt-5 grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4">
             {view.kpis.map((c) => (
-              <KpiCard key={c.label} card={c} />
+              <KpiCard key={c.id} card={c} />
             ))}
+          </div>
 
-            {/* Up Next — who to call next (same rows as /priority) */}
-            <UpNextCard biz={biz} />
+          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] xl:grid-cols-3">
+            <ActivityCard series={view.series} showProduction={biz !== 'mpg'} />
+            <GoalsCard model={view.goals} />
+          </div>
 
-            {/* Row 2 — Performance · My Tasks · Today */}
-            <PerformanceCard
-              model={view.chart}
-              showBay={biz !== 'mpg'}
-              showMpg={biz !== 'bay'}
-              headMetrics={view.headMetrics}
-              caption={view.chartCaption}
-              markerLabel={`Today · ${biz === 'mpg' ? 'MPG' : 'Bayway'}`}
-            />
-            <MyTasks className="col-span-1 xl:col-span-3" />
-            <TodayAgenda className="col-span-1 xl:col-span-3" />
+          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2 xl:grid-cols-3">
+            <TodayAgenda />
+            <PipelineMixCard biz={biz} rows={biz === 'mpg' ? data.mpgRows : data.bayPipe} rules={pq.rules} />
+            <SourcesCard biz={biz} sources={view.sources} />
+          </div>
 
-            {/* Row 3 — Sprints + Priority Leads (per-book at 3 cols, doubled at 6) */}
-            {biz === 'all' && (
-              <>
-                <MpgSprintCard sprint={view.sprint.mpg} span="col-span-1 xl:col-span-3" cols={1} />
-                <BaySprintCard sprint={view.sprint.bay} span="col-span-1 xl:col-span-3" cols={1} />
-                <PriorityLeadsCard biz="mpg" rows={view.mpgLeads} span="col-span-1 xl:col-span-3" to="/mpg/pipeline" />
-                <PriorityLeadsCard biz="bay" rows={view.bayLeads} span="col-span-1 xl:col-span-3" to="/bayway/priority-leads" />
-              </>
-            )}
-            {biz === 'mpg' && (
-              <>
-                <MpgSprintCard sprint={view.sprint.mpg} span="col-span-2 xl:col-span-6" cols={2} />
-                <PriorityLeadsCard biz="mpg" rows={view.mpgLeads} span="col-span-2 xl:col-span-6" to="/mpg/pipeline" />
-              </>
-            )}
-            {biz === 'bay' && (
-              <>
-                <BaySprintCard sprint={view.sprint.bay} span="col-span-2 xl:col-span-6" cols={2} />
-                <PriorityLeadsCard biz="bay" rows={view.bayLeads} span="col-span-2 xl:col-span-6" to="/bayway/priority-leads" />
-              </>
-            )}
+          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2 xl:grid-cols-3">
+            <IncomeCard model={view.income} biz={biz} />
+            <UpNextCard queue={pq.queue} loading={pq.loading} error={pq.error} />
+            <SprintCard model={view.sprint} />
           </div>
         </>
       )}
     </div>
   )
+}
+
+// ---- Demo ---------------------------------------------------------------------------
+
+function demoData() {
+  const today = todayKey()
+  const month = today.slice(0, 8) + '01'
+  const ago = (d, h = 11) => {
+    const t = new Date()
+    t.setDate(t.getDate() - d)
+    t.setHours(h, 0, 0, 0)
+    return t.toISOString()
+  }
+  const activities = []
+  for (let d = 0; d < 2 * CHART_DAYS; d++) {
+    const n = 4 + ((d * 7) % 9)
+    for (let i = 0; i < n; i++) activities.push({ occurred_at: ago(d, 9 + (i % 8)), type: i % 3 === 0 ? 'text' : 'call', business_id: i % 2 ? 'mpg' : 'bay' })
+  }
+  return {
+    metrics: [
+      { date: month, business_id: 'bay', metric_key: 'rev_gross_commission', value: 9800 },
+      { date: month, business_id: 'mpg', metric_key: 'rev_monthly_residual', value: 640 },
+      { date: month, business_id: 'mpg', metric_key: 'new_merchant_accounts', value: 1 },
+      { date: today, business_id: 'bay', metric_key: 'calls', value: 24 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_funded_loans', value: 3 },
+      { date: MPG_SPRINT.from, business_id: 'bay', metric_key: 'bay_completed_applications', value: 30 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_proposals_sent', value: 14 },
+      { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_activated', value: 2 },
+    ],
+    targets: resolveTargets(DEFAULT_TARGETS, null),
+    latestSync: { ran_at: new Date().toISOString(), status: 'ok', message: null },
+    tasks: [],
+    activities,
+    leads: [
+      { business_id: 'bay', source: 'LendingFlow', created: ago(3), person_stage: 'Lead', tags: ['Application/Estimate Sent'] },
+      { business_id: 'bay', source: 'LendingFlow', created: ago(5), person_stage: 'Lead', tags: [] },
+      { business_id: 'mpg', source: 'Website', created: ago(2), person_stage: 'Contacted', tags: null },
+    ],
+    bayPipe: [
+      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', stage: 'Application Received', stage_since: ago(4), last_touch_at: null },
+      { id: 'b2', business_id: 'bay', name: 'Nguyen Refi', stage: 'Application/Estimate Sent', stage_since: ago(9), last_touch_at: ago(1) },
+      { id: 'b3', business_id: 'bay', name: 'Okafor Purchase', stage: 'Contacted/Working', stage_since: ago(12), last_touch_at: ago(2) },
+      { id: 'b4', business_id: 'bay', name: 'Lee Purchase', stage: 'New Lead', stage_since: ago(1), last_touch_at: null },
+    ],
+    deals: [
+      { status: 'won', value: 340000, expected_close: today, business_id: 'bay' },
+      { status: 'open', value: 625000, expected_close: null, business_id: 'bay' },
+    ],
+    mpgRows: [
+      { id: 'm1', business_id: 'mpg', name: 'Ana Torres', company: 'Riverside Deli', stage: 'Open', last_touch_at: null },
+      { id: 'm2', business_id: 'mpg', name: 'Chris Lee', company: 'Heights Auto', stage: 'Contacted', last_touch_at: ago(1) },
+      { id: 'm3', business_id: 'mpg', name: 'Priya Shah', company: 'Oak Spa', stage: 'Qualified', last_touch_at: ago(1) },
+    ],
+  }
 }

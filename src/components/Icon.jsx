@@ -31,6 +31,8 @@ export const ICONS = {
   pulse: 'M3 12h4l3-8 4 16 3-8h4',
   tag: 'M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z M7.5 7.5h.01',
   chevronDown: 'M6 9l6 6 6-6',
+  money: 'M12 2v20 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
+  key: 'M3 21h18 M5 21V10l7-6 7 6v11 M10 21v-6h4v6',
 }
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8, className = '' }) {
