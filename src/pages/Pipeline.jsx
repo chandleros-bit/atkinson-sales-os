@@ -9,7 +9,7 @@ import { useNow } from '../lib/useNow'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { buildActionRequest, summarizeResult, needsNextStepPrompt, LOST_REASONS, LOST_WARNING } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
-import CrmLink from '../components/CrmLink'
+import PersonLink from '../components/PersonLink'
 import QuickActions, { NextStepPrompt } from '../components/QuickActions'
 import { showToast } from '../components/Toaster'
 import { useIsMobile } from '../components/UpNextRow'
@@ -157,9 +157,9 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
       {r.moving && (
         <span className="absolute right-2 top-2 text-[10.5px] font-semibold text-dim">Moving…</span>
       )}
-      <CrmLink url={r.crm_profile_url} className="block truncate text-[13px] font-semibold">
+      <PersonLink id={r.id} url={r.crm_profile_url} className="block w-full truncate text-[13px] font-semibold">
         {headline || '(no name)'}
-      </CrmLink>
+      </PersonLink>
       <div className="mt-0.5 truncate text-[11.5px] text-muted">
         {sub || 'no contact info'}
       </div>

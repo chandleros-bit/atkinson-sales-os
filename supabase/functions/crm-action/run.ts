@@ -250,6 +250,31 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
     }
   }
 
+  // Read-only: one lead's notes from its CRM into the activities mirror, for
+  // the contact card (the activity syncs only pull notes for recent leads).
+  // Writes nothing to the CRM and leaves no crm_actions row.
+  if (req.action === 'contact_notes') {
+    if (!req.contact_id) return reply(200, { status: 'refused', error: 'contact_id is required' })
+    const contact = await loadContact(db, req.contact_id)
+    if (!contact) return reply(200, { status: 'refused', error: 'Contact not found' })
+    const adapter = adapters[contact.business_id]
+    try {
+      const recs = await adapter.read.notesFor(String(contact.external_id))
+      const ids = new Map([[String(contact.external_id), contact.id]])
+      const seen = new Set()
+      const rows = (recs || [])
+        .map((r) => adapter.map.activity(r, 'note', ids))
+        .filter((r) => r.contact_id === contact.id && !seen.has(r.external_id) && seen.add(r.external_id))
+      if (rows.length) {
+        const { error } = await db.from('activities').upsert(rows, ON_CONFLICT)
+        if (error) throw new Error(`activities upsert: ${error.message}`)
+      }
+      return reply(200, { status: 'ok', notes: rows.length })
+    } catch (e) {
+      return reply(200, { status: 'error', error: msg(e) })
+    }
+  }
+
   const resolved = await resolve(db, req)
   if (resolved.refuse) return reply(200, { status: 'refused', error: resolved.refuse })
   const target = resolved.target

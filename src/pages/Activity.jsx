@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { TYPE_META, TYPE_CHIPS, filterByType, groupByDay, timeOfDay } from '../lib/activity'
-import CrmLink from '../components/CrmLink'
+import PersonLink from '../components/PersonLink'
 
 const PER_PAGE = 150
 
@@ -179,7 +179,7 @@ export default function Activity({ biz }) {
                     <TypeTag type={r.type} accent={config.accent} />
                     <div className="num w-14 flex-none text-[12px] text-muted">{timeOfDay(r.occurred_at)}</div>
                     <div className="min-w-0 flex-1 truncate text-[13px] font-semibold sm:w-40 sm:flex-none">
-                      <CrmLink url={r.crm_profile_url}>{r.contact_name || '(unknown)'}</CrmLink>
+                      <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name || '(unknown)'}</PersonLink>
                     </div>
                     {/* Phones: the detail wraps onto its own line instead of being cut off. */}
                     <div className="line-clamp-2 basis-full text-[12.5px] text-muted sm:line-clamp-1 sm:min-w-0 sm:flex-1 sm:basis-auto">{r.snippet || '—'}</div>

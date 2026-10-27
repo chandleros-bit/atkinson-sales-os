@@ -41,9 +41,11 @@ function fakeDb(seed) {
         if (op === 'upsert') {
           if (failUpsert.has(table)) return { error: { message: 'mirror down' } }
           const keys = opts.onConflict.split(',')
-          const i = rows.findIndex((r) => keys.every((k) => r[k] === payload[k]))
-          if (i >= 0) rows[i] = { ...rows[i], ...payload }
-          else rows.push({ ...payload })
+          for (const p of [].concat(payload)) {
+            const i = rows.findIndex((r) => keys.every((k) => r[k] === p[k]))
+            if (i >= 0) rows[i] = { ...rows[i], ...p }
+            else rows.push({ ...p })
+          }
           return { error: null }
         }
         return { data: rows.filter(match), error: null }
@@ -500,5 +502,46 @@ describe('crm-action run: create_contact (new lead)', () => {
     expect(res.body.status).toBe('error')
     expect(res.body.results).toEqual([{ step: 'create_contact', ok: false, error: 'Already in FollowUpBoss, assigned to another agent' }])
     expect(bay.send.addNote).not.toHaveBeenCalled()
+  })
+})
+
+describe('crm-action run: contact_notes (read-only)', () => {
+  const notesReq = (contactId) => ({ client_action_id: uuid(90), action: 'contact_notes', contact_id: contactId })
+
+  it("pulls a Bayway lead's notes from FUB into the mirror, writing nothing to FUB", async () => {
+    bay.read.notesFor = vi.fn(async () => [
+      { id: 71, personId: 4821, body: 'Asked for W-2s', createdBy: 'Chandler Atkinson', created: '2026-10-18T15:00:00Z' },
+      { id: 70, personId: 4821, body: 'Credit: 660-699 / loan type: DSCR', createdBy: 'LendingFlow', created: '2026-10-01T15:00:00Z' },
+    ])
+    const res = await go(notesReq('c-bay'))
+    expect(res.body).toEqual({ status: 'ok', notes: 2 })
+    expect(bay.read.notesFor).toHaveBeenCalledWith('4821')
+    const rows = db.tables.activities.filter((a) => a.type === 'note')
+    expect(rows.map((a) => [a.external_id, a.contact_id, a.business_id])).toEqual([
+      ['note-71', 'c-bay', 'bay'],
+      ['note-70', 'c-bay', 'bay'],
+    ])
+    expect(bay.sent).toEqual([])
+    expect(db.tables.crm_actions || []).toEqual([])
+  })
+
+  it('reads MPG notes from Zoho the same way', async () => {
+    mpg.read.notesFor = vi.fn(async () => [
+      { id: 'N1', Note_Content: 'Sent statements', Parent_Id: { id: 'L555' }, $se_module: 'Leads', Created_Time: '2026-10-18T15:00:00+00:00' },
+    ])
+    const res = await go(notesReq('c-mpg'))
+    expect(res.body).toEqual({ status: 'ok', notes: 1 })
+    expect(db.tables.activities.find((a) => a.external_id === 'note-N1')).toMatchObject({ contact_id: 'c-mpg', business_id: 'mpg' })
+  })
+
+  it('says why when the CRM read fails', async () => {
+    mpg.read.notesFor = vi.fn(async () => {
+      throw new Error('Zoho GET Leads/L555/Notes -> NOT_SUPPORTED')
+    })
+    expect((await go(notesReq('c-mpg'))).body).toEqual({ status: 'error', error: 'Zoho GET Leads/L555/Notes -> NOT_SUPPORTED' })
+  })
+
+  it('needs a known contact', async () => {
+    expect((await go(notesReq('nope'))).body).toEqual({ status: 'refused', error: 'Contact not found' })
   })
 })
