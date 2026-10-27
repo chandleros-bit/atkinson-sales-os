@@ -172,7 +172,6 @@ export default function Calendar() {
   return (
     <div>
       <PageHeader
-        eyebrow="OVERVIEW"
         title="Calendar"
         note={
           stale && (

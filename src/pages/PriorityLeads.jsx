@@ -11,7 +11,7 @@ const COLUMNS =
 
 function Header({ note }) {
   return (
-    <PageHeader eyebrow="BAYWAY" eyebrowColor="var(--bay-ink)" title="Priority Leads" note={note} />
+    <PageHeader eyebrow="Bayway · FollowUpBoss" eyebrowColor="var(--bay-ink)" title="Priority Leads" note={note} />
   )
 }
 

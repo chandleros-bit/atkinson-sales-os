@@ -10,7 +10,7 @@ const PER_PAGE = 150
 
 const ACTIVITY = {
   bay: {
-    label: 'BAYWAY',
+    label: 'Bayway · FollowUpBoss',
     accent: 'bay',
     source: 'v_bayway_activity',
     copy: 'Bayway activity — calls, texts, emails, notes, and appointments from FollowUpBoss.',
@@ -23,7 +23,7 @@ const ACTIVITY = {
     ],
   },
   mpg: {
-    label: 'MPG',
+    label: 'MPG · Zoho',
     accent: 'mpg',
     source: 'v_mpg_activity',
     // Calls only today — Zoho meetings/notes are gated behind module/admin
@@ -142,7 +142,7 @@ export default function Activity({ biz }) {
   return (
     <div>
       <PageHeader
-        eyebrow={books.length > 1 ? 'OVERVIEW' : config.label}
+        eyebrow={books.length > 1 ? 'Both books' : config.label}
         eyebrowColor={books.length > 1 ? undefined : `var(--${config.accent}-ink)`}
         title="Activity"
         note={!loading && !error && <span className="num text-[12px] text-muted">{total} shown</span>}

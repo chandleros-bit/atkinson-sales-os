@@ -217,7 +217,7 @@ export default function Analytics() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader eyebrow="OVERVIEW" title="Analytics" subtitle="How consistently you call, and which lead sources turn into business." />
+      <PageHeader title="Analytics" subtitle="How consistently you call, and which lead sources turn into business." />
       {isDemoMode && (
         <div className="rounded-card border border-line bg-panel px-6 py-8 text-center text-sm text-muted">Demo mode — connect Supabase to see analytics.</div>
       )}

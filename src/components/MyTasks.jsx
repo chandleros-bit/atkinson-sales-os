@@ -12,7 +12,7 @@ import QuickActions from './QuickActions'
 // alert banner, so the rail and the banner never disagree.
 const CHIP = {
   overdue: { background: '#FCEBEB', color: '#DC2626' },
-  today: { background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' },
+  today: { background: 'var(--warn-bg)', color: 'var(--warn-ink)' },
 }
 
 export default function MyTasks({ className = '' }) {

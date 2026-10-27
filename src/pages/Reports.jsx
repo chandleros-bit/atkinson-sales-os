@@ -310,7 +310,6 @@ export default function Reports() {
   return (
     <div>
       <PageHeader
-        eyebrow="OVERVIEW"
         title="Reports"
         subtitle="Your scoreboard against the Atkinson KPI targets. Live where data is wired; manual otherwise."
       />

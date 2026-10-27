@@ -147,7 +147,6 @@ export default function Tasks() {
   return (
     <div>
       <PageHeader
-        eyebrow="OVERVIEW"
         title="Tasks"
         note={!loading && !error && <span className="num text-[12px] text-muted">{total} open</span>}
         subtitle="Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Complete or push a task here and it changes in the CRM too."

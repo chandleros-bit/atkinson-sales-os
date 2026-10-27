@@ -48,7 +48,7 @@ function MobileContactRow({ r, config }) {
 
 function bayStagePill(stage) {
   if (stage === NURTURE) return { background: 'transparent', color: 'var(--dim)' }
-  if (stage === 'Application Received') return { background: 'rgba(232,180,95,.14)', color: 'var(--bay-gold)' }
+  if (stage === 'Application Received') return { background: 'var(--warn-bg)', color: 'var(--warn-ink)' }
   return { background: 'var(--bay-soft)', color: 'var(--bay-ink)' }
 }
 
@@ -65,7 +65,7 @@ const BAY_FILTERS = [
 
 const CONFIGS = {
   bay: {
-    label: 'BAYWAY',
+    label: 'Bayway · FollowUpBoss',
     accent: 'bay',
     source: 'v_bayway_contacts',
     columns: ['name', 'stage', 'contact', 'last_touch'],
@@ -78,7 +78,7 @@ const CONFIGS = {
     ],
   },
   mpg: {
-    label: 'MPG',
+    label: 'MPG · Zoho',
     accent: 'mpg',
     source: 'v_mpg_contacts',
     columns: ['name', 'company', 'stage', 'contact', 'last_touch'],

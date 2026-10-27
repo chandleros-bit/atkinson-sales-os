@@ -4,16 +4,16 @@
 import { healthPills } from '../lib/cardHealth'
 
 export const PILL_TONE = {
-  neg: { background: 'var(--neg-bg)', color: 'var(--neg-ink)' },
-  warn: { background: 'var(--warn-bg)', color: 'var(--warn-ink)' },
-  pos: { background: 'var(--pos-bg)', color: 'var(--pos-ink)' },
-  neutral: { background: 'var(--panel2)', color: 'var(--muted)' },
+  neg: { background: 'var(--neg-bg)', color: 'var(--neg-ink)', borderColor: 'var(--neg-line)' },
+  warn: { background: 'var(--warn-bg)', color: 'var(--warn-ink)', borderColor: 'var(--warn-line)' },
+  pos: { background: 'var(--pos-bg)', color: 'var(--pos-ink)', borderColor: 'var(--pos-line)' },
+  neutral: { background: 'var(--panel2)', color: 'var(--muted)', borderColor: 'var(--line2)' },
 }
 
 export function Pill({ tone = 'neutral', className = '', children, ...rest }) {
   return (
     <span
-      className={`inline-block max-w-full truncate rounded-full px-2 py-[2px] text-[11px] font-semibold ${className}`}
+      className={`inline-block max-w-full truncate rounded-md border px-2 py-[1px] text-[11.5px] font-semibold ${className}`}
       style={PILL_TONE[tone]}
       {...rest}
     >

@@ -141,7 +141,7 @@ export default function CalendarCard() {
           {stale && (
             <span
               className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
-              style={{ background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }}
+              style={{ background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
               title="Outlook sync is behind — showing the last synced data."
             >
               Stale

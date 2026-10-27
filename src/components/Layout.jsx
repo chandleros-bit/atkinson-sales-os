@@ -5,6 +5,8 @@ import Toaster from './Toaster'
 import SearchPalette, { openSearch } from './SearchPalette'
 import { PersonSheetHost } from './PersonSheet'
 import BusinessFilter from './BusinessFilter'
+import NewMenu from './NewMenu'
+import Icon from './Icon'
 import { useBusiness } from '../context/BusinessContext'
 import { useAuth } from '../context/AuthContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
@@ -36,46 +38,49 @@ export const pageTitle = (path) => TITLES.find(([re]) => re.test(path))?.[1] || 
 function MobileBar({ onMenu }) {
   const { pathname } = useLocation()
   return (
-    <div className="sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-2 border-b border-line bg-panel2/95 px-4 py-2 backdrop-blur sm:hidden">
+    <div className="sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-2 border-b border-line bg-panel/95 px-4 py-2 backdrop-blur sm:hidden">
       <button
         type="button"
         onClick={onMenu}
         aria-label="Open menu"
-        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border border-line2 text-[17px] text-muted"
+        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border border-line2 text-muted"
       >
-        ☰
+        <Icon name="menu" size={19} />
       </button>
-      <div className="min-w-0 flex-1 truncate text-[14px] font-bold" data-page-title>
+      <div className="min-w-0 flex-1 truncate text-[15px] font-semibold" data-page-title>
         {pageTitle(pathname)}
       </div>
-      <div className="w-[150px] flex-none">
-        <BusinessFilter />
+      <div className="w-[164px] flex-none">
+        <BusinessFilter compact />
       </div>
       <button
         type="button"
         onClick={openSearch}
         aria-label="Search"
-        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border border-line2 text-[17px] text-muted"
+        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border border-line2 text-muted"
       >
-        ⌕
+        <Icon name="search" size={19} />
       </button>
     </div>
   )
 }
 
-const Icon = ({ d }) => (
-  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    {d.map((x) => (
-      <path key={x} d={x} />
-    ))}
-  </svg>
-)
-const ICONS = {
-  home: ['M3 11l9-7 9 7', 'M5 10v10h14V10'],
-  bench: ['M4 6h16', 'M4 12h16', 'M4 18h10'],
-  pipeline: ['M4 5h4v14H4z', 'M10 5h4v9h-4z', 'M16 5h4v6h-4z'],
-  tasks: ['M9 11l3 3 8-8', 'M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h11'],
-  calendar: ['M4 6h16v14H4z', 'M4 10h16', 'M8 3v4', 'M16 3v4'],
+// Desktop top bar: the page's name, the business switch and + New.
+function TopBar() {
+  const { pathname } = useLocation()
+  return (
+    <div className="mb-7 hidden h-[72px] items-center justify-between gap-4 border-b border-line sm:flex">
+      <div className="truncate text-[22px] font-semibold tracking-[-0.4px]" data-page-title>
+        {pageTitle(pathname)}
+      </div>
+      <div className="flex flex-none items-center gap-3">
+        <div className="w-[248px]">
+          <BusinessFilter />
+        </div>
+        <NewMenu />
+      </div>
+    </div>
+  )
 }
 
 // Phone tab bar: the five pages used on the go. Pipeline follows the book
@@ -102,7 +107,7 @@ function BottomNav() {
           aria-current={it.on ? 'page' : undefined}
           className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[10.5px] font-semibold ${it.on ? 'text-[color:var(--text)]' : 'text-muted'}`}
         >
-          <Icon d={ICONS[it.icon]} />
+          <Icon name={it.icon} size={20} strokeWidth={1.9} />
           {it.label}
         </NavLink>
       ))}
@@ -136,8 +141,9 @@ export default function Layout() {
           <div className="flex-1 bg-black/40" />
         </div>
       )}
-      <main className="min-w-0 flex-1 px-4 pb-[calc(84px+env(safe-area-inset-bottom))] sm:p-[26px]">
+      <main className="min-w-0 flex-1 px-4 pb-[calc(84px+env(safe-area-inset-bottom))] sm:px-10 sm:pb-12">
         <MobileBar onMenu={() => setMenuOpen(true)} />
+        <TopBar />
         {isDemoMode && (
           <div className="mb-5 rounded-[11px] border border-line bg-panel px-4 py-2.5 text-xs text-muted">
             Demo mode — Supabase is not connected yet. Copy .env.example to .env,
