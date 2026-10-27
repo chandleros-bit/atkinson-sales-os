@@ -4,7 +4,8 @@
 // is not a link and the actions sit inline.
 // dense (the Workbench's Calls lane, 640px+): two lines (who and why; phone,
 // stage and state) with the actions stacked beside them. Clicking the row opens
-// a quick look with the whole lead form, recent notes, CRM link and Snooze.
+// a quick look: Details (the whole lead form, recent notes) and Tasks (the
+// lead's open tasks, each completable or pushable), plus CRM link and Snooze.
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { refreshPriorityQueue } from '../lib/usePriorityQueue'
@@ -13,6 +14,9 @@ import { followUpDate } from '../lib/crmActions'
 import { formatPhone, telHref } from '../lib/phone'
 import { noteFacts } from '../lib/noteFacts'
 import { useRecentNotes } from '../lib/contactNotes'
+import { useContactTasks } from '../lib/useContactTasks'
+import { dueLabel, dueDayKey } from '../lib/tasks'
+import { dayKey } from '../lib/calendar'
 import { stageProgress } from '../lib/pipeline'
 import BizBadge from './BizBadge'
 import { Pill } from './HealthPills'
@@ -224,7 +228,10 @@ function PeekHeading({ children }) {
 function LeadPeek({ row, rect, anchor, onClose }) {
   const ref = useRef(null)
   const [snoozing, setSnoozing] = useState(false)
+  const [tab, setTab] = useState('details')
   const { notes, loading } = useRecentNotes(row.id, row.first_note)
+  const tasks = useContactTasks(row.id)
+  const today = dayKey(new Date().toISOString())
   const { facts } = noteFacts(row.first_note)
   const tel = telHref(row.phone)
   const phone = formatPhone(row.phone)
@@ -280,8 +287,74 @@ function LeadPeek({ row, rect, anchor, onClose }) {
         <span className="text-[12px] text-dim">{lastCallLabel(row)}</span>
       </div>
 
-      {(facts.length > 0 || row.first_note) && <PeekHeading>Lead form</PeekHeading>}
-      {facts.length > 0 ? (
+      <div role="tablist" aria-label="Quick look" className="mt-3 flex gap-1 border-b border-line">
+        {[
+          ['details', 'Details', null],
+          ['tasks', 'Tasks', tasks.loading ? null : tasks.tasks.length],
+        ].map(([id, label, n]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`-mb-px min-h-[36px] border-b-2 px-3 text-[13px] ${
+              tab === id ? 'border-[color:var(--text)] font-semibold' : 'border-transparent text-muted hover:text-[color:var(--text)]'
+            }`}
+          >
+            {label}
+            {n != null && <span className="num ml-1 text-dim">{n}</span>}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'tasks' && (
+        <div role="tabpanel" aria-label="Tasks" className="pt-1">
+          {tasks.loading && <div className="py-3 text-[13px] text-muted">Loading…</div>}
+          {!tasks.loading && tasks.tasks.length === 0 && <div className="py-3 text-[13px] text-muted">No open tasks.</div>}
+          {tasks.tasks.map((t) => {
+            const late = t.due_at && dueDayKey(t.due_at) < today
+            return (
+              <div key={t.id} data-peek-task className="flex items-center gap-2 border-b border-hoverbg py-2 last:border-b-0">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] font-semibold">{t.title || 'Task'}</div>
+                  <div className="text-[12px]" style={{ color: late ? 'var(--neg-ink)' : 'var(--muted)' }}>
+                    {dueLabel(t.due_at)}
+                    {late ? ' · overdue' : ''}
+                  </div>
+                </div>
+                <QuickActions
+                  businessId={row.business_id}
+                  contactId={row.id}
+                  contactName={row.name}
+                  task={{ id: t.id, title: t.title }}
+                  only={['done', 'push']}
+                  onDone={() => {
+                    tasks.reload()
+                    refreshPriorityQueue()
+                  }}
+                />
+              </div>
+            )
+          })}
+          <div className="mt-1 flex items-center gap-1 text-[12.5px] font-semibold text-muted">
+            <QuickActions
+              businessId={row.business_id}
+              contactId={row.id}
+              contactName={row.name}
+              only={['followup']}
+              onDone={() => {
+                tasks.reload()
+                refreshPriorityQueue()
+              }}
+            />
+            Add a follow-up
+          </div>
+        </div>
+      )}
+
+      {tab === 'details' && (facts.length > 0 || row.first_note) && <PeekHeading>Lead form</PeekHeading>}
+      {tab !== 'details' ? null : facts.length > 0 ? (
         <dl aria-label={`Lead form for ${row.name || 'lead'}`} className="mt-1.5 grid grid-cols-[120px_minmax(0,1fr)] gap-y-1 text-[13.5px]">
           {facts.map((f) => (
             <Fragment key={f.k}>
@@ -294,6 +367,8 @@ function LeadPeek({ row, rect, anchor, onClose }) {
         row.first_note && <p className="mt-1.5 whitespace-pre-line break-words text-[13.5px]">{row.first_note}</p>
       )}
 
+      {tab === 'details' && (
+      <>
       <PeekHeading>Notes</PeekHeading>
       <div className="mt-1.5 flex flex-col gap-2">
         {loading && <div className="text-[13px] text-muted">Loading…</div>}
@@ -307,6 +382,8 @@ function LeadPeek({ row, rect, anchor, onClose }) {
           </div>
         ))}
       </div>
+      </>
+      )}
 
       {snoozing ? (
         <div className="mt-4">

@@ -119,6 +119,13 @@ export function newLeadProblem(form) {
   return null
 }
 
+// The stage a logged call moves a lead to, or null. Bayway only (MPG stages
+// come from Zoho), and only forward: a New Lead becomes Attempted; a lead
+// already further along stays where it is. stage: the lead's board column.
+export function callStageAdvance(businessId, stage) {
+  return businessId === 'bay' && stage === 'New Lead' ? 'attempted' : null
+}
+
 // form -> the crm-action request body. Throws on a form the UI should not have
 // let through, so a bug surfaces as a message rather than a half-built write.
 export function buildActionRequest(form) {
@@ -146,6 +153,9 @@ export function buildActionRequest(form) {
       payload.no_next_step_reason = form.noNextStepReason
       if (form.noNextStepReason === PARK_REASON) payload.set_stage = 'credit_repair'
     }
+    // A call on a New Lead moves it to Attempted (callStageAdvance), unless the
+    // call parks it.
+    if (form.setStage && !payload.set_stage) payload.set_stage = form.setStage
     if (form.completeTaskId) payload.complete_task_id = form.completeTaskId
     return { ...base, contact_id: form.contactId, payload }
   }

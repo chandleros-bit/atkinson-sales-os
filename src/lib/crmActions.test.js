@@ -4,6 +4,7 @@ import {
   followUpDate,
   defaultNextStep,
   needsNextStepPrompt,
+  callStageAdvance,
   NO_NEXT_STEP_REASONS,
   LOST_REASONS,
   newLeadProblem,
@@ -126,6 +127,19 @@ describe('buildActionRequest', () => {
   it('records why there is no next step, audit-only', () => {
     const r = buildActionRequest({ action: 'log_call', contactId, outcome: 'Not Interested', durationMin: 5, nextStep: 'none', noNextStepReason: 'Not interested' })
     expect(r.payload).toEqual({ outcome: 'Not Interested', duration_min: 5, next_step: 'none', no_next_step_reason: 'Not interested' })
+  })
+
+  it('a call on a Bayway New Lead moves it to Attempted, never backwards', () => {
+    expect(callStageAdvance('bay', 'New Lead')).toBe('attempted')
+    expect(callStageAdvance('bay', 'Attempted')).toBe(null)
+    expect(callStageAdvance('bay', 'Contacted/Working')).toBe(null)
+    expect(callStageAdvance('bay', null)).toBe(null)
+    expect(callStageAdvance('mpg', 'New Lead')).toBe(null)
+    const r = buildActionRequest({ action: 'log_call', contactId, outcome: 'No Answer', durationMin: 1, nextStep: 'scheduled', setStage: 'attempted' })
+    expect(r.payload.set_stage).toBe('attempted')
+    // Parking wins: the call moves the lead to Nurture instead.
+    const parked = buildActionRequest({ action: 'log_call', contactId, outcome: 'Interested', durationMin: 5, nextStep: 'none', noNextStepReason: 'Moving to Nurture', setStage: 'attempted' })
+    expect(parked.payload.set_stage).toBe('credit_repair')
   })
 
   it('parks the lead in Nurture when that is the reason', () => {

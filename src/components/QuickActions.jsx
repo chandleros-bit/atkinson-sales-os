@@ -23,6 +23,7 @@ import {
   LOST_REASONS,
   LOST_WARNING,
   needsNextStepPrompt,
+  callStageAdvance,
   defaultDurationMin,
   defaultFollowUpTitle,
   endOfTodayIso,
@@ -243,7 +244,7 @@ function useSubmit({ businessId, onSuccess }) {
   return { busy, result, send, retry, setResult }
 }
 
-function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
+function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }) {
   const [outcome, setOutcome] = useState(null)
   const [note, setNote] = useState('')
   const [duration, setDuration] = useState('')
@@ -298,6 +299,8 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
     setNextTouched(true)
   }
   const reasons = businessId === 'bay' ? NO_NEXT_STEP_REASONS : NO_NEXT_STEP_REASONS.filter((r) => r !== PARK_REASON)
+  const advance = callStageAdvance(businessId, stage)
+  const parking = nextStep === 'none' && reason === PARK_REASON
   const nextReady =
     nextStep === 'follow_up' ? !!safeDate(preset, picked) : nextStep === 'scheduled' ? !!futureTask : nextStep === 'none' ? !!reason : false
 
@@ -314,6 +317,7 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
           followUp: nextStep === 'follow_up' ? { dueDate: followUpDate(preset, new Date(), picked), title } : null,
           noNextStepReason: nextStep === 'none' ? reason : null,
           completeTaskId: openTask && completeOpen ? openTask.id : null,
+          setStage: advance,
         }),
       )
     } catch (e) {
@@ -394,6 +398,12 @@ function LogCallForm({ businessId, contactId, contactName, t, onSuccess }) {
             Complete open task: <span className="font-semibold">{openTask.title || 'Task'}</span>
           </span>
         </label>
+      )}
+
+      {advance && !parking && (
+        <div data-stage-advance className="mt-2 text-[12.5px] text-muted">
+          Moves {contactName || 'the lead'} from New Lead to <span className="font-semibold text-[color:var(--text)]">Attempted</span> in FollowUpBoss.
+        </div>
       )}
 
       <ResultBox result={result} onRetry={retry} busy={busy} />
@@ -698,7 +708,7 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
 
       {open === 'call' && (
         <Sheet title="Log call" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
-          <LogCallForm businessId={businessId} contactId={contactId} contactName={contactName} t={t} onSuccess={success} />
+          <LogCallForm businessId={businessId} contactId={contactId} contactName={contactName} stage={stage} t={t} onSuccess={success} />
         </Sheet>
       )}
       {open === 'note' && (
