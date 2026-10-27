@@ -86,7 +86,8 @@ export function buildAlerts({ queue = [], signals = [], pipeline = [], tasks = [
           id: w.contact_id,
           name: w.contact_name || w.title,
           book: w.business_id,
-          detail: [w.waiting_on && `Waiting on ${w.waiting_on}`, late(overdueDays(w.check_back_on, now))].filter(Boolean).join(' · '),
+          // Short, so the name stays readable: "Borrower · 1d overdue".
+          detail: [w.waiting_on, late(overdueDays(w.check_back_on, now))].filter(Boolean).join(' · '),
         })),
       null,
     ),
