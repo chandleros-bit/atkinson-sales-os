@@ -48,6 +48,8 @@ export default function App() {
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/tasks" element={<Tasks />} />
+              {/* Follows the business filter; All merges both books. */}
+              <Route path="/activity" element={<Activity />} />
               <Route path="/mpg/pipeline" element={<Pipeline biz="mpg" />} />
               <Route path="/mpg/activity" element={<Activity biz="mpg" />} />
               <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />

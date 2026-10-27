@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
-import { TYPE_META, TYPE_CHIPS, filterByType, groupByDay, timeOfDay } from '../lib/activity'
+import { TYPE_META, TYPE_CHIPS, filterByType, groupByDay, timeOfDay, mergeFeeds } from '../lib/activity'
+import { useBusiness } from '../context/BusinessContext'
+import BizBadge from '../components/BizBadge'
 import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
 
@@ -37,9 +39,9 @@ const ACTIVITY = {
   },
 }
 
-// The 'call' tag takes the business accent (green Bayway / blue MPG) so the
-// dominant activity type stays on-brand and the two palettes never mix on one
-// page; other types keep their shared semantic hue from TYPE_META.
+// The 'call' tag takes the row's business accent (green Bayway / blue MPG),
+// so in the merged feed a call's color says which book it belongs to; other
+// types keep their shared semantic hue from TYPE_META.
 function TypeTag({ type, accent }) {
   const m =
     type === 'call'
@@ -55,44 +57,51 @@ function TypeTag({ type, accent }) {
   )
 }
 
-export default function Activity({ biz }) {
-  const config = ACTIVITY[biz] || ACTIVITY.bay
+// Both books in one timeline (/activity with the All filter).
+const BOTH = {
+  copy: 'Both books in one timeline — FollowUpBoss for Bayway, Zoho calls for MPG.',
+  empty: 'No activity yet — connect the FollowUpBoss and Zoho activity syncs.',
+}
 
-  const [rows, setRows] = useState([])
+async function fetchPage(book, offset) {
+  const { data, error } = await supabase
+    .from(ACTIVITY[book].source)
+    .select('*')
+    .order('occurred_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false })
+    .range(offset, offset + PER_PAGE - 1)
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+// biz: 'bay' | 'mpg' for a book's own page; omitted, the page follows the
+// business filter and All merges both books (mergeFeeds).
+export default function Activity({ biz }) {
+  const filter = useBusiness()?.biz || 'all'
+  const scope = biz || filter
+  const books = useMemo(() => (scope === 'all' ? ['bay', 'mpg'] : [scope]), [scope])
+  const config = books.length > 1 ? BOTH : ACTIVITY[books[0]]
+
+  // { [book]: { rows, hasMore } }
+  const [feeds, setFeeds] = useState({})
   const [loading, setLoading] = useState(!isDemoMode)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
-  const [hasMore, setHasMore] = useState(false)
   const [typeFilter, setTypeFilter] = useState('all')
-
-  const fetchPage = useCallback(
-    async (offset) => {
-      const { data, error: err } = await supabase
-        .from(config.source)
-        .select('*')
-        .order('occurred_at', { ascending: false, nullsFirst: false })
-        .order('id', { ascending: false })
-        .range(offset, offset + PER_PAGE - 1)
-      if (err) throw new Error(err.message)
-      return data || []
-    },
-    [config.source],
-  )
 
   const load = useCallback(async () => {
     if (isDemoMode) return
     setLoading(true)
     setError(null)
     try {
-      const page = await fetchPage(0)
-      setRows(page)
-      setHasMore(page.length === PER_PAGE)
+      const pages = await Promise.all(books.map((b) => fetchPage(b, 0)))
+      setFeeds(Object.fromEntries(books.map((b, i) => [b, { rows: pages[i], hasMore: pages[i].length === PER_PAGE }])))
     } catch (e) {
       setError(String(e?.message || e))
     } finally {
       setLoading(false)
     }
-  }, [fetchPage])
+  }, [books])
 
   useEffect(() => {
     load()
@@ -102,9 +111,15 @@ export default function Activity({ biz }) {
     if (loadingMore) return
     setLoadingMore(true)
     try {
-      const page = await fetchPage(rows.length)
-      setRows((prev) => [...prev, ...page])
-      setHasMore(page.length === PER_PAGE)
+      const more = books.filter((b) => feeds[b]?.hasMore)
+      const pages = await Promise.all(more.map((b) => fetchPage(b, feeds[b].rows.length)))
+      setFeeds((prev) => {
+        const next = { ...prev }
+        more.forEach((b, i) => {
+          next[b] = { rows: [...prev[b].rows, ...pages[i]], hasMore: pages[i].length === PER_PAGE }
+        })
+        return next
+      })
     } catch (e) {
       setError(String(e?.message || e))
     } finally {
@@ -112,15 +127,23 @@ export default function Activity({ biz }) {
     }
   }
 
-  const sourceRows = isDemoMode ? config.demoRows : rows
+  const merged = useMemo(
+    () =>
+      mergeFeeds(
+        books.map((b) => (isDemoMode ? { biz: b, rows: ACTIVITY[b].demoRows, hasMore: false } : { biz: b, ...(feeds[b] || { rows: [], hasMore: false }) })),
+      ),
+    [books, feeds],
+  )
+  const sourceRows = merged.rows
+  const hasMore = merged.hasMore
   const groups = useMemo(() => groupByDay(filterByType(sourceRows, typeFilter)), [sourceRows, typeFilter])
   const total = groups.reduce((n, g) => n + g.rows.length, 0)
 
   return (
     <div>
       <PageHeader
-        eyebrow={config.label}
-        eyebrowColor={`var(--${config.accent}-ink)`}
+        eyebrow={books.length > 1 ? 'OVERVIEW' : config.label}
+        eyebrowColor={books.length > 1 ? undefined : `var(--${config.accent}-ink)`}
         title="Activity"
         note={!loading && !error && <span className="num text-[12px] text-muted">{total} shown</span>}
         subtitle={config.copy}
@@ -170,10 +193,12 @@ export default function Activity({ biz }) {
               <div className="overflow-hidden rounded-card border border-line bg-panel">
                 {g.rows.map((r) => (
                   <div
-                    key={r.id}
+                    key={r.key}
+                    data-activity={r.business_id}
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg sm:flex-nowrap"
                   >
-                    <TypeTag type={r.type} accent={config.accent} />
+                    {books.length > 1 && <BizBadge biz={r.business_id} />}
+                    <TypeTag type={r.type} accent={r.business_id} />
                     <div className="num w-14 flex-none text-[12px] text-muted">{timeOfDay(r.occurred_at)}</div>
                     <div className="min-w-0 flex-1 truncate text-[13px] font-semibold sm:w-40 sm:flex-none">
                       <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name || '(unknown)'}</PersonLink>

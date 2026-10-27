@@ -88,6 +88,8 @@ export function usePriorityQueue(biz = 'all') {
     const touchedToday = new Set(snap.touched.filter((t) => inView(t) && ids.has(t.contact_id)).map((t) => t.contact_id)).size
     return {
       queue: buildQueue(rows, snap.rules, Date.now()),
+      // Every lead row in view, bucketed or not (the Workbench alerts).
+      signals: rows,
       rules: snap.rules,
       touchedToday,
       loading: snap.loading,

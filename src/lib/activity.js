@@ -69,3 +69,21 @@ export function groupByDay(rows, now = Date.now()) {
   }
   return groups
 }
+
+// Both books in one timeline. feeds: [{ biz, rows, hasMore }], each feed's
+// rows newest-first as paged from its own view. Rows get business_id and a
+// feed-unique key. A feed with more pages hides everything older than its own
+// oldest loaded row: the other book's older rows wait for "Load older", so
+// the timeline never skips a stretch of one book.
+export function mergeFeeds(feeds) {
+  const ms = (iso) => new Date(iso).getTime()
+  const cut = Math.max(
+    -Infinity,
+    ...feeds.filter((f) => f.hasMore && f.rows.length).map((f) => Math.min(...f.rows.filter((r) => r.occurred_at).map((r) => ms(r.occurred_at)))),
+  )
+  const rows = feeds
+    .flatMap((f) => f.rows.map((r) => ({ ...r, business_id: r.business_id || f.biz, key: `${f.biz}:${r.id}` })))
+    .filter((r) => r.occurred_at && ms(r.occurred_at) >= cut)
+    .sort((a, b) => ms(b.occurred_at) - ms(a.occurred_at))
+  return { rows, hasMore: feeds.some((f) => f.hasMore) }
+}
