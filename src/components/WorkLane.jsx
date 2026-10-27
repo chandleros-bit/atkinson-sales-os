@@ -1,5 +1,5 @@
-// The Workbench Work lane: groups of file work (workbench.js). Each item has
-// Open (person sheet), Update (status, waiting on, check back, notes: the
+// The Workbench Work lane: groups of file work (workbench.js). Each item's
+// name opens the person sheet; Update (status, waiting on, check back, notes: the
 // app's own work_items row) and a finishing button:
 //   estimate     Done -> "Estimate sent" / "Application sent" (FUB stage tag)
 //   mpg_task     Done -> completes the Zoho task
@@ -195,37 +195,43 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
   )
 }
 
+// Two lines: what (title, status, rough time); who (the name opens the person
+// sheet), why and the latest note. Update and the finishing button sit beside.
 function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }) {
   const finish = it.kind === 'application' ? 'Mark reviewed' : canDone ? 'Done' : null
   const note = it.notes?.split('\n')[0]
   return (
-    <div data-work-item className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3 last:border-b-0">
-      <div className="min-w-0 flex-[1_1_220px]">
-        <div className="flex items-center gap-2">
+    <div data-work-item className="flex items-center gap-3 border-b border-line px-4 py-2 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2 leading-5">
           {showBook && <BizBadge biz={it.book} />}
-          <span className="text-[14px] font-semibold">{it.title}</span>
+          <span className="min-w-0 truncate text-[14px] font-semibold">{it.title}</span>
           <StatusPill status={it.status} />
           {it.minutes && (
-            <span className="num rounded-full bg-panel2 px-2 py-[1px] text-[11px] font-semibold text-muted" title="Rough time">
+            <span className="num flex-none rounded-full bg-panel2 px-2 py-[1px] text-[11px] font-semibold text-muted" title="Rough time">
               ~{it.minutes}m
             </span>
           )}
         </div>
-        {it.name && <div className="truncate text-[12.5px] text-muted">{it.name}</div>}
-        {it.why && (
-          <Pill tone={it.late ? 'neg' : 'neutral'} className="mt-1 text-[12px]" data-health={it.late ? 'late' : 'ok'}>
-            {it.why}
-          </Pill>
-        )}
-        {note && <div className="truncate text-[12.5px] italic text-muted">“{note}”</div>}
+        <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[12.5px] leading-[18px] text-muted">
+          {it.name &&
+            (it.contactId ? (
+              <button type="button" onClick={onOpen} title="Open contact card" className="min-w-0 truncate font-semibold text-[color:var(--text)] hover:underline">
+                {it.name}
+              </button>
+            ) : (
+              <span className="min-w-0 truncate">{it.name}</span>
+            ))}
+          {it.why && (
+            <Pill tone={it.late ? 'neg' : 'neutral'} className="flex-none text-[11.5px]" data-health={it.late ? 'late' : 'ok'}>
+              {it.why}
+            </Pill>
+          )}
+          {note && <span className="min-w-0 truncate italic">“{note}”</span>}
+        </div>
       </div>
       <div className="flex flex-none gap-1.5">
-        {it.contactId && (
-          <button type="button" onClick={onOpen} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
-            Open
-          </button>
-        )}
-        <button type="button" onClick={onUpdate} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
+        <button type="button" onClick={onUpdate} className="min-h-[32px] rounded-[9px] border border-line2 px-2.5 text-[12.5px] font-semibold text-[#344054]">
           Update
         </button>
         {finish && (
@@ -233,13 +239,26 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
             type="button"
             disabled={busy}
             onClick={onFinish}
-            className="min-h-[40px] rounded-[10px] px-3 text-[13px] font-semibold text-white disabled:opacity-50"
-            style={{ background: 'var(--text)' }}
+            className="min-h-[32px] rounded-[9px] px-2.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
+            style={{ background: 'var(--chrome)' }}
           >
             {finish}
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+// A group's title: larger and darker than the rows so each category reads as
+// its own section inside the lane.
+function GroupTitle({ g, count, children }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-line px-4 pb-1.5 pt-4">
+      {g.book && <BizBadge biz={g.book} />}
+      <h3 className="text-[15px] font-bold tracking-[-0.1px] text-[color:var(--text)]">{g.title}</h3>
+      <span className="num rounded-full bg-hoverbg px-2 py-[1px] text-[12px] font-semibold text-muted">{count}</span>
+      {children}
     </div>
   )
 }
@@ -299,37 +318,33 @@ export default function WorkLane({ groups, onChanged }) {
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col pb-2">
       {groups.map((g) => {
         if (g.id === 'waiting') {
           if (g.items.length === 0) return null
           return (
-            <div key={g.id} className="overflow-hidden rounded-card border border-dashed border-line2 bg-panel">
+            <section key={g.id}>
               <button
                 type="button"
                 aria-expanded={showWaiting}
                 onClick={() => setShowWaiting((v) => !v)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left text-[14px] font-bold"
+                className="flex w-full items-center justify-between border-b border-dashed border-line2 px-4 pb-1.5 pt-4 text-left text-[15px] font-bold"
               >
                 <span>{`${g.title} · ${g.items.length}`}</span>
                 <span aria-hidden="true" className="text-muted">{showWaiting ? '▴' : '▾'}</span>
               </button>
-              {showWaiting && <div className="border-t border-line">{g.items.map((it) => row(g, it))}</div>}
-            </div>
+              {showWaiting && <div>{g.items.map((it) => row(g, it))}</div>}
+            </section>
           )
         }
         return (
-          <div key={g.id} className="overflow-hidden rounded-card border border-line bg-panel">
-            <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-              {g.book && <BizBadge biz={g.book} />}
-              <h2 className="text-[15px] font-bold">{g.title}</h2>
-              <span className="num text-[12.5px] font-semibold text-muted">{g.items.length}</span>
-            </div>
+          <section key={g.id}>
+            <GroupTitle g={g} count={g.items.length} />
             {g.items.length === 0 && (
-              <div className="px-4 py-3 text-[13px] text-muted">{g.id === 'custom' ? 'Add your own with + Work item.' : 'Nothing here right now.'}</div>
+              <div className="px-4 py-2.5 text-[13px] text-muted">{g.id === 'custom' ? 'Add your own with + Work item.' : 'Nothing here right now.'}</div>
             )}
             {g.items.map((it) => row(g, it))}
-          </div>
+          </section>
         )
       })}
       {picking && (

@@ -130,7 +130,8 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen">
-      <div className="hidden sm:flex">
+      {/* Pinned to the window: a long menu scrolls inside it, never stretching the page. */}
+      <div className="sticky top-0 hidden h-screen sm:flex">
         <Sidebar />
       </div>
       {menuOpen && (

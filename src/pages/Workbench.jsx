@@ -14,20 +14,38 @@ import { useIsMobile } from '../components/UpNextRow'
 import WorkLane from '../components/WorkLane'
 import AddWorkItem from '../components/AddWorkItem'
 import VoiceTask from '../components/VoiceTask'
-import PageHeader from '../components/PageHeader'
+import { SyncDot } from '../components/PageHeader'
 import Priority from './Priority'
 
 function Progress({ label, value, pct }) {
   return (
-    <div className="flex min-w-[160px] flex-col gap-1.5">
+    <div className="flex w-[180px] flex-col gap-1.5">
       <div className="flex justify-between text-[13px] font-semibold">
         <span>{label}</span>
         <span className="num">{value}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-line">
-        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round(pct * 100))}%`, background: 'var(--text)' }} />
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round(pct * 100))}%`, background: 'var(--chrome)' }} />
       </div>
     </div>
+  )
+}
+
+// One lane as a card: a gray header with its count (the phone's tabs carry the
+// counts there), then the body, which scrolls on its own once the lanes sit
+// side by side (xl+).
+function Lane({ label, count, mobile, children }) {
+  return (
+    <section aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-card border border-line bg-panel shadow-[0_1px_2px_rgba(16,24,40,.05)]">
+      {!mobile && (
+        <div className="flex flex-none items-center border-b border-line bg-panel2 px-4 py-3">
+          <h2 className="text-[16px] font-semibold">
+            {label} <span className="num font-medium text-muted">· {count}</span>
+          </h2>
+        </div>
+      )}
+      <div className="min-h-0 flex-1 xl:overflow-y-auto">{children}</div>
+    </section>
   )
 }
 
@@ -54,23 +72,24 @@ export default function Workbench() {
   const showWork = !mobile || lane === 'work'
 
   return (
-    <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Workbench"
-        subtitle="Calls to make and files to move, both books."
-        actions={
-          <div className="flex flex-wrap items-center gap-5">
-            <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
-            <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
-            <div className="flex gap-2">
-              <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
-              <button type="button" onClick={() => setAdding(true)} className="min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold">
-                + Work item
-              </button>
-            </div>
-          </div>
-        }
-      />
+    // xl+: the page fits the window (top bar 100px + bottom padding 48px) and
+    // each lane scrolls by itself. Narrower, the lanes stack and the page scrolls.
+    <div className="flex flex-col gap-4 xl:h-[calc(100dvh-148px)] xl:min-h-[600px]">
+      {/* One compact row: the top bar already names the page. */}
+      <header className="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <h2 className="sr-only">Workbench</h2>
+        <div className="flex flex-wrap items-center gap-x-7 gap-y-3">
+          <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
+          <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
+          <SyncDot />
+        </div>
+        <div className="flex gap-2">
+          <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
+          <button type="button" onClick={() => setAdding(true)} className="min-h-[38px] rounded-[10px] border border-line2 px-3.5 text-[13.5px] font-semibold text-[#344054]">
+            + Work item
+          </button>
+        </div>
+      </header>
 
       <AlertsRail alerts={alerts} showBook={biz === 'all'} />
 
@@ -94,19 +113,17 @@ export default function Workbench() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-start gap-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {showCalls && (
-          <section aria-label="Calls" className="min-w-0 flex-[1_1_380px]">
-            {!mobile && <h2 className="mb-2 px-1 text-[16px] font-bold">Calls</h2>}
+          <Lane label="Calls" count={`${toGo} to go`} mobile={mobile}>
             <Priority embedded />
-          </section>
+          </Lane>
         )}
         {showWork && (
-          <section aria-label="Work" className="min-w-0 flex-[1.2_1_420px]">
-            {!mobile && <h2 className="mb-2 px-1 text-[16px] font-bold">Work</h2>}
-            {work.error && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{work.error}</div>}
+          <Lane label="Work" count={`${openWork} open`} mobile={mobile}>
+            {work.error && <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{work.error}</div>}
             <WorkLane groups={groups} onChanged={work.reload} />
-          </section>
+          </Lane>
         )}
       </div>
       {adding && (

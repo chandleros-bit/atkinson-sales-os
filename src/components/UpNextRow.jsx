@@ -2,19 +2,25 @@
 // Mobile first: under 640px the whole row is a tel: link (tap = dial) and the
 // actions live in a bottom sheet behind the ⋯ button. On wider screens the row
 // is not a link and the actions sit inline.
-import { useEffect, useState } from 'react'
+// dense (the Workbench's Calls lane, 640px+): two lines (who and why; phone,
+// stage and state) with the actions stacked beside them. Clicking the row opens
+// a quick look with the whole lead form, recent notes, CRM link and Snooze.
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { refreshPriorityQueue } from '../lib/usePriorityQueue'
 import { BUCKET_LABEL, reasonText, lastCallLabel } from '../lib/priorityQueue'
 import { followUpDate } from '../lib/crmActions'
 import { formatPhone, telHref } from '../lib/phone'
 import { noteFacts } from '../lib/noteFacts'
+import { useRecentNotes } from '../lib/contactNotes'
 import { stageProgress } from '../lib/pipeline'
 import BizBadge from './BizBadge'
 import { Pill } from './HealthPills'
 import StageProgress from './StageProgress'
 import CrmLink from './CrmLink'
+import Icon from './Icon'
 import PersonLink from './PersonLink'
+import { openPerson } from './PersonSheet'
 import QuickActions from './QuickActions'
 import { showToast } from './Toaster'
 
@@ -195,9 +201,249 @@ function ActionsSheet({ row, onClose }) {
   )
 }
 
-export default function UpNextRow({ row, compact = false }) {
+const stop = (e) => e.stopPropagation()
+const sourceOf = (row) => (row.lead_source && row.lead_source !== '<unspecified>' ? row.lead_source : null)
+const urgentColor = (row) => (row.bucket === 'reached_out' || row.bucket === 'new_lead' ? 'var(--neg-ink)' : 'var(--text)')
+const PEEK_W = 460
+
+// Below the row when there's room, else above it; never off screen.
+function peekStyle(rect) {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const left = Math.max(12, Math.min(rect.left + 24, vw - PEEK_W - 12))
+  const below = vh - rect.bottom
+  return below >= 380 || below >= rect.top
+    ? { left, top: rect.bottom + 6, maxHeight: below - 18 }
+    : { left, bottom: vh - rect.top + 6, maxHeight: rect.top - 18 }
+}
+
+function PeekHeading({ children }) {
+  return <div className="mt-4 text-[11.5px] font-semibold uppercase tracking-[.4px] text-dim">{children}</div>
+}
+
+function LeadPeek({ row, rect, anchor, onClose }) {
+  const ref = useRef(null)
+  const [snoozing, setSnoozing] = useState(false)
+  const { notes, loading } = useRecentNotes(row.id, row.first_note)
+  const { facts } = noteFacts(row.first_note)
+  const tel = telHref(row.phone)
+  const phone = formatPhone(row.phone)
+  const others = row.reasons.filter((r) => r !== row.bucket)
+
+  useEffect(() => {
+    const inside = (e) => ref.current?.contains(e.target) || anchor.current?.contains(e.target)
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    const onDown = (e) => !inside(e) && onClose()
+    const onScroll = (e) => !ref.current?.contains(e.target) && onClose()
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onClose)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onClose)
+    }
+  }, [anchor, onClose])
+
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label={`${row.name || 'Lead'} details`}
+      data-lead-peek
+      onClick={stop}
+      className="fixed z-40 w-[460px] max-w-[calc(100vw-24px)] cursor-default overflow-y-auto rounded-[14px] border border-line2 bg-panel p-4 shadow-[0_12px_32px_rgba(16,24,40,.16),0_2px_6px_rgba(16,24,40,.08)]"
+      style={peekStyle(rect)}
+    >
+      <div className="flex items-center gap-2">
+        <BizBadge biz={row.business_id} />
+        <PersonLink id={row.id} url={row.crm_profile_url} className="min-w-0 truncate text-[16px] font-semibold">
+          {row.name || '(no name)'}
+        </PersonLink>
+        <button type="button" onClick={onClose} aria-label="Close" className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-[8px] text-muted hover:bg-hoverbg">
+          ✕
+        </button>
+      </div>
+      <div className="mt-1 text-[13px] text-muted">
+        {[phone, row.business_id === 'mpg' && row.company, sourceOf(row), row.stage].filter(Boolean).join(' · ')}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <Pill tone={TONE[row.bucket] || 'neutral'}>{reasonText(row)}</Pill>
+        {others.map((r) => (
+          <Pill key={r} tone={TONE[r]} title={BUCKET_LABEL[r]}>
+            {SHORT[r]}
+          </Pill>
+        ))}
+        {row.decide && <Pill tone="warn" className="font-bold">Decide</Pill>}
+        <span className="text-[12px] text-dim">{lastCallLabel(row)}</span>
+      </div>
+
+      {(facts.length > 0 || row.first_note) && <PeekHeading>Lead form</PeekHeading>}
+      {facts.length > 0 ? (
+        <dl aria-label={`Lead form for ${row.name || 'lead'}`} className="mt-1.5 grid grid-cols-[120px_minmax(0,1fr)] gap-y-1 text-[13.5px]">
+          {facts.map((f) => (
+            <Fragment key={f.k}>
+              <dt className="text-dim">{f.k}</dt>
+              <dd className="break-words">{f.v}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      ) : (
+        row.first_note && <p className="mt-1.5 whitespace-pre-line break-words text-[13.5px]">{row.first_note}</p>
+      )}
+
+      <PeekHeading>Notes</PeekHeading>
+      <div className="mt-1.5 flex flex-col gap-2">
+        {loading && <div className="text-[13px] text-muted">Loading…</div>}
+        {!loading && notes.length === 0 && <div className="text-[13px] text-muted">No notes yet.</div>}
+        {notes.map((n) => (
+          <div key={n.id} className="rounded-[9px] bg-panel2 px-2.5 py-2 text-[13px] leading-[1.45]">
+            <div className="text-[11.5px] text-dim">
+              {[new Date(n.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), n.author].filter(Boolean).join(' · ')}
+            </div>
+            <div className="whitespace-pre-line break-words">{n.text}</div>
+          </div>
+        ))}
+      </div>
+
+      {snoozing ? (
+        <div className="mt-4">
+          <SnoozeForm row={row} onDone={onClose} />
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {tel && (
+            <a href={tel} className="flex min-h-[36px] items-center rounded-[9px] bg-[color:var(--chrome)] px-3.5 text-[13.5px] font-semibold text-white hover:opacity-90">
+              Call
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              openPerson(row.id)
+              onClose()
+            }}
+            className="min-h-[36px] rounded-[9px] border border-line2 px-3.5 text-[13.5px] font-semibold"
+          >
+            Open contact card
+          </button>
+          <button type="button" onClick={() => setSnoozing(true)} className="min-h-[36px] rounded-[9px] border border-line2 px-3.5 text-[13.5px] font-semibold text-muted">
+            Snooze…
+          </button>
+          <CrmLink url={row.crm_profile_url} className="ml-auto px-1 text-[12.5px] font-semibold text-muted">
+            CRM ↗
+          </CrmLink>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DenseRow({ row }) {
+  const ref = useRef(null)
+  const [rect, setRect] = useState(null)
+  const toggle = () => setRect((r) => (r ? null : ref.current.getBoundingClientRect()))
+  const close = useCallback(() => setRect(null), [])
+  const tel = telHref(row.phone)
+  const phone = formatPhone(row.phone)
+  const source = sourceOf(row)
+  const state = noteFacts(row.first_note).facts.find((f) => f.k === 'State')?.v
+  const others = row.reasons.filter((r) => r !== row.bucket)
+
+  return (
+    <div
+      ref={ref}
+      data-dense-row
+      onClick={toggle}
+      className={`flex cursor-pointer items-center gap-3 border-b border-line py-2 pl-4 pr-3 last:border-b-0 hover:bg-panel2 ${rect ? 'bg-panel2 shadow-[inset_3px_0_0_var(--chrome)]' : ''}`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2 leading-5">
+          <BizBadge biz={row.business_id} />
+          {/* The name keeps its room; company and source give way first. */}
+          <PersonLink data-lead-name id={row.id} url={row.crm_profile_url} className="max-w-[55%] flex-none truncate text-[14.5px] font-semibold">
+            {row.name || '(no name)'}
+          </PersonLink>
+          {row.business_id === 'mpg' && row.company && <span className="min-w-0 truncate text-[12px] text-muted">· {row.company}</span>}
+          {source && (
+            <span title="Lead source" className="min-w-[48px] max-w-[150px] truncate rounded-full border border-line2 px-2 text-[11px] font-semibold leading-[18px] text-muted">
+              {source}
+            </span>
+          )}
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={!!rect}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggle()
+            }}
+            className="ml-auto flex-none whitespace-nowrap pl-2 text-[13px] font-semibold hover:underline"
+            style={{ color: urgentColor(row) }}
+          >
+            {reasonText(row)}
+          </button>
+        </div>
+        <div className="mt-1 flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap text-[12.5px] leading-[18px] text-muted">
+          {phone && (
+            <a href={tel} onClick={stop} aria-label={`Call ${row.name || 'lead'} at ${phone}`} className="num flex-none font-semibold text-[color:var(--text)] hover:underline">
+              {phone}
+            </a>
+          )}
+          {row.stage &&
+            (row.business_id === 'bay' && stageProgress(row.stage) ? (
+              <StageProgress stage={row.stage} label className="flex-none" />
+            ) : (
+              <span className="flex-none">{row.stage}</span>
+            ))}
+          {state && (
+            <span title="State" className="flex-none">
+              {state}
+            </span>
+          )}
+          {others.map((r) => (
+            <Pill key={r} tone={TONE[r]} data-health={r} title={BUCKET_LABEL[r]} className="flex-none">
+              {SHORT[r]}
+            </Pill>
+          ))}
+          {row.decide && (
+            <Pill tone="warn" className="flex-none font-bold" title="Snoozed 3+ times in 60 days: move to Nurture or let it go">
+              Decide
+            </Pill>
+          )}
+        </div>
+      </div>
+      {/* Actions stacked: a tall Call (dial) beside Log call, note, follow-up and stage, two to a row. */}
+      <div className="flex flex-none items-stretch gap-[3px]" onClick={stop}>
+        {tel ? (
+          <a href={tel} title={`Call ${phone}`} aria-label={`Call ${row.name || 'lead'}`} className="grid min-h-[47px] w-10 place-items-center rounded-[9px] bg-[color:var(--chrome)] text-white hover:opacity-90">
+            <Icon name="phone" size={17} strokeWidth={1.9} />
+          </a>
+        ) : (
+          <span aria-hidden="true" className="w-10" />
+        )}
+        <QuickActions
+          size="sm"
+          businessId={row.business_id}
+          contactId={row.id}
+          contactName={row.name}
+          hasPhone={!!row.phone}
+          stage={row.business_id === 'bay' ? row.stage : null}
+          only={['call', 'note', 'followup', 'stage']}
+          onDone={() => refreshPriorityQueue()}
+        />
+      </div>
+      {rect && <LeadPeek row={row} rect={rect} anchor={ref} onClose={close} />}
+    </div>
+  )
+}
+
+export default function UpNextRow({ row, compact = false, dense = false }) {
   const mobile = useIsMobile()
   const [sheet, setSheet] = useState(false)
+  if (dense && !mobile) return <DenseRow row={row} />
   const tel = telHref(row.phone)
   const phone = formatPhone(row.phone)
   // Quick read before the call: where the lead came from and what it said.
