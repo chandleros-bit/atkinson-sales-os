@@ -93,52 +93,45 @@ async function render(biz) {
   return host.textContent
 }
 
-describe('Overview command center', () => {
+describe('Overview dashboard', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
   })
 
-  it('renders every combined-view card', async () => {
+  it('renders every card in the combined view', async () => {
     const text = await render('all')
-    expect(text).toContain('Outbound Calls · Today')
-    expect(text).toContain('Bayway Calls · Today')
-    expect(text).toContain('MPG Calls · Today')
-    expect(text).toContain('Performance')
-    expect(text).toContain('Bayway Sprint')
-    expect(text).toContain('MPG Sprint')
-    expect(text).toContain('Priority Leads')
-    expect(text).toContain('My Tasks')
-    expect(text).toContain('Today')
-    // Both books' priority leads reach the row-3 cards.
-    expect(text).toContain('Jessica Chen') // Bayway (scored)
-    expect(text).toContain('Riverside Deli') // MPG (derived from v_mpg_contacts)
-    // Dropped cards no longer render.
-    expect(text).not.toContain('Revenue Goal')
-    expect(text).not.toContain('Pre-Approvals')
-    expect(text).not.toContain('Needs Attention')
-    // 47 + 31 combined calls in the Outbound Calls KPI.
-    expect(text).toContain('78')
+    for (const t of ['Gross commission (MTD)', 'Closed this month', 'Calls this month', 'Pipeline value (open)',
+      'Activity & Production', 'Monthly Goals', "Today's Events", 'Pipeline Mix', 'Lead Sources', 'Income Mix', 'Up Next', '90-Day Sprints']) {
+      expect(text).toContain(t)
+    }
+    // MPG residual entered in Reports reaches the income card.
+    expect(text).toContain('$8,400')
+    // Today's calendar event, with its location.
+    expect(text).toContain('Closing')
+    expect(text).toContain('Title Co.')
+    // One won Bayway deal this month.
+    expect(document.querySelector('[data-kpi="closed"]').textContent).toContain('Bayway 1 loans · MPG 0 merchants')
+    // Old command-center cards are gone.
+    expect(text).not.toContain('Priority Leads')
+    expect(text).not.toContain('Bayway Sprint')
   })
 
   it('scopes the Bayway view', async () => {
     const text = await render('bay')
     expect(text).toContain('Bayway view')
-    expect(text).toContain('Bayway Sprint')
-    expect(text).toContain('Priority Leads')
-    expect(text).toContain('Jessica Chen')
-    expect(text).not.toContain('MPG Calls')
-    expect(text).not.toContain('MPG Sprint')
-    expect(text).not.toContain('Pre-Approvals')
+    expect(text).toContain('Gross commission (MTD)')
+    expect(text).toContain('Apps & estimates')
+    expect(text).not.toContain('MPG residual')
+    expect(document.querySelector('[data-goal="merchants"]')).toBeNull()
   })
 
-  it('shows the MPG-only sprint and priority leads in the MPG view', async () => {
+  it('swaps in MPG cards in the MPG view', async () => {
     const text = await render('mpg')
     expect(text).toContain('MPG view')
-    expect(text).toContain('MPG Sprint')
-    expect(text).toContain('Priority Leads')
-    expect(text).toContain('Riverside Deli')
-    expect(text).not.toContain('Bayway Sprint')
-    expect(text).not.toContain('Pre-Approvals')
-    expect(text).not.toContain('Lead Pipeline')
+    expect(text).toContain('MPG residual (MTD)')
+    expect(text).toContain('Open MPG leads')
+    expect(text).toContain('MPG leads by stage')
+    expect(text).not.toContain('Pipeline value')
+    expect(text).not.toContain('Apps & estimates')
   })
 })
