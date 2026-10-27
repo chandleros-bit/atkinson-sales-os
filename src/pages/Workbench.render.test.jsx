@@ -224,7 +224,7 @@ describe('Workbench', () => {
   it('opens the lead from a work item', async () => {
     mobile = false
     await render()
-    await act(async () => button(workItem('Gil Estimate'), 'Open').click())
+    await act(async () => button(workItem('Gil Estimate'), 'Gil Estimate').click())
     await act(async () => {})
     expect(document.querySelector('[role="dialog"][aria-label="Gil Estimate"]')).not.toBe(null)
     // Applications get Mark reviewed, never a CRM Done.
@@ -293,7 +293,7 @@ describe('Workbench', () => {
     DATA.workItems = [{ id: 'w1', source_key: 'estimate:e1', kind: 'estimate', business_id: 'bay', status: 'waiting', waiting_on: 'Borrower', check_back_on: later.toISOString().slice(0, 10) }]
     const host = await render()
     expect(workItem('Gil Estimate')).toBe(undefined)
-    const bar = host.querySelector('button[aria-expanded]')
+    const bar = host.querySelector('[aria-label="Work"] button[aria-expanded]')
     expect(bar.textContent).toContain('Waiting on others · 1')
     await act(async () => bar.click())
     expect(workItem('Gil Estimate').textContent).toContain('Waiting on Borrower')

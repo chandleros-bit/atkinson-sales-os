@@ -57,7 +57,8 @@ function Svg({ name, size = 16 }) {
   )
 }
 
-function IconButton({ name, label, onClick, disabled, title, t }) {
+// small: the Workbench's stacked 2×2 grid (outlined, about half the size).
+function IconButton({ name, label, onClick, disabled, title, t, small }) {
   return (
     <button
       type="button"
@@ -65,11 +66,13 @@ function IconButton({ name, label, onClick, disabled, title, t }) {
       title={title || label}
       disabled={disabled}
       onClick={onClick}
-      className="grid h-10 w-10 flex-none place-items-center rounded-[10px] text-muted transition-colors hover:bg-hoverbg disabled:cursor-not-allowed disabled:opacity-40"
+      className={`grid flex-none place-items-center text-muted transition-colors hover:bg-hoverbg disabled:cursor-not-allowed disabled:opacity-40 ${
+        small ? 'h-[22px] w-[26px] rounded-md border border-line bg-panel' : 'h-10 w-10 rounded-[10px]'
+      }`}
       onMouseEnter={(e) => !disabled && (e.currentTarget.style.color = t.ink)}
       onMouseLeave={(e) => (e.currentTarget.style.color = '')}
     >
-      <Svg name={name} />
+      <Svg name={name} size={small ? 13 : 16} />
     </button>
   )
 }
@@ -607,8 +610,9 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *               add, usually with only={[]} so no buttons show)
  *   onSheetClose  called when that sheet closes (saved or dismissed)
  *   only        optional subset of ['call','note','followup','stage','done','push']
+ *   size        'sm': small outlined buttons stacked two to a row (Workbench)
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, autoOpen = null, onSheetClose, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, autoOpen = null, onSheetClose, size, className = '' }) {
   const flags = useWritebackFlags()
   const [open, setOpen] = useState(autoOpen)
   // Tell a quick-add caller when its sheet has closed.
@@ -667,12 +671,14 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
   const show = (name) => !only || only.includes(name)
   const stop = (e) => e.stopPropagation()
   const subtitle = [contactName, crm].filter(Boolean).join(' · ')
+  const small = size === 'sm'
 
   return (
-    <div className={`flex items-center gap-0.5 ${className}`} onClick={stop}>
+    <div className={`${small ? 'grid grid-cols-2 gap-[3px]' : 'flex items-center gap-0.5'} ${className}`} onClick={stop}>
       {contactId && show('call') && (
         <IconButton
           t={t}
+          small={small}
           name="call"
           label="Log call"
           title={callDisabled ? 'No phone on file in FUB' : 'Log call'}
@@ -680,15 +686,15 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
           onClick={() => setOpen('call')}
         />
       )}
-      {contactId && show('note') && <IconButton t={t} name="note" label="Add note" onClick={() => setOpen('note')} />}
+      {contactId && show('note') && <IconButton t={t} small={small} name="note" label="Add note" onClick={() => setOpen('note')} />}
       {contactId && show('followup') && (
-        <IconButton t={t} name="followup" label="Schedule follow-up" onClick={() => setOpen('followup')} />
+        <IconButton t={t} small={small} name="followup" label="Schedule follow-up" onClick={() => setOpen('followup')} />
       )}
       {contactId && businessId === 'bay' && stage && show('stage') && (
-        <IconButton t={t} name="stage" label="Move stage" onClick={() => setOpen('stage')} />
+        <IconButton t={t} small={small} name="stage" label="Move stage" onClick={() => setOpen('stage')} />
       )}
-      {task && show('done') && <IconButton t={t} name="done" label="Complete task" onClick={complete} />}
-      {task && show('push') && <IconButton t={t} name="push" label="Push task" onClick={() => setOpen('push')} />}
+      {task && show('done') && <IconButton t={t} small={small} name="done" label="Complete task" onClick={complete} />}
+      {task && show('push') && <IconButton t={t} small={small} name="push" label="Push task" onClick={() => setOpen('push')} />}
 
       {open === 'call' && (
         <Sheet title="Log call" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>

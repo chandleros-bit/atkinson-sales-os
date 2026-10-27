@@ -90,3 +90,25 @@ export function useContactNotes(contactId) {
 
   return { ...state, reload: load, showMore: () => setLimit((n) => n + 20) }
 }
+
+// The last few mirrored notes, for the Workbench's quick look at a lead. No
+// CRM refresh: that runs when the full contact card opens.
+export function useRecentNotes(contactId, firstNote = null, count = 3) {
+  const [state, setState] = useState({ notes: [], loading: true })
+  useEffect(() => {
+    if (!contactId || isDemoMode) return setState({ notes: [], loading: false })
+    let live = true
+    supabase
+      .from('activities')
+      .select('id, occurred_at, notes, raw')
+      .eq('contact_id', contactId)
+      .eq('type', 'note')
+      .order('occurred_at', { ascending: false })
+      .limit(count + 1)
+      .then(({ data }) => live && setState({ notes: noteRows(data || [], firstNote).slice(0, count), loading: false }))
+    return () => {
+      live = false
+    }
+  }, [contactId, firstNote, count])
+  return state
+}
