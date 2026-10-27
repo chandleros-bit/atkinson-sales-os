@@ -156,6 +156,7 @@ export default function Sidebar({ onNavigate }) {
           <Item onNavigate={onNavigate} to="/tasks" icon="✓">Tasks</Item>
           <Item onNavigate={onNavigate} to="/activity" icon="◷">Activity</Item>
           <Item onNavigate={onNavigate} to="/reports" icon="▢">Reports</Item>
+          <Item onNavigate={onNavigate} to="/analytics" icon="▥">Analytics</Item>
         </div>
 
         <div>
