@@ -10,6 +10,9 @@ import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { buildActionRequest, summarizeResult, needsNextStepPrompt, LOST_REASONS, LOST_WARNING } from '../lib/crmActions'
 import { docsState, docSummary, isDocAging } from '../lib/borrowerDocs'
 import PersonLink from '../components/PersonLink'
+import PageHeader from '../components/PageHeader'
+import HealthPills from '../components/HealthPills'
+import StageProgress from '../components/StageProgress'
 import QuickActions, { NextStepPrompt } from '../components/QuickActions'
 import { showToast } from '../components/Toaster'
 import { useIsMobile } from '../components/UpNextRow'
@@ -17,21 +20,12 @@ import { useIsMobile } from '../components/UpNextRow'
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
   return (
-    <div>
-      <div className="flex items-center gap-3">
-        <h2 className="text-[26px] font-bold tracking-tight">Pipeline</h2>
-        <span
-          className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
-          style={{
-            color: isMpg ? 'var(--mpg)' : 'var(--bay)',
-            background: isMpg ? 'var(--mpg-soft)' : 'var(--bay-soft)',
-          }}
-        >
-          {isMpg ? 'MPG' : 'BAYWAY'}
-        </span>
-        {note}
-      </div>
-    </div>
+    <PageHeader
+      eyebrow={isMpg ? 'MPG' : 'BAYWAY'}
+      eyebrowColor={isMpg ? 'var(--mpg-ink)' : 'var(--bay-ink)'}
+      title="Pipeline"
+      note={note}
+    />
   )
 }
 
@@ -85,44 +79,6 @@ function LastNote({ r }) {
   )
 }
 
-// Next-step dot + words. The colour is never the only signal.
-const DOT = { overdue: 'var(--neg-ink)', today: 'var(--bay-gold)', scheduled: 'var(--pos-ink)', none: 'var(--dim)' }
-
-function HealthLine({ h }) {
-  if (!h) return null
-  if (h.speed) {
-    return (
-      <div
-        className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold"
-        style={{ color: h.speed.late ? 'var(--neg-ink)' : 'var(--muted)' }}
-        data-health="speed"
-        data-late={h.speed.late ? 'true' : 'false'}
-      >
-        <span aria-hidden="true">⏱</span>
-        {h.speed.text}
-      </div>
-    )
-  }
-  if (h.next.state === 'parked') return null
-  const overdue = h.next.state === 'overdue'
-  return (
-    <div className="mt-1 flex items-center gap-1.5 text-[11px]" data-health={h.next.state}>
-      <span aria-hidden="true" className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: DOT[h.next.state] }} />
-      <span className={overdue ? 'font-semibold' : 'text-muted'} style={overdue ? { color: 'var(--neg-ink)' } : undefined}>
-        {h.next.text}
-      </span>
-    </div>
-  )
-}
-
-function StuckLine({ h }) {
-  if (!h?.stuck) return null
-  return (
-    <div className="mt-0.5 text-[11px] font-semibold" style={{ color: 'var(--neg-ink)' }} data-health="stuck">
-      {h.stuck.text}
-    </div>
-  )
-}
 
 function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
   const d = daysSince(r.last_touch_at)
@@ -163,8 +119,7 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
       <div className="mt-0.5 truncate text-[11.5px] text-muted">
         {sub || 'no contact info'}
       </div>
-      <HealthLine h={health} />
-      <StuckLine h={health} />
+      <HealthPills h={health} className="mt-1.5" />
       <div
         className={`mt-1 text-[11px] ${stale ? 'font-semibold' : 'text-dim'}`}
         style={stale ? { color: 'var(--bay-gold)' } : undefined}
@@ -225,14 +180,17 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now, wide = false }) 
       }
       data-stage={col.stage}
     >
-      <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
-        <span className={`text-[12.5px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>
-          {col.stage}
-        </span>
-        <span className="num text-[11px] text-muted" data-col-count>
-          {col.cards.length}
-          {summary ? ` · ${summary}` : ''}
-        </span>
+      <div className="border-b border-line px-3.5 py-2.5">
+        <div className="flex items-center justify-between">
+          <span className={`text-[12.5px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>
+            {col.stage}
+          </span>
+          <span className="num text-[11px] text-muted" data-col-count>
+            {col.cards.length}
+            {summary ? ` · ${summary}` : ''}
+          </span>
+        </div>
+        {biz !== 'mpg' && <StageProgress stage={col.stage} className="mt-1.5" />}
       </div>
       <div className="flex min-h-[64px] flex-col gap-2 p-2.5">
         {col.cards.map((r) => (

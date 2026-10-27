@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildColumns, isLostStage, LOAN_FLOW_ORDER, MPG_LEAD_FLOW, dropTargetFor, withPendingMoves } from './pipeline'
+import { buildColumns, isLostStage, LOAN_FLOW_ORDER, MPG_LEAD_FLOW, dropTargetFor, withPendingMoves, stageProgress } from './pipeline'
 
 const row = (id, stage, last_touch_at = null) => ({ id, stage, last_touch_at })
 
@@ -143,5 +143,19 @@ describe('buildColumns sortCards', () => {
     expect(buildColumns(rows)[0].cards.map((c) => c.id)).toEqual(['b', 'a'])
     const byId = (cards) => [...cards].sort((x, y) => x.id.localeCompare(y.id))
     expect(buildColumns(rows, undefined, { sortCards: byId })[0].cards.map((c) => c.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('stageProgress', () => {
+  it('steps New Lead through Application Received', () => {
+    expect(stageProgress('New Lead')).toEqual({ step: 1, of: 5, pct: 20 })
+    expect(stageProgress('Contacted/Working')).toEqual({ step: 3, of: 5, pct: 60 })
+    expect(stageProgress('Application Received')).toEqual({ step: 5, of: 5, pct: 100 })
+  })
+  it('null off the path', () => {
+    expect(stageProgress('Nurture / Credit Repair')).toBeNull()
+    expect(stageProgress('Lost')).toBeNull()
+    expect(stageProgress('Qualified')).toBeNull()
+    expect(stageProgress(null)).toBeNull()
   })
 })

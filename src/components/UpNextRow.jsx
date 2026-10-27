@@ -9,7 +9,10 @@ import { BUCKET_LABEL, reasonText, lastCallLabel } from '../lib/priorityQueue'
 import { followUpDate } from '../lib/crmActions'
 import { formatPhone, telHref } from '../lib/phone'
 import { noteFacts } from '../lib/noteFacts'
+import { stageProgress } from '../lib/pipeline'
 import BizBadge from './BizBadge'
+import { Pill } from './HealthPills'
+import StageProgress from './StageProgress'
 import CrmLink from './CrmLink'
 import PersonLink from './PersonLink'
 import QuickActions from './QuickActions'
@@ -36,6 +39,16 @@ const SHORT = {
   no_next_step: 'No next step',
   stuck: 'Stuck',
   quiet: 'Quiet',
+}
+// The other reasons a lead is on the list, tinted like the board's health pills.
+const TONE = {
+  reached_out: 'neg',
+  new_lead: 'neg',
+  overdue: 'neg',
+  stuck: 'neg',
+  hot_cold: 'warn',
+  no_next_step: 'warn',
+  quiet: 'neutral',
 }
 
 function fmtDay(key) {
@@ -237,21 +250,22 @@ export default function UpNextRow({ row, compact = false }) {
         ))}
       {!compact && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-          {row.stage && <span className="rounded-full border border-line px-2 py-0.5 text-muted">{row.stage}</span>}
+          {row.stage &&
+            (row.business_id === 'bay' && stageProgress(row.stage) ? (
+              <StageProgress stage={row.stage} label className="rounded-full border border-line px-2 py-0.5" />
+            ) : (
+              <span className="rounded-full border border-line px-2 py-0.5 text-muted">{row.stage}</span>
+            ))}
           <span className="text-dim">{lastCallLabel(row)}</span>
           {others.map((r) => (
-            <span key={r} className="rounded-full bg-panel2 px-2 py-0.5 font-semibold text-muted" title={BUCKET_LABEL[r]}>
+            <Pill key={r} tone={TONE[r]} data-health={r} title={BUCKET_LABEL[r]}>
               {SHORT[r]}
-            </span>
+            </Pill>
           ))}
           {row.decide && (
-            <span
-              className="rounded-full px-2 py-0.5 font-bold"
-              style={{ background: 'rgba(232,180,95,.18)', color: 'var(--bay-gold)' }}
-              title="Snoozed 3+ times in 60 days: move to Nurture or let it go"
-            >
+            <Pill tone="warn" className="font-bold" title="Snoozed 3+ times in 60 days: move to Nurture or let it go">
               Decide
-            </span>
+            </Pill>
           )}
         </div>
       )}

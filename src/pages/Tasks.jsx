@@ -12,6 +12,7 @@ import {
   normalizePriority,
 } from '../lib/tasks'
 import PersonLink from '../components/PersonLink'
+import PageHeader from '../components/PageHeader'
 import QuickActions from '../components/QuickActions'
 
 // One generous window; both books together are far under this today. If a book
@@ -145,14 +146,12 @@ export default function Tasks() {
 
   return (
     <div>
-      <div className="flex items-center gap-3">
-        <h2 className="text-[26px] font-bold tracking-tight">Tasks</h2>
-        {!loading && !error && <span className="num text-[12px] text-muted">{total} open</span>}
-      </div>
-      <p className="mt-1 hidden text-sm text-muted sm:block">
-        Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Complete or
-        push a task here and it changes in the CRM too.
-      </p>
+      <PageHeader
+        eyebrow="OVERVIEW"
+        title="Tasks"
+        note={!loading && !error && <span className="num text-[12px] text-muted">{total} open</span>}
+        subtitle="Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Complete or push a task here and it changes in the CRM too."
+      />
 
       <div className="-mx-4 mt-3 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:flex-wrap sm:px-0">
         {PRIORITY_CHIPS.map((c) => (

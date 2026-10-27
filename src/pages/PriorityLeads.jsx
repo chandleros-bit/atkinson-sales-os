@@ -4,22 +4,14 @@ import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, isHot } from '../lib/overview'
 import { TIERS, tierMeta, scoreBarPct, groupByTier } from '../lib/priorityLeads'
 import QuickActions from '../components/QuickActions'
+import PageHeader from '../components/PageHeader'
 
 const COLUMNS =
   'id, name, owner, score, tier, last_activity_at, last_activity_type, ai_note, tags, fub_profile_url, phone'
 
 function Header({ note }) {
   return (
-    <div className="flex items-center gap-3">
-      <h2 className="text-[26px] font-bold tracking-tight">Priority Leads</h2>
-      <span
-        className="rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide"
-        style={{ color: 'var(--bay-ink)', background: 'var(--bay-soft)' }}
-      >
-        BAYWAY
-      </span>
-      {note}
-    </div>
+    <PageHeader eyebrow="BAYWAY" eyebrowColor="var(--bay-ink)" title="Priority Leads" note={note} />
   )
 }
 

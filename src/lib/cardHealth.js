@@ -69,6 +69,19 @@ export function cardHealth(row, rules, now = Date.now()) {
   return { next: nextStep(row, now), stuck: stuckFor(row, rules, now), speed: speedToLead(row, rules, now) }
 }
 
+// The card's health as pills: { key, tone, text, late? }. key is the
+// data-health value; tone is neg (act now), warn (today), pos (on track) or
+// neutral. Speed-to-lead stands in for the next step on a new, uncalled lead.
+const NEXT_TONE = { overdue: 'neg', today: 'warn', scheduled: 'pos', none: 'neutral' }
+export function healthPills(h) {
+  if (!h) return []
+  const pills = []
+  if (h.speed) pills.push({ key: 'speed', tone: h.speed.late ? 'neg' : 'neutral', text: h.speed.text, late: h.speed.late })
+  else if (h.next.state !== 'parked') pills.push({ key: h.next.state, tone: NEXT_TONE[h.next.state], text: h.next.text })
+  if (h.stuck) pills.push({ key: 'stuck', tone: 'neg', text: h.stuck.text })
+  return pills
+}
+
 // Smaller sorts first: uncalled new leads (late, then fresh), then overdue,
 // stuck, no next step, due today, scheduled.
 const NEXT_RANK = { overdue: 0, none: 2, today: 3, scheduled: 4, parked: 5 }

@@ -33,6 +33,9 @@
   --pos-ink: #2E9E52;
   --neg-bg: #FCEBEA;
   --neg-ink: #DC4B43;
+  /* Due-today / stale: amber, the same gold Bayway uses for aging docs */
+  --warn-bg: #FBF1DF;
+  --warn-ink: #B07A1F;
 
   /* Card chrome shared by the Overview command center */
   --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 30px rgba(16, 24, 40, 0.05);

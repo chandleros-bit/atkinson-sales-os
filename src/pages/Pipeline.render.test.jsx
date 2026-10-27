@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import React from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -36,7 +37,7 @@ async function mount(biz = 'bay') {
   document.body.appendChild(host)
   await act(async () => {
     createRoot(host).render(
-      React.createElement(React.Fragment, null, React.createElement(Pipeline, { biz }), React.createElement(Toaster)),
+      React.createElement(MemoryRouter, null, React.createElement(Pipeline, { biz }), React.createElement(Toaster)),
     )
   })
   await act(async () => {})
@@ -235,6 +236,28 @@ describe('Pipeline card health', () => {
     expect(cardEl('a').querySelector('[data-health="stuck"]')).toBeNull()
     expect(column('Attempted').querySelector('[data-col-count]').textContent).toBe('2 · 1 overdue · 1 stuck')
     expect(cardsIn('Attempted')).toEqual(['a', 'b'])
+  })
+
+  it('tints the pills and steps each Bayway column toward Application Received', async () => {
+    DATA.rows = [
+      { ...card('a', 'Ana Late', 'Attempted'), open_task_count: 1, oldest_open_due_at: ago(3), stage_since: ago(1) },
+      { ...card('n', 'Ned Nurture', 'Nurture / Credit Repair') },
+    ]
+    await mount()
+    expect(cardEl('a').querySelector('[data-health="overdue"]').style.color).toBe('var(--neg-ink)')
+    expect(column('Attempted').querySelector('[data-stage-step]').getAttribute('data-stage-step')).toBe('2')
+    expect(column('Application Received').querySelector('[data-stage-step]').getAttribute('data-stage-step')).toBe('5')
+    expect(column('Nurture / Credit Repair').querySelector('[data-stage-step]')).toBeNull()
+    // No sync rows in the mock: the header dot says so and links to Sync Status.
+    const dot = document.querySelector('[data-sync-state]')
+    expect(dot.getAttribute('data-sync-state')).toBe('unknown')
+    expect(dot.getAttribute('href')).toBe('/sync')
+  })
+
+  it('leaves the MPG columns without a step bar', async () => {
+    DATA.rows = [{ ...card('m', 'Mo Merchant', 'Contacted'), business_id: 'mpg' }]
+    await mount('mpg')
+    expect(column('Contacted').querySelector('[data-stage-step]')).toBeNull()
   })
 })
 

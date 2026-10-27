@@ -8,6 +8,7 @@ import {
   sumWon, countWon, deriveStageCounts, pipelineValue, periodDateFor,
   sprintRows, sprintWindow, MPG_SPRINT, callsByDay, callsSince,
 } from '../lib/reports'
+import PageHeader from '../components/PageHeader'
 
 const TABS = [
   { key: 'daily', label: 'Daily' },
@@ -308,10 +309,11 @@ export default function Reports() {
 
   return (
     <div>
-      <h2 className="text-[28px] font-bold tracking-tight">Reports</h2>
-      <p className="mt-1 hidden text-sm text-muted sm:block">
-        Your scoreboard against the Atkinson KPI targets. Live where data is wired; manual otherwise.
-      </p>
+      <PageHeader
+        eyebrow="OVERVIEW"
+        title="Reports"
+        subtitle="Your scoreboard against the Atkinson KPI targets. Live where data is wired; manual otherwise."
+      />
 
       <div className="mt-5 flex items-end justify-between border-b border-line">
         <div role="tablist" className="flex gap-1">

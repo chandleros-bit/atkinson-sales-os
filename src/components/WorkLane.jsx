@@ -14,6 +14,7 @@ import { invokeCrmAction, useWritebackFlags } from '../lib/writeback'
 import { buildActionRequest, followUpDate, summarizeResult, LOST_REASONS, LOST_WARNING } from '../lib/crmActions'
 import { saveWorkItem, WAITING_ON } from '../lib/workItems'
 import BizBadge from './BizBadge'
+import { Pill } from './HealthPills'
 import PersonSheet from './PersonSheet'
 import { Sheet, quickActionTone } from './QuickActions'
 import { showToast } from './Toaster'
@@ -211,9 +212,11 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
           )}
         </div>
         {it.name && <div className="truncate text-[12.5px] text-muted">{it.name}</div>}
-        <div className={`text-[12.5px] font-semibold ${it.late ? '' : 'text-muted'}`} style={it.late ? { color: 'var(--neg-ink)' } : undefined}>
-          {it.why}
-        </div>
+        {it.why && (
+          <Pill tone={it.late ? 'neg' : 'neutral'} className="mt-1 text-[12px]" data-health={it.late ? 'late' : 'ok'}>
+            {it.why}
+          </Pill>
+        )}
         {note && <div className="truncate text-[12.5px] italic text-muted">“{note}”</div>}
       </div>
       <div className="flex flex-none gap-1.5">
