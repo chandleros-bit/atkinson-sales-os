@@ -30,8 +30,8 @@ describe('buildAlerts', () => {
     const a = byId(buildAlerts({ queue, rules, now: NOW }), 'new_leads')
     expect(a).toMatchObject({ tone: 'neg', count: 2, hint: 'Past 5m, not called' })
     expect(a.people).toEqual([
-      { id: 'a', name: 'Ana', book: 'bay' },
-      { id: 'b', name: 'Bo', book: 'mpg' },
+      { id: 'a', name: 'Ana', book: 'bay', detail: '20m · not called' },
+      { id: 'b', name: 'Bo', book: 'mpg', detail: '40m · not called' },
     ])
   })
 
@@ -43,7 +43,8 @@ describe('buildAlerts', () => {
       app('fresh', { last_inbound_at: daysAgo(1) }),
       { ...app('other', {}), stage: 'Attempted' },
     ]
-    expect(ids(byId(buildAlerts({ signals, rules, now: NOW }), 'quiet_apps'))).toEqual(['quiet', 'never'])
+    const quiet = byId(buildAlerts({ signals, rules, now: NOW }), 'quiet_apps')
+    expect(quiet.people.map((p) => [p.id, p.detail])).toEqual([['quiet', `${QUIET_APP_DAYS} days since a touch`], ['never', 'No touch yet']])
   })
 
   it('docs aging only on applications with old, outstanding requests', () => {
@@ -63,7 +64,7 @@ describe('buildAlerts', () => {
       { id: 3, title: 'Call back', due_at: daysAgo(5), contact_id: 'm3', company: 'Other' },
     ]
     const a = byId(buildAlerts({ tasks, rules, now: NOW }), 'statements_late')
-    expect(a.people).toEqual([{ id: 'm1', name: 'Pita Co', book: 'mpg' }])
+    expect(a.people).toEqual([{ id: 'm1', name: 'Pita Co', book: 'mpg', detail: 'Follow up on statements · 2d overdue' }])
   })
 
   it('check-backs due today or earlier, waiting only', () => {
@@ -74,6 +75,8 @@ describe('buildAlerts', () => {
       { id: 3, business_id: 'bay', status: 'open', check_back_on: day(3), contact_id: 'z', contact_name: 'Zed' },
     ]
     expect(ids(byId(buildAlerts({ workItems, rules, now: NOW }), 'check_backs'))).toEqual(['x'])
+    workItems[0].waiting_on = 'Borrower'
+    expect(byId(buildAlerts({ workItems, rules, now: NOW }), 'check_backs').people[0].detail).toBe('Waiting on Borrower · due today')
   })
 
   it('follows the business filter and shows three names plus a count', () => {
@@ -82,6 +85,8 @@ describe('buildAlerts', () => {
     const all = buildAlerts({ pipeline, tasks, rules, now: NOW })
     expect(byId(all, 'docs_aging')).toMatchObject({ count: 5, more: 2 })
     expect(byId(all, 'docs_aging').people).toHaveLength(3)
+    // Show more lists the rest, each with its why.
+    expect(byId(all, 'docs_aging').rest.map((p) => [p.id, p.detail])).toEqual([['d', '1 missing · 10d'], ['e', '1 missing · 10d']])
     const mpgOnly = buildAlerts({ pipeline, tasks, rules, now: NOW, inBook: (b) => b === 'mpg' })
     expect(mpgOnly.map((a) => a.id)).toEqual(['statements_late'])
   })

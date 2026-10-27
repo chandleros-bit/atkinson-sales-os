@@ -168,6 +168,22 @@ describe('Workbench', () => {
     expect(card('statements_late').textContent).toContain('Lending Flow')
   })
 
+  it('previews three people per alert, with why, and shows the rest on demand', async () => {
+    mobile = false
+    for (const n of ['Q1', 'Q2', 'Q3', 'Q4']) {
+      DATA.signals.push({ ...DATA.signals[0], id: n, name: n, stage: 'Application Received', last_inbound_at: null, last_outbound_at: null, last_outbound_call_at: null })
+    }
+    const host = await render()
+    const card = host.querySelector('[data-alert="quiet_apps"]')
+    const names = () => [...card.querySelectorAll('li [data-person-link]')].map((e) => e.textContent)
+    expect(names()).toEqual(['Q1', 'Q2', 'Q3'])
+    expect(card.querySelector('li').textContent).toContain('No touch yet')
+    await act(async () => button(card, 'Show 1 more').click())
+    expect(names()).toEqual(['Q1', 'Q2', 'Q3', 'Q4'])
+    await act(async () => button(card, 'Show less').click())
+    expect(names()).toHaveLength(3)
+  })
+
   it('shows no rail when nothing is slipping', async () => {
     mobile = false
     DATA.tasks = []
