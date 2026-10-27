@@ -184,6 +184,22 @@ describe('Workbench', () => {
     expect(names()).toHaveLength(3)
   })
 
+  it("lists the lead's open tasks in the quick look's Tasks tab", async () => {
+    mobile = false
+    const host = await render()
+    const row = host.querySelector('[data-dense-row]')
+    await act(async () => row.querySelector('[aria-haspopup="dialog"]').click())
+    await act(async () => {})
+    const peek = document.querySelector('[data-lead-peek]')
+    const tab = [...peek.querySelectorAll('[role="tab"]')].find((t) => t.textContent.startsWith('Tasks'))
+    expect(tab.textContent).toBe('Tasks1')
+    await act(async () => tab.click())
+    const task = peek.querySelector('[data-peek-task]')
+    expect(task.textContent).toContain('3 Statements FU')
+    expect(task.textContent).toContain('overdue')
+    expect(peek.querySelector('[role="tabpanel"]').textContent).toContain('Add a follow-up')
+  })
+
   it('shows no rail when nothing is slipping', async () => {
     mobile = false
     DATA.tasks = []

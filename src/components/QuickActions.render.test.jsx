@@ -197,6 +197,26 @@ describe('QuickActions: Log call next step', () => {
     expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture', set_stage: 'credit_repair' })
   })
 
+  it('moves a New Lead to Attempted with the call, and says so first', async () => {
+    ok()
+    await mount({ ...bay, stage: 'New Lead' })
+    await click(byLabel('Log call'))
+    expect(document.querySelector('[data-stage-advance]').textContent).toContain('from New Lead to Attempted')
+    await click(byText('No Answer'))
+    await click(save())
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ outcome: 'No Answer', set_stage: 'attempted' })
+  })
+
+  it('leaves a lead past New Lead where it is', async () => {
+    ok()
+    await mount({ ...bay, stage: 'Contacted/Working' })
+    await click(byLabel('Log call'))
+    expect(document.querySelector('[data-stage-advance]')).toBeNull()
+    await click(byText('No Answer'))
+    await click(save())
+    expect(invoke.mock.calls[0][1].body.payload.set_stage).toBeUndefined()
+  })
+
   it('uses the task already on the books instead of adding another', async () => {
     futureTasks.rows = [{ id: 't-fut', title: 'Follow up: Jo', due_at: '2099-01-02T00:00:00Z' }]
     ok()
