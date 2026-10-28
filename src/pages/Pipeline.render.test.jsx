@@ -272,6 +272,49 @@ const ago = (n) => {
   return d.toISOString()
 }
 
+describe('Pipeline paging', () => {
+  const many = (n, stage = 'Attempted') => Array.from({ length: n }, (_, i) => card(`p${i + 1}`, `Lead ${i + 1}`, stage))
+  const rowIds = () => [...document.querySelectorAll('[data-row-id]')].map((e) => e.getAttribute('data-row-id'))
+  const btn = (root, text) => [...root.querySelectorAll('button')].find((b) => b.textContent.trim() === text)
+
+  it('List shows 25 leads a page with Prev / Next', async () => {
+    localStorage.setItem('pipeline-view', 'list')
+    DATA.rows = many(30)
+    await mount()
+    expect(rowIds()).toHaveLength(25)
+    const pager = document.querySelector('[data-pager]')
+    expect(pager.textContent).toContain('1–25 of 30')
+    expect(btn(pager, 'Prev').disabled).toBe(true)
+    await act(async () => btn(pager, 'Next').click())
+    expect(rowIds()).toHaveLength(5)
+    expect(document.querySelector('[data-pager]').textContent).toContain('26–30 of 30')
+  })
+
+  it('Board columns share the page width and show 25 cards, then Show more', async () => {
+    DATA.rows = many(60)
+    await mount()
+    const board = document.querySelector('[data-view="board"]')
+    expect(board.style.gridTemplateColumns).toContain('repeat(')
+    expect(cardsIn('Attempted')).toHaveLength(25)
+    await act(async () => btn(column('Attempted'), 'Show 25 more · 35 left').click())
+    expect(cardsIn('Attempted')).toHaveLength(50)
+    await act(async () => btn(column('Attempted'), 'Show 10 more · 10 left').click())
+    expect(cardsIn('Attempted')).toHaveLength(60)
+    expect(btn(column('Attempted'), 'Show 10 more · 10 left')).toBeUndefined()
+  })
+
+  it('By stage pages each stage 25 at a time', async () => {
+    localStorage.setItem('pipeline-view', 'grouped')
+    DATA.rows = [...many(27), card('n', 'New One', 'New Lead')]
+    await mount()
+    const group = document.querySelector('[data-group="Attempted"]')
+    expect(group.querySelectorAll('[data-row-id]')).toHaveLength(25)
+    expect(document.querySelector('[data-group="New Lead"] [data-pager]')).toBeNull()
+    await act(async () => btn(group.querySelector('[data-pager]'), 'Next').click())
+    expect(group.querySelectorAll('[data-row-id]')).toHaveLength(2)
+  })
+})
+
 describe('Pipeline card health', () => {
   it('shows the next step, stuck days and a column summary, worst first', async () => {
     DATA.rows = [
@@ -283,7 +326,8 @@ describe('Pipeline card health', () => {
     expect(cardEl('b').querySelector('[data-health="none"]').textContent).toContain('No next step')
     expect(cardEl('b').querySelector('[data-health="stuck"]').textContent).toBe('9d in Attempted')
     expect(cardEl('a').querySelector('[data-health="stuck"]')).toBeNull()
-    expect(column('Attempted').querySelector('[data-col-count]').textContent).toBe('2 · 1 overdue · 1 stuck')
+    expect(column('Attempted').querySelector('[data-col-count]').textContent).toBe('2')
+    expect(column('Attempted').textContent).toContain('1 overdue · 1 stuck')
     expect(cardsIn('Attempted')).toEqual(['a', 'b'])
   })
 

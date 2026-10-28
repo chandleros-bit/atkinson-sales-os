@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
@@ -20,6 +20,8 @@ import Icon from '../components/Icon'
 import { openPerson } from '../components/PersonSheet'
 import { formatPhone } from '../lib/phone'
 import { VIEWS, SORTS, filterRows, sortRows, pipelineKpis } from '../lib/pipelineView'
+import { PAGE_SIZE, pageSlice } from '../lib/paging'
+import Pager from '../components/Pager'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -206,13 +208,22 @@ const LIST_HEAD = {
   mpg: [['Merchant', 'user'], ['Status', 'layers'], ['Health', 'pulse'], ['Contact', 'phone'], ['Last touch', 'clock']],
 }
 
+// 25 leads a page; Prev / Next scroll back to the top of the list.
 function ListView({ rows, biz, rules, now }) {
   const mobile = useIsMobile()
+  const top = useRef(null)
+  const [page, setPage] = useState(1)
+  const slice = pageSlice(rows, page)
+  const turn = (p) => {
+    setPage(p)
+    top.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+  }
+  const pager = <Pager slice={slice} total={rows.length} onPage={turn} label="List pages" className="mt-4" />
   const health = (r) => (rules ? cardHealth(r, rules, now) : null)
   if (mobile) {
     return (
-      <div className="mt-4 flex flex-col gap-2.5" data-view="list">
-        {rows.map((r) => (
+      <div ref={top} className="mt-4 flex scroll-mt-4 flex-col gap-2.5" data-view="list">
+        {slice.rows.map((r) => (
           <article key={r.id} data-row-id={r.id} className="cc-card p-3.5">
             <div className="flex items-center gap-3">
               <Avatar r={r} biz={biz} size={36} />
@@ -231,12 +242,14 @@ function ListView({ rows, biz, rules, now }) {
             <HealthPills h={health(r)} className="mt-2" />
           </article>
         ))}
+        {pager}
       </div>
     )
   }
   const cols = LIST_COLS[biz] || LIST_COLS.bay
   return (
-    <div className="mt-5 overflow-x-auto" data-view="list">
+    <div ref={top} className="mt-5 scroll-mt-4" data-view="list">
+      <div className="overflow-x-auto">
       <div className="min-w-[980px]">
         <div
           className="grid h-[50px] items-center gap-3 rounded-xl border border-line bg-panel2 px-4 text-[14px] text-muted"
@@ -251,7 +264,7 @@ function ListView({ rows, biz, rules, now }) {
           <span />
         </div>
         <div className="mt-2.5 flex flex-col gap-2.5">
-          {rows.map((r) => (
+          {slice.rows.map((r) => (
             <div
               key={r.id}
               data-row-id={r.id}
@@ -277,7 +290,45 @@ function ListView({ rows, biz, rules, now }) {
           ))}
         </div>
       </div>
+      </div>
+      {pager}
     </div>
+  )
+}
+
+// One stage of the By stage view: 25 leads a page, its own Prev / Next.
+function StageGroup({ col, biz, rules, now }) {
+  const [page, setPage] = useState(1)
+  const slice = pageSlice(col.cards, page)
+  const summary = rules ? columnSummary(col.cards, rules, now) : ''
+  return (
+    <section aria-label={col.stage} data-group={col.stage} className="cc-card overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel2 px-4 py-3 sm:px-5">
+        <h2 className={`text-[16px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>{col.stage}</h2>
+        {biz !== 'mpg' && <StageProgress stage={col.stage} />}
+        {summary && <span className="text-[13px] font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</span>}
+        <span className="num ml-auto rounded-full border border-line2 bg-panel px-2.5 text-[13px] font-semibold text-[#344054]">
+          {col.cards.length} {col.cards.length === 1 ? 'lead' : 'leads'}
+        </span>
+      </div>
+      {slice.rows.map((r) => (
+        <div key={r.id} data-row-id={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 sm:px-5">
+          <div className="flex min-w-0 flex-[1_1_240px] items-center gap-3">
+            <Avatar r={r} biz={biz} size={34} />
+            <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[15px] font-semibold">
+              {headline(r, biz)}
+            </PersonLink>
+          </div>
+          <span className="num flex-[0_1_160px] whitespace-nowrap text-[14px]">{formatPhone(r.phone) || '—'}</span>
+          <HealthPills h={rules ? cardHealth(r, rules, now) : null} className="flex-[1_1_220px]" />
+          <span className="flex-[0_0_96px] text-right">
+            <Touch r={r} />
+          </span>
+          <MoreButton r={r} biz={biz} />
+        </div>
+      ))}
+      <Pager slice={slice} total={col.cards.length} onPage={setPage} label={`${col.stage} pages`} className="border-t border-line bg-panel2 px-4 py-2 sm:px-5" />
+    </section>
   )
 }
 
@@ -286,37 +337,9 @@ function GroupedView({ columns, biz, rules, now }) {
     <div className="mt-5 flex flex-col gap-4" data-view="grouped">
       {columns
         .filter((c) => c.cards.length > 0)
-        .map((col) => {
-          const summary = rules ? columnSummary(col.cards, rules, now) : ''
-          return (
-            <section key={col.stage} aria-label={col.stage} data-group={col.stage} className="cc-card overflow-hidden">
-              <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel2 px-4 py-3 sm:px-5">
-                <h2 className={`text-[16px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>{col.stage}</h2>
-                {biz !== 'mpg' && <StageProgress stage={col.stage} />}
-                {summary && <span className="text-[13px] font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</span>}
-                <span className="num ml-auto rounded-full border border-line2 bg-panel px-2.5 text-[13px] font-semibold text-[#344054]">
-                  {col.cards.length} {col.cards.length === 1 ? 'lead' : 'leads'}
-                </span>
-              </div>
-              {col.cards.map((r) => (
-                <div key={r.id} data-row-id={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 sm:px-5">
-                  <div className="flex min-w-0 flex-[1_1_240px] items-center gap-3">
-                    <Avatar r={r} biz={biz} size={34} />
-                    <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[15px] font-semibold">
-                      {headline(r, biz)}
-                    </PersonLink>
-                  </div>
-                  <span className="num flex-[0_1_160px] whitespace-nowrap text-[14px]">{formatPhone(r.phone) || '—'}</span>
-                  <HealthPills h={rules ? cardHealth(r, rules, now) : null} className="flex-[1_1_220px]" />
-                  <span className="flex-[0_0_96px] text-right">
-                    <Touch r={r} />
-                  </span>
-                  <MoreButton r={r} biz={biz} />
-                </div>
-              ))}
-            </section>
-          )
-        })}
+        .map((col) => (
+          <StageGroup key={col.stage} col={col} biz={biz} rules={rules} now={now} />
+        ))}
     </div>
   )
 }
@@ -381,7 +404,7 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
   const sub = biz === 'mpg' ? r.name || formatPhone(r.phone) || r.email : formatPhone(r.phone) || r.email
   return (
     <div
-      className={`relative rounded-xl border border-line bg-panel px-3.5 py-3 shadow-[var(--card-shadow)] ${
+      className={`relative min-w-0 rounded-xl border border-line bg-panel px-3 py-2.5 shadow-[var(--card-shadow)] ${
         drag && !r.moving ? 'cursor-grab active:cursor-grabbing' : ''
       } ${r.moving ? 'opacity-60' : ''}`}
       draggable={!!drag && !r.moving}
@@ -425,7 +448,8 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
         </>
       )}
       <QuickActions
-        className="-mb-1.5 -ml-2 mt-1"
+        size="xs"
+        className="mt-2"
         businessId={biz === 'mpg' ? 'mpg' : 'bay'}
         contactId={r.id}
         contactName={r.name}
@@ -439,12 +463,16 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
   )
 }
 
-function Column({ col, biz, onDone, onPrompt, drag, rules, now, wide = false }) {
+// A stage column: its first 25 cards, then Show more (25 at a time).
+function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
   const isOver = drag?.over === col.stage
   const summary = rules ? columnSummary(col.cards, rules, now) : ''
+  const [limit, setLimit] = useState(PAGE_SIZE)
+  const cards = col.cards.slice(0, limit)
+  const rest = col.cards.length - cards.length
   return (
     <div
-      className={`${wide ? 'w-full' : 'w-[286px] flex-none'} overflow-hidden rounded-card border transition-colors`}
+      className="w-full min-w-0 overflow-hidden rounded-card border transition-colors"
       style={{
         borderColor: isOver ? 'var(--bay)' : 'var(--line)',
         background: isOver ? 'var(--bay-soft)' : 'var(--panel2)',
@@ -472,20 +500,20 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now, wide = false }) 
       }
       data-stage={col.stage}
     >
-      <div className="border-b border-line bg-panel px-4 py-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className={`text-[14.5px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>
+      <div className="border-b border-line bg-panel px-3 py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <span className={`min-w-0 text-[13.5px] font-semibold leading-[18px] ${col.isLost ? 'text-dim' : ''}`}>
             {col.stage}
           </span>
-          <span className="num text-[12px] text-muted" data-col-count>
+          <span className="num flex-none text-[12px] leading-[18px] text-muted" data-col-count>
             {col.cards.length}
-            {summary ? ` · ${summary}` : ''}
           </span>
         </div>
+        {summary && <div className="mt-0.5 text-[11.5px] font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</div>}
         {biz !== 'mpg' && <StageProgress stage={col.stage} className="mt-1.5" />}
       </div>
-      <div className="flex min-h-[64px] flex-col gap-2.5 p-2.5">
-        {col.cards.map((r) => (
+      <div className="flex min-h-[64px] flex-col gap-2 p-2">
+        {cards.map((r) => (
           <Card
             key={r.id}
             r={r}
@@ -501,6 +529,15 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now, wide = false }) 
           <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-[11.5px] text-dim">
             {drag ? 'Drop a lead here' : 'Empty'}
           </div>
+        )}
+        {rest > 0 && (
+          <button
+            type="button"
+            onClick={() => setLimit((n) => n + PAGE_SIZE)}
+            className="min-h-[34px] rounded-lg border border-line2 bg-panel text-[12.5px] font-semibold text-[#344054] hover:bg-hoverbg"
+          >
+            Show {Math.min(rest, PAGE_SIZE)} more · {rest} left
+          </button>
         )}
       </div>
     </div>
@@ -544,13 +581,14 @@ function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
       <div className="mt-4">
         <StageTabs columns={columns} current={current} onPick={setPicked} />
         <div className="mt-2">
-          <Column wide col={current} biz={biz} onDone={onDone} onPrompt={onPrompt} rules={rules} now={now} />
+          <Column col={current} biz={biz} onDone={onDone} onPrompt={onPrompt} rules={rules} now={now} />
         </div>
       </div>
     )
   }
   return (
-    <div className="mt-5 flex items-start gap-4 overflow-x-auto pb-2" data-view="board">
+    // Every stage in view: the columns share the page width, no sideways scroll.
+    <div className="mt-5 grid items-start gap-3 pb-2" data-view="board" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
       {columns.map((col) => (
         <Column key={col.stage} col={col} biz={biz} onDone={onDone} onPrompt={onPrompt} drag={drag} rules={rules} now={now} />
       ))}
@@ -884,9 +922,9 @@ export default function Pipeline({ biz }) {
               No leads match “{query.trim()}”.
             </div>
           ) : view === 'list' ? (
-            <ListView rows={sortRows(shown, sort, rules, now)} biz={biz} rules={rules} now={now} />
+            <ListView key={`${sort}|${query}`} rows={sortRows(shown, sort, rules, now)} biz={biz} rules={rules} now={now} />
           ) : view === 'grouped' ? (
-            <GroupedView columns={groups} biz={biz} rules={rules} now={now} />
+            <GroupedView key={`${sort}|${query}`} columns={groups} biz={biz} rules={rules} now={now} />
           ) : (
             <Board
               columns={columns}
