@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sourceToBiz, dayKey, eventDayKey, dayLabel, timeLabel, groupByDay } from './calendar'
+import { liveEvents, sourceToBiz, dayKey, eventDayKey, dayLabel, timeLabel, groupByDay } from './calendar'
 
 // Build local-time ISO strings so tests are deterministic regardless of env TZ.
 const local = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).toISOString()
@@ -101,5 +101,18 @@ describe('groupByDay', () => {
     )
     expect(g).toHaveLength(1)
     expect(g[0].events.map((e) => e.id).sort()).toEqual(['allday', 'timed'])
+  })
+})
+
+describe('liveEvents', () => {
+  it('drops rows Outlook or Google retitled as canceled', () => {
+    const rows = [
+      { id: 'a', title: 'Canceled: Daily' },
+      { id: 'b', title: 'Canceled event: Product Demo' },
+      { id: 'c', title: 'Daily' },
+      { id: 'd', title: null },
+    ]
+    expect(liveEvents(rows).map((e) => e.id)).toEqual(['c', 'd'])
+    expect(liveEvents(null)).toEqual([])
   })
 })

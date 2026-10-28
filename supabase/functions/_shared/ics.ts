@@ -1,7 +1,7 @@
 // ICS fetch + parse + recurrence expansion using ical.js.
 // Not vitest-tested (esm.sh import); verified on a real feed. Read-only.
 import ICAL from 'https://esm.sh/ical.js@1.5.0'
-import { mapEvent } from './ics-map.ts'
+import { isCanceled, mapEvent } from './ics-map.ts'
 
 const OCCURRENCE_CAP = 1000 // guard runaway RRULEs
 
@@ -52,6 +52,7 @@ export function expandIcs(text, windowStartMs, windowEndMs) {
 
   for (const ve of comp.getAllSubcomponents('vevent')) {
     const event = new ICAL.Event(ve)
+    if (isCanceled({ status: ve.getFirstPropertyValue('status'), summary: event.summary })) continue
     const isAllDay = event.startDate.isDate
 
     if (!event.isRecurring()) {

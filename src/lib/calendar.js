@@ -10,6 +10,15 @@ export function sourceToBiz(source) {
   return null
 }
 
+// Outlook retitles a canceled meeting "Canceled: ..." and its feed keeps
+// serving it; Google's reads "Canceled event: ...". outlook-sync skips and
+// prunes these, and this keeps any row still stored off the screen.
+const CANCELED_TITLE = /^cancell?ed( event)?:/i
+
+export function liveEvents(rows) {
+  return (rows || []).filter((e) => !CANCELED_TITLE.test(String(e?.title || '').trim()))
+}
+
 export function dayKey(iso) {
   const d = new Date(iso)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

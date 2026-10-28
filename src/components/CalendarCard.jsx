@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
-import { sourceToBiz, timeLabel, eventDayKey, dayLabel } from '../lib/calendar'
+import { liveEvents, sourceToBiz, timeLabel, eventDayKey, dayLabel } from '../lib/calendar'
 import { isSyncStale, eventsForDay } from '../lib/calendarRail'
 import { monthCells, monthLabel, eventDots, todayKey, WEEKDAYS } from '../lib/overviewCards'
 
@@ -87,7 +87,7 @@ export default function CalendarCard() {
           setError(evRes.error.message)
           return
         }
-        setRows(evRes.data || [])
+        setRows(liveEvents(evRes.data))
         setLastSync(syncRes.data?.ran_at ? new Date(syncRes.data.ran_at).getTime() : null)
       } catch (e) {
         if (alive) setError(String(e?.message || e))
