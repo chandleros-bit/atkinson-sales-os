@@ -15,12 +15,11 @@ import { formatPhone, telHref } from '../lib/phone'
 import { noteFacts } from '../lib/noteFacts'
 import { useRecentNotes } from '../lib/contactNotes'
 import { useContactTasks } from '../lib/useContactTasks'
-import { dueLabel, dueDayKey } from '../lib/tasks'
-import { dayKey } from '../lib/calendar'
 import { stageProgress } from '../lib/pipeline'
 import BizBadge from './BizBadge'
 import { Pill } from './HealthPills'
 import StageProgress from './StageProgress'
+import ContactTasks, { PopupTabs, taskCount } from './ContactTasks'
 import CrmLink from './CrmLink'
 import Icon from './Icon'
 import PersonLink from './PersonLink'
@@ -231,7 +230,6 @@ function LeadPeek({ row, rect, anchor, onClose }) {
   const [tab, setTab] = useState('details')
   const { notes, loading } = useRecentNotes(row.id, row.first_note)
   const tasks = useContactTasks(row.id)
-  const today = dayKey(new Date().toISOString())
   const { facts } = noteFacts(row.first_note)
   const tel = telHref(row.phone)
   const phone = formatPhone(row.phone)
@@ -287,71 +285,17 @@ function LeadPeek({ row, rect, anchor, onClose }) {
         <span className="text-[12px] text-dim">{lastCallLabel(row)}</span>
       </div>
 
-      <div role="tablist" aria-label="Quick look" className="mt-3 flex gap-1 border-b border-line">
-        {[
+      <PopupTabs
+        label="Quick look"
+        tabs={[
           ['details', 'Details', null],
-          ['tasks', 'Tasks', tasks.loading ? null : tasks.tasks.length],
-        ].map(([id, label, n]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
-            className={`-mb-px min-h-[36px] border-b-2 px-3 text-[13px] ${
-              tab === id ? 'border-[color:var(--text)] font-semibold' : 'border-transparent text-muted hover:text-[color:var(--text)]'
-            }`}
-          >
-            {label}
-            {n != null && <span className="num ml-1 text-dim">{n}</span>}
-          </button>
-        ))}
-      </div>
+          ['tasks', 'Tasks', taskCount(tasks)],
+        ]}
+        tab={tab}
+        onTab={setTab}
+      />
 
-      {tab === 'tasks' && (
-        <div role="tabpanel" aria-label="Tasks" className="pt-1">
-          {tasks.loading && <div className="py-3 text-[13px] text-muted">Loading…</div>}
-          {!tasks.loading && tasks.tasks.length === 0 && <div className="py-3 text-[13px] text-muted">No open tasks.</div>}
-          {tasks.tasks.map((t) => {
-            const late = t.due_at && dueDayKey(t.due_at) < today
-            return (
-              <div key={t.id} data-peek-task className="flex items-center gap-2 border-b border-hoverbg py-2 last:border-b-0">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13.5px] font-semibold">{t.title || 'Task'}</div>
-                  <div className="text-[12px]" style={{ color: late ? 'var(--neg-ink)' : 'var(--muted)' }}>
-                    {dueLabel(t.due_at)}
-                    {late ? ' · overdue' : ''}
-                  </div>
-                </div>
-                <QuickActions
-                  businessId={row.business_id}
-                  contactId={row.id}
-                  contactName={row.name}
-                  task={{ id: t.id, title: t.title }}
-                  only={['done', 'push']}
-                  onDone={() => {
-                    tasks.reload()
-                    refreshPriorityQueue()
-                  }}
-                />
-              </div>
-            )
-          })}
-          <div className="mt-1 flex items-center gap-1 text-[12.5px] font-semibold text-muted">
-            <QuickActions
-              businessId={row.business_id}
-              contactId={row.id}
-              contactName={row.name}
-              only={['followup']}
-              onDone={() => {
-                tasks.reload()
-                refreshPriorityQueue()
-              }}
-            />
-            Add a follow-up
-          </div>
-        </div>
-      )}
+      {tab === 'tasks' && <ContactTasks businessId={row.business_id} contactId={row.id} contactName={row.name} tasks={tasks} />}
 
       {tab === 'details' && (facts.length > 0 || row.first_note) && <PeekHeading>Lead form</PeekHeading>}
       {tab !== 'details' ? null : facts.length > 0 ? (
