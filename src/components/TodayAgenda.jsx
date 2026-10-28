@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
-import { sourceToBiz, timeLabel } from '../lib/calendar'
+import { liveEvents, sourceToBiz, timeLabel } from '../lib/calendar'
 import { todayEvents } from '../lib/calendarRail'
 import { todayKey } from '../lib/overviewCards'
 
@@ -47,7 +47,7 @@ export default function TodayAgenda({ className = '' }) {
           .order('starts_at', { ascending: true })
         if (!alive) return
         if (err) setError(err.message)
-        else setRows(data || [])
+        else setRows(liveEvents(data))
       } catch (e) {
         if (alive) setError(String(e?.message || e))
       } finally {

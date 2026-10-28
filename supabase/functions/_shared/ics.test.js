@@ -113,3 +113,36 @@ describe('expandIcs timezone resolution', () => {
     expect(ev.is_all_day).toBe(false)
   })
 })
+
+// Outlook keeps a canceled series on the attendee's calendar as "Canceled: ..."
+// and the published feed keeps serving every occurrence of it.
+const CANCELED_ICS = `BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:daily-1
+SUMMARY:Canceled: Daily
+DTSTART:20260706T144500Z
+DTEND:20260706T151500Z
+RRULE:FREQ=DAILY;COUNT=5
+END:VEVENT
+BEGIN:VEVENT
+UID:huddle-1
+SUMMARY:MPG Sales Huddle
+STATUS:CANCELLED
+DTSTART:20260707T160000Z
+DTEND:20260707T161500Z
+END:VEVENT
+BEGIN:VEVENT
+UID:standup-1
+SUMMARY:Standup
+DTSTART:20260708T150000Z
+DTEND:20260708T151500Z
+END:VEVENT
+END:VCALENDAR`
+
+describe('expandIcs canceled events', () => {
+  it('skips a canceled series and a STATUS:CANCELLED event, keeps the rest', () => {
+    const rows = expandIcs(CANCELED_ICS, WINDOW_START, WINDOW_END)
+    expect(rows.map((r) => r.external_id)).toEqual(['standup-1'])
+  })
+})

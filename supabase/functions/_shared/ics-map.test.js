@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapEvent } from './ics-map.ts'
+import { isCanceled, mapEvent } from './ics-map.ts'
 
 describe('mapEvent', () => {
   it('maps a single event, external_id = uid', () => {
@@ -38,5 +38,19 @@ describe('mapEvent', () => {
     expect(r.location).toBe(null)
     expect(r.ends_at).toBe(null)
     expect(r.is_all_day).toBe(true)
+  })
+})
+
+describe('isCanceled', () => {
+  it('reads Outlook and Google cancel titles and STATUS:CANCELLED', () => {
+    expect(isCanceled({ summary: 'Canceled: Daily' })).toBe(true)
+    expect(isCanceled({ summary: 'Cancelled: Daily' })).toBe(true)
+    expect(isCanceled({ summary: 'Canceled event: Product Demo @ Tue' })).toBe(true)
+    expect(isCanceled({ status: 'CANCELLED', summary: 'Huddle' })).toBe(true)
+  })
+  it('leaves a live meeting alone, even one that mentions canceling', () => {
+    expect(isCanceled({ summary: 'Daily' })).toBe(false)
+    expect(isCanceled({ status: 'CONFIRMED', summary: 'Review canceled loans' })).toBe(false)
+    expect(isCanceled({})).toBe(false)
   })
 })
