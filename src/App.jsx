@@ -15,6 +15,17 @@ import Reports from './pages/Reports'
 import Analytics from './pages/Analytics'
 import Tasks from './pages/Tasks'
 import PagePlaceholder from './components/PagePlaceholder'
+import BookPage from './components/BookPage'
+import SectionTabs from './components/SectionTabs'
+
+const REPORT_TABS = [
+  ['/reports', 'Scoreboard'],
+  ['/analytics', 'Analytics'],
+]
+const SETTINGS_TABS = [
+  ['/sync', 'Sync status'],
+  ['/settings', 'Settings'],
+]
 
 function Protected({ children }) {
   const { isAuthed, loading } = useAuth()
@@ -47,11 +58,17 @@ export default function App() {
               <Route path="/priority" element={<Workbench />} />
               <Route path="/workbench" element={<Workbench />} />
               <Route path="/calendar" element={<Calendar />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/analytics" element={<Analytics />} />
+              {/* One nav link each; the pages are tabs. */}
+              <Route element={<SectionTabs label="Reports" tabs={REPORT_TABS} />}>
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/analytics" element={<Analytics />} />
+              </Route>
               <Route path="/tasks" element={<Tasks />} />
               {/* Follows the business filter; All merges both books. */}
               <Route path="/activity" element={<Activity />} />
+              <Route path="/pipeline" element={<BookPage page={Pipeline} />} />
+              <Route path="/contacts" element={<BookPage page={Contacts} />} />
+              {/* Per-book routes: old links and bookmarks keep working. */}
               <Route path="/mpg/pipeline" element={<Pipeline biz="mpg" />} />
               <Route path="/mpg/activity" element={<Activity biz="mpg" />} />
               <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />
@@ -59,15 +76,17 @@ export default function App() {
               <Route path="/bayway/priority-leads" element={<PriorityLeads />} />
               <Route path="/bayway/activity" element={<Activity biz="bay" />} />
               <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />
-              <Route path="/sync" element={<SyncStatus />} />
-              <Route
-                path="/settings"
-                element={
-                  <PagePlaceholder title="Settings" phase="2">
-                    Connected accounts, stage mapping, and metric targets.
-                  </PagePlaceholder>
-                }
-              />
+              <Route element={<SectionTabs label="Settings" tabs={SETTINGS_TABS} />}>
+                <Route path="/sync" element={<SyncStatus />} />
+                <Route
+                  path="/settings"
+                  element={
+                    <PagePlaceholder title="Settings" phase="2">
+                      Connected accounts, stage mapping, and metric targets.
+                    </PagePlaceholder>
+                  }
+                />
+              </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
