@@ -621,6 +621,7 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *   onSheetClose  called when that sheet closes (saved or dismissed)
  *   only        optional subset of ['call','note','followup','stage','done','push']
  *   size        'sm': small outlined buttons stacked two to a row (Workbench)
+ *               'xs': the same small buttons in one wrapping row (Pipeline board)
  */
 export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, autoOpen = null, onSheetClose, size, className = '' }) {
   const flags = useWritebackFlags()
@@ -681,10 +682,10 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
   const show = (name) => !only || only.includes(name)
   const stop = (e) => e.stopPropagation()
   const subtitle = [contactName, crm].filter(Boolean).join(' · ')
-  const small = size === 'sm'
+  const small = size === 'sm' || size === 'xs'
 
   return (
-    <div className={`${small ? 'grid grid-cols-2 gap-[3px]' : 'flex items-center gap-0.5'} ${className}`} onClick={stop}>
+    <div className={`${size === 'sm' ? 'grid grid-cols-2 gap-[3px]' : size === 'xs' ? 'flex flex-wrap items-center gap-[3px]' : 'flex items-center gap-0.5'} ${className}`} onClick={stop}>
       {contactId && show('call') && (
         <IconButton
           t={t}
