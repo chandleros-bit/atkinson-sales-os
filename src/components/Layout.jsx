@@ -7,7 +7,6 @@ import { PersonSheetHost } from './PersonSheet'
 import BusinessFilter from './BusinessFilter'
 import NewMenu from './NewMenu'
 import Icon from './Icon'
-import { useBusiness } from '../context/BusinessContext'
 import { useAuth } from '../context/AuthContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
@@ -23,6 +22,8 @@ const TITLES = [
   [/^\/analytics/, 'Analytics'],
   [/^\/tasks/, 'Tasks'],
   [/^\/activity/, 'Activity'],
+  [/^\/pipeline/, 'Pipeline'],
+  [/^\/contacts/, 'Contacts'],
   [/^\/mpg\/pipeline/, 'Pipeline'],
   [/^\/mpg\/activity/, 'Activity'],
   [/^\/mpg\/contacts/, 'Contacts'],
@@ -84,14 +85,13 @@ function TopBar() {
 }
 
 // Phone tab bar: the five pages used on the go. Pipeline follows the book
-// filter (MPG when MPG is picked, else Bayway).
+// filter (/pipeline picks the book).
 function BottomNav() {
-  const { biz } = useBusiness() || { biz: 'all' }
   const { pathname } = useLocation()
   const items = [
     { to: '/', label: 'Home', icon: 'home', on: pathname === '/' },
     { to: '/workbench', label: 'Workbench', icon: 'bench', on: /^\/(priority|workbench)/.test(pathname) },
-    { to: biz === 'mpg' ? '/mpg/pipeline' : '/bayway/pipeline', label: 'Pipeline', icon: 'pipeline', on: /\/pipeline$/.test(pathname) },
+    { to: '/pipeline', label: 'Pipeline', icon: 'pipeline', on: /\/pipeline$/.test(pathname) },
     { to: '/tasks', label: 'Tasks', icon: 'tasks', on: pathname.startsWith('/tasks') },
     { to: '/calendar', label: 'Calendar', icon: 'calendar', on: pathname.startsWith('/calendar') },
   ]

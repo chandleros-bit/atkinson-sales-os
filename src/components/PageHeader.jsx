@@ -9,7 +9,7 @@ import { syncHealth } from '../lib/syncHealth'
 import { useSyncHealth } from '../lib/useSyncHealth'
 import { useNow } from '../lib/useNow'
 
-const DOT = { ok: '#12B76A', stale: '#F79009', error: '#D92D20', unknown: '#98A2B3' }
+export const SYNC_DOT = { ok: '#12B76A', stale: '#F79009', error: '#D92D20', unknown: '#98A2B3' }
 const MARK = { ok: 'M7.5 12.5l3 3 6-6.5', stale: 'M12 7v6 M12 16.5v.5', error: 'M12 7v6 M12 16.5v.5', unknown: 'M8 12h8' }
 
 export function SyncDot() {
@@ -32,7 +32,7 @@ export function SyncDot() {
       </svg>
       <span className="num whitespace-nowrap">{text}</span>
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" className="flex-none">
-        <circle cx="12" cy="12" r="10" fill={DOT[h.state]} />
+        <circle cx="12" cy="12" r="10" fill={SYNC_DOT[h.state]} />
         <path d={MARK[h.state]} stroke="#FFFFFF" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </Link>

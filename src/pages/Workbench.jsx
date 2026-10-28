@@ -4,6 +4,7 @@
 // the app's status and notes on top (workbench.js, work_items).
 // Spec: docs/superpowers/specs/2026-10-22-workbench-design.md
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useBusiness } from '../context/BusinessContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useWorkLane } from '../lib/useWorkLane'
@@ -84,6 +85,12 @@ export default function Workbench() {
           <SyncDot />
         </div>
         <div className="flex gap-2">
+          {/* Priority Leads (FUB score tiers) left the nav; it opens from here. */}
+          {biz !== 'mpg' && (
+            <Link to="/bayway/priority-leads" className="flex min-h-[38px] items-center rounded-[10px] px-2.5 text-[13.5px] font-semibold text-muted hover:text-[color:var(--text)]">
+              Priority Leads
+            </Link>
+          )}
           <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
           <button type="button" onClick={() => setAdding(true)} className="min-h-[38px] rounded-[10px] border border-line2 px-3.5 text-[13.5px] font-semibold text-[#344054]">
             + Work item
