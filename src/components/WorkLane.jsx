@@ -1,6 +1,7 @@
 // The Workbench Work lane: groups of file work (workbench.js). Each item's
 // name opens the person sheet; Update (status, waiting on, check back, notes: the
-// app's own work_items row) and a finishing button:
+// app's own work_items row, plus a Tasks tab with the lead's open tasks and
+// Add a follow-up) and a finishing button:
 //   estimate     Done -> "Estimate sent" / "Application sent" (FUB stage tag)
 //   mpg_task     Done -> completes the Zoho task
 //   application  Mark reviewed -> hidden for 3 days, or until its missing docs
@@ -15,6 +16,8 @@ import { buildActionRequest, followUpDate, summarizeResult, LOST_REASONS, LOST_W
 import { saveWorkItem, WAITING_ON } from '../lib/workItems'
 import BizBadge from './BizBadge'
 import { Pill } from './HealthPills'
+import { useContactTasks } from '../lib/useContactTasks'
+import ContactTasks, { PopupTabs, taskCount } from './ContactTasks'
 import PersonSheet from './PersonSheet'
 import { Sheet, quickActionTone } from './QuickActions'
 import { showToast } from './Toaster'
@@ -67,6 +70,8 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
   const [notes, setNotes] = useState(item.notes || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [tab, setTab] = useState('update')
+  const tasks = useContactTasks(item.contactId)
 
   const save = async () => {
     if (busy) return
@@ -102,7 +107,21 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
 
   return (
     <Sheet title="Update work item" subtitle={[item.title, item.name].filter(Boolean).join(' · ')} t={quickActionTone(item.book)} onClose={onClose}>
-      <div className="flex flex-col gap-3">
+      {item.contactId && (
+        <div className="-mt-3 mb-3">
+          <PopupTabs
+            label="Work item"
+            tabs={[
+              ['update', 'Update', null],
+              ['tasks', 'Tasks', taskCount(tasks)],
+            ]}
+            tab={tab}
+            onTab={setTab}
+          />
+        </div>
+      )}
+      {tab === 'tasks' && <ContactTasks businessId={item.book} contactId={item.contactId} contactName={item.name} tasks={tasks} />}
+      <div className={`flex flex-col gap-3 ${tab === 'update' ? '' : 'hidden'}`}>
         <div className={`grid gap-2 ${reviewable ? 'grid-cols-2' : 'grid-cols-3'}`}>
           {statuses.map(([k, label]) => (
             <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)} className="min-h-[40px] rounded-[10px] border text-[12.5px] font-semibold" style={chip(status === k)}>

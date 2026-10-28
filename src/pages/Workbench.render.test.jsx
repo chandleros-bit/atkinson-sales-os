@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The Workbench against a fake Supabase: both lanes, the header counts, Done
 // on an estimate (moves the FUB stage) and on an MPG Zoho task (completes it),
-// Open into the person sheet, the Calls | Work switch on a phone, and the
+// Open into the person sheet, the Tasks tabs (quick look, work item), the Calls | Work switch on a phone, and the
 // work_items writes: Update (status, waiting on, check back, notes), Mark
 // reviewed, + Work item and the Waiting on others bar.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -298,6 +298,21 @@ describe('Workbench', () => {
       body: { source_key: 'estimate:e1', kind: 'estimate', business_id: 'bay', contact_id: 'e1', status: 'waiting', waiting_on: 'Lender', notes: 'Rate sheet asked for' },
     })
     expect(writes[0].body.check_back_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it("lists the lead's open tasks in the work item's Tasks tab", async () => {
+    mobile = false
+    await render()
+    await act(async () => button(workItem('Gil Estimate'), 'Update').click())
+    await act(async () => {})
+    const tab = [...dialog().querySelectorAll('[role="tab"]')].find((t) => t.textContent.startsWith('Tasks'))
+    expect(tab.textContent).toBe('Tasks1')
+    await act(async () => tab.click())
+    const task = dialog().querySelector('[data-peek-task]')
+    expect(task.textContent).toContain('3 Statements FU')
+    expect(task.textContent).toContain('overdue')
+    expect(dialog().querySelector('[role="tabpanel"]').textContent).toContain('Add a follow-up')
+    expect(dialog().querySelector('[aria-label="Work notes"]').closest('.hidden')).not.toBeNull()
   })
 
   it('marks an application reviewed for 3 days', async () => {
