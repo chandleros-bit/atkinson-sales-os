@@ -19,7 +19,7 @@ import { useIsMobile } from '../components/UpNextRow'
 import Icon from '../components/Icon'
 import { openPerson } from '../components/PersonSheet'
 import { formatPhone } from '../lib/phone'
-import { VIEWS, SORTS, filterRows, sortRows, pipelineKpis } from '../lib/pipelineView'
+import { VIEWS, SORTS, filterRows, sortRows, pipelineKpis, leadSource } from '../lib/pipelineView'
 import { PAGE_SIZE, pageSlice } from '../lib/paging'
 import Pager from '../components/Pager'
 
@@ -138,7 +138,7 @@ function Toolbar({ view, onView, sort, onSort, query, onQuery }) {
         <Icon name="search" />
         <input
           aria-label="Search this pipeline"
-          placeholder="Search name, company, phone"
+          placeholder="Search name, company, phone, source"
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           className="min-w-0 flex-1 bg-transparent text-[14px] text-[color:var(--text)] outline-none"
@@ -209,6 +209,21 @@ const LIST_HEAD = {
 }
 
 // 25 leads a page; Prev / Next scroll back to the top of the list.
+// Where the lead came from (FUB source / Zoho Lead_Source), on every row and card.
+function SourcePill({ r, className = '' }) {
+  const source = leadSource(r)
+  if (!source) return null
+  return (
+    <span
+      title={`Lead source: ${source}`}
+      data-lead-source
+      className={`inline-block max-w-[160px] flex-none truncate rounded-full border border-line2 px-2 py-px align-middle text-[11px] font-semibold leading-[16px] text-muted ${className}`}
+    >
+      {source}
+    </span>
+  )
+}
+
 function ListView({ rows, biz, rules, now }) {
   const mobile = useIsMobile()
   const top = useRef(null)
@@ -238,6 +253,7 @@ function ListView({ rows, biz, rules, now }) {
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="text-[13px] text-muted">{r.stage}</span>
               {biz !== 'mpg' && <StageProgress stage={r.stage} />}
+              <SourcePill r={r} />
             </div>
             <HealthPills h={health(r)} className="mt-2" />
           </article>
@@ -277,7 +293,11 @@ function ListView({ rows, biz, rules, now }) {
                   <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[15px] font-semibold">
                     {headline(r, biz)}
                   </PersonLink>
-                  <div className="truncate text-[13px] text-muted">{(biz === 'mpg' ? r.name : r.email) || '—'}</div>
+                  {/* The source sits by the email, so a long one never cuts the name short. */}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 truncate text-[13px] text-muted">{(biz === 'mpg' ? r.name : r.email) || '—'}</span>
+                    <SourcePill r={r} />
+                  </div>
                 </div>
               </div>
               <StageCell r={r} biz={biz} />
@@ -318,6 +338,7 @@ function StageGroup({ col, biz, rules, now }) {
             <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[15px] font-semibold">
               {headline(r, biz)}
             </PersonLink>
+            <SourcePill r={r} />
           </div>
           <span className="num flex-[0_1_160px] whitespace-nowrap text-[14px]">{formatPhone(r.phone) || '—'}</span>
           <HealthPills h={rules ? cardHealth(r, rules, now) : null} className="flex-[1_1_220px]" />
@@ -434,6 +455,7 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
       <div className="mt-0.5 truncate text-[11.5px] text-muted">
         {sub || 'no contact info'}
       </div>
+      <SourcePill r={r} className="mt-1" />
       <HealthPills h={health} className="mt-1.5" />
       <div
         className={`mt-1 text-[11px] ${stale ? 'font-semibold' : 'text-dim'}`}
@@ -673,7 +695,7 @@ const demoRows = [
 // Per-business query + presentation config. MPG reads Zoho leads through
 // v_mpg_contacts (0 deals today — the pipeline lives on leads); Bayway reads
 // the FUB-derived v_active_pipeline. flowOrder curates the column order.
-const HEALTH_COLUMNS = ', stage_since, crm_created_at, last_outbound_call_at, open_task_count, oldest_open_due_at'
+const HEALTH_COLUMNS = ', stage_since, crm_created_at, last_outbound_call_at, open_task_count, oldest_open_due_at, lead_source'
 
 const PIPELINE = {
   bay: {
