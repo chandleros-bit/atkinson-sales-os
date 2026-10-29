@@ -217,11 +217,12 @@ describe('Pipeline drag between stages', () => {
 describe('Pipeline drop zones', () => {
   const zone = () => document.querySelector('[data-zone="credit_repair"]')
 
-  it('shows the Nurture zone only while a card is dragged', async () => {
+  it('shows Nurture and Credit Repair zones only while a card is dragged', async () => {
     await mount()
     expect(document.querySelector('[data-drop-zones]')).toBe(null)
     await fire(cardEl('a'), 'dragstart')
-    expect(zone().textContent).toContain('Nurture / Credit Repair')
+    expect(document.querySelector('[data-zone="nurture"]').textContent).toBe('Drop here: Nurture')
+    expect(zone().textContent).toBe('Drop here: Credit Repair')
     await fire(cardEl('a'), 'dragend')
     expect(document.querySelector('[data-drop-zones]')).toBe(null)
   })
@@ -241,8 +242,32 @@ describe('Pipeline drop zones', () => {
     DATA.rows = [{ ...card('a', 'Ana Lead', 'Nurture / Credit Repair'), open_task_count: 0 }]
     await act(async () => resolve({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null }))
     await act(async () => {})
-    expect(document.body.textContent).toContain('Ana Lead moved to Nurture / Credit Repair in FollowUpBoss')
+    expect(document.body.textContent).toContain('Ana Lead tagged Credit Repair in FollowUpBoss')
     expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
+  it('tags Nurture from its own zone, in the same column', async () => {
+    invoke.mockImplementation(() => new Promise(() => {})) // still in flight
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'New Lead'), open_task_count: 0 }]
+    await mount()
+    await fire(cardEl('a'), 'dragstart')
+    const nurture = document.querySelector('[data-zone="nurture"]')
+    await fire(nurture, 'dragover')
+    await fire(nurture, 'drop')
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a', payload: { target: 'nurture' } })
+    expect(cardsIn('Nurture / Credit Repair')).toEqual(['a'])
+  })
+
+  it('asks Nurture or Credit Repair when a card is dropped on that column', async () => {
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'New Lead'), open_task_count: 0 }]
+    await mount()
+    await dragTo('a', 'Nurture / Credit Repair')
+    expect(invoke).not.toHaveBeenCalled()
+    const sheet = document.querySelector('[role="dialog"]')
+    expect(sheet.textContent).toContain('Nurture or Credit Repair?')
+    await act(async () => [...sheet.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Nurture').click())
+    expect(invoke.mock.calls[0][1].body.payload).toEqual({ target: 'nurture' })
   })
 
   it('marks a lead Lost with a reason, warns it is one-way, and drops it from the board', async () => {

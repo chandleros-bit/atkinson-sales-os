@@ -89,9 +89,10 @@ export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER, { showAllFlow = 
   })
 }
 
-// Dragging a Bayway card onto a column = a Move stage to that column. The
-// Application/Estimate Sent column holds two tags (Smart Lists 04 / 05), so a
-// drop there asks which one. null: not a Bayway column (no drop).
+// Dragging a Bayway card onto a column = a Move stage to that column. Two
+// columns hold two tags each, so a drop there asks which one:
+// Application/Estimate Sent (Smart Lists 04 / 05) and Nurture / Credit Repair.
+// null: not a Bayway column (no drop).
 export function dropTargetFor(stage) {
   const targets = STAGE_TARGETS.filter((t) => t.stage === stage)
   if (targets.length === 0) return null

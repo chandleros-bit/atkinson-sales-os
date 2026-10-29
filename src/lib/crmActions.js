@@ -83,7 +83,7 @@ export function defaultNextStep(outcome, hasFutureTask = false) {
 // After a stage move: offer a follow-up when nothing is scheduled. Parking in
 // Nurture needs none, and callers that don't know the open-task count never prompt.
 export function needsNextStepPrompt(targetKey, openTaskCount) {
-  if (targetKey === 'credit_repair' || targetKey === 'lost' || openTaskCount == null) return false
+  if (targetKey === 'nurture' || targetKey === 'credit_repair' || targetKey === 'lost' || openTaskCount == null) return false
   return !(openTaskCount > 0)
 }
 export const defaultDurationMin = (outcome) => (CONNECTED.has(outcome) ? 5 : 1)
@@ -151,7 +151,7 @@ export function buildActionRequest(form) {
     if (form.nextStep === 'none') {
       if (!NO_NEXT_STEP_REASONS.includes(form.noNextStepReason)) throw new Error('Pick why there is no next step')
       payload.no_next_step_reason = form.noNextStepReason
-      if (form.noNextStepReason === PARK_REASON) payload.set_stage = 'credit_repair'
+      if (form.noNextStepReason === PARK_REASON) payload.set_stage = 'nurture'
     }
     // A call on a New Lead moves it to Attempted (callStageAdvance), unless the
     // call parks it.

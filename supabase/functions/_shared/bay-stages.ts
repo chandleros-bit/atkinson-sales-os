@@ -13,8 +13,9 @@ export const BAY_STAGES = [
   'Contacted/Working',
   'Application/Estimate Sent',
   'Application Received',
-  // Parked leads (Smart List 11). Last on the board; the name contains
-  // "Nurture", so Up Next leaves these leads alone.
+  // Parked leads (Smart List 11): tagged Nurture or Credit Repair, one column
+  // on the board. Last; the name contains "Nurture", so Up Next leaves these
+  // leads alone.
   'Nurture / Credit Repair',
 ]
 const PARKED = 'Nurture / Credit Repair'
@@ -28,7 +29,7 @@ const STAGE_TAGS = {
   'Contacted/Working': ['working estimate'],
   'Application/Estimate Sent': ['estimate sent', 'application sent'],
   'Application Received': ['application received', 'need docs', 'under contract'],
-  'Nurture / Credit Repair': ['credit repair'],
+  'Nurture / Credit Repair': ['credit repair', 'nurture'],
   [LOST]: ['lost'],
 }
 const WORKFLOW = new Set(Object.values(STAGE_TAGS).flat())
@@ -68,7 +69,9 @@ export const STAGE_TARGETS = [
     tag: 'application received',
     keep: ['application received', 'need docs', 'under contract'],
   },
-  { key: 'credit_repair', label: 'Nurture / Credit Repair', stage: PARKED, tag: 'Credit Repair', keep: ['credit repair'] },
+  // Two ways to park, one column: picking one swaps out the other's tag.
+  { key: 'nurture', label: 'Nurture', stage: PARKED, tag: 'Nurture', keep: ['nurture'] },
+  { key: 'credit_repair', label: 'Credit Repair', stage: PARKED, tag: 'Credit Repair', keep: ['credit repair'] },
   { key: 'lost', label: 'Lost', stage: LOST, tag: 'Lost', keep: ['lost'] },
 ]
 // Review outcomes for an Application Received file (Workbench "Review
@@ -102,6 +105,9 @@ export function targetForStage(tags, personStage) {
   const stage = bayStageFromTags(tags, personStage)
   if (stage === 'Application/Estimate Sent') {
     return (Array.isArray(tags) ? tags : []).map(norm).includes('application sent') ? 'application_sent' : 'estimate_sent'
+  }
+  if (stage === PARKED) {
+    return (Array.isArray(tags) ? tags : []).map(norm).includes('credit repair') ? 'credit_repair' : 'nurture'
   }
   if (!stage) return null
   return STAGE_TARGETS.find((t) => t.stage === stage)?.key ?? null

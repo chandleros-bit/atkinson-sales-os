@@ -31,6 +31,13 @@ describe('bayStageFromTags', () => {
     expect(bayStageFromTags(['Credit Repair'], 'Pre-Qualified')).toBe('Nurture / Credit Repair')
     expect(bayStageFromTags(['Credit Repair'], 'Nurture')).toBe(null)
   })
+  it('parks a Nurture-tagged lead in the same column, any case', () => {
+    expect(bayStageFromTags(['Nurture'], 'Lead')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['lendgo', ' nurture '], 'Lead')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['estimate sent', 'Nurture'], 'Pre-Qualified')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['Lost', 'Nurture'], 'Lead')).toBe('Lost')
+    expect(bayStageFromTags(['Nurture'], 'Nurture')).toBe(null)
+  })
   it('treats Pre-Qualified as Application Received', () => {
     expect(bayStageFromTags([], 'Pre-Qualified')).toBe('Application Received')
     expect(bayStageFromTags(['attempted'], 'Pre-Qualified')).toBe('Application Received')
@@ -79,6 +86,13 @@ describe('retagForTarget', () => {
     expect(retagForTarget(['Credit Repair', 'DSCR'], 'attempted')).toEqual(['DSCR', 'attempted'])
     expect(retagForTarget(['credit repair'], 'credit_repair')).toEqual(['credit repair'])
   })
+  it('tags Nurture or Credit Repair, never both: picking one swaps out the other', () => {
+    expect(retagForTarget(['attempted', 'DSCR'], 'nurture')).toEqual(['DSCR', 'Nurture'])
+    expect(retagForTarget(['Credit Repair', 'DSCR'], 'nurture')).toEqual(['DSCR', 'Nurture'])
+    expect(retagForTarget(['nurture', 'DSCR'], 'credit_repair')).toEqual(['DSCR', 'Credit Repair'])
+    expect(retagForTarget(['nurture'], 'nurture')).toEqual(['nurture'])
+    expect(retagForTarget(['Nurture', 'DSCR'], 'attempted')).toEqual(['DSCR', 'attempted'])
+  })
   it('marks Lost by swapping out stage tags, and un-marks it on any move', () => {
     expect(retagForTarget(['attempted', 'DSCR'], 'lost')).toEqual(['DSCR', 'Lost'])
     expect(retagForTarget(['DSCR', 'Lost'], 'attempted')).toEqual(['DSCR', 'attempted'])
@@ -87,8 +101,9 @@ describe('retagForTarget', () => {
   it('rejects an unknown target', () => {
     expect(() => retagForTarget([], 'closed')).toThrow(/Unknown stage target/)
   })
-  it('lists eight targets, Lost last', () => {
-    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'credit_repair', 'lost'])
+  it('lists nine targets, Nurture and Credit Repair as two, Lost last', () => {
+    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'nurture', 'credit_repair', 'lost'])
+    expect(STAGE_TARGETS.filter((t) => t.stage === 'Nurture / Credit Repair').map((t) => t.label)).toEqual(['Nurture', 'Credit Repair'])
   })
 })
 
@@ -100,5 +115,7 @@ describe('targetForStage', () => {
     expect(targetForStage(['need docs'], 'Lead')).toBe('application_received')
     expect(targetForStage(['Lost'], 'Lead')).toBe('lost')
     expect(targetForStage(['estimate sent'], 'Nurture')).toBe(null)
+    expect(targetForStage(['Nurture'], 'Lead')).toBe('nurture')
+    expect(targetForStage(['credit repair'], 'Lead')).toBe('credit_repair')
   })
 })

@@ -108,8 +108,8 @@ function stageRefusal(businessId, contact, key) {
   if (businessId !== 'bay') return 'Move stage is Bayway only; MPG stages come from Zoho'
   if (!isStageTarget(key)) return `Unknown stage: ${key}`
   const ps = String(contact?.person_stage || '').trim().toLowerCase()
-  // Pre-Qualified always reads as Application Received unless parked (Credit Repair).
-  if (ps === 'pre-qualified' && !['application_received', 'credit_repair', 'lost', 'pre_approved', 'disclosed'].includes(key)) {
+  // Pre-Qualified always reads as Application Received unless parked (Nurture / Credit Repair).
+  if (ps === 'pre-qualified' && !['application_received', 'nurture', 'credit_repair', 'lost', 'pre_approved', 'disclosed'].includes(key)) {
     return 'This lead is Pre-Qualified in FUB, which always shows as Application Received. Change the FUB stage first.'
   }
   if (ps !== 'lead' && ps !== 'pre-qualified') {
