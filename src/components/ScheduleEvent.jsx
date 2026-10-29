@@ -160,6 +160,15 @@ export function ScheduleEventForm({ businessId, contactId, contactName, t, onSav
   )
 }
 
+// Marks a call or meeting scheduled in the app (contact_events), not Outlook.
+export function OsTag({ done }) {
+  return (
+    <span className="ml-1.5 rounded border border-line2 px-1 py-px align-middle text-[9.5px] font-bold uppercase tracking-wide text-dim">
+      {done ? 'Done' : 'OS'}
+    </span>
+  )
+}
+
 const CalendarSvg = ({ size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM8 14h2v2H8z" />

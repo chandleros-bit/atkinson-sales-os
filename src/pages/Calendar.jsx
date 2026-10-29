@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import { liveEvents, sourceToBiz, timeLabel, eventDayKey, dayLabel } from '../lib/calendar'
 import { isSyncStale, eventsForDay } from '../lib/calendarRail'
 import { monthCells, monthLabel, eventDots, todayKey, WEEKDAYS } from '../lib/overviewCards'
 import PageHeader from '../components/PageHeader'
+import { openPerson } from '../components/PersonSheet'
+import { OsTag } from '../components/ScheduleEvent'
+import { fetchContactEvents, toCalendarEvent, onContactEventsChanged } from '../lib/contactEvents'
 
 const OUTLOOK_SOURCES = ['outlook-mpg', 'outlook-bayway']
 
@@ -70,6 +73,17 @@ export default function Calendar() {
   const [lastSync, setLastSync] = useState(null)
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
+  // Calls and meetings scheduled in the app reload in place after a save.
+  const [osBump, setOsBump] = useState(0)
+  const quietReload = useRef(false)
+  useEffect(
+    () =>
+      onContactEventsChanged(() => {
+        quietReload.current = true
+        setOsBump((n) => n + 1)
+      }),
+    [],
+  )
 
   useEffect(() => {
     if (isDemoMode) {
@@ -78,11 +92,12 @@ export default function Calendar() {
     }
     let alive = true
     ;(async () => {
-      setLoading(true)
+      if (!quietReload.current) setLoading(true)
+      quietReload.current = false
       setError(null)
       try {
         const { from, to } = rangeFor(view.year, view.month)
-        const [evRes, syncRes] = await Promise.all([
+        const [evRes, syncRes, osRes] = await Promise.all([
           supabase
             .from('calendar_events')
             .select('id, source_account, title, starts_at, ends_at, location, is_all_day')
@@ -97,6 +112,7 @@ export default function Calendar() {
             .order('ran_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
+          fetchContactEvents({ from, to }),
         ])
         if (!alive) return
         // A failed sync never deletes rows, so on error we still show whatever
@@ -105,7 +121,8 @@ export default function Calendar() {
           setError(evRes.error.message)
           return
         }
-        setRows(liveEvents(evRes.data))
+        // Our own events never block the Outlook ones: a failed read shows none.
+        setRows([...liveEvents(evRes.data), ...(osRes.data || []).map(toCalendarEvent)])
         setLastSync(syncRes.data?.ran_at ? new Date(syncRes.data.ran_at).getTime() : null)
       } catch (e) {
         if (alive) setError(String(e?.message || e))
@@ -116,7 +133,7 @@ export default function Calendar() {
     return () => {
       alive = false
     }
-  }, [view.year, view.month])
+  }, [view.year, view.month, osBump])
 
   const sourceRows = isDemoMode ? demoRows : rows
 
@@ -326,10 +343,13 @@ export default function Calendar() {
                   // timeLabel gives "9:30 AM" for timed events and "All day" for
                   // the rest; only the timed form splits into a value and suffix.
                   const [time, ampm] = e.is_all_day ? ['All', 'day'] : timeLabel(e).split(' ')
+                  // Calls and meetings scheduled in the app open their contact.
+                  const Row = e.os ? 'button' : 'div'
                   return (
-                    <div
+                    <Row
                       key={e.id}
-                      className="flex items-start gap-3 rounded-[14px] bg-panel2 p-3.5"
+                      {...(e.os ? { type: 'button', onClick: () => openPerson(e.contact_id), 'data-os-event': e.kind } : {})}
+                      className={`flex items-start gap-3 rounded-[14px] bg-panel2 p-3.5 text-left ${e.os ? 'hover:bg-hoverbg' : ''} ${e.status === 'done' ? 'opacity-60' : ''}`}
                       style={{ borderLeft: `3px solid ${color}` }}
                     >
                       <div className="min-w-[44px] flex-none text-center">
@@ -337,14 +357,17 @@ export default function Calendar() {
                         {ampm && <div className="mt-0.5 text-[10px] font-bold text-dim">{ampm}</div>}
                       </div>
                       <div className="min-w-0">
-                        <div className="text-[13.5px] font-bold">{e.title || '(no title)'}</div>
+                        <div className="text-[13.5px] font-bold">
+                          {e.title || '(no title)'}
+                          {e.os && <OsTag done={e.status === 'done'} />}
+                        </div>
                         {e.location && (
                           <div className="mt-0.5 truncate text-[12px] leading-snug text-dim">
                             {e.location}
                           </div>
                         )}
                       </div>
-                    </div>
+                    </Row>
                   )
                 })}
               </div>

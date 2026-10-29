@@ -126,7 +126,7 @@ export async function fetchContactEvents({ from, to }) {
   return supabase
     .from('contact_events')
     .select(COLUMNS)
-    .neq('status', 'canceled')
+    .in('status', ['scheduled', 'done'])
     .gte('starts_at', from)
     .lt('starts_at', to)
     .order('starts_at', { ascending: true })
