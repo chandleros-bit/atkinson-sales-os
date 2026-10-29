@@ -13,12 +13,16 @@ export const BAY_STAGES = [
   'Contacted/Working',
   'Application/Estimate Sent',
   'Application Received',
+  // Tag `Disclosed`: past Application Received, on its way to closing. Will
+  // move to an Under Contract pipeline once that exists.
+  'Disclosed',
   // Parked leads (Smart List 11): tagged Nurture or Credit Repair, one column
   // on the board. Last; the name contains "Nurture", so Up Next leaves these
   // leads alone.
   'Nurture / Credit Repair',
 ]
 const PARKED = 'Nurture / Credit Repair'
+const DISCLOSED = 'Disclosed'
 // Marked lost from the board (tag `Lost`). Not a column: v_active_pipeline
 // leaves these leads out, and Up Next skips the "Lost" stage name.
 export const LOST = 'Lost'
@@ -29,6 +33,7 @@ const STAGE_TAGS = {
   'Contacted/Working': ['working estimate'],
   'Application/Estimate Sent': ['estimate sent', 'application sent'],
   'Application Received': ['application received', 'need docs', 'under contract'],
+  Disclosed: ['disclosed'],
   'Nurture / Credit Repair': ['credit repair', 'nurture'],
   [LOST]: ['lost'],
 }
@@ -46,6 +51,8 @@ export function bayStageFromTags(tags, personStage) {
   if (STAGE_TAGS[LOST].some((t) => have.has(t))) return LOST
   // A parked lead stays parked whatever else it is tagged with.
   if (STAGE_TAGS[PARKED].some((t) => have.has(t))) return PARKED
+  // Disclosed is past Pre-Qualified's Application Received.
+  if (STAGE_TAGS[DISCLOSED].some((t) => have.has(t))) return DISCLOSED
   if (ps === 'pre-qualified') return 'Application Received'
   for (let i = BAY_STAGES.indexOf(PARKED) - 1; i > 0; i--) {
     const stage = BAY_STAGES[i]
@@ -55,7 +62,8 @@ export function bayStageFromTags(tags, personStage) {
 }
 
 // Move stage targets. `tag` is what gets added (in Chandler's casing); `keep`
-// are tags that already satisfy the target and are left as they are.
+// are tags that already satisfy the target and are left as they are; `carry`
+// are other workflow tags the move leaves in place.
 export const STAGE_TARGETS = [
   { key: 'new_lead', label: 'New Lead', stage: 'New Lead', tag: null, keep: [] },
   { key: 'attempted', label: 'Attempted', stage: 'Attempted', tag: 'attempted', keep: ['attempted'] },
@@ -69,21 +77,30 @@ export const STAGE_TARGETS = [
     tag: 'application received',
     keep: ['application received', 'need docs', 'under contract'],
   },
+  // Disclosed keeps the application's tags (need docs, under contract...) for
+  // the Under Contract pipeline to come.
+  {
+    key: 'disclosed',
+    label: 'Disclosed',
+    stage: DISCLOSED,
+    tag: 'Disclosed',
+    keep: ['disclosed'],
+    carry: ['application received', 'need docs', 'under contract'],
+  },
   // Two ways to park, one column: picking one swaps out the other's tag.
   { key: 'nurture', label: 'Nurture', stage: PARKED, tag: 'Nurture', keep: ['nurture'] },
   { key: 'credit_repair', label: 'Credit Repair', stage: PARKED, tag: 'Credit Repair', keep: ['credit repair'] },
   { key: 'lost', label: 'Lost', stage: LOST, tag: 'Lost', keep: ['lost'] },
 ]
-// Review outcomes for an Application Received file (Workbench "Review
-// complete"). Not moves: the tag is added and every other tag stays, so the
-// lead keeps its column. Not in STAGE_TARGETS, so they never show in the Move
-// stage menu or as a board drop target. A file with one of these tags is done
-// with review (REVIEWED_TAGS).
+// Review outcome for an Application Received file (Workbench "Review
+// complete"). Not a move: the tag is added and every other tag stays, so the
+// lead keeps its column. Not in STAGE_TARGETS, so it never shows in the Move
+// stage menu or as a board drop target. Disclosed (a stage) is the other
+// outcome. A file with either tag is done with review (REVIEWED_TAGS).
 export const TAG_TARGETS = [
   { key: 'pre_approved', label: 'Pre-Approved', tag: 'Pre-Approved', additive: true },
-  { key: 'disclosed', label: 'Disclosed', tag: 'Disclosed', additive: true },
 ]
-export const REVIEWED_TAGS = TAG_TARGETS.map((t) => t.tag.toLowerCase())
+export const REVIEWED_TAGS = ['pre-approved', 'disclosed']
 const TARGET = Object.fromEntries([...STAGE_TARGETS, ...TAG_TARGETS].map((t) => [t.key, t]))
 export const isStageTarget = (key) => Object.hasOwn(TARGET, key)
 
@@ -95,7 +112,8 @@ export function retagForTarget(tags, targetKey) {
   if (!target) throw new Error(`Unknown stage target: ${targetKey}`)
   const list = Array.isArray(tags) ? tags : []
   if (target.additive) return list.some((t) => norm(t) === norm(target.tag)) ? list : [...list, target.tag]
-  const kept = list.filter((t) => !WORKFLOW.has(norm(t)) || target.keep.includes(norm(t)))
+  const stays = [...target.keep, ...(target.carry || [])]
+  const kept = list.filter((t) => !WORKFLOW.has(norm(t)) || stays.includes(norm(t)))
   if (target.tag && !kept.some((t) => target.keep.includes(norm(t)))) kept.push(target.tag)
   return kept
 }

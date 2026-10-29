@@ -6,8 +6,9 @@
 //   mpg_task     Done -> completes the Zoho task
 //   application  Mark reviewed -> hidden for 3 days, or until its missing docs
 //                change or the lead re-enters the stage. Update > Review
-//                complete sends the outcome to FUB: Pre-Approved or Disclosed
-//                (tag; off review for good), Nurture or Credit Repair (parked),
+//                complete sends the outcome to FUB: Pre-Approved (tag; off
+//                review for good), Disclosed (moves to the Disclosed stage),
+//                Nurture or Credit Repair (parked),
 //                Trash (Lost)
 //   custom       Done
 // A CRM Done is also recorded in work_items, for the Work progress bar.
@@ -36,7 +37,7 @@ const STATUS = [
 // Review complete outcomes (applications): crm-action set_stage targets.
 const OUTCOMES = [
   { key: 'pre_approved', label: 'Pre-Approved', done: (n) => `${n} tagged Pre-Approved in FollowUpBoss` },
-  { key: 'disclosed', label: 'Disclosed', done: (n) => `${n} tagged Disclosed in FollowUpBoss` },
+  { key: 'disclosed', label: 'Disclosed', done: (n) => `${n} moved to Disclosed in FollowUpBoss` },
   { key: 'nurture', label: 'Nurture', done: (n) => `${n} tagged Nurture in FollowUpBoss` },
   { key: 'credit_repair', label: 'Credit Repair', done: (n) => `${n} tagged Credit Repair in FollowUpBoss` },
   { key: 'lost', label: 'Trash', done: (n) => `${n} marked Lost in FollowUpBoss` },
@@ -331,7 +332,7 @@ export default function WorkLane({ groups, onChanged }) {
       key={it.key}
       it={it}
       showBook={g.book == null}
-      canDone={it.kind === 'custom' || ((it.kind === 'estimate' || it.kind === 'mpg_task') && flags[it.book] === true)}
+      canDone={it.kind === 'custom' || it.kind === 'disclosed' || ((it.kind === 'estimate' || it.kind === 'mpg_task') && flags[it.book] === true)}
       busy={busy === it.key}
       onOpen={() => setPersonId(it.contactId)}
       onUpdate={() => setUpdating(it)}

@@ -16,10 +16,11 @@ const dayOnly = (n) => daysAgo(n).slice(0, 10)
 const byId = (groups, id) => groups.find((g) => g.id === id)
 
 describe('buildWorkGroups', () => {
-  it('always returns the five groups in order', () => {
+  it('always returns the six groups in order', () => {
     expect(build().map((g) => [g.id, g.title, g.book, g.items.length])).toEqual([
       ['estimates', 'Estimates to Work', 'bay', 0],
       ['applications', 'Applications to Review', 'bay', 0],
+      ['disclosed', 'Disclosed', 'bay', 0],
       ['statements', 'Statement/Proposal Review', 'mpg', 0],
       ['custom', 'Other work', null, 0],
       ['waiting', 'Waiting on others', null, 0],
@@ -68,8 +69,28 @@ describe('buildWorkGroups', () => {
     expect(apps.items.map((i) => i.contactId)).toEqual(['open'])
   })
 
+  it('lists Disclosed leads, longest disclosed first, until the Under Contract pipeline takes them', () => {
+    const disc = byId(build([
+      lead({ id: 'new', name: 'Ana', stage: 'Disclosed', stage_since: daysAgo(1) }),
+      lead({ id: 'old', name: 'Bo', stage: 'Disclosed', stage_since: daysAgo(12) }),
+      lead({ id: 'app', stage: 'Application Received' }),
+    ]), 'disclosed')
+    expect(disc.items.map((i) => [i.contactId, i.kind, i.title, i.why, i.late, i.minutes])).toEqual([
+      ['old', 'disclosed', 'Track to closing', 'Disclosed 12 days', false, 10],
+      ['new', 'disclosed', 'Track to closing', 'Disclosed 1 day', false, 10],
+    ])
+    expect(disc.items[0].key).toBe('disclosed:old')
+  })
+
+  it('hides a done Disclosed item until the lead re-enters Disclosed', () => {
+    const row = lead({ id: 'd', stage: 'Disclosed', stage_since: daysAgo(5) })
+    const done = { id: 'w', source_key: 'disclosed:d', kind: 'disclosed', status: 'done', done_at: daysAgo(1) }
+    expect(byId(build([row], [], [done]), 'disclosed').items).toEqual([])
+    expect(byId(build([{ ...row, stage_since: daysAgo(0, '09:00:00') }], [], [done]), 'disclosed').items).toHaveLength(1)
+  })
+
   it('turns open MPG Zoho tasks into statement/proposal work, earliest due first', () => {
-    const [, , mpg] = build([], [
+    const [, , , mpg] = build([], [
       { id: 't2', title: 'Proposal review', due_at: daysAgo(-2), contact_id: 'm2', contact_name: 'Ana', company: 'Deli' },
       { id: 't1', title: '3 Statements FU', due_at: daysAgo(5), contact_id: 'm1', contact_name: 'David', company: 'Lending Flow' },
     ])

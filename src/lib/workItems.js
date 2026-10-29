@@ -6,7 +6,7 @@
 // already and is updated by id.
 import { supabase } from './supabase'
 
-const KIND = { estimate: 'estimate', application: 'application', mpg_task: 'statement', custom: 'custom' }
+const KIND = { estimate: 'estimate', application: 'application', disclosed: 'disclosed', mpg_task: 'statement', custom: 'custom' }
 
 export const WAITING_ON = ['Borrower', 'Lender', 'Processor', 'Underwriter', 'Merchant']
 

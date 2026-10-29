@@ -36,6 +36,11 @@ describe('saveWorkItem', () => {
     })
   })
 
+  it('upserts a Disclosed item as a disclosed row on its contact', async () => {
+    await saveWorkItem({ key: 'disclosed:d', kind: 'disclosed', book: 'bay', contactId: 'd' }, { status: 'working' })
+    expect(calls[0].body).toMatchObject({ source_key: 'disclosed:d', kind: 'disclosed', business_id: 'bay', contact_id: 'd', status: 'working' })
+  })
+
   it('stamps done_at when marking done', async () => {
     await saveWorkItem({ key: 'application:a', kind: 'application', book: 'bay', contactId: 'a' }, { status: 'done' })
     expect(calls[0].body.done_at).toMatch(/^\d{4}-\d{2}-\d{2}T/)

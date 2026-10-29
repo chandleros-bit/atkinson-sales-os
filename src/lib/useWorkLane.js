@@ -1,4 +1,4 @@
-// Data for the Workbench Work lane: Bayway leads in the two work stages, open
+// Data for the Workbench Work lane: Bayway leads in the three work stages, open
 // MPG Zoho tasks and this user's work_items rows. Refreshes after any CRM
 // write (crm-action:done) and every minute while the tab is visible. Rules
 // live in workbench.js.
@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 import { fetchAllSettled } from './fetchAll'
 
-const WORK_STAGES = ['Contacted/Working', 'Application Received']
+const WORK_STAGES = ['Contacted/Working', 'Application Received', 'Disclosed']
 // Done rows older than this no longer change the lane (application review = 3 days).
 const WORK_ITEM_DAYS = 8
 

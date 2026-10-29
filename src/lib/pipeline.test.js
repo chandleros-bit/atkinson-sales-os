@@ -11,6 +11,7 @@ describe('LOAN_FLOW_ORDER', () => {
       'Contacted/Working',
       'Application/Estimate Sent',
       'Application Received',
+      'Disclosed',
       'Nurture / Credit Repair',
     ])
   })
