@@ -71,9 +71,15 @@ function parkedItem(row, base) {
 // One v_dial_contacts row -> its next cadence item, or null (not on a cadence).
 export function dialItem(row, now = Date.now()) {
   const book = row.business_id
-  const calls = row.outbound_calls || 0
-  const first = ms(row.first_outbound_call_at)
-  const last = ms(row.last_outbound_call_at)
+  let calls = row.outbound_calls || 0
+  let first = ms(row.first_outbound_call_at)
+  let last = ms(row.last_outbound_call_at)
+  // Moved to Attempted with no call logged (a call outside the CRMs, or a
+  // bulk move): that move is attempt 1, made when the lead entered the stage.
+  if (book === 'bay' && row.stage === 'Attempted' && calls === 0) {
+    calls = 1
+    first = last = ms(row.stage_since) ?? ms(row.crm_created_at) ?? now
+  }
   const base = { id: row.id, book, row, calls, hint: null }
   if (book === 'bay' && row.stage === PARKED) return parkedItem(row, base)
   const inCadence = book === 'bay' ? BAY_CADENCE.has(row.stage) : MPG_CADENCE.has(row.stage)
@@ -81,7 +87,9 @@ export function dialItem(row, now = Date.now()) {
   const created = ms(row.crm_created_at) ?? first ?? now
   const connected = ms(row.connected_at)
   if (connected != null && connected >= created) return null
-  if (calls === 0) return { ...base, kind: 'attempt', step: 1, dueAt: created, label: 'Attempt 1', hint: 'speed to lead', textKey: TEXT_AFTER[1] }
+  if (calls === 0) {
+    return { ...base, kind: 'attempt', step: 1, dueAt: created, label: 'Attempt 1', hint: now - created < DAY ? 'speed to lead' : null, textKey: TEXT_AFTER[1] }
+  }
   if (calls < ATTEMPTS) {
     const step = calls + 1
     return {
@@ -104,15 +112,17 @@ const endOfDay = (now) => {
   return d.getTime()
 }
 
-// rows -> { dueNow, laterToday }. Due now: new leads (attempt 1) first, then
-// oldest due first. Later today: by time. skips: contact ids off the list today.
+// rows -> { dueNow, laterToday }. Due now: leads that arrived in the last day
+// (speed to lead) first, then most recently due first, so an old backlog
+// doesn't bury today's follow-ups. Later today: by time. skips: contact ids
+// off the list today.
 export function buildDialList(rows, { now = Date.now(), skips = new Set(), inBook = () => true } = {}) {
   const items = (rows || [])
     .map((r) => dialItem(r, now))
     .filter((i) => i && inBook(i.book) && !skips.has(i.id) && i.dueAt <= endOfDay(now))
   const dueNow = items
     .filter((i) => i.dueAt <= now)
-    .sort((a, b) => (a.kind === 'attempt' && a.step === 1 ? 0 : 1) - (b.kind === 'attempt' && b.step === 1 ? 0 : 1) || b.dueAt - a.dueAt)
+    .sort((a, b) => (a.hint === 'speed to lead' ? 0 : 1) - (b.hint === 'speed to lead' ? 0 : 1) || b.dueAt - a.dueAt)
   const laterToday = items.filter((i) => i.dueAt > now).sort((a, b) => a.dueAt - b.dueAt)
   return { dueNow, laterToday }
 }

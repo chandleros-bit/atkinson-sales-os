@@ -49,6 +49,14 @@ describe('dialItem: lead attempts', () => {
     const it4 = dialItem(lead(called(3, at(26, 10), at(29, 8))), at(29, 8, 30))
     expect(it4.dueAt).toBe(at(29, 10))
   })
+  it('says speed to lead only for a lead that arrived in the last day', () => {
+    expect(dialItem(lead(), at(27, 8)).hint).toBe('speed to lead')
+    expect(dialItem(lead(), at(28, 9)).hint).toBe(null)
+  })
+  it('counts a Bayway lead moved to Attempted with no logged call as attempt 1 done, from the move', () => {
+    const moved = dialItem(lead({ stage: 'Attempted', stage_since: iso(at(26, 10)) }), at(26, 11))
+    expect(moved).toMatchObject({ kind: 'attempt', step: 2, calls: 1, dueAt: at(26, 13) })
+  })
   it('ends the cadence on a connected call or a stage past Attempted', () => {
     expect(dialItem(lead({ ...called(2, at(26, 10)), connected_at: iso(at(26, 13)) }), at(27))).toBe(null)
     expect(dialItem(lead({ stage: 'Contacted/Working' }), at(27))).toBe(null)
@@ -95,9 +103,9 @@ describe('buildDialList', () => {
     lead({ id: 'tomorrow', ...called(2, at(28, 9), at(28, 11)) }), // attempt 3 due tomorrow
     lead({ id: 'mpg', business_id: 'mpg', stage: 'Open' }),
   ]
-  it('keeps what is due by the end of today: due now first (new leads on top), then later today', () => {
+  it('keeps what is due by the end of today: fresh leads on top, then most recently due, then later today', () => {
     const list = buildDialList(rows, { now })
-    expect(list.dueNow.map((i) => i.id)).toEqual(['new', 'mpg', 'over'])
+    expect(list.dueNow.map((i) => i.id)).toEqual(['new', 'over', 'mpg'])
     expect(list.laterToday.map((i) => i.id)).toEqual(['later'])
   })
   it('drops skipped leads and other books', () => {
