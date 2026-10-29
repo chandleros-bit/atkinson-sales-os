@@ -21,6 +21,7 @@ import ContactTasks, { PopupTabs, taskCount } from './ContactTasks'
 import PersonSheet from './PersonSheet'
 import { Sheet, quickActionTone } from './QuickActions'
 import { showToast } from './Toaster'
+import { PERSON_LINK_CLS } from './PersonLink'
 
 const SENT = [
   { key: 'estimate_sent', label: 'Estimate sent' },
@@ -235,7 +236,7 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
         <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[12.5px] leading-[18px] text-muted">
           {it.name &&
             (it.contactId ? (
-              <button type="button" onClick={onOpen} title="Open contact card" className="min-w-0 truncate font-semibold text-[color:var(--text)] hover:underline">
+              <button type="button" onClick={onOpen} title="Open contact card" className={`min-w-0 truncate font-semibold text-[color:var(--text)] ${PERSON_LINK_CLS}`}>
                 {it.name}
               </button>
             ) : (

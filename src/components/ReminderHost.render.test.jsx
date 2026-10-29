@@ -60,10 +60,15 @@ class FakeNotification {
   }
 }
 
+// Unmounted after each test: a live host from an earlier test would answer the
+// same window events and claim reminders first.
+const roots = []
 async function mount() {
   const host = document.createElement('div')
   document.body.appendChild(host)
-  await act(async () => createRoot(host).render(React.createElement(ReminderHost)))
+  const root = createRoot(host)
+  roots.push(root)
+  await act(async () => root.render(React.createElement(ReminderHost)))
   await act(async () => {})
   return host
 }
@@ -84,6 +89,7 @@ beforeEach(() => {
   window.Notification = FakeNotification
 })
 afterEach(() => {
+  act(() => roots.splice(0).forEach((r) => r.unmount()))
   vi.useRealTimers()
   delete window.Notification
 })
@@ -141,6 +147,17 @@ describe('ReminderHost', () => {
     await mount()
     expect(card()).toBe(null)
     expect(updates).toEqual([])
+  })
+
+  it('reloads when a backgrounded phone tab comes back, so a new event still reminds', async () => {
+    vi.setSystemTime(new Date(2026, 9, 29, 9, 25))
+    DATA.rows = []
+    await mount()
+    expect(card()).toBe(null)
+    DATA.rows = [event()] // saved on another device while this tab slept
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    await act(async () => {})
+    expect(card()).not.toBe(null)
   })
 
   it('shows the card without a desktop notification until the browser allows it', async () => {
