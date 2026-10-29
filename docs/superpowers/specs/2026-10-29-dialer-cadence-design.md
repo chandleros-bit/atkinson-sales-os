@@ -52,10 +52,21 @@ Sunday move to Monday, except attempts 1 and 2 (same day as the lead).
 Mockup: the "Workbench dial list" and "Lead call cadence" visuals in the
 2026-10-29 conversation that produced this spec.
 
-## Lead cadence (Bayway, phase 1)
+## Lead cadence (Bayway and MPG, phase 1)
 
-Who: Bayway leads in **New Lead** or **Attempted** (bay-stages.ts / v_active_pipeline).
-Moving past Attempted (Contacted/Working or later) or to Lost ends it.
+Who:
+- Bayway leads in **New Lead** or **Attempted** (bay-stages.ts / v_active_pipeline).
+  Moving past Attempted (Contacted/Working or later) or to Lost ends it.
+- MPG leads with Zoho status **Not Contacted**, **Open** or **Attempted to
+  Contact** (v_mpg_contacts). Any other status (Contacted, Contact in Future,
+  Pre-Qualified, Qualified, lost statuses) ends it. MPG has no stage the OS can
+  write, so MPG runs on calls alone.
+
+Either book: a **connected** call also ends it, even if the stage or status
+hasn't been changed yet. Connected = the call's CRM outcome is Interested or
+Not Interested (FUB `outcome`; Zoho `Call_Result` or a `Call: Interested` /
+`Call: Not Interested` subject, as crm-action writes them) or it lasted 2
+minutes or more.
 
 Attempt *n* is the *n*-th outbound call to the lead since it was created
 (`activities`, type `call`, direction `outbound`), counting calls logged from
@@ -76,9 +87,12 @@ happened. Logging a call from the OS writes the activity row at once
   2 PM, and vice versa. The row shows "try afternoon" / "try morning".
 - Attempts made early or late don't break anything: the next one is always
   measured from attempt 1, and an overdue attempt shows as due now.
-- After attempt 6 with no conversation, the dialer's outcome step offers
+- After attempt 6 with no conversation, a Bayway lead's outcome step offers
   **Move to Nurture** (preselected) and the row shows "6 attempts, move to
   Nurture" until done. The OS never re-tags a lead in FUB on its own.
+- MPG after attempt 6 goes straight into nurture by call count: call 7 due
+  7 days after call 6, call 8 seven days after that, then Cold (every 30 days
+  after the last call).
 - **Connected** (Interested / Not Interested on the OS log, or the lead moving
   to Contacted/Working) ends the cadence; the existing Log call form takes it
   from there (next step, follow-up task).
@@ -94,7 +108,9 @@ Who: Bayway leads in the Nurture / Credit Repair column tagged **Nurture**.
   check-in due every 30 days after its last outbound call (shown in the lead
   cadence block as "Cold check-in").
 - Any inbound call/text puts the lead in "They reached out" as today.
-- Credit Repair-tagged leads: monthly check-in (open question below).
+- Credit Repair-tagged leads: a check-in every 30 days after the later of
+  entering the column and their last outbound call, for as long as they're
+  parked.
 
 ## Weekday themes (Bayway)
 
@@ -157,9 +173,19 @@ it sits beside the list.
 
 ### Texts
 
-- Templates per lead-cadence step (texts 1–4) and per theme (Tuesday status
-  check-in, Thursday pre-approval check-in, Friday partner check-in), with
-  `{first_name}` filled in. In code for v1.
+- Templates per lead-cadence step (texts 1–4, one set per book), nurture /
+  cold and credit repair check-ins, and later the theme check-ins, with
+  `{first}` filled in. In code for v1. Short and plain, the way Chandler
+  texts (no dashes, no sign-off):
+
+| When | Bayway | MPG |
+|---|---|---|
+| After attempt 1 | Hi {first}, this is Chandler with Bayway. Just tried calling about your home loan. When's a good time to talk? | Hi {first}, this is Chandler with Media Payments Group. Just tried calling about your card processing. When's a good time? |
+| After attempt 3 | Hey {first}, Chandler again. Still happy to help with your loan. Do you have 10 min today or tomorrow? | Hey {first}, Chandler again. Got a few minutes this week to look at your processing rates? |
+| After attempt 5 | {first}, quick check in. Are you still looking at a loan, or should I check back later? | {first}, quick check in. Still want to look at lowering your fees, or should I check back later? |
+| After attempt 6 | Hi {first}, I'll stop reaching out for now. If anything changes just text me here. | Hi {first}, I'll stop reaching out for now. Text me here if you want to pick it back up. |
+| Nurture / cold | Hey {first}, Chandler here. Just checking in, anything I can help with on the home search? | Hey {first}, Chandler with MPG checking in. Anything I can help with on the processing side? |
+| Credit repair | Hi {first}, checking in on how the credit is coming along. Happy to take another look anytime. | |
 - Tapping Text logs a FUB note "Texted (template name)" through crm-action
   `add_note`, with Undo on the toast for when Send wasn't pressed.
 
@@ -187,7 +213,7 @@ crm-action action (`log_call`, `add_note`, `set_stage`).
 
 ## Phases
 
-1. **Lead cadence + dialer + texts** (Bayway): v_dial_contacts, dialList.js
+1. **Lead cadence + dialer + texts** (both books): v_dial_contacts, dialList.js
    lead rules, Calls tab sections, dialer, sms templates, dial_skips.
 2. **Weekday themes** Mon / Wed / Thu / Fri: theme rules, week strip, cap,
    settings.dial_cadence.
@@ -210,13 +236,9 @@ Each phase ships on its own PR with its migration and tests.
 
 ## Open questions (decide before the phase that needs them)
 
-- MPG (Zoho) new leads: same six-attempt cadence? MPG has no Attempted stage,
-  so attempts would be tracked from calls only. (Phase 1.)
-- Credit Repair-tagged leads: monthly check-in, or off the dial list? (Phase 1.)
 - Regular (non-new, non-top) realtors: every 60 days on Monday, as above? (Phase 2.)
 - Past clients' close date when there's no FUB deal: skip anniversaries, or
   read a FUB custom field? (Phase 2.)
-- Text template wording. (Phase 1.)
 
 ## Out of scope
 
