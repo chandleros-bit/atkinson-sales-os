@@ -19,15 +19,24 @@ export const SORTS = [
 
 const digits = (s) => String(s || '').replace(/\D/g, '')
 
-// Name, company and email as a case-insensitive substring; phone by digits
-// once the query has 3 or more of them.
+// Where the lead came from (FUB `source`, Zoho `Lead_Source`; migration
+// 0046), or null when the CRM has none. FUB says "<unspecified>" and Zoho's
+// empty picklist value is "-None-".
+const NO_SOURCE = new Set(['<unspecified>', '-none-'])
+export function leadSource(row) {
+  const s = String(row?.lead_source || '').trim()
+  return s && !NO_SOURCE.has(s.toLowerCase()) ? s : null
+}
+
+// Name, company, email and lead source as a case-insensitive substring; phone
+// by digits once the query has 3 or more of them.
 export function filterRows(rows, query) {
   const q = String(query || '').trim().toLowerCase()
   if (!q) return rows
   const qd = digits(q)
   return rows.filter(
     (r) =>
-      [r.name, r.company, r.email].some((v) => String(v || '').toLowerCase().includes(q)) ||
+      [r.name, r.company, r.email, leadSource(r)].some((v) => String(v || '').toLowerCase().includes(q)) ||
       (qd.length >= 3 && digits(r.phone).includes(qd)),
   )
 }

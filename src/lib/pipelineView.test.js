@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterRows, sortRows, pipelineKpis } from './pipelineView'
+import { filterRows, sortRows, pipelineKpis, leadSource } from './pipelineView'
 import { DEFAULT_RULES } from './priorityQueue'
 
 // Local times (no Z). 2026-10-18 is a Sunday.
@@ -25,6 +25,10 @@ describe('filterRows', () => {
     expect(filterRows(rows, 'RUIZ').map((r) => r.id)).toEqual(['a'])
     expect(filterRows(rows, 'pita').map((r) => r.id)).toEqual(['b'])
     expect(filterRows(rows, 'ana@').map((r) => r.id)).toEqual(['a'])
+  })
+  it('lead source, any case', () => {
+    const withSource = [...rows, row('c', { name: 'Cy', lead_source: 'LendingFlow' })]
+    expect(filterRows(withSource, 'lendingflow').map((r) => r.id)).toEqual(['c'])
   })
   it('phone by digits once there are three', () => {
     expect(filterRows(rows, '555-0195').map((r) => r.id)).toEqual(['b'])
@@ -75,5 +79,18 @@ describe('pipelineKpis', () => {
     const k = pipelineKpis([row('q', { stage: 'Qualified' }), row('n', { stage: 'Not Contacted' })], rules, 'mpg', NOW)
     expect(k[2]).toMatchObject({ id: 'qualified', value: 1 })
     expect(k[3]).toMatchObject({ value: 0, tone: 'book' })
+  })
+})
+
+describe('leadSource', () => {
+  it("is the CRM's lead source, trimmed", () => {
+    expect(leadSource({ lead_source: '  Zillow ' })).toBe('Zillow')
+  })
+  it('is null when the CRM has none', () => {
+    expect(leadSource({ lead_source: null })).toBe(null)
+    expect(leadSource({ lead_source: '   ' })).toBe(null)
+    expect(leadSource({ lead_source: '<unspecified>' })).toBe(null)
+    expect(leadSource({ lead_source: '-None-' })).toBe(null)
+    expect(leadSource({})).toBe(null)
   })
 })

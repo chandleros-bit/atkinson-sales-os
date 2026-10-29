@@ -102,6 +102,23 @@ describe('Pipeline views', () => {
     expect(document.querySelector('[data-kpi="active"]').textContent).toContain('3')
   })
 
+  it('shows each lead source as a pill in List, By stage and Board', async () => {
+    DATA.rows = [
+      { ...card('a', 'Ana Lead', 'New Lead'), lead_source: 'LendingFlow' },
+      { ...card('b', 'Ben Working', 'Contacted/Working'), lead_source: '<unspecified>' },
+    ]
+    await mount()
+    const pills = () => [...document.querySelectorAll('[data-lead-source]')].map((e) => e.textContent)
+    expect(document.querySelector('[data-row-id="a"] [data-lead-source]').textContent).toBe('LendingFlow')
+    expect(document.querySelector('[data-row-id="b"] [data-lead-source]')).toBeNull()
+    expect(pills()).toEqual(['LendingFlow'])
+    await act(async () => viewButton('By stage').click())
+    expect(document.querySelector('[data-row-id="a"] [data-lead-source]').textContent).toBe('LendingFlow')
+    await act(async () => viewButton('Board').click())
+    expect(cardEl('a').querySelector('[data-lead-source]').textContent).toBe('LendingFlow')
+    expect(cardEl('b').querySelector('[data-lead-source]')).toBeNull()
+  })
+
   it('By stage groups the rows under their stage; the choice is remembered', async () => {
     await mount()
     await act(async () => viewButton('By stage').click())
