@@ -83,6 +83,23 @@ describe('Up Next page', () => {
     expect(host.textContent).toContain('20 days since last touch')
   })
 
+  it('leaves out leads the dial list already shows (hideIds)', async () => {
+    mobile = false
+    DATA.signals = [
+      lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) }),
+      lead({ id: 'b', name: 'Ben Overdue', open_task_count: 1, oldest_open_due_at: iso(3) }),
+    ]
+    await refreshPriorityQueue()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    await act(async () => {
+      createRoot(host).render(React.createElement(MemoryRouter, null, React.createElement(Priority, { embedded: true, hideIds: new Set(['a']) })))
+    })
+    await act(async () => {})
+    expect(host.textContent).not.toContain('Ana Inbound')
+    expect(host.textContent).toContain('Ben Overdue')
+  })
+
   it('makes the whole row a tel: link on a phone', async () => {
     mobile = true
     DATA.signals = [lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) })]
