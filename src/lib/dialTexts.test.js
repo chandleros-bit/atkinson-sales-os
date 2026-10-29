@@ -32,3 +32,10 @@ describe('smsHref', () => {
     expect(smsHref('', 'x')).toBe(null)
   })
 })
+
+describe('theme texts', () => {
+  it('has a Bayway check-in for every weekday theme', () => {
+    for (const k of ['new_realtor', 'loan_status', 'past_client', 'pre_approved', 'top_partner']) expect(TEXTS.bay[k]).toBeTruthy()
+    expect(textFor('bay', 'pre_approved', 'Ana Ruiz')).toBe('Hi Ana, checking in on the house hunt. Found anything you like yet?')
+  })
+})
