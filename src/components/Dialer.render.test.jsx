@@ -70,6 +70,15 @@ describe('Dialer', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('keeps Nurture and Lost to leads: a realtor with a bad number just moves on', async () => {
+    invoke.mockResolvedValue(ok(['log_call']))
+    await open([item({ kind: 'new_realtor', step: null, calls: 0, label: 'New realtor · intro call', textKey: 'new_realtor', row: { ...item().row, stage: null } })])
+    await click(button('Bad number'))
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ outcome: 'Bad Number' })
+    expect(button('Move to Nurture')).toBe(undefined)
+    expect(button('Mark Lost')).toBe(undefined)
+  })
+
   it('shows a CRM error with Retry and stays on the lead', async () => {
     invoke.mockResolvedValue({ data: { status: 'error', results: [{ step: 'log_call', ok: false, error: 'FUB down' }] }, error: null })
     await open([item()])

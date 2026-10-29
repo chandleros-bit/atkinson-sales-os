@@ -19,6 +19,8 @@ import { SyncDot } from '../components/PageHeader'
 import Priority from './Priority'
 import { useDialList } from '../lib/useDialList'
 import { buildDialList } from '../lib/dialList'
+import { buildThemeList } from '../lib/dialThemes'
+import ThemeList from '../components/ThemeList'
 import DialList from '../components/DialList'
 import Dialer from '../components/Dialer'
 
@@ -61,10 +63,14 @@ export default function Workbench() {
   const mobile = useIsMobile()
   const [lane, setLane] = useState('calls')
   const [adding, setAdding] = useState(false)
-  // The lead cadence (dialList.js) sits above Up Next in the Calls lane;
-  // dialAt is where the dialer opened in that list, null while closed.
+  // The Calls lane (spec: The daily list): Up Next's "They reached out", the
+  // lead cadence (dialList.js), Up Next's overdue follow-ups, the weekday
+  // theme (dialThemes.js), then the rest of Up Next under More. dialRun is the
+  // list the dialer is walking, null while closed; themeDay previews another
+  // weekday's theme (null = today).
   const dial = useDialList()
-  const [dialAt, setDialAt] = useState(null)
+  const [dialRun, setDialRun] = useState(null)
+  const [themeDay, setThemeDay] = useState(null)
 
   const cap = rules.daily_cap || 15
   const toGo = Math.min(queue.length, cap)
@@ -72,8 +78,9 @@ export default function Workbench() {
   const now = Date.now()
   const dialDue = buildDialList(dial.rows, { now: dial.now, skips: dial.skips, inBook })
   const dialItems = [...dialDue.dueNow, ...dialDue.laterToday]
-  const dialIds = new Set(dialItems.map((i) => i.id))
-  const callsToGo = toGo + dialDue.dueNow.length
+  const themeList = buildThemeList(dial.rows, { now: dial.now, day: themeDay, skips: dial.skips, inBook })
+  const dialIds = new Set([...dialItems, ...themeList.items].map((i) => i.id))
+  const callsToGo = toGo + dialDue.dueNow.length + (themeDay == null ? themeList.items.length : 0)
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
@@ -136,8 +143,14 @@ export default function Workbench() {
         {showCalls && (
           <Lane label="Calls" count={`${callsToGo} to go`} mobile={mobile}>
             {dial.error && <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{dial.error}</div>}
-            <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={dial.now} onDial={setDialAt} />
-            <Priority embedded hideIds={dialIds} />
+            <Priority embedded hideIds={dialIds} buckets={['reached_out']} />
+            <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={dial.now} onDial={(i) => setDialRun({ items: dialItems, start: i })} />
+            <Priority embedded hideIds={dialIds} buckets={['overdue']} />
+            <ThemeList list={themeList} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeList.items, start: i })} />
+            <details>
+              <summary className="cursor-pointer border-b border-line px-4 py-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">More from Up Next</summary>
+              <Priority embedded hideIds={dialIds} buckets={['new_lead', 'hot_cold', 'no_next_step', 'stuck', 'quiet']} />
+            </details>
           </Lane>
         )}
         {showWork && (
@@ -147,13 +160,13 @@ export default function Workbench() {
           </Lane>
         )}
       </div>
-      {dialAt != null && (
+      {dialRun && (
         <Dialer
-          items={dialItems}
-          start={dialAt}
+          items={dialRun.items}
+          start={dialRun.start}
           skipToday={dial.skipToday}
           onClose={() => {
-            setDialAt(null)
+            setDialRun(null)
             dial.reload()
           }}
         />

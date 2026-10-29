@@ -10,6 +10,8 @@ import { buildActionRequest, summarizeResult, callStageAdvance, CRM_LABEL } from
 import { formatPhone, telHref } from '../lib/phone'
 import { textFor, smsHref } from '../lib/dialTexts'
 
+// Lead cadence kinds (dialList.js); theme calls (dialThemes.js) never park or lose anyone.
+const LEAD_KINDS = new Set(['attempt', 'move_nurture', 'nurture', 'cold', 'credit_repair'])
 const quiet = 'min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold text-[#344054]'
 
 export default function Dialer({ items, start = 0, onClose, skipToday }) {
@@ -54,7 +56,7 @@ export default function Dialer({ items, start = 0, onClose, skipToday }) {
 
   if (!it) {
     return (
-      <Sheet title="Done for now" subtitle="Lead cadence" t={t} onClose={onClose}>
+      <Sheet title="Done for now" subtitle="Dial list" t={t} onClose={onClose}>
         <div className="text-[14px]">{stats.calls} calls · {stats.connected} connected · {stats.texts} texts</div>
         <button type="button" onClick={onClose} className={`${quiet} mt-4 w-full`}>Close</button>
       </Sheet>
@@ -63,7 +65,8 @@ export default function Dialer({ items, start = 0, onClose, skipToday }) {
 
   const r = it.row
   const text = textFor(it.book, it.textKey, r.name)
-  const parkPrompt = it.book === 'bay' && (it.kind === 'move_nurture' || (it.kind === 'attempt' && it.step === 6))
+  const isLead = LEAD_KINDS.has(it.kind)
+  const parkPrompt = isLead && it.book === 'bay' && (it.kind === 'move_nurture' || (it.kind === 'attempt' && it.step === 6))
 
   return (
     <Sheet title={r.name || '(no name)'} subtitle={`${pos + 1} of ${queue.length} · ${it.label}`} t={t} onClose={onClose}>
@@ -130,7 +133,7 @@ export default function Dialer({ items, start = 0, onClose, skipToday }) {
         </div>
       )}
 
-      {phase === 'bad' && it.book === 'bay' && (
+      {phase === 'bad' && isLead && it.book === 'bay' && (
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button type="button" disabled={busy} className={quiet} onClick={() => move('nurture')}>Move to Nurture</button>
           <button type="button" disabled={busy} className={quiet} onClick={() => move('lost', 'Unreachable')}>Mark Lost</button>
