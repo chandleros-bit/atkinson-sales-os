@@ -121,16 +121,16 @@ stays due and comes back on the same weekday next week.
 | Day | List | Who | Rhythm per person |
 |---|---|---|---|
 | Mon | New realtors | FUB stage Realtors, added in the last 90 days | calls in week 1, week 2, week 4, then monthly |
-| Mon | Realtor check-ins | other Realtors (not Top Partner) | every 60 days (below new realtors) |
 | Tue | Loan status updates | Disclosed column, plus any lead tagged `under contract` | every Tuesday until it leaves the stage |
-| Wed | Past clients | FUB stage Closed / Past Client | every 90 days, plus the week of their home anniversary |
+| Wed | Past clients | FUB stage Closed / Past Client | every 90 days |
 | Thu | Pre-approved | tagged `Pre-Approved`, still on the board (not Disclosed, parked or Lost) | weekly; flagged at 60+ days pre-approved so the letter gets refreshed |
 | Fri | Top partners | tagged `Top Partner` | every 14 days (about half the list each Friday) |
 
 - "Due" = days since the last outbound call to that person ≥ the interval.
   Never called counts as due.
-- Past-client anniversary: the close date of their FUB deal (`deals`); with no
-  deal, only the 90-day rhythm applies.
+- Realtors after their first 90 days get no scheduled call unless they're tagged
+  `Top Partner` (Friday). Home anniversaries aren't tracked (no close-date data
+  in FUB), so past clients run on the 90-day rhythm only.
 - Pre-approved age: when the OS tagged Pre-Approved (`crm_actions`), else the
   date the lead entered Application Received.
 
@@ -196,7 +196,7 @@ it sits beside the list.
   stage, tags, board stage (`derive_stage`), `stage_since`, `crm_created_at`,
   phone, email, outbound call count since created, first / last outbound call,
   last inbound activity, `top_partner` / `pre_approved` / `under_contract`
-  flags, and the newest FUB deal close date. One read feeds the whole list;
+  flags. One read feeds the whole list;
   cadence rules run in the browser (pure `dialList.js`), like Up Next.
 - **contact_relationships** (new table, mirror of FUB Relationships):
   `contact_id`, FUB relationship id, type, name, phone, email,
@@ -228,18 +228,12 @@ Each phase ships on its own PR with its migration and tests.
 - `dialList.test.js` (pure): attempt numbering from call history, due times
   (3 h, opposite half-day, business-day roll), cadence exit on connect / stage
   move, attempt-6 Nurture prompt, nurture 7/7 then cold 30, each theme's
-  membership and rhythm, anniversary week, cap and ordering, skips.
+  membership and rhythm, cap and ordering, skips.
 - Render tests: Calls tab sections and week strip; dialer outcome → the right
   crm-action request; `sms:` / `tel:` links; Tuesday three-number row.
 - crm-action: `contact_relationships` mapping and type matching.
 - Browser: walk a day's list on a phone-sized screen with live data (no
   outcomes sent for real leads during testing unless Chandler is calling).
-
-## Open questions (decide before the phase that needs them)
-
-- Regular (non-new, non-top) realtors: every 60 days on Monday, as above? (Phase 2.)
-- Past clients' close date when there's no FUB deal: skip anniversaries, or
-  read a FUB custom field? (Phase 2.)
 
 ## Out of scope
 
