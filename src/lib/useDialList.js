@@ -11,10 +11,11 @@ export function useDialList() {
 
   const load = useCallback(async () => {
     if (isDemoMode) return
-    const today = localDateKey(new Date())
+    // A skip hides the lead while until_date is after today.
+    const tomorrow = localDateKey(new Date(Date.now() + 86_400_000))
     const [v, s] = await Promise.all([
       fetchAllSettled(() => supabase.from('v_dial_contacts').select('*').order('id')),
-      supabase.from('dial_skips').select('contact_id').gt('until_date', today),
+      supabase.from('dial_skips').select('contact_id').gte('until_date', tomorrow),
     ])
     const error = v.error || s.error
     setState((st) => ({

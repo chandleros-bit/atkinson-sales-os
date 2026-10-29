@@ -22,9 +22,11 @@ function stuckNote(rules) {
 
 // embedded: the Workbench's Calls lane (no page header or width of its own;
 // the lane is the card, so groups are flat sections of dense rows).
-export default function Priority({ embedded = false }) {
+// hideIds: Workbench passes the dial list's leads so no one shows twice.
+export default function Priority({ embedded = false, hideIds = null }) {
   const { biz } = useBusiness()
-  const { queue, rules, touchedToday, loading, error } = usePriorityQueue(biz)
+  const { queue: all, rules, touchedToday, loading, error } = usePriorityQueue(biz)
+  const queue = hideIds ? all.filter((r) => !hideIds.has(r.id)) : all
   const [showAll, setShowAll] = useState(false)
 
   const cap = rules.daily_cap || 15

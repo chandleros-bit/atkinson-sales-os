@@ -17,6 +17,10 @@ import AddWorkItem from '../components/AddWorkItem'
 import VoiceTask from '../components/VoiceTask'
 import { SyncDot } from '../components/PageHeader'
 import Priority from './Priority'
+import { useDialList } from '../lib/useDialList'
+import { buildDialList } from '../lib/dialList'
+import DialList from '../components/DialList'
+import Dialer from '../components/Dialer'
 
 function Progress({ label, value, pct }) {
   return (
@@ -57,11 +61,19 @@ export default function Workbench() {
   const mobile = useIsMobile()
   const [lane, setLane] = useState('calls')
   const [adding, setAdding] = useState(false)
+  // The lead cadence (dialList.js) sits above Up Next in the Calls lane;
+  // dialAt is where the dialer opened in that list, null while closed.
+  const dial = useDialList()
+  const [dialAt, setDialAt] = useState(null)
 
   const cap = rules.daily_cap || 15
   const toGo = Math.min(queue.length, cap)
   const inBook = (book) => biz === 'all' || book === biz
   const now = Date.now()
+  const dialDue = buildDialList(dial.rows, { now: dial.now, skips: dial.skips, inBook })
+  const dialItems = [...dialDue.dueNow, ...dialDue.laterToday]
+  const dialIds = new Set(dialItems.map((i) => i.id))
+  const callsToGo = toGo + dialDue.dueNow.length
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
@@ -103,7 +115,7 @@ export default function Workbench() {
       {mobile && (
         <div role="tablist" aria-label="Lane" className="grid grid-cols-2 rounded-xl bg-panel2 p-1">
           {[
-            ['calls', `Calls · ${toGo}`],
+            ['calls', `Calls · ${callsToGo}`],
             ['work', `Work · ${openWork}`],
           ].map(([id, label]) => (
             <button
@@ -122,8 +134,10 @@ export default function Workbench() {
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {showCalls && (
-          <Lane label="Calls" count={`${toGo} to go`} mobile={mobile}>
-            <Priority embedded />
+          <Lane label="Calls" count={`${callsToGo} to go`} mobile={mobile}>
+            {dial.error && <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{dial.error}</div>}
+            <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={dial.now} onDial={setDialAt} />
+            <Priority embedded hideIds={dialIds} />
           </Lane>
         )}
         {showWork && (
@@ -133,6 +147,17 @@ export default function Workbench() {
           </Lane>
         )}
       </div>
+      {dialAt != null && (
+        <Dialer
+          items={dialItems}
+          start={dialAt}
+          skipToday={dial.skipToday}
+          onClose={() => {
+            setDialAt(null)
+            dial.reload()
+          }}
+        />
+      )}
       {adding && (
         <AddWorkItem
           defaultBook={biz === 'mpg' ? 'mpg' : 'bay'}
