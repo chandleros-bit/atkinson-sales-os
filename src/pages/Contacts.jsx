@@ -6,6 +6,7 @@ import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
 import { formatPhone, telHref } from '../lib/phone'
 import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
+import { ScheduleButton } from '../components/ScheduleEvent'
 
 const PER_PAGE = 50
 
@@ -21,7 +22,10 @@ function MobileContactRow({ r, config }) {
             {name}
           </PersonLink>
         </div>
-        <div className="flex-none text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
+        <div className="flex flex-none items-center gap-1 text-[11.5px] text-muted">
+          {lastTouchLabel(r.last_touch_at)}
+          <ScheduleButton variant="icon" businessId={config.biz} contactId={r.id} contactName={r.name} />
+        </div>
       </div>
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         {r.company && <span className="min-w-0 truncate text-[12.5px] text-muted">{r.company}</span>}
@@ -66,9 +70,10 @@ const BAY_FILTERS = [
 const CONFIGS = {
   bay: {
     label: 'Bayway · FollowUpBoss',
+    biz: 'bay',
     accent: 'bay',
     source: 'v_bayway_contacts',
-    columns: ['name', 'stage', 'contact', 'last_touch'],
+    columns: ['name', 'stage', 'contact', 'last_touch', 'schedule'],
     stageHeader: 'Stage',
     filters: BAY_FILTERS,
     stagePill: bayStagePill,
@@ -79,9 +84,10 @@ const CONFIGS = {
   },
   mpg: {
     label: 'MPG · Zoho',
+    biz: 'mpg',
     accent: 'mpg',
     source: 'v_mpg_contacts',
-    columns: ['name', 'company', 'stage', 'contact', 'last_touch'],
+    columns: ['name', 'company', 'stage', 'contact', 'last_touch', 'schedule'],
     stageHeader: 'Status',
     filters: [],
     stagePill: mpgStagePill,
@@ -138,6 +144,17 @@ const COLUMNS = {
     sortKey: 'last_touch_at',
     cell: (r) => (
       <div className="w-24 text-right text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
+    ),
+  },
+  // Schedule a call or meeting with this contact (ScheduleEvent).
+  schedule: {
+    header: () => '',
+    thClass: 'w-8',
+    sortKey: null,
+    cell: (r, config) => (
+      <div className="flex w-8 justify-end">
+        <ScheduleButton variant="icon" businessId={config.biz} contactId={r.id} contactName={r.name} />
+      </div>
     ),
   },
 }

@@ -112,7 +112,7 @@ export function Sheet({ title, subtitle, t, onClose, children }) {
   )
 }
 
-function Chip({ active, onClick, children, t }) {
+export function Chip({ active, onClick, children, t }) {
   return (
     <button
       type="button"
@@ -130,7 +130,7 @@ function Chip({ active, onClick, children, t }) {
   )
 }
 
-const inputCls = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px] text-[color:var(--text)]'
+export const inputCls = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px] text-[color:var(--text)]'
 
 // Inline outcome of a submit: partial / error text with per-step Retry.
 function ResultBox({ result, onRetry, busy }) {
@@ -166,7 +166,7 @@ function ResultBox({ result, onRetry, busy }) {
   )
 }
 
-function SubmitButton({ busy, disabled, children, t, onClick }) {
+export function SubmitButton({ busy, disabled, children, t, onClick }) {
   return (
     <button
       type="button"
