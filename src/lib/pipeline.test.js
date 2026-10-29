@@ -110,8 +110,15 @@ describe('buildColumns with every flow column', () => {
 describe('dropTargetFor', () => {
   it('maps a column to its Move stage target', () => {
     expect(dropTargetFor('Attempted')).toEqual({ key: 'attempted' })
-    expect(dropTargetFor('Nurture / Credit Repair')).toEqual({ key: 'credit_repair' })
     expect(dropTargetFor('New Lead')).toEqual({ key: 'new_lead' })
+  })
+  it('asks Nurture or Credit Repair for the parked column', () => {
+    expect(dropTargetFor('Nurture / Credit Repair')).toEqual({
+      choose: [
+        { key: 'nurture', label: 'Nurture' },
+        { key: 'credit_repair', label: 'Credit Repair' },
+      ],
+    })
   })
   it('asks which tag for the shared Application/Estimate Sent column', () => {
     expect(dropTargetFor('Application/Estimate Sent')).toEqual({

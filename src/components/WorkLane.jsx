@@ -7,7 +7,8 @@
 //   application  Mark reviewed -> hidden for 3 days, or until its missing docs
 //                change or the lead re-enters the stage. Update > Review
 //                complete sends the outcome to FUB: Pre-Approved or Disclosed
-//                (tag; off review for good), Credit Repair (Nurture), Trash (Lost)
+//                (tag; off review for good), Nurture or Credit Repair (parked),
+//                Trash (Lost)
 //   custom       Done
 // A CRM Done is also recorded in work_items, for the Work progress bar.
 import { useState } from 'react'
@@ -36,7 +37,8 @@ const STATUS = [
 const OUTCOMES = [
   { key: 'pre_approved', label: 'Pre-Approved', done: (n) => `${n} tagged Pre-Approved in FollowUpBoss` },
   { key: 'disclosed', label: 'Disclosed', done: (n) => `${n} tagged Disclosed in FollowUpBoss` },
-  { key: 'credit_repair', label: 'Credit Repair', done: (n) => `${n} moved to Nurture / Credit Repair in FollowUpBoss` },
+  { key: 'nurture', label: 'Nurture', done: (n) => `${n} tagged Nurture in FollowUpBoss` },
+  { key: 'credit_repair', label: 'Credit Repair', done: (n) => `${n} tagged Credit Repair in FollowUpBoss` },
   { key: 'lost', label: 'Trash', done: (n) => `${n} marked Lost in FollowUpBoss` },
 ]
 const BACK = [

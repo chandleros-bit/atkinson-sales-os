@@ -619,11 +619,14 @@ function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
 }
 
 // Off-flow moves while dragging, so parking a lead needs no scroll to the
-// far-right column. Lost asks why first and leaves the board.
+// far-right column. Nurture and Credit Repair are separate FUB tags that share
+// one column. Lost asks why first and leaves the board.
 const DROP_ZONES = [
-  { key: 'credit_repair', stage: 'Nurture / Credit Repair' },
+  { key: 'nurture', stage: 'Nurture / Credit Repair', label: 'Nurture' },
+  { key: 'credit_repair', stage: 'Nurture / Credit Repair', label: 'Credit Repair' },
   { key: 'lost', stage: 'Lost', needsReason: true },
 ]
+const PARKED_LABEL = { nurture: 'Nurture', credit_repair: 'Credit Repair' }
 
 function DropZones({ drag }) {
   if (!drag?.draggingId) return null
@@ -657,7 +660,7 @@ function DropZones({ drag }) {
               drag.onDropZone(z)
             }}
           >
-            Drop here: {z.stage}
+            Drop here: {z.label || z.stage}
           </div>
         )
       })}
@@ -838,7 +841,10 @@ export default function Pipeline({ biz }) {
     // The tag move is what matters; a failed Lost note still counts as moved.
     const moved = Array.isArray(res?.results) ? res.results.find((r) => r.step === 'set_stage') : null
     if (moved?.ok) {
-      const done = targetKey === 'lost' ? `${name} marked Lost in FollowUpBoss` : `${name} moved to ${stage} in FollowUpBoss`
+      const done =
+        targetKey === 'lost' ? `${name} marked Lost in FollowUpBoss`
+        : PARKED_LABEL[targetKey] ? `${name} tagged ${PARKED_LABEL[targetKey]} in FollowUpBoss`
+        : `${name} moved to ${stage} in FollowUpBoss`
       showToast({ ...summary, text: summary.tone === 'ok' ? done : summary.text })
       if (needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
       await load({ quiet: true })
@@ -963,8 +969,8 @@ export default function Pipeline({ biz }) {
       <DropZones drag={drag} />
       {choice && (
         <PickSheet
-          title="Which was sent?"
-          subtitle={`${choice.row.name || 'This lead'} · Application/Estimate Sent`}
+          title={choice.stage === 'Nurture / Credit Repair' ? 'Nurture or Credit Repair?' : 'Which was sent?'}
+          subtitle={`${choice.row.name || 'This lead'} · ${choice.stage}`}
           options={choice.choices}
           onCancel={() => setChoice(null)}
           onPick={(key) => {

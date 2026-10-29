@@ -194,7 +194,7 @@ describe('QuickActions: Log call next step', () => {
     await click(byText('No next step'))
     await click(byText('Moving to Nurture'))
     await click(save())
-    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture', set_stage: 'credit_repair' })
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture', set_stage: 'nurture' })
   })
 
   it('moves a New Lead to Attempted with the call, and says so first', async () => {
@@ -239,7 +239,7 @@ describe('QuickActions: Move stage', () => {
     await click(byLabel('Move stage'))
     const options = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')]
     expect(options.map((b) => b.textContent.replace('Now', ''))).toEqual([
-      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received', 'Nurture / Credit Repair', 'Lost',
+      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received', 'Nurture', 'Credit Repair', 'Lost',
     ])
     expect(options.filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent.replace('Now', '')))
       .toEqual(['Estimate Sent', 'Application Sent'])
@@ -268,8 +268,9 @@ describe('QuickActions: Move stage', () => {
     document.body.innerHTML = ''
     await mount({ ...bay, stage: 'New Lead', openTaskCount: 0 })
     await click(byLabel('Move stage'))
-    await click(byText('Nurture / Credit Repair'))
+    await click(byText('Nurture'))
     expect(document.querySelector('[role="dialog"]')).toBe(null)
+    expect(invoke.mock.calls.at(-1)[1].body.payload).toEqual({ target: 'nurture' })
   })
 
   it('asks why before marking Lost, then sends the reason', async () => {

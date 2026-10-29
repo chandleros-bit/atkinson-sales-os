@@ -139,12 +139,12 @@ describe('buildActionRequest', () => {
     expect(r.payload.set_stage).toBe('attempted')
     // Parking wins: the call moves the lead to Nurture instead.
     const parked = buildActionRequest({ action: 'log_call', contactId, outcome: 'Interested', durationMin: 5, nextStep: 'none', noNextStepReason: 'Moving to Nurture', setStage: 'attempted' })
-    expect(parked.payload.set_stage).toBe('credit_repair')
+    expect(parked.payload.set_stage).toBe('nurture')
   })
 
   it('parks the lead in Nurture when that is the reason', () => {
     const r = buildActionRequest({ action: 'log_call', contactId, outcome: 'Interested', durationMin: 5, nextStep: 'none', noNextStepReason: 'Moving to Nurture' })
-    expect(r.payload).toMatchObject({ next_step: 'none', no_next_step_reason: 'Moving to Nurture', set_stage: 'credit_repair' })
+    expect(r.payload).toMatchObject({ next_step: 'none', no_next_step_reason: 'Moving to Nurture', set_stage: 'nurture' })
   })
 
   it('requires a next step, and a reason when there is none', () => {
@@ -272,6 +272,7 @@ describe('needsNextStepPrompt', () => {
     expect(needsNextStepPrompt('attempted', 0)).toBe(true)
     expect(needsNextStepPrompt('attempted', 2)).toBe(false)
     expect(needsNextStepPrompt('credit_repair', 0)).toBe(false)
+    expect(needsNextStepPrompt('nurture', 0)).toBe(false)
     expect(needsNextStepPrompt('lost', 0)).toBe(false)
     expect(needsNextStepPrompt('attempted', undefined)).toBe(false)
     expect(needsNextStepPrompt('attempted', null)).toBe(false)
