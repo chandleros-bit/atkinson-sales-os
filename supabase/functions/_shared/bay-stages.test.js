@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { BAY_STAGES, STAGE_TARGETS, bayStageFromTags, retagForTarget, targetForStage } from './bay-stages.ts'
+import { BAY_STAGES, STAGE_TARGETS, REVIEWED_TAGS, bayStageFromTags, retagForTarget, targetForStage } from './bay-stages.ts'
 
 describe('BAY_STAGES', () => {
-  it('lists the six columns in board order', () => {
-    expect(BAY_STAGES).toEqual(['New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Nurture / Credit Repair'])
+  it('lists the seven columns in board order', () => {
+    expect(BAY_STAGES).toEqual(['New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Disclosed', 'Nurture / Credit Repair'])
   })
 })
 
@@ -38,6 +38,14 @@ describe('bayStageFromTags', () => {
     expect(bayStageFromTags(['Lost', 'Nurture'], 'Lead')).toBe('Lost')
     expect(bayStageFromTags(['Nurture'], 'Nurture')).toBe(null)
   })
+  it('puts a Disclosed-tagged lead in Disclosed, past Application Received, Pre-Qualified included', () => {
+    expect(bayStageFromTags(['Disclosed'], 'Lead')).toBe('Disclosed')
+    expect(bayStageFromTags(['application received', 'under contract', ' disclosed '], 'Lead')).toBe('Disclosed')
+    expect(bayStageFromTags(['Disclosed', 'under contract'], 'Pre-Qualified')).toBe('Disclosed')
+    expect(bayStageFromTags(['Disclosed', 'Nurture'], 'Lead')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['Disclosed', 'Lost'], 'Lead')).toBe('Lost')
+    expect(bayStageFromTags(['Disclosed'], 'Closed')).toBe(null)
+  })
   it('treats Pre-Qualified as Application Received', () => {
     expect(bayStageFromTags([], 'Pre-Qualified')).toBe('Application Received')
     expect(bayStageFromTags(['attempted'], 'Pre-Qualified')).toBe('Application Received')
@@ -58,10 +66,16 @@ describe('bayStageFromTags', () => {
 describe('retagForTarget', () => {
   const others = ['DSCR', 'Active', 'HOT']
 
-  it('adds a review outcome tag (Pre-Approved, Disclosed) without moving the lead', () => {
+  it('adds the Pre-Approved review tag without moving the lead', () => {
     expect(retagForTarget(['DSCR', 'application received', 'need docs'], 'pre_approved')).toEqual(['DSCR', 'application received', 'need docs', 'Pre-Approved'])
-    expect(retagForTarget(['application received'], 'disclosed')).toEqual(['application received', 'Disclosed'])
     expect(retagForTarget(['application received', 'pre-approved'], 'pre_approved')).toEqual(['application received', 'pre-approved'])
+  })
+  it('moves to Disclosed keeping the application tags (for the Under Contract pipeline) and dropping earlier ones', () => {
+    expect(retagForTarget(['application received'], 'disclosed')).toEqual(['application received', 'Disclosed'])
+    expect(retagForTarget(['DSCR', 'need docs', 'under contract', 'Pre-Approved'], 'disclosed')).toEqual(['DSCR', 'need docs', 'under contract', 'Pre-Approved', 'Disclosed'])
+    expect(retagForTarget(['attempted', 'Credit Repair', 'DSCR'], 'disclosed')).toEqual(['DSCR', 'Disclosed'])
+    expect(retagForTarget(['disclosed'], 'disclosed')).toEqual(['disclosed'])
+    expect(retagForTarget(['Disclosed', 'application received'], 'application_received')).toEqual(['application received'])
   })
 
   it('adds the target tag and removes other columns\' workflow tags, keeping the rest', () => {
@@ -101,8 +115,8 @@ describe('retagForTarget', () => {
   it('rejects an unknown target', () => {
     expect(() => retagForTarget([], 'closed')).toThrow(/Unknown stage target/)
   })
-  it('lists nine targets, Nurture and Credit Repair as two, Lost last', () => {
-    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'nurture', 'credit_repair', 'lost'])
+  it('lists ten targets, Disclosed after Application Received, Nurture and Credit Repair as two, Lost last', () => {
+    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'disclosed', 'nurture', 'credit_repair', 'lost'])
     expect(STAGE_TARGETS.filter((t) => t.stage === 'Nurture / Credit Repair').map((t) => t.label)).toEqual(['Nurture', 'Credit Repair'])
   })
 })
@@ -116,6 +130,13 @@ describe('targetForStage', () => {
     expect(targetForStage(['Lost'], 'Lead')).toBe('lost')
     expect(targetForStage(['estimate sent'], 'Nurture')).toBe(null)
     expect(targetForStage(['Nurture'], 'Lead')).toBe('nurture')
+    expect(targetForStage(['Disclosed'], 'Pre-Qualified')).toBe('disclosed')
     expect(targetForStage(['credit repair'], 'Lead')).toBe('credit_repair')
+  })
+})
+
+describe('REVIEWED_TAGS', () => {
+  it('Pre-Approved or Disclosed means the application review is done', () => {
+    expect(REVIEWED_TAGS).toEqual(['pre-approved', 'disclosed'])
   })
 })

@@ -494,14 +494,15 @@ function computeValues(tab, biz, data) {
     const bayDeals = data.deals.filter((d) => d.business_id === 'bay')
     const win = monthWindow()
     // Board columns from the FUB stage tags (bay-stages.ts).
-    const stageCounts = deriveStageCounts(data.activeRows, ['Application/Estimate Sent', 'Application Received'])
+    const stageCounts = deriveStageCounts(data.activeRows, ['Application/Estimate Sent', 'Application Received', 'Disclosed'])
     const dbTotal =
       biz === 'all' ? data.bayContacts + data.mpgContacts
       : biz === 'bay' ? data.bayContacts
       : data.mpgContacts
     return {
       ...manual,
-      pre_approvals: stageCounts['Application Received'],
+      // Disclosed files were pre-approved first (they sat in Application Received).
+      pre_approvals: stageCounts['Application Received'] + stageCounts.Disclosed,
       applications: stageCounts['Application/Estimate Sent'],
       loans_closed: countWon(bayDeals, win),
       loan_volume: sumWon(bayDeals, win),

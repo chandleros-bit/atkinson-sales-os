@@ -16,7 +16,7 @@ import { sourceTable } from './analytics'
 import { isLostStage } from './pipeline'
 
 export const CHART_DAYS = 30
-export const PRODUCTION_STAGES = new Set(['Application/Estimate Sent', 'Application Received'])
+export const PRODUCTION_STAGES = new Set(['Application/Estimate Sent', 'Application Received', 'Disclosed'])
 const TOUCH_TYPES = new Set(['call', 'text', 'email'])
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 

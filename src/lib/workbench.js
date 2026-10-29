@@ -5,7 +5,9 @@
 //   Estimates to Work (Bayway)        leads in Contacted/Working (tag Working Estimate)
 //   Applications to Review (Bayway)   leads in Application Received, until
 //                                     Review complete tags them Pre-Approved
-//                                     or Disclosed in FUB
+//                                     or moves them to Disclosed in FUB
+//   Disclosed (Bayway)                leads in Disclosed, tracked to closing
+//                                     (until an Under Contract pipeline exists)
 //   Statement/Proposal Review (MPG)   open Zoho tasks about statements or a
 //                                     proposal, plus your own MPG work items
 //   Other work                        your own Bayway "+ Work item" rows
@@ -32,7 +34,7 @@ const REVIEW_DAYS = 3
 const DAY_MS = 86400000
 
 // Rough minutes per kind of work, shown as a chip.
-const MINUTES = { estimate: 25, application: 20, mpg_task: 20, custom: 15 }
+const MINUTES = { estimate: 25, application: 20, disclosed: 10, mpg_task: 20, custom: 15 }
 
 // Zoho tasks that belong in Statement/Proposal Review.
 const STATEMENT_TASK = /statement|proposal/i
@@ -77,6 +79,21 @@ function applicationItem(row, rules, now) {
     late: docs > 0 || !!stuckFor(row, rules, now),
     minutes: MINUTES.application,
     docs,
+  }
+}
+
+function disclosedItem(row, now) {
+  const days = calendarDaysSince(row.stage_since, now)
+  return {
+    key: `disclosed:${row.id}`,
+    kind: 'disclosed',
+    book: 'bay',
+    contactId: row.id,
+    name: row.name || '(no name)',
+    title: 'Track to closing',
+    why: days == null ? 'Disclosed' : `Disclosed ${plural(days, 'day')}`,
+    late: false,
+    minutes: MINUTES.disclosed,
   }
 }
 
@@ -157,6 +174,8 @@ export function buildWorkGroups({ pipeline = [], mpgTasks = [], workItems = [], 
     .filter((r) => !reviewDone(r.tags))
     .sort((a, b) => (b.docs_outstanding_count || 0) - (a.docs_outstanding_count || 0) || byStageSince(a, b))
     .map((r) => merge(applicationItem(r, rules, now), r.stage_since))
+  // Longest disclosed first.
+  const disclosed = inStage('Disclosed').sort(byStageSince).map((r) => merge(disclosedItem(r, now), r.stage_since))
   const own = workItems
     .filter((w) => w.kind === 'custom' && w.status !== 'done')
     // Earliest due first; undated after, oldest first.
@@ -198,6 +217,7 @@ export function buildWorkGroups({ pipeline = [], mpgTasks = [], workItems = [], 
   const groups = [
     { id: 'estimates', title: 'Estimates to Work', book: 'bay', items: settle(estimates) },
     { id: 'applications', title: 'Applications to Review', book: 'bay', items: settle(applications) },
+    { id: 'disclosed', title: 'Disclosed', book: 'bay', items: settle(disclosed) },
     { id: 'statements', title: 'Statement/Proposal Review', book: 'mpg', items: settle(statements) },
     { id: 'custom', title: 'Other work', book: null, items: settle(custom) },
   ]

@@ -41,6 +41,8 @@ export const DEFAULT_RULES = {
     'Contacted/Working': 7,
     'Application/Estimate Sent': 7,
     'Application Received': 14,
+    // Waiting on closing, tracked in the Workbench Disclosed group.
+    Disclosed: null,
     'Nurture / Credit Repair': null,
   },
   // Minutes before a new, uncalled lead's timer turns red (board + tab title).
