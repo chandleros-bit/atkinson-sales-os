@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { getCredentials, mapStage, mapContact, mapDeal, zohoList } from './zoho.ts'
+import { getCredentials, isExcludedLead, mapStage, mapContact, mapDeal, zohoList } from './zoho.ts'
 
 const fakeGet = (obj) => (k) => obj[k]
 
@@ -49,6 +49,19 @@ describe('mapStage', () => {
     const open = mapStage({ display_value: 'Qualification', forecast_type: 'Open' }, 1)
     expect(open.is_won).toBe(false)
     expect(open.is_lost).toBe(false)
+  })
+})
+
+describe('isExcludedLead', () => {
+  it('excludes "Initial lead" in any casing or spacing', () => {
+    expect(isExcludedLead({ Lead_Status: 'Initial lead' })).toBe(true)
+    expect(isExcludedLead({ Lead_Status: ' INITIAL LEAD ' })).toBe(true)
+  })
+  it('keeps every other status, including "Initial lead follow up" and none', () => {
+    for (const s of ['Initial lead follow up', 'Open', 'Pending', 'Not Contacted', null]) {
+      expect(isExcludedLead({ Lead_Status: s })).toBe(false)
+    }
+    expect(isExcludedLead({})).toBe(false)
   })
 })
 

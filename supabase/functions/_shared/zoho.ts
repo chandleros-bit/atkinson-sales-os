@@ -189,6 +189,15 @@ export function mapStage(stage, sortOrder) {
   }
 }
 
+// MPG's "Initial lead" leads are the untouched Web Research list (~600 rows),
+// kept out of the OS. Exact match: "Initial lead follow up" is a worked lead
+// and stays. A lead shows up once Zoho moves it to any other status.
+const EXCLUDED_LEAD_STATUS = 'initial lead'
+
+export function isExcludedLead(rec) {
+  return String(rec?.Lead_Status || '').trim().toLowerCase() === EXCLUDED_LEAD_STATUS
+}
+
 // kind: 'Leads' | 'Contacts'
 export function mapContact(rec, kind) {
   const owner = (rec.Owner && (rec.Owner.name || rec.Owner.full_name)) || null
