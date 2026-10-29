@@ -186,8 +186,9 @@ it sits beside the list.
 | After attempt 6 | Hi {first}, I'll stop reaching out for now. If anything changes just text me here. | Hi {first}, I'll stop reaching out for now. Text me here if you want to pick it back up. |
 | Nurture / cold | Hey {first}, Chandler here. Just checking in, anything I can help with on the home search? | Hey {first}, Chandler with MPG checking in. Anything I can help with on the processing side? |
 | Credit repair | Hi {first}, checking in on how the credit is coming along. Happy to take another look anytime. | |
-- Tapping Text logs a FUB note "Texted (template name)" through crm-action
-  `add_note`, with Undo on the toast for when Send wasn't pressed.
+- **Text** opens Messages with the template; **Log text** then records
+  `Texted: <text>` as a CRM note (crm-action `add_note`). The OS can't delete a
+  CRM note, so logging waits for that tap.
 
 ## Data
 
