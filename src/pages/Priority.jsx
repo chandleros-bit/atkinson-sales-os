@@ -34,7 +34,8 @@ export default function Priority({ embedded = false, hideIds = null, buckets = n
   const cap = rules.daily_cap || 15
   const { groups, hiddenCount, counts } = groupForDisplay(queue, showAll ? queue.length : cap)
   const toGo = Math.min(queue.length, cap)
-  const note = stuckNote(rules)
+  // The stuck-tracking note belongs with the Stuck bucket (Workbench: under More).
+  const note = !buckets || buckets.includes('stuck') ? stuckNote(rules) : null
   const pad = embedded ? 'mx-4' : ''
 
   if (buckets && (loading || error || isDemoMode || queue.length === 0)) return null

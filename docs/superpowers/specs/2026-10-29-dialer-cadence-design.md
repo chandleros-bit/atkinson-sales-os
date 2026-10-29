@@ -216,8 +216,9 @@ crm-action action (`log_call`, `add_note`, `set_stage`).
 
 1. **Lead cadence + dialer + texts** (both books): v_dial_contacts, dialList.js
    lead rules, Calls tab sections, dialer, sms templates, dial_skips.
-2. **Weekday themes** Mon / Wed / Thu / Fri: theme rules, week strip, cap,
-   settings.dial_cadence.
+2. **Weekday themes** Mon / Wed / Thu / Fri: theme rules, week strip, cap.
+   Shipped with a borrower-only Tuesday list (phase 3 adds the agents); the
+   cap is a constant (15) until `settings.dial_cadence` is needed.
 3. **Tuesday loan status with agents**: contact_relationships, crm-action
    `contact_relationships`, agent matching, three-number rows.
 

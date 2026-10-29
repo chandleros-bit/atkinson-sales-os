@@ -30,7 +30,7 @@ describe('ThemeList', () => {
     const onPickDay = vi.fn()
     const host = await render({ list: { theme: week[0], items: [item], total: 2, week }, onDial, onPickDay })
     const days = [...host.querySelectorAll('[data-theme-day]')]
-    expect(days.map((d) => d.textContent)).toEqual(['MonNew realtors · 2', 'TueLoan status · 1', 'WedPast clients · 0', 'ThuPre-approved · 0', 'FriTop partners · 1'])
+    expect(days.map((d) => d.textContent)).toEqual(['MonNew realtors2 due', 'TueLoan status1 due', 'WedPast clients0 due', 'ThuPre-approved0 due', 'FriTop partners1 due'])
     expect(days[0].getAttribute('aria-current')).toBe('date')
     const row = host.querySelector('[data-theme-row]')
     expect(row.textContent).toContain('Rita Realtor')

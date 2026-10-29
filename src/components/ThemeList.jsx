@@ -28,7 +28,9 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial })
               className={`min-w-0 rounded-[10px] border px-1 py-1.5 text-center text-[11.5px] leading-tight ${active ? 'border-[color:var(--chrome)] bg-panel2 font-semibold' : 'border-line text-muted'}`}
             >
               <span className="block font-bold">{DAY_NAMES[w.day]}</span>
-              <span className="block truncate">{w.label} · {w.count}</span>
+              {/* Own lines, so a narrow phone cuts the theme name, never the count. */}
+              <span className="block truncate">{w.label}</span>
+              <span className="num block">{w.count} due</span>
             </button>
           )
         })}
