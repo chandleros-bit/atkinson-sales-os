@@ -31,6 +31,26 @@ async function addCrmNote({ businessId, contactId, row }) {
   return summarizeResult(res, businessId)
 }
 
+// Reminders pop up in the app; desktop notifications need the browser's OK,
+// asked for here (never on page load).
+function DesktopAlertsHint({ remindMin }) {
+  const supported = typeof window !== 'undefined' && 'Notification' in window
+  const [permission, setPermission] = useState(supported ? window.Notification.permission : 'unsupported')
+  if (remindMin == null || permission !== 'default') return null
+  const ask = async () => {
+    try {
+      setPermission(await window.Notification.requestPermission())
+    } catch {
+      setPermission(window.Notification.permission)
+    }
+  }
+  return (
+    <button type="button" onClick={ask} className="mt-1 text-[11.5px] font-semibold text-muted underline">
+      Turn on desktop alerts too
+    </button>
+  )
+}
+
 export function ScheduleEventForm({ businessId, contactId, contactName, t, onSaved }) {
   const flags = useWritebackFlags()
   const canNote = !!flags[businessId]
@@ -131,6 +151,8 @@ export function ScheduleEventForm({ businessId, contactId, contactName, t, onSav
           ))}
         </select>
       </label>
+
+      <DesktopAlertsHint remindMin={remindMin} />
 
       <textarea
         aria-label="Event note"
