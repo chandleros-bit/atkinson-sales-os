@@ -93,9 +93,16 @@ export default function ReminderHost() {
     load()
     const id = setInterval(load, LOAD_MS)
     const off = onContactEventsChanged(load)
+    // Phones pause timers in a background tab: reload the moment it is back,
+    // and the check below catches anything that came due meanwhile.
+    const onVisible = () => document.visibilityState !== 'hidden' && load()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
     return () => {
       clearInterval(id)
       off()
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
     }
   }, [load])
 

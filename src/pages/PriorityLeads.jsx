@@ -4,6 +4,7 @@ import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, isHot } from '../lib/overview'
 import { TIERS, tierMeta, scoreBarPct, groupByTier } from '../lib/priorityLeads'
 import QuickActions from '../components/QuickActions'
+import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
 
 const COLUMNS =
@@ -71,18 +72,9 @@ function Row({ r, onDone }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            {r.fub_profile_url ? (
-              <a
-                href={r.fub_profile_url}
-                target="_blank"
-                rel="noreferrer"
-                className="truncate text-[13.5px] font-semibold hover:underline"
-              >
-                {r.name || '(no name)'}
-              </a>
-            ) : (
-              <span className="truncate text-[13.5px] font-semibold">{r.name || '(no name)'}</span>
-            )}
+            <PersonLink id={r.id} url={r.fub_profile_url} className="truncate text-[13.5px] font-semibold">
+              {r.name || '(no name)'}
+            </PersonLink>
             <span
               className="flex-none rounded px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide"
               style={{ color: meta.color, background: meta.soft }}

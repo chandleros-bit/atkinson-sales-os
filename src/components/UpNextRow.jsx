@@ -162,7 +162,9 @@ function ActionsSheet({ row, onClose }) {
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="break-words text-[15px] font-bold">{row.name || '(no name)'}</div>
+            <PersonLink id={row.id} url={row.crm_profile_url} className="break-words text-[15px] font-bold">
+              {row.name || '(no name)'}
+            </PersonLink>
             <div className="truncate text-[12px] text-muted">{reasonText(row)}</div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">

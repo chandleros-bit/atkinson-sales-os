@@ -213,7 +213,7 @@ export function ScheduleButton({ businessId, contactId, contactName, variant = '
             e.stopPropagation()
             setOpen(true)
           }}
-          className={`grid h-8 w-8 flex-none place-items-center rounded-[9px] text-muted hover:bg-hoverbg ${className}`}
+          className={`grid h-10 w-10 flex-none place-items-center rounded-[9px] text-muted hover:bg-hoverbg sm:h-8 sm:w-8 ${className}`}
         >
           <CalendarSvg size={15} />
         </button>
