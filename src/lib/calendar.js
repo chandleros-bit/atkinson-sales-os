@@ -4,9 +4,10 @@
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+// 'os-*' are calls and meetings scheduled in the app (contactEvents.js).
 export function sourceToBiz(source) {
-  if (source === 'outlook-mpg') return 'mpg'
-  if (source === 'outlook-bayway') return 'bay'
+  if (source === 'outlook-mpg' || source === 'os-mpg') return 'mpg'
+  if (source === 'outlook-bayway' || source === 'os-bay') return 'bay'
   return null
 }
 

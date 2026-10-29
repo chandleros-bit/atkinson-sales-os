@@ -5,6 +5,9 @@ import { useBusiness } from '../context/BusinessContext'
 import { liveEvents, sourceToBiz, timeLabel } from '../lib/calendar'
 import { todayEvents } from '../lib/calendarRail'
 import { todayKey } from '../lib/overviewCards'
+import { fetchContactEvents, toCalendarEvent, onContactEventsChanged } from '../lib/contactEvents'
+import { openPerson } from './PersonSheet'
+import { OsTag } from './ScheduleEvent'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -27,6 +30,9 @@ export default function TodayAgenda({ className = '' }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
+  // Calls and meetings scheduled in the app reload in place after a save.
+  const [osBump, setOsBump] = useState(0)
+  useEffect(() => onContactEventsChanged(() => setOsBump((n) => n + 1)), [])
 
   useEffect(() => {
     if (isDemoMode) {
@@ -35,19 +41,23 @@ export default function TodayAgenda({ className = '' }) {
     }
     let alive = true
     ;(async () => {
-      setLoading(true)
+      if (!osBump) setLoading(true)
       setError(null)
       try {
         const { from, to } = todayWindow()
-        const { data, error: err } = await supabase
-          .from('calendar_events')
-          .select('id, source_account, title, starts_at, ends_at, is_all_day, location')
-          .gte('starts_at', from)
-          .lt('starts_at', to)
-          .order('starts_at', { ascending: true })
+        const [{ data, error: err }, osRes] = await Promise.all([
+          supabase
+            .from('calendar_events')
+            .select('id, source_account, title, starts_at, ends_at, is_all_day, location')
+            .gte('starts_at', from)
+            .lt('starts_at', to)
+            .order('starts_at', { ascending: true }),
+          fetchContactEvents({ from, to }),
+        ])
         if (!alive) return
         if (err) setError(err.message)
-        else setRows(liveEvents(data))
+        // Our own events never block the Outlook ones: a failed read shows none.
+        else setRows([...liveEvents(data), ...(osRes.data || []).map(toCalendarEvent)])
       } catch (e) {
         if (alive) setError(String(e?.message || e))
       } finally {
@@ -57,7 +67,7 @@ export default function TodayAgenda({ className = '' }) {
     return () => {
       alive = false
     }
-  }, [])
+  }, [osBump])
 
   const agenda = useMemo(
     () => todayEvents(rows.filter((e) => matches(sourceToBiz(e.source_account)))),
@@ -99,14 +109,24 @@ export default function TodayAgenda({ className = '' }) {
             const biz = sourceToBiz(e.source_account)
             const color = biz === 'mpg' ? 'var(--mpg)' : biz === 'bay' ? 'var(--bay)' : 'var(--dim)'
             const past = !e.is_all_day && new Date(e.ends_at || e.starts_at).getTime() < now
+            // Calls and meetings scheduled in the app open their contact.
+            const Row = e.os ? 'button' : 'div'
             return (
-              <div key={e.id} data-event className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0">
+              <Row
+                key={e.id}
+                data-event
+                {...(e.os ? { type: 'button', onClick: () => openPerson(e.contact_id), 'data-os-event': e.kind } : {})}
+                className={`flex items-center gap-3 border-b border-line py-2.5 text-left last:border-b-0 ${e.os ? 'hover:bg-hoverbg' : ''} ${e.status === 'done' ? 'opacity-60' : ''}`}
+              >
                 <div className={`num w-[58px] flex-none text-[13px] font-semibold ${past ? 'text-dim' : ''}`}>
                   {e.is_all_day ? 'All day' : timeLabel(e)}
                 </div>
                 <span className="w-[3px] flex-none self-stretch rounded-full" style={{ background: color }} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-semibold">{e.title || '(no title)'}</div>
+                  <div className="truncate text-[14px] font-semibold">
+                    {e.title || '(no title)'}
+                    {e.os && <OsTag done={e.status === 'done'} />}
+                  </div>
                   <div className="truncate text-[12.5px] text-muted">
                     {[e.location, biz === 'mpg' ? 'MPG' : biz === 'bay' ? 'Bayway' : null].filter(Boolean).join(' · ')}
                   </div>
@@ -116,7 +136,7 @@ export default function TodayAgenda({ className = '' }) {
                     Next
                   </span>
                 )}
-              </div>
+              </Row>
             )
           })}
         </div>

@@ -1,9 +1,10 @@
 // One lead at a glance (the contact card): book and stage, phone and email,
 // the board's health pills and stage step, the Priority Leads score, Quick
-// Actions and the CRM link, then tabs: Notes (the lead form's first note and
-// every note, useContactNotes), Activity (calls, texts, emails, appointments),
-// Loan (Bayway: lead form scenario and docs) and Details (source, owner,
-// dates, tags, open tasks; useContactCard). Opens from search, the Workbench,
+// Actions, Schedule (a call or meeting, ScheduleEvent) and the CRM link, the
+// contact's upcoming calls and meetings, then tabs: Notes (the lead form's
+// first note and every note, useContactNotes), Activity (calls, texts, emails,
+// appointments), Loan (Bayway: lead form scenario and docs) and Details
+// (source, owner, dates, tags, open tasks; useContactCard). Opens from search, the Workbench,
 // and any contact name in the app (openPerson / PersonLink).
 // Spec: docs/superpowers/specs/2026-10-19-tier1-pipeline-flow-design.md (5)
 import { Fragment, useCallback, useEffect, useState } from 'react'
@@ -21,6 +22,7 @@ import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { cardHealth } from '../lib/cardHealth'
 import { CRM_LABEL } from '../lib/crmActions'
 import QuickActions, { Sheet, quickActionTone } from './QuickActions'
+import { ScheduleButton, UpcomingEvents } from './ScheduleEvent'
 
 const BOOK = { bay: 'Bayway', mpg: 'MPG' }
 
@@ -292,11 +294,15 @@ export default function PersonSheet({ id, initial = null, onClose }) {
               extra.reload()
             }}
           />
-          {person.crm_profile_url && (
-            <a href={person.crm_profile_url} target="_blank" rel="noreferrer" className="text-[12.5px] font-semibold" style={{ color: t.ink }}>
-              Open in {CRM_LABEL[biz]} ↗
-            </a>
-          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <ScheduleButton businessId={biz} contactId={person.id} contactName={person.name} />
+            {person.crm_profile_url && (
+              <a href={person.crm_profile_url} target="_blank" rel="noreferrer" className="text-[12.5px] font-semibold" style={{ color: t.ink }}>
+                Open in {CRM_LABEL[biz]} ↗
+              </a>
+            )}
+          </div>
+          <UpcomingEvents contactId={person.id} />
           <div role="tablist" aria-label="Contact card" className="mt-2 flex gap-1 border-b border-line">
             {tabs.map((x) => (
               <button
