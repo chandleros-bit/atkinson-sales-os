@@ -2,6 +2,7 @@
 // day's theme and how many are due, then the picked day's people with a call
 // link. Start dialing / a row opens the Dialer on this list.
 import PersonLink from './PersonLink'
+import { SECTION_HEAD, SectionTitle } from './CallSection'
 import { AgentLines } from './AgentCalls'
 import { telHref } from '../lib/phone'
 
@@ -14,8 +15,17 @@ const CallIcon = () => (
 // agents / agentsChecked: useLoanAgents, for the loan-status rows.
 export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, agents = null, agentsChecked = false }) {
   const { theme, items, total, week } = list
+  const title = !theme ? 'Theme of the day' : `${pickedDay == null ? "Today's theme" : DAY_NAMES[theme.day]}: ${theme.label}`
   return (
     <section aria-label="Theme of the day">
+      <div className={SECTION_HEAD}>
+        <SectionTitle icon="calendar" count={total}>{title}</SectionTitle>
+        {items.length > 0 && (
+          <button type="button" data-theme-start onClick={() => onDial(0)} className="ml-auto min-h-[34px] flex-none rounded-[10px] px-3 text-[13px] font-bold text-white" style={{ background: 'var(--chrome)' }}>
+            Start dialing
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-5 gap-1 border-b border-line px-3 py-2.5">
         {week.map((w) => {
           const active = pickedDay != null ? w.day === pickedDay : w.isToday
@@ -36,16 +46,6 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
             </button>
           )
         })}
-      </div>
-      <div className="flex items-center justify-between gap-2 border-b border-line px-4 pb-1.5 pt-3">
-        <div className="text-[12px] font-bold uppercase tracking-wide text-muted">
-          {theme ? theme.label : 'Theme of the day'} <span className="num font-semibold text-dim">{total}</span>
-        </div>
-        {items.length > 0 && (
-          <button type="button" data-theme-start onClick={() => onDial(0)} className="min-h-[34px] rounded-[10px] px-3 text-[13px] font-bold text-white" style={{ background: 'var(--chrome)' }}>
-            Start dialing
-          </button>
-        )}
       </div>
       {!theme && <div className="border-b border-line px-4 py-3 text-[13px] text-muted">No theme list on weekends.</div>}
       {theme && items.length === 0 && <div className="border-b border-line px-4 py-3 text-[13px] text-muted">Nobody due on {theme.label} right now.</div>}

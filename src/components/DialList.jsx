@@ -3,6 +3,7 @@
 // dialing / a row opens the Dialer at that lead.
 import PersonLink from './PersonLink'
 import BizBadge from './BizBadge'
+import { SECTION_HEAD, SectionTitle } from './CallSection'
 import { telHref } from '../lib/phone'
 import { ATTEMPTS, whenLabel } from '../lib/dialList'
 
@@ -50,13 +51,11 @@ export default function DialList({ dueNow, laterToday, now = Date.now(), onDial 
   const all = [...dueNow, ...laterToday]
   return (
     <section aria-label="Lead cadence">
-      <div className="flex items-center justify-between gap-2 border-b border-line px-4 pb-1.5 pt-3">
-        <div className="text-[12px] font-bold uppercase tracking-wide text-muted">
-          Lead cadence <span className="num font-semibold text-dim">{dueNow.length}</span>
-          {laterToday.length > 0 && <span className="font-semibold normal-case text-dim"> · {laterToday.length} later today</span>}
-        </div>
+      <div className={SECTION_HEAD}>
+        <SectionTitle icon="phone" count={dueNow.length}>Lead cadence</SectionTitle>
+        {laterToday.length > 0 && <span className="flex-none text-[12.5px] font-semibold text-muted">{laterToday.length} later today</span>}
         {all.length > 0 && (
-          <button type="button" data-start-dialing onClick={() => onDial(0)} className="min-h-[34px] rounded-[10px] px-3 text-[13px] font-bold text-white" style={{ background: 'var(--chrome)' }}>
+          <button type="button" data-start-dialing onClick={() => onDial(0)} className="ml-auto min-h-[34px] flex-none rounded-[10px] px-3 text-[13px] font-bold text-white" style={{ background: 'var(--chrome)' }}>
             Start dialing
           </button>
         )}
