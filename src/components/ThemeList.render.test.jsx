@@ -46,4 +46,22 @@ describe('ThemeList', () => {
     expect((await render({ list: { theme: null, items: [], total: 0, week } })).textContent).toContain('No theme list on weekends')
     expect((await render({ list: { theme: week[2], items: [], total: 0, week } })).textContent).toContain('Nobody due on Past clients')
   })
+  it("lists a loan's agents under the borrower, or asks for them once FUB has answered", async () => {
+    const loan = { ...item, id: 'b1', kind: 'loan_status', label: 'Loan status update', row: { id: 'b1', name: 'Jo Ramirez', phone: '7135550100' } }
+    const loan2 = { ...loan, id: 'b2', row: { id: 'b2', name: 'Al Ames', phone: null } }
+    const agents = new Map([['b1', [
+      { id: 'a1', contact_id: 'b1', kind: 'buyer_agent', name: 'Jane Smith', phone: '281-555-0100', matched_contact_id: 'r9' },
+      { id: 'a2', contact_id: 'b1', kind: 'seller_agent', name: 'Sam Seller', phone: null, matched_phone: '8325550111' },
+    ]]])
+    const list = { theme: week[1], items: [loan, loan2], total: 2, week }
+    const host = await render({ list, agents, agentsChecked: true })
+    const rows = [...host.querySelectorAll('[data-theme-row]')]
+    const lines = [...rows[0].querySelectorAll('[data-agent-line]')]
+    expect(lines.map((l) => l.textContent)).toEqual(["Buyer's agentJane Smith(281) 555-0100", "Seller's agentSam Seller(832) 555-0111"])
+    expect(lines[0].querySelector('[data-person-link]')).not.toBe(null)
+    expect(lines[1].querySelector('a[href="tel:8325550111"]')).not.toBe(null)
+    expect(rows[1].querySelector('[data-agents-missing]').textContent).toBe('Add agents in FUB')
+    const before = await render({ list, agents: new Map(), agentsChecked: false })
+    expect(before.querySelector('[data-agents-missing]')).toBe(null)
+  })
 })

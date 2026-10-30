@@ -18,6 +18,7 @@ import VoiceTask from '../components/VoiceTask'
 import { SyncDot } from '../components/PageHeader'
 import Priority from './Priority'
 import { useDialList } from '../lib/useDialList'
+import { useLoanAgents } from '../lib/loanAgents'
 import { buildDialList } from '../lib/dialList'
 import { buildThemeList } from '../lib/dialThemes'
 import ThemeList from '../components/ThemeList'
@@ -81,6 +82,9 @@ export default function Workbench() {
   const themeList = buildThemeList(dial.rows, { now: dial.now, day: themeDay, skips: dial.skips, inBook })
   const dialIds = new Set([...dialItems, ...themeList.items].map((i) => i.id))
   const callsToGo = toGo + dialDue.dueNow.length + (themeDay == null ? themeList.items.length : 0)
+  // Tuesday loans: their buyer's / seller's agents. While dialing, the list
+  // being walked, so a borrower just called keeps their agents on screen.
+  const loanAgents = useLoanAgents((dialRun ? dialRun.items : themeList.items).filter((i) => i.kind === 'loan_status').map((i) => i.id))
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
@@ -146,7 +150,7 @@ export default function Workbench() {
             <Priority embedded hideIds={dialIds} buckets={['reached_out']} />
             <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={dial.now} onDial={(i) => setDialRun({ items: dialItems, start: i })} />
             <Priority embedded hideIds={dialIds} buckets={['overdue']} />
-            <ThemeList list={themeList} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeList.items, start: i })} />
+            <ThemeList list={themeList} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeList.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
             <details>
               <summary className="cursor-pointer border-b border-line px-4 py-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">More from Up Next</summary>
               <Priority embedded hideIds={dialIds} buckets={['new_lead', 'hot_cold', 'no_next_step', 'stuck', 'quiet']} />
@@ -165,6 +169,8 @@ export default function Workbench() {
           items={dialRun.items}
           start={dialRun.start}
           skipToday={dial.skipToday}
+          agents={loanAgents.byContact}
+          agentsChecked={loanAgents.checked}
           onClose={() => {
             setDialRun(null)
             dial.reload()

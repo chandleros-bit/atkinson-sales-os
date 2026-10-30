@@ -39,3 +39,10 @@ describe('theme texts', () => {
     expect(textFor('bay', 'pre_approved', 'Ana Ruiz')).toBe('Hi Ana, checking in on the house hunt. Found anything you like yet?')
   })
 })
+
+describe('agent text', () => {
+  it("names the borrower to the agent", () => {
+    expect(textFor('bay', 'agent_update', 'Jane Smith', { borrower: 'Jo Ramirez' })).toBe("Hi Jane, Chandler with Bayway. Quick check in on Jo Ramirez's loan. Anything you need from me?")
+    expect(textFor('bay', 'agent_update', 'Jane Smith')).toMatch(/on your buyer's loan/)
+  })
+})
