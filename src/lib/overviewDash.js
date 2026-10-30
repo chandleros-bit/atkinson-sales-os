@@ -78,7 +78,7 @@ const signed = (n) => (n > 0 ? `↑ ${n}` : n < 0 ? `↓ ${Math.abs(n)}` : '→ 
 
 // The month's raw values every card reads, for the visible book(s).
 // activities: outbound call/text/email rows { occurred_at, type, business_id }.
-export function monthValues({ biz, metrics, deals = [], activities = [], pipeline = [], now = Date.now() }) {
+export function monthValues({ biz, metrics, deals = [], activities = [], pipeline = [], now = Date.now(), loanStats = null }) {
   const inBook = inBookFor(biz)
   const win = monthWindow(now)
   const prev = prevMonthWindow(now)
@@ -93,11 +93,14 @@ export function monthValues({ biz, metrics, deals = [], activities = [], pipelin
   const manualCalls = (rows, to = '9999') =>
     rows.filter((r) => inBook(r.business_id) && r.metric_key === 'calls' && String(r.date).slice(0, 10) < to).reduce((s, r) => s + Number(r.value || 0), 0)
   const prod = productionDays(pipeline)
+  // Once any loan is imported, Bayway's loan numbers come from Arive.
+  const arive = bay && loanStats ? loanStats : null
   return {
-    commission: bay ? sumMetric(month, 'bay', 'rev_gross_commission') : 0,
+    commission: arive ? arive.commission : bay ? sumMetric(month, 'bay', 'rev_gross_commission') : 0,
+    commissionFromArive: !!arive,
     residual: mpg ? sumMetric(month, 'mpg', 'rev_monthly_residual') : 0,
-    loansClosed: bay ? countWon(deals, win) : 0,
-    loansClosedPrev: bay ? countWon(deals, prev) : 0,
+    loansClosed: arive ? arive.closed : bay ? countWon(deals, win) : 0,
+    loansClosedPrev: arive ? arive.closedPrev : bay ? countWon(deals, prev) : 0,
     merchants: mpg ? sumMetric(month, 'mpg', 'new_merchant_accounts') : 0,
     merchantsPrev: mpg ? sumMetric(prevMonth, 'mpg', 'new_merchant_accounts') : 0,
     proposals: mpg ? sumMetric(month, 'mpg', 'merchant_proposals_delivered') : 0,
@@ -105,8 +108,8 @@ export function monthValues({ biz, metrics, deals = [], activities = [], pipelin
     callsPrevSoFar: manualCalls(prevMonth, cut) + callsBetween(acts, prev.from, cut),
     callsToday: manualCalls(month.filter((r) => String(r.date).slice(0, 10) === today)) + callsBetween(acts, today, tomorrow),
     applications: bay ? countIn(prod, win.from, win.to) : 0,
-    pipelineValue: bay ? pipelineValue(deals) : 0,
-    openLoans: bay ? deals.filter((d) => d.status === 'open').length : 0,
+    pipelineValue: arive ? arive.pipeline : bay ? pipelineValue(deals) : 0,
+    openLoans: arive ? arive.open : bay ? deals.filter((d) => d.status === 'open').length : 0,
     prevMonthLabel: MONTHS[Number(prev.from.slice(5, 7)) - 1],
   }
 }
@@ -118,7 +121,7 @@ export function kpiCards({ biz, values: v, targets, mpgRows = [] }) {
   const bay = biz !== 'mpg'
   const mpg = biz !== 'bay'
   const money = bay
-    ? { id: 'commission', label: 'Gross commission (MTD)', value: v.commission, unit: 'currency', goal: targets.rev_gross_commission, tag: 'Entered', icon: 'money', tone: 'bay' }
+    ? { id: 'commission', label: 'Gross commission (MTD)', value: v.commission, unit: 'currency', goal: targets.rev_gross_commission, tag: v.commissionFromArive ? 'Est. from Arive' : 'Entered', icon: 'money', tone: 'bay' }
     : { id: 'residual', label: 'MPG residual (MTD)', value: v.residual, unit: 'currency', goal: targets.rev_monthly_residual, tag: 'Entered', icon: 'money', tone: 'mpg' }
   money.pct = pctOf(money.value, money.goal)
   money.delta = { text: `${money.pct}% of goal`, tone: 'flat' }
@@ -369,12 +372,12 @@ const SPRINT_ITEMS = [
   { key: 'bay_completed_applications', label: 'Bayway applications', book: 'bay' },
 ]
 
-export function sprintPace({ biz, metrics, targets, now = Date.now() }) {
+export function sprintPace({ biz, metrics, targets, now = Date.now(), measured = {} }) {
   const win = sprintWindow()
   const rows = sprintRows(metrics)
   const elapsed = sprintElapsed(win, now)
   const items = SPRINT_ITEMS.filter((s) => biz === 'all' || s.book === biz).map((s) => {
-    const value = sumMetric(rows, s.book, s.key)
+    const value = measured[s.key] ?? sumMetric(rows, s.book, s.key)
     const target = targets[s.key]
     return { ...s, value, target, pct: pctOf(value, target), onPace: goalStatus(value, target, elapsed) !== 'behind' }
   })

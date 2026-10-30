@@ -158,3 +158,25 @@ describe('pipeline mix, income, sprints', () => {
     expect(fmtMoney(640)).toBe('$640')
   })
 })
+
+describe('Arive loan stats on Overview', () => {
+  const loanStats = { closed: 3, closedPrev: 1, volume: 1104233, commission: 13800, pipeline: 900000, open: 4, sprintFunded: 5 }
+
+  it('uses the loan stats instead of FUB deals and entered commission', () => {
+    const v = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW, loanStats })
+    expect(v).toMatchObject({ commission: 13800, loansClosed: 3, loansClosedPrev: 1, pipelineValue: 900000, openLoans: 4, commissionFromArive: true })
+    const cards = kpiCards({ biz: 'bay', values: v, targets })
+    expect(cards[0]).toMatchObject({ value: 13800, tag: 'Est. from Arive' })
+  })
+
+  it('falls back to the old sources without an import', () => {
+    const v = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW, loanStats: null })
+    expect(v).toMatchObject({ commission: 9800, commissionFromArive: false })
+    expect(kpiCards({ biz: 'bay', values: v, targets })[0].tag).toBe('Entered')
+  })
+
+  it('sprint pace takes measured funded loans', () => {
+    const s = sprintPace({ biz: 'bay', metrics: [], targets, now: NOW, measured: { bay_funded_loans: 5 } })
+    expect(s.items.find((x) => x.key === 'bay_funded_loans').value).toBe(5)
+  })
+})

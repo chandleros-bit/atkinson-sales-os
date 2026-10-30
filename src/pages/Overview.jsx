@@ -21,7 +21,9 @@ import { deriveAlert } from '../lib/overview'
 import { MPG_LEAD_FLOW } from '../lib/pipeline'
 import { pipelineKpis } from '../lib/pipelineView'
 import { formatPhone, telHref } from '../lib/phone'
-import { DEFAULT_TARGETS, resolveTargets, monthWindow, formatValue, MPG_SPRINT } from '../lib/reports'
+import { DEFAULT_TARGETS, resolveTargets, monthWindow, sprintWindow, formatValue, MPG_SPRINT } from '../lib/reports'
+import { fetchLoanBundle } from '../lib/loansData'
+import { loanStats } from '../lib/loans'
 import { todayKey } from '../lib/overviewCards'
 import { BAY_STAGES } from '../../supabase/functions/_shared/bay-stages.ts'
 import {
@@ -139,7 +141,7 @@ function KpiCard({ card }) {
           {card.tag && (
             <span
               className="rounded-md border px-[7px] py-px text-[11px] font-semibold"
-              title={card.tag === 'Entered' ? 'Typed into Reports' : 'From synced CRM data'}
+              title={card.tag === 'Entered' ? 'Typed into Reports' : card.tag === 'Est. from Arive' ? 'Estimated from the Arive loan import' : 'From synced CRM data'}
               style={card.tag === 'Entered' ? { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' } : { borderColor: 'var(--line2)', background: 'var(--panel2)', color: 'var(--muted)' }}
             >
               {card.tag}
@@ -557,6 +559,7 @@ function useOverviewData(biz) {
           q.deals = fetchAllSettled(() =>
             supabase.from('deals').select('status, value, expected_close, business_id').eq('business_id', 'bay').order('id'),
           )
+          q.loans = fetchLoanBundle()
         }
         if (wantsMpg) {
           q.mpgRows = fetchAllSettled(() => supabase.from('v_mpg_contacts').select(`id, name, company, stage, last_touch_at${HEALTH_COLUMNS}`).order('id'))
@@ -580,6 +583,7 @@ function useOverviewData(biz) {
           leads: (res.contacts.data || []).map(toLead),
           bayPipe: res.bayPipe?.data || [],
           deals: res.deals?.data || [],
+          loanBundle: res.loans?.data || null,
           mpgRows: (res.mpgRows?.data || []).map((r) => ({ ...r, business_id: 'mpg' })),
         })
       } catch (e) {
@@ -600,7 +604,9 @@ function buildView(biz, data) {
   const inBook = (b) => biz === 'all' || b === biz
   const now = Date.now()
   const activities = data.activities.filter((a) => inBook(a.business_id))
-  const values = monthValues({ biz, metrics: data.metrics, deals: data.deals, activities: data.activities, pipeline: data.bayPipe, now })
+  const lb = data.loanBundle
+  const stats = lb ? loanStats(lb.loans, lb.rates, { month: monthWindow(now), prev: prevMonthWindow(now), sprint: sprintWindow() }) : null
+  const values = monthValues({ biz, metrics: data.metrics, deals: data.deals, activities: data.activities, pipeline: data.bayPipe, now, loanStats: stats })
   return {
     alert: deriveAlert({ latestSync: data.latestSync, tasks: data.tasks, now }),
     kpis: kpiCards({ biz, values, targets: data.targets, mpgRows: data.mpgRows }),
@@ -608,7 +614,7 @@ function buildView(biz, data) {
     goals: monthlyGoals({ biz, values, targets: data.targets, now }),
     sources: topSources(data.leads, biz, new Date(`${monthWindow(now).from}T00:00:00`).getTime()),
     income: incomeMix({ values, targets: data.targets }),
-    sprint: sprintPace({ biz, metrics: data.metrics, targets: data.targets, now }),
+    sprint: sprintPace({ biz, metrics: data.metrics, targets: data.targets, now, measured: stats ? { bay_funded_loans: stats.sprintFunded } : {} }),
   }
 }
 
