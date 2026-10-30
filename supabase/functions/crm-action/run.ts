@@ -14,12 +14,16 @@
 
 import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS } from './plan.ts'
 import { isStageTarget } from '../_shared/bay-stages.ts'
+import { mapRelationship } from '../_shared/fub-relationships.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SOURCE_FOR = { bay: 'fub', mpg: 'zoho' }
 const BOOK_LABEL = { bay: 'Bayway', mpg: 'MPG' }
 const CRM_LABEL = { bay: 'FUB', mpg: 'Zoho' }
 const ON_CONFLICT = { onConflict: 'source_crm,external_id' }
+
+const RELATIONSHIP_TTL_MS = 60 * 60_000
+const RELATIONSHIP_MAX = 25
 
 const reply = (http, body) => ({ http, body })
 const msg = (e) => String(e?.message || e).slice(0, 500)
@@ -273,6 +277,42 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
     } catch (e) {
       return reply(200, { status: 'error', error: msg(e) })
     }
+  }
+
+  // Read-only: the buyer's / seller's agents on Bayway borrowers (Tuesday
+  // loan status), from FUB Relationships into contact_relationships. Each
+  // borrower is pulled at most once an hour; a pull replaces their agents.
+  // Writes nothing to the CRM and leaves no crm_actions row.
+  if (req.action === 'contact_relationships') {
+    const ids = Array.isArray(req.payload?.contact_ids) ? [...new Set(req.payload.contact_ids.map(String))] : []
+    if (!ids.length) return reply(200, { status: 'refused', error: 'contact_ids is required' })
+    if (ids.length > RELATIONSHIP_MAX) return reply(200, { status: 'refused', error: `At most ${RELATIONSHIP_MAX} contacts at a time` })
+    let synced = 0
+    let skipped = 0
+    const errors = []
+    for (const id of ids) {
+      const contact = await loadContact(db, id)
+      if (!contact || contact.business_id !== 'bay') { skipped++; continue }
+      const { data: last } = await db.from('contact_relationship_syncs').select('synced_at').eq('contact_id', id).maybeSingle()
+      if (last?.synced_at && now.getTime() - new Date(last.synced_at).getTime() < RELATIONSHIP_TTL_MS) { skipped++; continue }
+      try {
+        const recs = await adapters.bay.read.relationshipsFor(String(contact.external_id))
+        const rows = (recs || []).map((r) => mapRelationship(r, id)).filter(Boolean)
+        const del = await db.from('contact_relationships').delete().eq('contact_id', id)
+        if (del.error) throw new Error(`contact_relationships delete: ${del.error.message}`)
+        if (rows.length) {
+          const ins = await db.from('contact_relationships').insert(rows.map((r) => ({ ...r, synced_at: now.toISOString() })))
+          if (ins.error) throw new Error(`contact_relationships insert: ${ins.error.message}`)
+        }
+        const stamp = await db.from('contact_relationship_syncs').upsert({ contact_id: id, synced_at: now.toISOString() }, { onConflict: 'contact_id' })
+        if (stamp.error) throw new Error(`contact_relationship_syncs: ${stamp.error.message}`)
+        synced++
+      } catch (e) {
+        errors.push({ contact_id: id, error: msg(e) })
+      }
+    }
+    if (errors.length && !synced) return reply(200, { status: 'error', error: errors[0].error, errors })
+    return reply(200, { status: 'ok', synced, skipped, errors })
   }
 
   const resolved = await resolve(db, req)

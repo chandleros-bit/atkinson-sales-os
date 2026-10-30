@@ -8,6 +8,7 @@
 
 import { fubGet, fubSend, mapContact } from '../_shared/fub.ts'
 import { retagForTarget, targetForStage } from '../_shared/bay-stages.ts'
+import { relationshipsOf } from '../_shared/fub-relationships.ts'
 import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, FUB_TASK_TYPES } from '../_shared/fub-write.ts'
 import { mapActivity as fubMapActivity } from '../_shared/fub-activity.ts'
 import { mapTask as fubMapTask } from '../_shared/fub-tasks.ts'
@@ -97,6 +98,8 @@ export function fubAdapter(env) {
       notesFor: async (personId) => (await fubGet('/notes', { personId, sort: '-created', limit: 100 })).notes || [],
       task: (id) => fubGet(`/tasks/${id}`),
       person: (id) => fubGet(`/people/${id}`),
+      // The borrower's FUB Relationships (buyer's / seller's agent; dialer phase 3).
+      relationshipsFor: async (personId) => relationshipsOf(await fubGet('/peopleRelationships', { personId, limit: 100 })),
     },
     map: { activity: fubMapActivity, task: fubMapTask, contact: mapContact },
     whoami: async () => {
