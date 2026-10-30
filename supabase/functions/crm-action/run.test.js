@@ -31,7 +31,11 @@ function fakeDb(seed) {
           if (table === 'crm_actions' && rows.some((r) => r.client_action_id === payload.client_action_id)) {
             return { error: { code: '23505', message: 'duplicate key' } }
           }
-          rows.push({ ...payload })
+          for (const p of [].concat(payload)) rows.push({ ...p })
+          return { error: null }
+        }
+        if (op === 'delete') {
+          tables[table] = rows.filter((r) => !match(r))
           return { error: null }
         }
         if (op === 'update') {
@@ -54,6 +58,7 @@ function fakeDb(seed) {
         select: () => q,
         insert: (row) => { op = 'insert'; payload = row; calls.push(['insert', table, row]); return q },
         update: (patch) => { op = 'update'; payload = patch; calls.push(['update', table, patch]); return q },
+        delete: () => { op = 'delete'; calls.push(['delete', table]); return q },
         upsert: (row, o) => { op = 'upsert'; payload = row; opts = o; calls.push(['upsert', table, row, o]); return q },
         eq: (c, v) => { filters.push([c, v]); return q },
         maybeSingle: async () => {
@@ -543,5 +548,60 @@ describe('crm-action run: contact_notes (read-only)', () => {
 
   it('needs a known contact', async () => {
     expect((await go(notesReq('nope'))).body).toEqual({ status: 'refused', error: 'Contact not found' })
+  })
+})
+
+describe('crm-action run: contact_relationships (read-only)', () => {
+  const relReq = (ids) => ({ client_action_id: uuid(91), action: 'contact_relationships', payload: { contact_ids: ids } })
+  const jane = { id: 501, personId: 4821, type: "Buyer's Agent", firstName: 'Jane', lastName: 'Smith', phones: [{ value: '281-555-0100' }] }
+  const spouse = { id: 502, personId: 4821, type: 'Spouse', firstName: 'Pat', lastName: 'Ramirez' }
+
+  it("replaces a borrower's agents from FUB and stamps the sync, writing nothing to FUB", async () => {
+    db.tables.contact_relationships = [{ contact_id: 'c-bay', external_id: '400', kind: 'seller_agent', name: 'Gone Agent' }]
+    bay.read.relationshipsFor = vi.fn(async () => [jane, spouse])
+    const res = await go(relReq(['c-bay']))
+    expect(res.body).toEqual({ status: 'ok', synced: 1, skipped: 0, errors: [] })
+    expect(bay.read.relationshipsFor).toHaveBeenCalledWith('4821')
+    expect(db.tables.contact_relationships.map((r) => [r.contact_id, r.external_id, r.kind, r.name])).toEqual([
+      ['c-bay', '501', 'buyer_agent', 'Jane Smith'],
+    ])
+    expect(db.tables.contact_relationship_syncs).toEqual([{ contact_id: 'c-bay', synced_at: expect.any(String) }])
+    expect(bay.sent).toEqual([])
+    expect(db.tables.crm_actions || []).toEqual([])
+  })
+
+  it('skips borrowers pulled in the last hour, MPG leads, and unknown ids', async () => {
+    db.tables.contact_relationship_syncs = [{ contact_id: 'c-bay', synced_at: new Date(now.getTime() - 20 * 60_000).toISOString() }]
+    bay.read.relationshipsFor = vi.fn(async () => [jane])
+    const res = await go(relReq(['c-bay', 'c-mpg', 'nope']))
+    expect(res.body).toEqual({ status: 'ok', synced: 0, skipped: 3, errors: [] })
+    expect(bay.read.relationshipsFor).not.toHaveBeenCalled()
+  })
+
+  it('pulls again once the last pull is over an hour old', async () => {
+    db.tables.contact_relationship_syncs = [{ contact_id: 'c-bay', synced_at: new Date(now.getTime() - 61 * 60_000).toISOString() }]
+    bay.read.relationshipsFor = vi.fn(async () => [jane])
+    expect((await go(relReq(['c-bay']))).body).toMatchObject({ status: 'ok', synced: 1 })
+  })
+
+  it('reports a failed borrower without stopping the others', async () => {
+    bay.read.relationshipsFor = vi.fn(async (pid) => {
+      if (pid === '4821') throw new Error('FUB GET /peopleRelationships -> 500')
+      return [{ ...jane, id: 600, personId: 4822 }]
+    })
+    const res = await go(relReq(['c-bay', 'c-nophone']))
+    expect(res.body).toEqual({ status: 'ok', synced: 1, skipped: 0, errors: [{ contact_id: 'c-bay', error: 'FUB GET /peopleRelationships -> 500' }] })
+    expect(db.tables.contact_relationships.map((r) => r.contact_id)).toEqual(['c-nophone'])
+  })
+
+  it('says error when every pull failed', async () => {
+    bay.read.relationshipsFor = vi.fn(async () => { throw new Error('FUB down') })
+    expect((await go(relReq(['c-bay']))).body).toMatchObject({ status: 'error', error: 'FUB down' })
+  })
+
+  it('needs a list of ids, 25 at most', async () => {
+    expect((await go(relReq([]))).body).toEqual({ status: 'refused', error: 'contact_ids is required' })
+    const many = Array.from({ length: 26 }, (_, i) => `c-${i}`)
+    expect((await go(relReq(many))).body).toEqual({ status: 'refused', error: 'At most 25 contacts at a time' })
   })
 })

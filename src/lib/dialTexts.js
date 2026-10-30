@@ -3,7 +3,8 @@
 // a6 = after attempts 1, 3, 5 and 6; nurture (nurture and cold calls);
 // credit_repair (Bayway parked in Credit Repair); and the Bayway weekday
 // themes (dialThemes.js): new_realtor, loan_status, past_client,
-// pre_approved, top_partner.
+// pre_approved, top_partner; agent_update (a buyer's / seller's agent on a
+// Tuesday loan, {borrower} = the borrower's name).
 export const TEXTS = {
   bay: {
     a1: "Hi {first}, this is Chandler with Bayway. Just tried calling about your home loan. When's a good time to talk?",
@@ -17,6 +18,7 @@ export const TEXTS = {
     past_client: 'Hey {first}, Chandler with Bayway. Hope the house is treating you well. Anything I can help with?',
     pre_approved: 'Hi {first}, checking in on the house hunt. Found anything you like yet?',
     top_partner: 'Hey {first}, Chandler here. Just checking in, anything I can help with on your deals?',
+    agent_update: "Hi {first}, Chandler with Bayway. Quick check in on {borrower}'s loan. Anything you need from me?",
   },
   mpg: {
     a1: "Hi {first}, this is Chandler with Media Payments Group. Just tried calling about your card processing. When's a good time?",
@@ -29,9 +31,9 @@ export const TEXTS = {
 
 export const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || 'there'
 
-export function textFor(book, key, name) {
+export function textFor(book, key, name, { borrower } = {}) {
   const t = key ? TEXTS[book]?.[key] : null
-  return t ? t.replaceAll('{first}', firstName(name)) : null
+  return t ? t.replaceAll('{first}', firstName(name)).replaceAll('{borrower}', String(borrower || '').trim() || 'your buyer') : null
 }
 
 // Opens Messages on an iPhone / Mac (iMessage when the other person has it,

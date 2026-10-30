@@ -2,6 +2,7 @@
 // day's theme and how many are due, then the picked day's people with a call
 // link. Start dialing / a row opens the Dialer on this list.
 import PersonLink from './PersonLink'
+import { AgentLines } from './AgentCalls'
 import { telHref } from '../lib/phone'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -10,7 +11,8 @@ const CallIcon = () => (
 )
 
 // list: buildThemeList output. pickedDay: the previewed weekday or null (today).
-export default function ThemeList({ list, pickedDay = null, onPickDay, onDial }) {
+// agents / agentsChecked: useLoanAgents, for the loan-status rows.
+export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, agents = null, agentsChecked = false }) {
   const { theme, items, total, week } = list
   return (
     <section aria-label="Theme of the day">
@@ -51,16 +53,19 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial })
         const r = it.row
         const tel = telHref(r.phone)
         return (
-          <div key={it.id} data-theme-row className="flex items-center gap-3 border-b border-line px-4 py-2.5">
-            <div role="button" tabIndex={0} onClick={() => onDial(i)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onDial(i)} className="min-w-0 flex-1 cursor-pointer text-left" aria-label={`Dial ${r.name || 'contact'}`}>
-              <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[14px] font-semibold">{r.name || '(no name)'}</PersonLink>
-              <div className="mt-0.5 text-[12.5px] text-muted">{[it.label, it.hint].filter(Boolean).join(' · ')}</div>
+          <div key={it.id} data-theme-row className="border-b border-line px-4 py-2.5">
+            <div className="flex items-center gap-3">
+              <div role="button" tabIndex={0} onClick={() => onDial(i)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onDial(i)} className="min-w-0 flex-1 cursor-pointer text-left" aria-label={`Dial ${r.name || 'contact'}`}>
+                <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[14px] font-semibold">{r.name || '(no name)'}</PersonLink>
+                <div className="mt-0.5 text-[12.5px] text-muted">{[it.label, it.hint].filter(Boolean).join(' · ')}</div>
+              </div>
+              {tel && (
+                <a href={tel} aria-label={`Call ${r.name || 'contact'}`} className="grid h-10 w-10 flex-none place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
+                  <CallIcon />
+                </a>
+              )}
             </div>
-            {tel && (
-              <a href={tel} aria-label={`Call ${r.name || 'contact'}`} className="grid h-10 w-10 flex-none place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
-                <CallIcon />
-              </a>
-            )}
+            {it.kind === 'loan_status' && <AgentLines agents={agents?.get(it.id)} checked={agentsChecked} />}
           </div>
         )
       })}

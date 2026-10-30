@@ -1,10 +1,13 @@
 // One lead at a time (spec: The dialer). Calls go out on Chandler's phone or
 // in the CRM; this logs the outcome through crm-action and offers the text
 // for the step. items: [...dueNow, ...laterToday] at the moment dialing began.
+// agents / agentsChecked (useLoanAgents): a Tuesday loan's buyer's and
+// seller's agents, shown under the borrower.
 import { useState } from 'react'
 import QuickActions, { Sheet, quickActionTone } from './QuickActions'
 import BizBadge from './BizBadge'
 import { Pips } from './DialList'
+import AgentCalls from './AgentCalls'
 import { invokeCrmAction } from '../lib/writeback'
 import { buildActionRequest, summarizeResult, callStageAdvance, CRM_LABEL } from '../lib/crmActions'
 import { formatPhone, telHref } from '../lib/phone'
@@ -14,7 +17,7 @@ import { textFor, smsHref } from '../lib/dialTexts'
 const LEAD_KINDS = new Set(['attempt', 'move_nurture', 'nurture', 'cold', 'credit_repair'])
 const quiet = 'min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold text-[#344054]'
 
-export default function Dialer({ items, start = 0, onClose, skipToday }) {
+export default function Dialer({ items, start = 0, onClose, skipToday, agents = null, agentsChecked = false }) {
   const [queue, setQueue] = useState(() => items.slice(start).concat(items.slice(0, start)))
   const [pos, setPos] = useState(0)
   const [phase, setPhase] = useState('call') // call | after | bad | log
@@ -138,6 +141,10 @@ export default function Dialer({ items, start = 0, onClose, skipToday }) {
           <button type="button" disabled={busy} className={quiet} onClick={() => move('nurture')}>Move to Nurture</button>
           <button type="button" disabled={busy} className={quiet} onClick={() => move('lost', 'Unreachable')}>Mark Lost</button>
         </div>
+      )}
+
+      {phase !== 'log' && it.kind === 'loan_status' && (
+        <AgentCalls key={it.id} agents={agents?.get(it.id)} checked={agentsChecked} borrowerId={it.id} borrowerName={r.name} />
       )}
 
       {phase !== 'log' && (
