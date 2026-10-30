@@ -9,6 +9,7 @@ import {
   fetchLeads,
   fetchContacts,
   fetchDeals,
+  isExcludedLead,
   mapStage,
   mapContact,
   mapDeal,
@@ -59,8 +60,15 @@ Deno.serve(async () => {
       fetchLeads(apiHost, accessToken, since),
       fetchContacts(apiHost, accessToken, since),
     ])
+    // "Initial lead" leads stay out of the OS. One that moved back into that
+    // status is removed (migration 0044's remove_zoho_contacts).
+    const excludedIds = leads.filter(isExcludedLead).map((r) => String(r.id))
+    if (excludedIds.length) {
+      const { error } = await db.rpc('remove_zoho_contacts', { ext_ids: excludedIds })
+      if (error) throw new Error(`initial lead removal: ${error.message}`)
+    }
     const contactRows = [
-      ...leads.map((r) => mapContact(r, 'Leads')),
+      ...leads.filter((r) => !isExcludedLead(r)).map((r) => mapContact(r, 'Leads')),
       ...contacts.map((r) => mapContact(r, 'Contacts')),
     ]
     if (contactRows.length) {
