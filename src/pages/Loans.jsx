@@ -6,6 +6,7 @@ import { isDemoMode } from '../lib/supabase'
 import { fetchLoanBundle, saveLoanPatch, saveRates } from '../lib/loansData'
 import {
   DEFAULT_RATES, filterLoans, pipelineStatus, lenderSpread, fundedByMonth, estComp, isScenario, isOpen, notInLatest, hasApplicationDates,
+  periodWindow, inPeriod,
 } from '../lib/loans'
 import { pageSlice } from '../lib/paging'
 import { fmtMoney } from '../lib/overviewDash'
@@ -16,6 +17,10 @@ import LoanImport from '../components/LoanImport'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const ROLES = [['all', 'All'], ['primary', 'Mine'], ['assisted', 'Assisted']]
+const LENDER_PERIODS = [['ytd', 'YTD'], ['month', 'This month'], ['year', 'Year']]
+const PIPELINE_PERIODS = [['now', 'Now'], ['ytd', 'YTD'], ['month', 'This month']]
+// Ring segments in row order (top three lenders, then Others): existing tokens only.
+const RING_COLORS = ['var(--bay)', 'var(--bay-deep)', 'var(--bay-gold)', 'var(--dim)']
 const money = (n) => (n == null ? '—' : '$' + Math.round(n).toLocaleString('en-US'))
 const shortDate = (k) => (k ? new Date(`${String(k).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')
 
@@ -33,11 +38,23 @@ function demoBundle() {
   }
 }
 
-function Panel({ title, right, children }) {
+// Header label for a period, e.g. "YTD 2026", "Oct 2026", "2026".
+function periodLabel(period, now = new Date()) {
+  const y = now.getFullYear()
+  if (period === 'ytd') return `YTD ${y}`
+  if (period === 'month') return `${MONTHS[now.getMonth()]} ${y}`
+  if (period === 'year') return String(y)
+  return 'Now'
+}
+
+function Panel({ title, note, right, panel, children }) {
   return (
-    <section className="rounded-card border border-line bg-panel p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-[14px] font-semibold">{title}</h3>
+    <section data-panel={panel} className="rounded-card border border-line bg-panel p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h3 className="text-[14px] font-semibold">{title}</h3>
+          {note && <span className="truncate text-[12px] text-muted">{note}</span>}
+        </div>
         {right}
       </div>
       {children}
@@ -45,16 +62,40 @@ function Panel({ title, right, children }) {
   )
 }
 
-function PipelineStatus({ loans, showPeriod }) {
-  const groups = pipelineStatus(loans)
+function PeriodPills({ label, options, value, onChange }) {
+  return (
+    <div role="group" aria-label={label} className="flex gap-1">
+      {options.map(([k, text]) => (
+        <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}
+          className={`min-h-[26px] whitespace-nowrap rounded-full border px-3 text-[12px] ${value === k ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted'}`}>
+          {text}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Until any loan has application_on there is only "Now"; then YTD and This
+// month count the loans whose application_on falls in that window.
+function PipelineStatus({ loans, hasDates }) {
+  const [period, setPeriod] = useState('now')
+  const active = hasDates ? period : 'now'
+  const groups = pipelineStatus(inPeriod(loans, 'application_on', periodWindow(active)))
   const max = Math.max(1, ...groups.flatMap((g) => g.rows.map((r) => r.count)))
   return (
-    <Panel title="Pipeline Status" right={<span className="text-[12px] text-muted">{showPeriod}</span>}>
+    <Panel
+      title="Pipeline Status"
+      panel="pipeline-status"
+      note={hasDates ? (active === 'now' ? 'Now' : `Applications · ${periodLabel(active)}`) : null}
+      right={hasDates
+        ? <PeriodPills label="Pipeline Status period" options={PIPELINE_PERIODS} value={active} onChange={setPeriod} />
+        : <span className="text-[12px] text-muted">Now · add Application Date for YTD</span>}
+    >
       {groups.map((g) => (
         <div key={g.key} className="mb-3">
           <div className="mb-1 text-[12.5px] font-semibold">{g.label}</div>
           {g.rows.map((r) => (
-            <div key={r.stage} className="grid grid-cols-[minmax(0,1fr)_32px_64px_minmax(0,1.2fr)] items-center gap-2 text-[12.5px]">
+            <div key={r.stage} data-stage={r.stage} className="grid grid-cols-[minmax(0,1fr)_32px_64px_minmax(0,1.2fr)] items-center gap-2 text-[12.5px]">
               <span className="truncate text-muted">{r.stage}</span>
               <span className="num text-right">{r.count}</span>
               <span className="num text-right text-muted">{fmtMoney(r.amount)}</span>
@@ -67,20 +108,54 @@ function PipelineStatus({ loans, showPeriod }) {
   )
 }
 
-function LenderSpread({ loans, year }) {
-  const s = lenderSpread(loans, { from: `${year}-01-01`, to: `${year + 1}-01-01` })
+// Donut with one segment per lenderSpread row, coloured like its swatch.
+function LenderRing({ rows, total }) {
+  const r = 28
+  const c = 2 * Math.PI * r
+  let offset = 0
   return (
-    <Panel title="Lender Spread" right={<span className="text-[12px] text-muted">Funded · {year}</span>}>
+    <svg role="img" aria-label={`Funded loans by lender: ${rows.map((x) => `${x.lender} ${x.count}`).join(', ')}`}
+      viewBox="0 0 72 72" width="72" height="72" className="shrink-0">
+      <circle cx="36" cy="36" r={r} fill="none" stroke="var(--line)" strokeWidth="10" />
+      {rows.map((x, i) => {
+        const len = (x.count / total) * c
+        const seg = (
+          <circle key={x.lender} cx="36" cy="36" r={r} fill="none" stroke={RING_COLORS[i % RING_COLORS.length]} strokeWidth="10"
+            strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-offset} transform="rotate(-90 36 36)" />
+        )
+        offset += len
+        return seg
+      })}
+    </svg>
+  )
+}
+
+function LenderSpread({ loans }) {
+  const [period, setPeriod] = useState('ytd')
+  const s = lenderSpread(loans, periodWindow(period))
+  return (
+    <Panel
+      title="Lender Spread"
+      panel="lender-spread"
+      note={`Funded · ${periodLabel(period)}`}
+      right={<PeriodPills label="Lender Spread period" options={LENDER_PERIODS} value={period} onChange={setPeriod} />}
+    >
       {s.total === 0 ? (
-        <p className="text-[12.5px] text-muted">No funded loans in {year}.</p>
+        <p className="text-[12.5px] text-muted">No funded loans in this period.</p>
       ) : (
-        <div className="flex flex-wrap gap-x-6 gap-y-2">
-          {s.rows.map((r) => (
-            <div key={r.lender}>
-              <div className="text-[11.5px] uppercase tracking-wide text-muted">{r.lender}</div>
-              <div className="num text-[24px] font-light">{r.count}</div>
-            </div>
-          ))}
+        <div className="flex items-center gap-4">
+          <LenderRing rows={s.rows} total={s.total} />
+          <div className="flex min-w-0 flex-wrap gap-x-6 gap-y-2">
+            {s.rows.map((r, i) => (
+              <div key={r.lender} className="min-w-0">
+                <div className="flex items-center gap-1.5 text-[11.5px] uppercase tracking-wide text-muted">
+                  <span aria-hidden="true" className="inline-block h-2 w-2 shrink-0 rounded-sm" style={{ background: RING_COLORS[i % RING_COLORS.length] }} />
+                  <span className="truncate">{r.lender}</span>
+                </div>
+                <div className="num text-[24px] font-light">{r.count}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </Panel>
@@ -91,7 +166,7 @@ function LoansFunded({ loans, year }) {
   const f = fundedByMonth(loans, year)
   const max = Math.max(1, ...f.months.map((m) => m.volume))
   return (
-    <Panel title={`${f.count} Loans Funded`} right={<span className="text-[12px] text-muted">{year}</span>}>
+    <Panel title={`${f.count} Loans Funded`} panel="loans-funded" right={<span className="text-[12px] text-muted">{year}</span>}>
       <div className="num text-[30px] font-light">{fmtMoney(f.volume)}</div>
       <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[12.5px]">
         <div><b className="num">{f.purchase.count}</b> Purchase <span className="text-muted">{money(f.purchase.volume)}</span></div>
@@ -190,7 +265,8 @@ export default function Loans() {
   }, [])
   useEffect(() => { load() }, [load])
 
-  const shown = useMemo(() => (bundle ? sortLoans(filterLoans(bundle.loans, { role, scenarios })) : []), [bundle, role, scenarios])
+  const filtered = useMemo(() => (bundle ? filterLoans(bundle.loans, { role, scenarios }) : []), [bundle, role, scenarios])
+  const shown = useMemo(() => sortLoans(filtered), [filtered])
   const slice = pageSlice(shown, page)
 
   async function patch(loan, p) {
@@ -253,10 +329,10 @@ export default function Loans() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-3.5 lg:grid-cols-2">
-            <PipelineStatus loans={filterLoans(bundle.loans, { role, scenarios })} showPeriod={hasApplicationDates(bundle.loans) ? 'Now' : 'Now · add Application Date for YTD'} />
+            <PipelineStatus loans={filtered} hasDates={hasApplicationDates(bundle.loans)} />
             <div className="grid gap-3.5">
-              <LenderSpread loans={filterLoans(bundle.loans, { role, scenarios })} year={year} />
-              <LoansFunded loans={filterLoans(bundle.loans, { role, scenarios })} year={year} />
+              <LenderSpread loans={filtered} />
+              <LoansFunded loans={filtered} year={year} />
             </div>
           </div>
 

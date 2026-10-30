@@ -1,7 +1,7 @@
 // Loan maths for the Loans page panels and the Reports / Overview metrics.
 // Loans are rows of the `loans` table (see ariveImport.js). Pure.
 import { STAGE_GROUPS, norm } from './ariveImport'
-import { inWindow } from './reports'
+import { inWindow, monthWindow } from './reports'
 
 export const DEFAULT_RATES = { lo_name: 'Chandler Dean Atkinson', primary_pct: 1.25, assisted_pct: 0.75 }
 
@@ -94,6 +94,23 @@ export function fundedByMonth(loans, year) {
 }
 
 export const hasApplicationDates = (loans) => loans.some((l) => l.application_on)
+
+// Panel period -> { from, to } local YYYY-MM-DD window, or null for 'now'
+// (no date filter). 'ytd' is Jan 1 to tomorrow; 'month' is monthWindow();
+// 'year' is the whole current year.
+export function periodWindow(period, now = Date.now()) {
+  if (period === 'month') return monthWindow(now)
+  const d = new Date(now)
+  const pad = (n) => String(n).padStart(2, '0')
+  const key = (x) => `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`
+  const from = `${d.getFullYear()}-01-01`
+  if (period === 'ytd') return { from, to: key(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) }
+  if (period === 'year') return { from, to: `${d.getFullYear() + 1}-01-01` }
+  return null
+}
+
+// Loans whose `field` date falls in win; no window keeps them all.
+export const inPeriod = (loans, field, win) => (win ? loans.filter((l) => inWindow(l[field], win.from, win.to)) : loans)
 
 // Metrics for Reports / Overview. win: { month, prev, sprint } as { from, to }
 // YYYY-MM-DD windows. Scenario files never count. null when nothing is imported.

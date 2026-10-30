@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_RATES, resolveRates, isScenario, isOpen, estComp, notInLatest, filterLoans,
-  pipelineStatus, lenderSpread, fundedByMonth, loanStats, hasApplicationDates,
+  pipelineStatus, lenderSpread, fundedByMonth, loanStats, hasApplicationDates, periodWindow, inPeriod,
 } from './loans'
 
 const L = (o) => ({ role: 'primary', amount: 100000, stage: 'App Intake', stage_group: 'prospect', scenario_auto: false, scenario_override: null, comp_override: null, ...o })
@@ -128,5 +128,28 @@ describe('loanStats', () => {
     expect(loanStats(loans, rates, win)).toEqual({
       closed: 2, closedPrev: 1, volume: 600000, commission: 6500, pipeline: 500000, open: 1, sprintFunded: 3,
     })
+  })
+})
+
+describe('periods', () => {
+  const now = new Date(2026, 9, 30, 15, 0).getTime() // local Oct 30 2026
+
+  it('periodWindow builds local YYYY-MM-DD windows', () => {
+    expect(periodWindow('ytd', now)).toEqual({ from: '2026-01-01', to: '2026-10-31' })
+    expect(periodWindow('month', now)).toEqual({ from: '2026-10-01', to: '2026-11-01' })
+    expect(periodWindow('year', now)).toEqual({ from: '2026-01-01', to: '2027-01-01' })
+    expect(periodWindow('now', now)).toBeNull()
+  })
+
+  it('periodWindow YTD rolls over month and year ends', () => {
+    expect(periodWindow('ytd', new Date(2026, 11, 31).getTime())).toEqual({ from: '2026-01-01', to: '2027-01-01' })
+    expect(periodWindow('ytd', new Date(2026, 1, 28).getTime())).toEqual({ from: '2026-01-01', to: '2026-03-01' })
+  })
+
+  it('inPeriod keeps loans whose field falls in the window; no window keeps all', () => {
+    const ls = [L({ id: 'a', application_on: '2026-10-02' }), L({ id: 'b', application_on: '2026-03-01' }), L({ id: 'c' })]
+    expect(inPeriod(ls, 'application_on', { from: '2026-10-01', to: '2026-11-01' }).map((l) => l.id)).toEqual(['a'])
+    expect(inPeriod(ls, 'application_on', { from: '2026-01-01', to: '2026-10-31' }).map((l) => l.id)).toEqual(['a', 'b'])
+    expect(inPeriod(ls, 'application_on', null)).toBe(ls)
   })
 })

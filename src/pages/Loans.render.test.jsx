@@ -15,14 +15,19 @@ const loan = (o) => ({
   amount: 100000, purpose: 'Purchase', lender: null, funded_on: null, firm_closing_on: null, contact_id: null,
   scenario_auto: false, scenario_override: null, comp_override: null, last_seen_at: '2026-10-30T12:00:00Z', ...o,
 })
-const DATA = {
-  loans: [
-    loan({ arive_loan_id: '1', borrower_name: 'Gina Park', stage: 'Loan Funded', stage_group: 'funded', amount: 400000, lender: 'UWM', funded_on: '2026-10-03' }),
-    loan({ arive_loan_id: '2', borrower_name: 'Omar Vale', role: 'assisted', loan_officer: 'Ronnie Gaydos', amount: 200000 }),
-    loan({ arive_loan_id: '3', borrower_name: 'Test Test', scenario_auto: true, amount: 633750 }),
-  ],
-  updates: [],
-}
+// Dates relative to today (local) so the fixture never rots. The Newfi loan is
+// funded this year but never this month: Jan 1, or Dec 1 when it is January.
+const pad = (n) => String(n).padStart(2, '0')
+const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const TODAY = new Date()
+const THIS_YEAR_NOT_THIS_MONTH = key(new Date(TODAY.getFullYear(), TODAY.getMonth() === 0 ? 11 : 0, 1))
+const BASE_LOANS = [
+  loan({ arive_loan_id: '1', borrower_name: 'Gina Park', stage: 'Loan Funded', stage_group: 'funded', amount: 400000, lender: 'UWM', funded_on: key(TODAY) }),
+  loan({ arive_loan_id: '2', borrower_name: 'Omar Vale', role: 'assisted', loan_officer: 'Ronnie Gaydos', amount: 200000 }),
+  loan({ arive_loan_id: '3', borrower_name: 'Test Test', scenario_auto: true, amount: 633750 }),
+  loan({ arive_loan_id: '4', borrower_name: 'Lena Ford', stage: 'Loan Funded', stage_group: 'funded', amount: 300000, lender: 'Newfi', funded_on: THIS_YEAR_NOT_THIS_MONTH }),
+]
+const DATA = { loans: BASE_LOANS, updates: [] }
 
 function query(table) {
   const q = {}
@@ -44,6 +49,7 @@ vi.mock('../lib/supabase', () => ({ isDemoMode: false, supabase: { from: (t) => 
 beforeEach(() => {
   document.body.innerHTML = ''
   DATA.updates = []
+  DATA.loans = [...BASE_LOANS]
   window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
 })
 
@@ -96,5 +102,50 @@ describe('Loans page', () => {
     const btn = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Import CSV')
     await act(async () => btn.click())
     expect(host.querySelector('[role="dialog"]').textContent).toContain('Import Arive loans')
+  })
+
+  it('Lender Spread defaults to YTD and narrows to this month', async () => {
+    const host = await render()
+    const panel = host.querySelector('[data-panel="lender-spread"]')
+    const pill = (t) => [...panel.querySelectorAll('[role="group"] button')].find((b) => b.textContent === t)
+    expect(pill('YTD').getAttribute('aria-pressed')).toBe('true')
+    expect(panel.textContent).toContain('UWM')
+    expect(panel.textContent.includes('Newfi')).toBe(TODAY.getMonth() > 0)
+    await act(async () => pill('Year').click())
+    expect(panel.textContent).toContain('Newfi')
+    expect(panel.querySelector('[role="img"]').getAttribute('aria-label')).toMatch(/UWM 1.*Newfi 1|Newfi 1.*UWM 1/)
+    await act(async () => pill('This month').click())
+    expect(pill('This month').getAttribute('aria-pressed')).toBe('true')
+    expect(panel.textContent).toContain('UWM')
+    expect(panel.textContent).not.toContain('Newfi')
+    expect(panel.querySelector('[role="img"]').getAttribute('aria-label')).toContain('UWM 1')
+  })
+
+  it('draws the lender ring only when loans funded in the period', async () => {
+    DATA.loans = BASE_LOANS.filter((l) => !l.funded_on)
+    const host = await render()
+    expect(host.querySelector('[data-panel="lender-spread"] [role="img"]')).toBeNull()
+  })
+
+  it('Pipeline Status shows Now until a loan has an application date', async () => {
+    const host = await render()
+    const panel = host.querySelector('[data-panel="pipeline-status"]')
+    expect(panel.querySelector('[role="group"]')).toBeNull()
+    expect(panel.textContent).toContain('add Application Date for YTD')
+  })
+
+  it('Pipeline Status filters by application date once one exists', async () => {
+    DATA.loans = [...BASE_LOANS, loan({ arive_loan_id: '5', borrower_name: 'Ada New', application_on: key(TODAY) })]
+    const host = await render()
+    const panel = host.querySelector('[data-panel="pipeline-status"]')
+    const pills = [...panel.querySelectorAll('[role="group"] button')]
+    expect(pills.map((b) => b.textContent)).toEqual(['Now', 'YTD', 'This month'])
+    expect(pills[0].getAttribute('aria-pressed')).toBe('true')
+    const intake = () => panel.querySelector('[data-stage="App Intake"] .num').textContent
+    expect(intake()).toBe('2') // Omar + Ada
+    await act(async () => pills[2].click())
+    expect(intake()).toBe('1') // only Ada has an application date
+    await act(async () => pills[1].click())
+    expect(intake()).toBe('1')
   })
 })
