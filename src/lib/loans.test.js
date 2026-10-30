@@ -49,10 +49,10 @@ describe('panels', () => {
   const loans = [
     L({ stage: 'App Intake', amount: 200000 }),
     L({ stage: 'App Intake', amount: null }),
-    L({ stage: 'Clear To Close', stage_group: 'closing', amount: 676000 }),
-    L({ stage: 'Loan Finalized', stage_group: 'funded', amount: 253725, lender: 'UWM', purpose: 'Purchase', funded_on: '2026-10-05' }),
-    L({ stage: 'Loan Funded', stage_group: 'funded', amount: 640200, lender: 'TLS', purpose: 'Purchase', funded_on: '2026-10-29' }),
-    L({ stage: 'Loan Finalized', stage_group: 'funded', amount: 210308, lender: 'Cardinal Financial', purpose: 'Refinance', funded_on: '2026-09-09' }),
+    L({ stage: 'Clear To Close', stage_group: 'closing', amount: 600000 }),
+    L({ stage: 'Loan Finalized', stage_group: 'funded', amount: 250000, lender: 'UWM', purpose: 'Purchase', funded_on: '2026-10-05' }),
+    L({ stage: 'Loan Funded', stage_group: 'funded', amount: 650000, lender: 'TLS', purpose: 'Purchase', funded_on: '2026-10-29' }),
+    L({ stage: 'Loan Finalized', stage_group: 'funded', amount: 200000, lender: 'Cardinal Financial', purpose: 'Refinance', funded_on: '2026-09-09' }),
     L({ stage: 'Loan Funded', stage_group: 'funded', amount: 100000, lender: 'Newfi', purpose: 'Purchase', funded_on: '2026-08-01' }),
     L({ stage: 'Loan Funded', stage_group: 'funded', amount: 90000, lender: 'Newfi', purpose: 'Purchase', funded_on: '2025-12-01' }),
     L({ stage: 'Mystery', stage_group: 'other', amount: 5 }),
@@ -63,7 +63,7 @@ describe('panels', () => {
     expect(groups.map((g) => g.key)).toEqual(['prospect', 'processing', 'closing', 'funded', 'adverse', 'other'])
     expect(groups[0].rows[0]).toEqual({ stage: 'App Intake', count: 2, amount: 200000 })
     expect(groups[1].rows.every((r) => r.count === 0)).toBe(true)
-    expect(groups[3].rows.find((r) => r.stage === 'Loan Funded')).toEqual({ stage: 'Loan Funded', count: 3, amount: 830200 })
+    expect(groups[3].rows.find((r) => r.stage === 'Loan Funded')).toEqual({ stage: 'Loan Funded', count: 3, amount: 840000 })
     expect(groups[5].rows).toEqual([{ stage: 'Mystery', count: 1, amount: 5 }])
   })
 
@@ -98,10 +98,10 @@ describe('panels', () => {
   it('fundedByMonth counts a year by funded_on, split by purpose', () => {
     const f = fundedByMonth(loans, 2026)
     expect(f.count).toBe(4)
-    expect(f.volume).toBe(1204233)
-    expect(f.purchase).toEqual({ count: 3, volume: 993925 })
-    expect(f.refinance).toEqual({ count: 1, volume: 210308 })
-    expect(f.months[9]).toEqual({ month: 9, count: 2, volume: 893925 })
+    expect(f.volume).toBe(1200000)
+    expect(f.purchase).toEqual({ count: 3, volume: 1000000 })
+    expect(f.refinance).toEqual({ count: 1, volume: 200000 })
+    expect(f.months[9]).toEqual({ month: 9, count: 2, volume: 900000 })
     expect(f.months).toHaveLength(12)
   })
 

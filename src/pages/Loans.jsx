@@ -1,8 +1,10 @@
 // Bayway › Loans: the Arive pipeline, imported from a CSV export
 // (docs/superpowers/specs/2026-10-30-arive-loans-import-design.md).
 // Panels mirror Arive's dashboard; maths in lib/loans.js.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isDemoMode } from '../lib/supabase'
+import { timeAgo } from '../lib/syncHealth'
+import { showToast } from '../components/Toaster'
 import { fetchLoanBundle, saveLoanPatch, saveRates } from '../lib/loansData'
 import {
   DEFAULT_RATES, filterLoans, pipelineStatus, lenderSpread, fundedByMonth, estComp, isScenario, isOpen, notInLatest, hasApplicationDates,
@@ -21,7 +23,22 @@ const LENDER_PERIODS = [['ytd', 'YTD'], ['month', 'This month'], ['year', 'Year'
 const PIPELINE_PERIODS = [['now', 'Now'], ['ytd', 'YTD'], ['month', 'This month']]
 // Ring segments in row order (top three lenders, then Others): existing tokens only.
 const RING_COLORS = ['var(--bay)', 'var(--bay-deep)', 'var(--bay-gold)', 'var(--dim)']
-const money = (n) => (n == null ? '—' : '$' + Math.round(n).toLocaleString('en-US'))
+const money = (n) => (n == null || !Number.isFinite(Number(n)) ? '—' : '$' + Math.round(n).toLocaleString('en-US'))
+// "1.25%" -> 1.25; blank, negative or not a number -> null.
+const parsePct = (v) => {
+  const s = String(v ?? '').replace(/[%\s]/g, '')
+  const n = Number(s)
+  return s !== '' && Number.isFinite(n) && n >= 0 ? n : null
+}
+
+// Escape closes a dialog unless it is mid-save.
+function useEscape(onEscape, disabled) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && !disabled && onEscape()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onEscape, disabled])
+}
 const shortDate = (k) => (k ? new Date(`${String(k).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')
 
 function demoBundle() {
@@ -162,11 +179,18 @@ function LenderSpread({ loans }) {
   )
 }
 
-function LoansFunded({ loans, year }) {
+function LoansFunded({ loans }) {
+  const thisYear = new Date().getFullYear()
+  const [year, setYear] = useState(thisYear)
+  const years = [thisYear, thisYear - 1].map((y) => [String(y), String(y)])
   const f = fundedByMonth(loans, year)
   const max = Math.max(1, ...f.months.map((m) => m.volume))
   return (
-    <Panel title={`${f.count} ${f.count === 1 ? 'Loan' : 'Loans'} Funded`} panel="loans-funded" right={<span className="text-[12px] text-muted">{year}</span>}>
+    <Panel
+      title={`${f.count} ${f.count === 1 ? 'Loan' : 'Loans'} Funded`}
+      panel="loans-funded"
+      right={<PeriodPills label="Loans Funded year" options={years} value={String(year)} onChange={(k) => setYear(Number(k))} />}
+    >
       <div className="num text-[30px] font-light">{fmtMoney(f.volume)}</div>
       <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[12.5px]">
         <div><b className="num">{f.purchase.count}</b> Purchase <span className="text-muted">{money(f.purchase.volume)}</span></div>
@@ -187,50 +211,82 @@ function LoansFunded({ loans, year }) {
 function CompCell({ loan, rates, onSave }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  // Enter or Escape closes the editor; the blur that follows must not save again.
+  const closed = useRef(false)
   const value = estComp(loan, rates)
   if (!editing) {
     return (
-      <button type="button" className="num underline decoration-dotted" title="Click to set this loan's commission" onClick={() => { setDraft(loan.comp_override ?? ''); setEditing(true) }}>
+      <button type="button" className="num underline decoration-dotted" title="Click to set this loan's commission"
+        onClick={() => { closed.current = false; setDraft(loan.comp_override ?? ''); setEditing(true) }}>
         {money(value)}{loan.comp_override != null ? ' *' : ''}
       </button>
     )
   }
+  const close = () => { closed.current = true; setEditing(false) }
+  // Blank resets to the estimate; anything not a number of 0 or more keeps the old value.
   const commit = () => {
-    setEditing(false)
+    if (closed.current) return
+    close()
     const v = String(draft).trim()
-    onSave(v === '' ? null : Number(v.replace(/[$,]/g, '')))
+    const next = v === '' ? null : Number(v.replace(/[$,\s]/g, ''))
+    if (next !== null && !(Number.isFinite(next) && next >= 0)) return
+    const prev = loan.comp_override == null ? null : Number(loan.comp_override)
+    if (next === prev) return
+    onSave(next)
   }
   return (
     <input
       autoFocus
+      aria-label={`Commission for ${loan.borrower_name}`}
       className="num w-[90px] rounded border border-line2 px-1 text-right"
       value={draft}
       placeholder="auto"
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
+      onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') close() }}
     />
   )
 }
 
+// onSave(rates) -> Promise<{ error }>; the parent closes the editor on success.
 function RatesEditor({ rates, onSave, onClose }) {
-  const [d, setD] = useState(rates)
-  const field = (k, label) => (
+  const [d, setD] = useState({ lo_name: rates.lo_name ?? '', primary_pct: String(rates.primary_pct ?? ''), assisted_pct: String(rates.assisted_pct ?? '') })
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+  useEscape(onClose, busy)
+
+  async function save() {
+    const lo_name = String(d.lo_name).trim()
+    const primary_pct = parsePct(d.primary_pct)
+    const assisted_pct = parsePct(d.assisted_pct)
+    if (!lo_name) { setError('Enter your name as it appears in Arive.'); return }
+    if (primary_pct == null || assisted_pct == null) { setError('Percentages must be numbers of 0 or more, like 1.25.'); return }
+    setError(null)
+    setBusy(true)
+    const { error: err } = await onSave({ lo_name, primary_pct, assisted_pct })
+    if (err) {
+      setBusy(false)
+      setError(`Couldn't save the rates: ${err.message || err}`)
+    }
+  }
+
+  const field = (k, label, autoFocus) => (
     <label className="block text-[12px] text-muted">
       {label}
-      <input className="mt-1 block w-full rounded border border-line2 px-2 py-1 text-[13px] text-[color:var(--text)]" value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} />
+      <input autoFocus={autoFocus} disabled={busy} className="mt-1 block w-full rounded border border-line2 px-2 py-1 text-[13px] text-[color:var(--text)]" value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} />
     </label>
   )
   return (
-    <div role="dialog" aria-label="Commission rates" className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-[360px] space-y-3 rounded-card border border-line bg-panel p-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose() }}>
+      <div role="dialog" aria-modal="true" aria-label="Commission rates" className="w-full max-w-[360px] space-y-3 rounded-card border border-line bg-panel p-5">
         <div className="text-[15px] font-semibold">Commission rates</div>
-        {field('lo_name', 'Your name as loan officer in Arive')}
+        {field('lo_name', 'Your name as loan officer in Arive', true)}
         {field('primary_pct', 'Your loans: % of loan amount')}
         {field('assisted_pct', 'Assisted loans: % of loan amount')}
+        {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="min-h-[32px] rounded-[9px] border border-line2 px-3 text-[13px] font-semibold">Cancel</button>
-          <button type="button" onClick={() => onSave({ lo_name: d.lo_name, primary_pct: Number(d.primary_pct), assisted_pct: Number(d.assisted_pct) })} className="min-h-[32px] rounded-[9px] bg-[color:var(--text)] px-3 text-[13px] font-semibold text-white">Save</button>
+          <button type="button" onClick={onClose} disabled={busy} className="min-h-[32px] rounded-[9px] border border-line2 px-3 text-[13px] font-semibold disabled:opacity-40">Cancel</button>
+          <button type="button" onClick={save} disabled={busy} className="min-h-[32px] rounded-[9px] bg-[color:var(--text)] px-3 text-[13px] font-semibold text-white disabled:opacity-40">{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
     </div>
@@ -255,7 +311,6 @@ export default function Loans() {
   const [page, setPage] = useState(1)
   const [importing, setImporting] = useState(false)
   const [editingRates, setEditingRates] = useState(false)
-  const year = new Date().getFullYear()
 
   const load = useCallback(async () => {
     if (isDemoMode) return
@@ -269,19 +324,27 @@ export default function Loans() {
   const shown = useMemo(() => sortLoans(filtered), [filtered])
   const slice = pageSlice(shown, page)
 
+  // Optimistic: the row changes at once and goes back if the save fails.
   async function patch(loan, p) {
-    setBundle((b) => ({ ...b, loans: b.loans.map((l) => (l.id === loan.id ? { ...l, ...p } : l)) }))
+    const prev = Object.fromEntries(Object.keys(p).map((k) => [k, loan[k] ?? null]))
+    const apply = (fields) => setBundle((b) => ({ ...b, loans: b.loans.map((l) => (l.id === loan.id ? { ...l, ...fields } : l)) }))
+    apply(p)
     if (isDemoMode) return
     const { error: err } = await saveLoanPatch(loan.id, p)
-    if (err) setError(err.message)
+    if (!err) return
+    apply(prev)
+    showToast({ tone: 'error', text: `Couldn't save ${loan.borrower_name || 'this loan'}: ${err.message}`, retry: () => patch(loan, p) })
   }
 
+  // Writes first; local state changes only once the save worked.
   async function storeRates(r) {
-    setEditingRates(false)
+    if (!isDemoMode) {
+      const { error: err } = await saveRates(r)
+      if (err) return { error: err }
+    }
     setBundle((b) => ({ ...b, rates: r }))
-    if (isDemoMode) return
-    const { error: err } = await saveRates(r)
-    if (err) setError(err.message)
+    setEditingRates(false)
+    return { error: null }
   }
 
   const lastImportAt = bundle?.lastImport?.ran_at || null
@@ -295,7 +358,9 @@ export default function Loans() {
         title="Loans"
         note={bundle && (
           <span className="num text-[12px] text-muted">
-            {lastImportAt ? `Last import ${shortDate(lastImportAt)} · ${bundle.loans.length} loans` : 'No Arive import yet'}
+            {lastImportAt
+              ? <><span title={new Date(lastImportAt).toLocaleString()}>Last import {timeAgo(lastImportAt)}</span> · {bundle.loans.length} loans</>
+              : 'No Arive import yet'}
           </span>
         )}
         subtitle="Your Arive pipeline, from the saved Pipeline Report export. Re-import any time; loans update by Arive loan ID and nothing is deleted."
@@ -332,7 +397,7 @@ export default function Loans() {
             <PipelineStatus loans={filtered} hasDates={hasApplicationDates(bundle.loans)} />
             <div className="grid gap-3.5">
               <LenderSpread loans={filtered} />
-              <LoansFunded loans={filtered} year={year} />
+              <LoansFunded loans={filtered} />
             </div>
           </div>
 
@@ -355,11 +420,11 @@ export default function Loans() {
                     <td className="px-3 py-2">{l.stage}</td>
                     <td className="num px-3 py-2">{money(l.amount)}</td>
                     <td className="px-3 py-2">{l.lender || '—'}</td>
-                    <td className="px-3 py-2">{l.role === 'assisted' ? `Assisted (${l.loan_officer})` : 'Mine'}</td>
+                    <td className="px-3 py-2">{l.role === 'assisted' ? (l.loan_officer ? `Assisted (${l.loan_officer})` : 'Assisted') : 'Mine'}</td>
                     <td className="px-3 py-2">{l.funded_on ? `Funded ${shortDate(l.funded_on)}` : shortDate(l.firm_closing_on)}</td>
                     <td className="px-3 py-2"><CompCell loan={l} rates={bundle.rates} onSave={(v) => patch(l, { comp_override: v })} /></td>
                     <td className="px-3 py-2">
-                      <input type="checkbox" name="scenario" checked={isScenario(l)} onChange={(e) => patch(l, { scenario_override: e.target.checked })} />
+                      <input type="checkbox" name="scenario" aria-label={`Scenario file: ${l.borrower_name}`} checked={isScenario(l)} onChange={(e) => patch(l, { scenario_override: e.target.checked })} />
                     </td>
                   </tr>
                 ))}

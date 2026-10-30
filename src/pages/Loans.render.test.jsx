@@ -27,7 +27,7 @@ const BASE_LOANS = [
   loan({ arive_loan_id: '3', borrower_name: 'Test Test', scenario_auto: true, amount: 633750 }),
   loan({ arive_loan_id: '4', borrower_name: 'Lena Ford', stage: 'Loan Funded', stage_group: 'funded', amount: 300000, lender: 'Newfi', funded_on: THIS_YEAR_NOT_THIS_MONTH }),
 ]
-const DATA = { loans: BASE_LOANS, updates: [] }
+const DATA = { loans: BASE_LOANS, updates: [], upserts: [], updateError: null }
 
 function query(table) {
   const q = {}
@@ -39,7 +39,9 @@ function query(table) {
       error: null,
     }),
   })
-  q.update = (patch) => { DATA.updates.push(patch); return { eq: () => Promise.resolve({ error: null }) } }
+  q.update = (patch) => { DATA.updates.push(patch); return { eq: () => Promise.resolve({ error: DATA.updateError }) } }
+  q.upsert = (rows) => { DATA.upserts.push({ table, rows }); return Promise.resolve({ error: null }) }
+  q.insert = () => Promise.resolve({ error: null })
   q.then = (resolve) => resolve({ data: table === 'loans' ? DATA.loans : [], error: null })
   return q
 }
@@ -49,20 +51,50 @@ vi.mock('../lib/supabase', () => ({ isDemoMode: false, supabase: { from: (t) => 
 beforeEach(() => {
   document.body.innerHTML = ''
   DATA.updates = []
+  DATA.upserts = []
+  DATA.updateError = null
   DATA.loans = [...BASE_LOANS]
   window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
 })
 
 const { default: Loans } = await import('./Loans')
+const { default: Toaster } = await import('../components/Toaster')
 
 async function render() {
   const host = document.createElement('div')
   document.body.appendChild(host)
   await act(async () => {
-    createRoot(host).render(React.createElement(MemoryRouter, null, React.createElement(Loans)))
+    createRoot(host).render(React.createElement(MemoryRouter, null, React.createElement(Loans), React.createElement(Toaster)))
   })
   await act(async () => {})
   return host
+}
+
+const settle = () => act(async () => new Promise((r) => setTimeout(r, 0)))
+const buttonNamed = (root, t) => [...root.querySelectorAll('button')].find((b) => b.textContent.trim() === t)
+const typeInto = (el, value) => act(async () => {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+})
+const press = (el, k) => act(async () => { el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })) })
+
+// Opens the commission editor on a row and returns its input.
+async function editComp(host, id) {
+  const cell = host.querySelector(`[data-loan="${id}"] td:nth-child(7) button`)
+  await act(async () => cell.click())
+  return host.querySelector(`[data-loan="${id}"] input[aria-label^="Commission for"]`)
+}
+
+// jsdom's File may lack text(); read it through FileReader when so.
+if (typeof File !== 'undefined' && !File.prototype.text) {
+  File.prototype.text = function text() {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader()
+      r.onload = () => resolve(r.result)
+      r.onerror = () => reject(r.error)
+      r.readAsText(this)
+    })
+  }
 }
 
 describe('Loans page', () => {
@@ -158,5 +190,150 @@ describe('Loans page', () => {
     expect(intake()).toBe('1') // only Ada has an application date
     await act(async () => pills[1].click())
     expect(intake()).toBe('1')
+  })
+
+  it('Loans Funded switches between this year and last year', async () => {
+    const y = TODAY.getFullYear()
+    DATA.loans = [...BASE_LOANS, loan({ arive_loan_id: '6', borrower_name: 'Old Funded', stage: 'Loan Funded', stage_group: 'funded', amount: 500000, lender: 'UWM', funded_on: `${y - 1}-06-15` })]
+    const host = await render()
+    const panel = host.querySelector('[data-panel="loans-funded"]')
+    const pill = (t) => [...panel.querySelectorAll('[role="group"] button')].find((b) => b.textContent === t)
+    expect(pill(String(y)).getAttribute('aria-pressed')).toBe('true')
+    expect(panel.textContent).toContain('2 Loans Funded')
+    await act(async () => pill(String(y - 1)).click())
+    expect(pill(String(y - 1)).getAttribute('aria-pressed')).toBe('true')
+    expect(panel.textContent).toContain('1 Loan Funded')
+    // Lender Spread's Year still means this year.
+    const spread = host.querySelector('[data-panel="lender-spread"]')
+    await act(async () => [...spread.querySelectorAll('[role="group"] button')].find((b) => b.textContent === 'Year').click())
+    expect(spread.querySelector('[role="img"]').getAttribute('aria-label')).toMatch(/UWM 1/)
+  })
+
+  it('saves a typed commission, dropping $ and commas', async () => {
+    const host = await render()
+    const input = await editComp(host, '1')
+    expect(input.getAttribute('aria-label')).toBe('Commission for Gina Park')
+    await typeInto(input, '$4,200')
+    await press(input, 'Enter')
+    expect(DATA.updates).toHaveLength(1)
+    expect(DATA.updates[0]).toMatchObject({ comp_override: 4200 })
+    expect(host.querySelector('[data-loan="1"]').textContent).toContain('$4,200 *')
+  })
+
+  it('ignores a commission that is not a number', async () => {
+    const host = await render()
+    const input = await editComp(host, '1')
+    await typeInto(input, 'abc')
+    await press(input, 'Enter')
+    expect(DATA.updates).toHaveLength(0)
+    expect(host.textContent).not.toContain('NaN')
+    expect(host.querySelector('[data-loan="1"]').textContent).toContain('$5,000')
+  })
+
+  it('clearing a commission resets it to the estimate', async () => {
+    DATA.loans = BASE_LOANS.map((l) => (l.arive_loan_id === '1' ? { ...l, comp_override: 4200 } : l))
+    const host = await render()
+    const input = await editComp(host, '1')
+    await typeInto(input, '')
+    await press(input, 'Enter')
+    expect(DATA.updates[0]).toMatchObject({ comp_override: null })
+    expect(host.querySelector('[data-loan="1"]').textContent).toContain('$5,000')
+  })
+
+  it('does not save an unchanged commission', async () => {
+    DATA.loans = BASE_LOANS.map((l) => (l.arive_loan_id === '1' ? { ...l, comp_override: 4200 } : l))
+    const host = await render()
+    const input = await editComp(host, '1')
+    await press(input, 'Enter')
+    expect(DATA.updates).toHaveLength(0)
+  })
+
+  it('restores a scenario toggle when the save fails', async () => {
+    DATA.updateError = { message: 'network down' }
+    const host = await render()
+    const toggle = () => host.querySelector('[data-loan="2"] input[name="scenario"]')
+    expect(toggle().getAttribute('aria-label')).toBe('Scenario file: Omar Vale')
+    await act(async () => toggle().click())
+    await settle()
+    expect(DATA.updates[0]).toMatchObject({ scenario_override: true })
+    expect(toggle().checked).toBe(false)
+    expect(document.body.querySelector('[role="status"]').textContent).toContain('Omar Vale')
+    expect(buttonNamed(document.body, 'Retry')).toBeTruthy()
+  })
+
+  it('labels an assisted loan without a loan officer as Assisted', async () => {
+    DATA.loans = [loan({ arive_loan_id: '9', borrower_name: 'No Officer', role: 'assisted', loan_officer: null })]
+    const host = await render()
+    expect(host.querySelector('[data-loan="9"]').textContent).toContain('Assisted')
+    expect(host.querySelector('[data-loan="9"]').textContent).not.toContain('null')
+  })
+
+  it('shows the last import as relative time with the full date on hover', async () => {
+    const host = await render()
+    const note = [...host.querySelectorAll('[title]')].find((el) => el.textContent.includes('Last import'))
+    expect(note.textContent).toMatch(/Last import (just now|\d+[mhd] ago)/)
+    expect(note.getAttribute('title')).toBe(new Date('2026-10-30T12:00:00Z').toLocaleString())
+  })
+
+  it('rates editor accepts 1.25% as 1.25 and saves before closing', async () => {
+    const host = await render()
+    await act(async () => buttonNamed(host, 'Rates').click())
+    const dialog = host.querySelector('[role="dialog"]')
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    const [name, primary] = dialog.querySelectorAll('input')
+    expect(document.activeElement).toBe(name)
+    await typeInto(primary, '1.25%')
+    await act(async () => buttonNamed(dialog, 'Save').click())
+    await settle()
+    const saved = DATA.upserts.find((u) => u.table === 'settings')
+    expect(saved.rows.value).toMatchObject({ lo_name: 'Chandler Dean Atkinson', primary_pct: 1.25, assisted_pct: 0.75 })
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('rates editor rejects a blank name and stays open', async () => {
+    const host = await render()
+    await act(async () => buttonNamed(host, 'Rates').click())
+    const dialog = host.querySelector('[role="dialog"]')
+    const [name] = dialog.querySelectorAll('input')
+    await typeInto(name, '   ')
+    await act(async () => buttonNamed(dialog, 'Save').click())
+    await settle()
+    expect(DATA.upserts).toHaveLength(0)
+    expect(host.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(host.querySelector('[role="dialog"] [role="alert"]').textContent).toMatch(/name/i)
+  })
+
+  it('Escape closes the import dialog', async () => {
+    const host = await render()
+    await act(async () => buttonNamed(host, 'Import CSV').click())
+    const dialog = host.querySelector('[role="dialog"]')
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(document.activeElement).toBe(dialog.querySelector('input[type="file"]'))
+    await press(window, 'Escape')
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('imports a picked file: preview, then confirm upserts the loans', async () => {
+    const host = await render()
+    await act(async () => buttonNamed(host, 'Import CSV').click())
+    const input = host.querySelector('input[aria-label="Arive CSV export"]')
+    const csv = [
+      'ARIVE Loan Id,Stage Name,Total Loan Amount,Primary Loan Officer Name,Primary Borrower',
+      '100,App Intake,250000,Chandler Dean Atkinson,New Person',
+      '1,Loan Funded,400000,Chandler Dean Atkinson,Gina Park',
+    ].join('\n')
+    const file = new File([csv], 'arive.csv', { type: 'text/csv' })
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+    await settle()
+    await settle()
+    const dialog = host.querySelector('[role="dialog"]')
+    expect(dialog.textContent).toContain('2 loans in this file')
+    expect(input.value).toBe('')
+    await act(async () => buttonNamed(dialog, 'Import 2 loans').click())
+    await settle()
+    const up = DATA.upserts.find((u) => u.table === 'loans')
+    expect(up.rows.map((r) => r.arive_loan_id)).toEqual(['100', '1'])
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
   })
 })
