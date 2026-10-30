@@ -57,6 +57,9 @@ describe('relationshipsOf', () => {
     expect(relationshipsOf({ peopleRelationships: [1] })).toEqual([1])
     expect(relationshipsOf({ relationships: [2] })).toEqual([2])
     expect(relationshipsOf({ _embedded: { peopleRelationships: [3] } })).toEqual([3])
-    expect(relationshipsOf({})).toEqual([])
+    expect(relationshipsOf({ _metadata: {}, peoplerelationships: [4] })).toEqual([4])
+  })
+  it('throws on a reply it does not recognize, so it never reads as no agents', () => {
+    expect(() => relationshipsOf({ _metadata: {}, people: [] })).toThrow('unexpected reply (keys: _metadata, people)')
   })
 })

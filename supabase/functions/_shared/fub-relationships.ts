@@ -3,9 +3,9 @@
 // the borrower in FUB; the type is free text, so it's read loosely. Only the
 // two agent kinds are kept.
 //
-// VERIFY on the first live run: GET /peopleRelationships?personId= returns
-// { peopleRelationships: [{ id, personId, type, firstName, lastName, phones,
-// emails }] }. relationshipsOf / mapRelationship accept the likely variants.
+// GET /peopleRelationships?personId= returns { _metadata, peoplerelationships:
+// [...] } (seen live). VERIFY the record fields on the first real agent:
+// { id, personId, type, firstName, lastName, phones, emails } is assumed.
 
 export function relationshipKind(type) {
   const t = String(type || '').toLowerCase().replace(/[’']/g, '')
@@ -21,24 +21,30 @@ const pick = (list) => {
 }
 
 export function mapRelationship(rec, contactId) {
-  const kind = relationshipKind(rec?.type)
+  const type = rec?.type ?? rec?.relationship ?? rec?.relationshipType
+  const kind = relationshipKind(type)
   if (!kind || rec?.id == null) return null
   const name = [rec.firstName, rec.lastName].filter(Boolean).join(' ').trim() || rec.name || null
   return {
     contact_id: contactId,
     external_id: String(rec.id),
     kind,
-    type: rec.type,
+    type,
     name,
     phone: pick(rec.phones) || rec.phone || null,
     email: pick(rec.emails) || rec.email || null,
   }
 }
 
+// The list from a GET /peopleRelationships reply. An unknown shape throws, so
+// it can't pass for "no agents recorded".
+// FUB answers with the key in lower case (`peoplerelationships`), so keys are
+// matched case-insensitively.
 export function relationshipsOf(json) {
-  for (const k of ['peopleRelationships', 'relationships']) {
-    if (Array.isArray(json?.[k])) return json[k]
-    if (Array.isArray(json?._embedded?.[k])) return json._embedded[k]
+  for (const obj of [json, json?._embedded]) {
+    for (const [k, v] of Object.entries(obj || {})) {
+      if (['peoplerelationships', 'relationships'].includes(k.toLowerCase()) && Array.isArray(v)) return v
+    }
   }
-  return []
+  throw new Error(`FUB /peopleRelationships: unexpected reply (keys: ${Object.keys(json || {}).join(', ') || 'none'})`)
 }
