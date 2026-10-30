@@ -12,6 +12,7 @@ import {
   sprintPace,
   monthElapsed,
   fmtMoney,
+  fundedLoanDeals,
 } from './overviewDash'
 import { DEFAULT_TARGETS } from './reports'
 
@@ -156,5 +157,56 @@ describe('pipeline mix, income, sprints', () => {
     expect(fmtMoney(17500)).toBe('$17.5K')
     expect(fmtMoney(2_000_000)).toBe('$2M')
     expect(fmtMoney(640)).toBe('$640')
+  })
+})
+
+describe('Arive loan stats on Overview', () => {
+  const loanStats = { closed: 3, closedPrev: 1, volume: 1104233, commission: 13800, pipeline: 900000, open: 4, sprintFunded: 5 }
+
+  it('uses the loan stats instead of FUB deals and entered commission', () => {
+    const v = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW, loanStats })
+    expect(v).toMatchObject({ commission: 13800, loansClosed: 3, loansClosedPrev: 1, pipelineValue: 900000, openLoans: 4, commissionFromArive: true })
+    const cards = kpiCards({ biz: 'bay', values: v, targets })
+    expect(cards[0]).toMatchObject({ value: 13800, tag: 'Est. from Arive' })
+  })
+
+  it('falls back to the old sources without an import', () => {
+    const v = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW, loanStats: null })
+    expect(v).toMatchObject({ commission: 9800, commissionFromArive: false })
+    expect(kpiCards({ biz: 'bay', values: v, targets })[0].tag).toBe('Entered')
+  })
+
+  it('sprint pace takes measured funded loans', () => {
+    const s = sprintPace({ biz: 'bay', metrics: [], targets, now: NOW, measured: { bay_funded_loans: 5 } })
+    expect(s.items.find((x) => x.key === 'bay_funded_loans').value).toBe(5)
+  })
+})
+
+describe('Arive loans on the activity chart and income card', () => {
+  const loans = [
+    { id: 'a', amount: 400000, funded_on: '2026-10-20', scenario_auto: false, scenario_override: null },
+    { id: 'b', amount: 300000, funded_on: '2026-10-21', scenario_auto: true, scenario_override: null },
+    { id: 'c', amount: 250000, funded_on: '2026-10-22', scenario_auto: true, scenario_override: false },
+    { id: 'd', amount: 500000, funded_on: null, scenario_auto: false, scenario_override: null },
+  ]
+
+  it('funded, non-scenario loans become won Bayway deals', () => {
+    expect(fundedLoanDeals(loans)).toEqual([
+      { status: 'won', value: 400000, expected_close: '2026-10-20', business_id: 'bay' },
+      { status: 'won', value: 250000, expected_close: '2026-10-22', business_id: 'bay' },
+    ])
+  })
+
+  it('feeds the closings series', () => {
+    const s = activitySeries({ deals: fundedLoanDeals(loans), now: NOW })
+    expect(s.totals.closings).toBe(2)
+    expect(s.points.find((p) => p.key === '2026-10-21').closings).toBe(0)
+  })
+
+  it('income mix says where commission came from', () => {
+    const fromArive = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW, loanStats: { closed: 1, closedPrev: 0, volume: 1, commission: 5000, pipeline: 0, open: 0, sprintFunded: 0 } })
+    expect(incomeMix({ values: fromArive, targets }).fromArive).toBe(true)
+    const entered = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW })
+    expect(incomeMix({ values: entered, targets }).fromArive).toBe(false)
   })
 })

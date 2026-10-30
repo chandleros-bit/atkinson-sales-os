@@ -4,7 +4,7 @@ import {
   formatValue, metricCardView, buildTabModel, weekStart, monthWindow,
   rollupMetrics, sprintRows, weeksRemaining, neededPerWeek, sumWon, countWon,
   pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor,
-  callsByDay, callsSince,
+  callsByDay, callsSince, ARIVE_KEYS, ariveValues, ariveNotes, revenueValues,
 } from './reports'
 
 describe('METRICS registry', () => {
@@ -305,5 +305,91 @@ describe('periodDateFor', () => {
   })
   it('writes sprint entries to the current day', () => {
     expect(periodDateFor('sprint', NOW_P)).toBe('2026-07-15')
+  })
+})
+
+describe('Arive-sourced metrics', () => {
+  it('commission and sprint funded loans are live now', () => {
+    const src = (k) => METRICS.find((m) => m.key === k).source
+    expect(src('rev_gross_commission')).toBe('live')
+    expect(src('bay_funded_loans')).toBe('live')
+    expect(ARIVE_KEYS).toEqual(['loans_closed', 'loan_volume', 'pipeline_value', 'rev_closings', 'rev_loan_volume', 'rev_gross_commission', 'bay_funded_loans'])
+  })
+
+  it('cards carry an optional note', () => {
+    const metric = METRICS.find((m) => m.key === 'loans_closed')
+    expect(metricCardView(metric, 2, 5, 'Arive · imported Oct 30').note).toBe('Arive · imported Oct 30')
+    expect(metricCardView(metric, 2, 5).note).toBeNull()
+    expect(buildTabModel([metric], { loans_closed: null }, {}, { loans_closed: 'no Arive import yet' })[0])
+      .toMatchObject({ valueText: '—', note: 'no Arive import yet' })
+  })
+})
+
+describe('ariveValues / ariveNotes / revenueValues', () => {
+  const stats = { closed: 2, closedPrev: 1, volume: 800000, commission: 10000, pipeline: 1500000, open: 3, sprintFunded: 4 }
+
+  it('every Arive key is null before the first import', () => {
+    expect(ariveValues(null, 'bay')).toEqual(Object.fromEntries(ARIVE_KEYS.map((k) => [k, null])))
+  })
+
+  it('maps loan stats onto the metric keys', () => {
+    expect(ariveValues(stats, 'bay')).toEqual({
+      loans_closed: 2, loan_volume: 800000, pipeline_value: 1500000,
+      rev_closings: 2, rev_loan_volume: 800000, rev_gross_commission: 10000,
+      bay_funded_loans: 4,
+    })
+    expect(ariveValues(stats, 'all').rev_gross_commission).toBe(10000)
+  })
+
+  it('Bayway loans never count on the MPG view', () => {
+    expect(ariveValues(stats, 'mpg')).toEqual(Object.fromEntries(ARIVE_KEYS.map((k) => [k, null])))
+  })
+
+  it('revenue maths: combined, annualized and averages', () => {
+    const manual = { rev_monthly_residual: 600, rev_active_merchants: 3 }
+    const all = revenueValues(manual, ariveValues(stats, 'all'))
+    expect(all).toMatchObject({
+      rev_gross_commission: 10000, rev_closings: 2, rev_loan_volume: 800000,
+      rev_combined_income: 10600, rev_annualized: 127200, rev_avg_per_closing: 5000, rev_avg_residual: 200,
+    })
+  })
+
+  it('MPG combined and annualized income exclude Bayway commission', () => {
+    const mpg = revenueValues({ rev_monthly_residual: 600, rev_active_merchants: 3 }, ariveValues(stats, 'mpg'))
+    expect(mpg.rev_combined_income).toBe(600)
+    expect(mpg.rev_annualized).toBe(7200)
+    expect(mpg.rev_gross_commission).toBeNull()
+  })
+
+  it('unknown averages are null, never NaN or $0', () => {
+    const v = revenueValues({}, ariveValues(null, 'bay'))
+    expect(v.rev_avg_per_closing).toBeNull()
+    expect(v.rev_avg_residual).toBeNull()
+    expect(v.rev_combined_income).toBe(0)
+  })
+
+  it('notes before the first import cover the derived revenue cards on Bayway and all', () => {
+    for (const biz of ['bay', 'all']) {
+      const n = ariveNotes({ loans: [], lastImport: null, biz })
+      for (const k of [...ARIVE_KEYS, 'rev_combined_income', 'rev_annualized', 'rev_avg_per_closing']) {
+        expect(n[k]).toBe('no Arive import yet')
+      }
+    }
+  })
+
+  it('the MPG view gets no Arive notes', () => {
+    expect(ariveNotes({ loans: [], lastImport: null, biz: 'mpg' })).toEqual({})
+    expect(ariveNotes({ loans: [{ id: 1 }], lastImport: null, biz: 'mpg' })).toEqual({})
+  })
+
+  it('after an import, notes carry the import date on the Arive keys only', () => {
+    const n = ariveNotes({ loans: [{ id: 1 }], lastImport: { ran_at: '2026-10-30T15:00:00Z' }, biz: 'bay' })
+    expect(n.loans_closed).toBe('Arive · imported Oct 30')
+    expect(n.rev_combined_income).toBeUndefined()
+  })
+
+  it('loans without a logged import say the date is unknown, never today', () => {
+    const n = ariveNotes({ loans: [{ id: 1 }], lastImport: null, biz: 'all' })
+    for (const k of ARIVE_KEYS) expect(n[k]).toBe('Arive · import date unknown')
   })
 })

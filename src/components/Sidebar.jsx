@@ -12,10 +12,10 @@ import Icon, { LogoMark } from './Icon'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { urgentCount } from '../lib/priorityQueue'
 
-// Nine links. Pipeline, Contacts and Activity follow the business switch, so
+// Ten links. Pipeline, Contacts and Activity follow the business switch, so
 // one link covers both books; each also lights up on its old per-book pages
 // (/bayway/pipeline, /mpg/contacts…). Reports holds Analytics and Settings
-// holds Sync Status as tabs.
+// holds Sync Status as tabs. Loans is Bayway only.
 const LINKS = [
   { group: null, items: [
     { to: '/', icon: 'home', label: 'Overview', on: /^\/$/ },
@@ -25,6 +25,7 @@ const LINKS = [
   ] },
   { group: 'Books', items: [
     { to: '/pipeline', icon: 'pipeline', label: 'Pipeline', on: /^\/((mpg|bayway)\/)?pipeline/ },
+    { to: '/bayway/loans', icon: 'money', label: 'Loans', on: /^\/bayway\/loans/ },
     { to: '/contacts', icon: 'users', label: 'Contacts', on: /^\/((mpg|bayway)\/)?contacts/ },
     { to: '/activity', icon: 'activity', label: 'Activity', on: /^\/((mpg|bayway)\/)?activity/ },
   ] },

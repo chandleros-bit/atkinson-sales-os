@@ -5,9 +5,13 @@ import { useBusiness } from '../context/BusinessContext'
 import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
-  sumWon, countWon, deriveStageCounts, pipelineValue, periodDateFor,
+  deriveStageCounts, periodDateFor,
   sprintRows, sprintWindow, MPG_SPRINT, callsByDay, callsSince,
+  ariveValues, ariveNotes, revenueValues,
 } from '../lib/reports'
+import { fetchLoanBundle } from '../lib/loansData'
+import { loanStats, DEFAULT_RATES } from '../lib/loans'
+import { prevMonthWindow } from '../lib/overviewDash'
 import PageHeader from '../components/PageHeader'
 
 const TABS = [
@@ -28,15 +32,6 @@ function todayKey() {
   const d = new Date()
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-// Returns null (renders as "—", pace "none") rather than NaN/Infinity when the
-// denominator is missing — an unknown average must not read as $0.
-function safeDiv(numerator, denominator) {
-  const n = Number(numerator || 0)
-  const d = Number(denominator || 0)
-  if (!d) return null
-  return n / d
 }
 
 function MetricCard({ card }) {
@@ -60,6 +55,7 @@ function MetricCard({ card }) {
           </span>
         )}
       </div>
+      {card.note && <div className="mt-1 text-[11px] text-dim">{card.note}</div>}
       <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
         <div className="h-full rounded-full" style={{ width: `${card.pct}%`, background: s.bar }} />
       </div>
@@ -228,8 +224,7 @@ export default function Reports() {
         return new Date(Math.min(sevenAgoMidnight.getTime(), wkStart.getTime(), moStart.getTime())).toISOString()
       })()
       const sprint = sprintWindow()
-      const [deals, active, bayContacts, mpgContacts, week, month, sprintMetrics, series, settings, callRows] = await Promise.all([
-        fetchAllSettled(() => supabase.from('deals').select('status, value, expected_close, business_id').order('id')),
+      const [active, bayContacts, mpgContacts, week, month, sprintMetrics, series, settings, callRows, loanBundle] = await Promise.all([
         fetchAllSettled(() => supabase.from('v_active_pipeline').select('stage, business_id').eq('business_id', 'bay').order('id')),
         supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'bay'),
         supabase.from('contacts').select('id', { count: 'exact', head: true }).eq('business_id', 'mpg'),
@@ -244,12 +239,15 @@ export default function Reports() {
           .select('occurred_at, business_id')
           .eq('type', 'call').eq('direction', 'outbound').gte('occurred_at', earliestStartIso)
           .order('id')),
+        fetchLoanBundle(),
       ])
-      const err = deals.error || active.error || bayContacts.error || mpgContacts.error || week.error ||
+      const err = active.error || bayContacts.error || mpgContacts.error || week.error ||
         month.error || sprintMetrics.error || series.error || settings.error || callRows.error
       if (err) { setError(err.message); return }
+      // Loans are not fatal: the rest of the scoreboard still renders, with the
+      // Arive cards reading "no Arive import yet".
+      if (loanBundle.error) console.warn('Reports: loans failed to load', loanBundle.error)
       setData({
-        deals: deals.data || [],
         activeRows: active.data || [],
         bayContacts: bayContacts.count || 0,
         mpgContacts: mpgContacts.count || 0,
@@ -260,6 +258,9 @@ export default function Reports() {
         savedTargets: settings.data?.value || {},
         targets: resolveTargets(DEFAULT_TARGETS, settings.data?.value),
         callRows: callRows.data || [],
+        loans: loanBundle.data?.loans || [],
+        loanRates: loanBundle.data?.rates || DEFAULT_RATES,
+        lastLoanImport: loanBundle.data?.lastImport || null,
       })
     } catch (e) {
       setError(String(e?.message || e))
@@ -304,7 +305,7 @@ export default function Reports() {
   const cards = useMemo(() => {
     if (!data) return []
     const values = computeValues(tab, biz, data)
-    return buildTabModel(metricsForTab(tab, biz), values, data.targets)
+    return buildTabModel(metricsForTab(tab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
   }, [tab, biz, data])
 
   return (
@@ -441,10 +442,6 @@ function demoReportsData() {
     { date: today, business_id: 'mpg', metric_key: 'new_contacts', value: 3 },
   ]
   return {
-    deals: [
-      { status: 'won', value: 340000, expected_close: today, business_id: 'bay' },
-      { status: 'open', value: 625000, expected_close: null, business_id: 'bay' },
-    ],
     activeRows: [
       { stage: 'Application Received', business_id: 'bay' },
       { stage: 'Application/Estimate Sent', business_id: 'bay' },
@@ -467,7 +464,17 @@ function demoReportsData() {
       { occurred_at: new Date().toISOString(), business_id: 'bay' },
       { occurred_at: new Date().toISOString(), business_id: 'mpg' },
     ],
+    loans: [],
+    loanRates: DEFAULT_RATES,
+    lastLoanImport: null,
   }
+}
+
+// Arive numbers for the switched metrics on this view; every key null before
+// the first import and on the MPG view.
+function ariveFor(data, biz) {
+  const stats = loanStats(data.loans, data.loanRates, { month: monthWindow(), prev: prevMonthWindow(), sprint: sprintWindow() })
+  return ariveValues(stats, biz)
 }
 
 // Maps each tab's metric keys to a number. Manual keys come from the
@@ -491,8 +498,8 @@ function computeValues(tab, biz, data) {
   }
   if (tab === 'monthly') {
     const manual = rollupMetrics(bizFilter(data.month))
-    const bayDeals = data.deals.filter((d) => d.business_id === 'bay')
     const win = monthWindow()
+    const arive = ariveFor(data, biz)
     // Board columns from the FUB stage tags (bay-stages.ts).
     const stageCounts = deriveStageCounts(data.activeRows, ['Application/Estimate Sent', 'Application Received', 'Disclosed'])
     const dbTotal =
@@ -504,29 +511,16 @@ function computeValues(tab, biz, data) {
       // Disclosed files were pre-approved first (they sat in Application Received).
       pre_approvals: stageCounts['Application Received'] + stageCounts.Disclosed,
       applications: stageCounts['Application/Estimate Sent'],
-      loans_closed: countWon(bayDeals, win),
-      loan_volume: sumWon(bayDeals, win),
-      pipeline_value: pipelineValue(bayDeals),
+      loans_closed: arive.loans_closed,
+      loan_volume: arive.loan_volume,
+      pipeline_value: arive.pipeline_value,
       db_total: dbTotal,
       calls_monthly: Number(manual.calls || 0) + callsSince(bizFilter(data.callRows), win.from),
     }
   }
   if (tab === 'sprint') {
-    return rollupMetrics(bizFilter(sprintRows(data.sprint)))
+    return { ...rollupMetrics(bizFilter(sprintRows(data.sprint))), bay_funded_loans: ariveFor(data, biz).bay_funded_loans }
   }
   // revenue
-  const manual = rollupMetrics(bizFilter(data.month))
-  const bayDeals = data.deals.filter((d) => d.business_id === 'bay')
-  const win = monthWindow()
-  const combined = Number(manual.rev_gross_commission || 0) + Number(manual.rev_monthly_residual || 0)
-  const closings = countWon(bayDeals, win)
-  return {
-    ...manual,
-    rev_closings: closings,
-    rev_loan_volume: sumWon(bayDeals, win),
-    rev_combined_income: combined,
-    rev_avg_per_closing: safeDiv(manual.rev_gross_commission, closings),
-    rev_avg_residual: safeDiv(manual.rev_monthly_residual, manual.rev_active_merchants),
-    rev_annualized: combined * 12,
-  }
+  return revenueValues(rollupMetrics(bizFilter(data.month)), ariveFor(data, biz))
 }

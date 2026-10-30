@@ -14,6 +14,7 @@ import PriorityLeads from './pages/PriorityLeads'
 import Reports from './pages/Reports'
 import Analytics from './pages/Analytics'
 import Tasks from './pages/Tasks'
+import Loans from './pages/Loans'
 import PagePlaceholder from './components/PagePlaceholder'
 import BookPage from './components/BookPage'
 import SectionTabs from './components/SectionTabs'
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/mpg/activity" element={<Activity biz="mpg" />} />
               <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />
               <Route path="/bayway/pipeline" element={<Pipeline biz="bay" />} />
+              <Route path="/bayway/loans" element={<Loans />} />
               <Route path="/bayway/priority-leads" element={<PriorityLeads />} />
               <Route path="/bayway/activity" element={<Activity biz="bay" />} />
               <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />

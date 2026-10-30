@@ -21,7 +21,9 @@ import { deriveAlert } from '../lib/overview'
 import { MPG_LEAD_FLOW } from '../lib/pipeline'
 import { pipelineKpis } from '../lib/pipelineView'
 import { formatPhone, telHref } from '../lib/phone'
-import { DEFAULT_TARGETS, resolveTargets, monthWindow, formatValue, MPG_SPRINT } from '../lib/reports'
+import { DEFAULT_TARGETS, resolveTargets, monthWindow, sprintWindow, formatValue, MPG_SPRINT } from '../lib/reports'
+import { fetchLoanBundle } from '../lib/loansData'
+import { loanStats } from '../lib/loans'
 import { todayKey } from '../lib/overviewCards'
 import { BAY_STAGES } from '../../supabase/functions/_shared/bay-stages.ts'
 import {
@@ -39,6 +41,7 @@ import {
   incomeMix,
   sprintPace,
   fmtMoney,
+  fundedLoanDeals,
 } from '../lib/overviewDash'
 
 const BAY_MIX_STAGES = BAY_STAGES.slice(0, 5)
@@ -139,7 +142,7 @@ function KpiCard({ card }) {
           {card.tag && (
             <span
               className="rounded-md border px-[7px] py-px text-[11px] font-semibold"
-              title={card.tag === 'Entered' ? 'Typed into Reports' : 'From synced CRM data'}
+              title={card.tag === 'Entered' ? 'Typed into Reports' : card.tag === 'Est. from Arive' ? 'Estimated from the Arive loan import' : 'From synced CRM data'}
               style={card.tag === 'Entered' ? { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' } : { borderColor: 'var(--line2)', background: 'var(--panel2)', color: 'var(--muted)' }}
             >
               {card.tag}
@@ -417,7 +420,9 @@ function IncomeCard({ model, biz }) {
           <div className="text-[12.5px] text-muted">Annualized {fmtMoney(model.annualized)}</div>
         </div>
       </div>
-      <div className="mx-5 mb-4 mt-auto text-[12px] text-dim">Entered in Reports</div>
+      <div className="mx-5 mb-4 mt-auto text-[12px] text-dim">
+        {!model.fromArive ? 'Entered in Reports' : biz === 'all' ? 'Commission estimated from Arive · residual entered in Reports' : 'Estimated from Arive'}
+      </div>
     </Card>
   )
 }
@@ -557,6 +562,7 @@ function useOverviewData(biz) {
           q.deals = fetchAllSettled(() =>
             supabase.from('deals').select('status, value, expected_close, business_id').eq('business_id', 'bay').order('id'),
           )
+          q.loans = fetchLoanBundle()
         }
         if (wantsMpg) {
           q.mpgRows = fetchAllSettled(() => supabase.from('v_mpg_contacts').select(`id, name, company, stage, last_touch_at${HEALTH_COLUMNS}`).order('id'))
@@ -566,7 +572,10 @@ function useOverviewData(biz) {
         const settled = await Promise.all(keys.map((k) => q[k]))
         if (!alive) return
         const res = Object.fromEntries(keys.map((k, i) => [k, settled[i]]))
-        const err = keys.map((k) => res[k].error).find(Boolean)
+        // Loans are not fatal: without them the cards keep their FUB and
+        // entered sources, as before the first Arive import.
+        if (res.loans?.error) console.warn('Overview: loans failed to load', res.loans.error)
+        const err = keys.filter((k) => k !== 'loans').map((k) => res[k].error).find(Boolean)
         if (err) {
           setError(err.message)
           return
@@ -580,6 +589,7 @@ function useOverviewData(biz) {
           leads: (res.contacts.data || []).map(toLead),
           bayPipe: res.bayPipe?.data || [],
           deals: res.deals?.data || [],
+          loanBundle: res.loans?.data || null,
           mpgRows: (res.mpgRows?.data || []).map((r) => ({ ...r, business_id: 'mpg' })),
         })
       } catch (e) {
@@ -600,15 +610,18 @@ function buildView(biz, data) {
   const inBook = (b) => biz === 'all' || b === biz
   const now = Date.now()
   const activities = data.activities.filter((a) => inBook(a.business_id))
-  const values = monthValues({ biz, metrics: data.metrics, deals: data.deals, activities: data.activities, pipeline: data.bayPipe, now })
+  const lb = data.loanBundle
+  const stats = lb ? loanStats(lb.loans, lb.rates, { month: monthWindow(now), prev: prevMonthWindow(now), sprint: sprintWindow() }) : null
+  const values = monthValues({ biz, metrics: data.metrics, deals: data.deals, activities: data.activities, pipeline: data.bayPipe, now, loanStats: stats })
   return {
     alert: deriveAlert({ latestSync: data.latestSync, tasks: data.tasks, now }),
     kpis: kpiCards({ biz, values, targets: data.targets, mpgRows: data.mpgRows }),
-    series: activitySeries({ activities, pipeline: biz === 'mpg' ? [] : data.bayPipe, deals: biz === 'mpg' ? [] : data.deals, now }),
+    // Once loans are imported, chart closings are funded loans, like the KPI cards.
+    series: activitySeries({ activities, pipeline: biz === 'mpg' ? [] : data.bayPipe, deals: biz === 'mpg' ? [] : stats ? fundedLoanDeals(lb.loans) : data.deals, now }),
     goals: monthlyGoals({ biz, values, targets: data.targets, now }),
     sources: topSources(data.leads, biz, new Date(`${monthWindow(now).from}T00:00:00`).getTime()),
     income: incomeMix({ values, targets: data.targets }),
-    sprint: sprintPace({ biz, metrics: data.metrics, targets: data.targets, now }),
+    sprint: sprintPace({ biz, metrics: data.metrics, targets: data.targets, now, measured: stats ? { bay_funded_loans: stats.sprintFunded } : {} }),
   }
 }
 
