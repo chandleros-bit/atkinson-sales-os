@@ -30,6 +30,9 @@ describe('rates and per-loan values', () => {
     expect(notInLatest(L({ last_seen_at: '2026-10-30T00:00:00Z' }), '2026-10-30T00:00:00Z')).toBe(false)
     expect(notInLatest(L({ last_seen_at: '2026-10-01T00:00:00Z' }), null)).toBe(false)
   })
+  it('compares last_seen_at as instants, not strings', () => {
+    expect(notInLatest(L({ last_seen_at: '2026-10-30T00:00:00+00:00' }), '2026-10-30T00:00:00Z')).toBe(false)
+  })
 })
 
 describe('filterLoans', () => {
@@ -62,6 +65,17 @@ describe('panels', () => {
     expect(groups[1].rows.every((r) => r.count === 0)).toBe(true)
     expect(groups[3].rows.find((r) => r.stage === 'Loan Funded')).toEqual({ stage: 'Loan Funded', count: 3, amount: 830200 })
     expect(groups[5].rows).toEqual([{ stage: 'Mystery', count: 1, amount: 5 }])
+  })
+
+  it('pipelineStatus counts a stage with extra spaces or different case in its row', () => {
+    const groups = pipelineStatus([L({ stage: 'Approved w/  Conditions', stage_group: 'processing', amount: 7 }), L({ stage: 'app intake' })])
+    expect(groups[1].rows.find((r) => r.stage === 'Approved w/ Conditions')).toEqual({ stage: 'Approved w/ Conditions', count: 1, amount: 7 })
+    expect(groups[0].rows[0]).toEqual({ stage: 'App Intake', count: 1, amount: 100000 })
+  })
+
+  it('pipelineStatus labels a blank stage (blank) in the other group', () => {
+    const other = pipelineStatus([L({ stage: null, stage_group: 'other', amount: 9 })]).find((g) => g.key === 'other')
+    expect(other.rows).toEqual([{ stage: '(blank)', count: 1, amount: 9 }])
   })
 
   it('pipelineStatus drops the other group when empty', () => {

@@ -1,6 +1,6 @@
 // Loan maths for the Loans page panels and the Reports / Overview metrics.
 // Loans are rows of the `loans` table (see ariveImport.js). Pure.
-import { STAGE_GROUPS } from './ariveImport'
+import { STAGE_GROUPS, norm } from './ariveImport'
 import { inWindow } from './reports'
 
 export const DEFAULT_RATES = { lo_name: 'Chandler Dean Atkinson', primary_pct: 1.25, assisted_pct: 0.75 }
@@ -16,7 +16,7 @@ export function resolveRates(saved) {
 
 export const isScenario = (l) => l.scenario_override ?? !!l.scenario_auto
 export const isOpen = (l) => ['prospect', 'processing', 'closing'].includes(l.stage_group)
-export const notInLatest = (l, lastImportAt) => !!lastImportAt && !!l.last_seen_at && l.last_seen_at < lastImportAt
+export const notInLatest = (l, lastImportAt) => !!lastImportAt && !!l.last_seen_at && Date.parse(l.last_seen_at) < Date.parse(lastImportAt)
 
 export function estComp(l, rates) {
   if (l.comp_override != null) return Number(l.comp_override)
@@ -39,18 +39,18 @@ export function pipelineStatus(loans) {
     key: g.key,
     label: g.label,
     rows: g.stages.map((stage) => {
-      const ls = loans.filter((l) => l.stage_group === g.key && String(l.stage).toLowerCase() === stage.toLowerCase())
+      const ls = loans.filter((l) => l.stage_group === g.key && norm(l.stage) === norm(stage))
       return { stage, count: ls.length, amount: sumAmount(ls) }
     }),
   }))
   const other = loans.filter((l) => l.stage_group === 'other')
   if (other.length) {
-    const names = [...new Set(other.map((l) => l.stage || 'Unknown'))].sort()
+    const names = [...new Set(other.map((l) => l.stage || '(blank)'))].sort()
     groups.push({
       key: 'other',
       label: 'Other',
       rows: names.map((stage) => {
-        const ls = other.filter((l) => (l.stage || 'Unknown') === stage)
+        const ls = other.filter((l) => (l.stage || '(blank)') === stage)
         return { stage, count: ls.length, amount: sumAmount(ls) }
       }),
     })

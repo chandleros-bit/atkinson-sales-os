@@ -12,7 +12,7 @@ export const STAGE_GROUPS = [
   { key: 'adverse', label: 'Adverse', stages: ['Adverse'] },
 ]
 
-const norm = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+export const norm = (s) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 const GROUP_OF = new Map(STAGE_GROUPS.flatMap((g) => g.stages.map((s) => [norm(s), g.key])))
 
 export function stageGroup(stage) {
@@ -24,7 +24,7 @@ const text = (v) => {
   return s === '' ? null : s
 }
 const num = (v) => {
-  const s = String(v ?? '').replace(/[$,\s]/g, '')
+  const s = String(v ?? '').replace(/[$,%\s]/g, '')
   if (s === '') return null
   const n = Number(s)
   return Number.isFinite(n) ? n : null
@@ -37,6 +37,10 @@ const phone10 = (v) => {
 export function parseUsDate(v) {
   const m = String(v ?? '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (!m) return null
+  const [y, mo, d] = [Number(m[3]), Number(m[1]), Number(m[2])]
+  const dt = new Date(0)
+  dt.setUTCFullYear(y, mo - 1, d)
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null
   return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`
 }
 
@@ -50,7 +54,7 @@ export function isScenarioRow({ first, last, name, email, phone }) {
   const [local, domain] = norm(email).split('@')
   if (email && (PLACEHOLDER_LOCALS.has(local) || PLACEHOLDER_DOMAINS.has(domain))) return true
   const d = String(phone ?? '').replace(/\D/g, '')
-  if (d.length >= 10 && /^(\d)\1+$/.test(d)) return true
+  if (d.length >= 10 && /^(\d)\1{9}$/.test(d.slice(-10))) return true
   if (PLACEHOLDER_NAMES.has(norm(first)) || PLACEHOLDER_NAMES.has(norm(last))) return true
   const full = norm(name)
   return PLACEHOLDER_PHRASES.some((p) => full.includes(p))
@@ -160,12 +164,14 @@ export function buildPreview({ header, rows, existing, contacts, loName }) {
     const loan = rowToLoan(row, { loName })
     if (!loan.arive_loan_id || seen.has(loan.arive_loan_id)) { counts.skipped++; continue }
     seen.add(loan.arive_loan_id)
-    loan.contact_id = matchContact(loan, contacts)
-    loans.push(loan)
-    if (loan.stage_group === 'other' && loan.stage) unknown.add(loan.stage)
-    if (loan.scenario_auto) counts.scenario++
-    else if (!loan.contact_id) counts.unmatched++
     const prev = byId.get(loan.arive_loan_id)
+    // A manual scenario toggle on the stored row beats detection (as isScenario does).
+    const scen = prev?.scenario_override ?? loan.scenario_auto
+    loan.contact_id = scen ? null : matchContact({ ...loan, scenario_auto: false }, contacts)
+    loans.push(loan)
+    if (loan.stage_group === 'other') unknown.add(loan.stage ?? '(blank)')
+    if (scen) counts.scenario++
+    else if (!loan.contact_id) counts.unmatched++
     if (!prev) counts.new++
     else if (IMPORT_FIELDS.every((f) => same(loan[f], prev[f]))) counts.unchanged++
     else counts.updated++

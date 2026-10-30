@@ -2,7 +2,7 @@
 // and doubled quotes. Returns the trimmed header and one object per non-blank
 // row, keyed by header; short rows are padded with ''.
 export function parseCsv(text) {
-  const src = String(text ?? '').replace(/^﻿/, '')
+  const src = String(text ?? '').replace(/^\uFEFF/, '')
   const records = []
   let row = []
   let field = ''

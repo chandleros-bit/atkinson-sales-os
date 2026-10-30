@@ -14,7 +14,7 @@ describe('parseCsv', () => {
   })
 
   it('strips a BOM, trims header names and skips blank lines', () => {
-    const { header, rows } = parseCsv('﻿ A , B\n\n1,2\n\n')
+    const { header, rows } = parseCsv('\uFEFF A , B\n\n1,2\n\n')
     expect(header).toEqual(['A', 'B'])
     expect(rows).toEqual([{ A: '1', B: '2' }])
   })

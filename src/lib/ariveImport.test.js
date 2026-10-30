@@ -33,6 +33,13 @@ describe('parseUsDate', () => {
     expect(parseUsDate('')).toBeNull()
     expect(parseUsDate('soon')).toBeNull()
   })
+  it('rejects impossible dates', () => {
+    expect(parseUsDate('2/30/2026')).toBeNull()
+    expect(parseUsDate('13/1/2026')).toBeNull()
+    expect(parseUsDate('0/5/2026')).toBeNull()
+    expect(parseUsDate('2/29/2024')).toBe('2024-02-29')
+    expect(parseUsDate('2/29/2026')).toBeNull()
+  })
 })
 
 describe('isScenarioRow', () => {
@@ -43,6 +50,20 @@ describe('isScenarioRow', () => {
     expect(isScenarioRow({ first: 'Josh', last: 'DSCR' })).toBe(true)
     expect(isScenarioRow({ name: 'Darren Cost Sheet' })).toBe(true)
     expect(isScenarioRow({ first: 'Gina', last: 'Park', email: 'gina.park@example.com', phone: '7135550101' })).toBe(false)
+  })
+  it('flags every placeholder email local part and domain', () => {
+    for (const email of ['123@gmail.com', '456@x.com', 'lead@gmail.com', 'test@x.com', 'x@123.com']) {
+      expect(isScenarioRow({ email }), email).toBe(true)
+    }
+  })
+  it('flags placeholder first or last names and phrases in the full name', () => {
+    expect(isScenarioRow({ first: 'tbd', last: 'Smith' })).toBe(true)
+    expect(isScenarioRow({ first: 'Sam', last: 'Client' })).toBe(true)
+    expect(isScenarioRow({ name: 'Jo Smith Renovation Loan' })).toBe(true)
+  })
+  it('flags a repeated-digit phone even with a country code', () => {
+    expect(isScenarioRow({ phone: '+1 (222) 222-2222' })).toBe(true)
+    expect(isScenarioRow({ phone: '+1 (713) 555-0101' })).toBe(false)
   })
 })
 
@@ -62,6 +83,10 @@ describe('rowToLoan', () => {
   })
   it('marks other loan officers as assisted and blank amounts as null', () => {
     expect(rowToLoan(rows[1], { loName: LO })).toMatchObject({ role: 'assisted', amount: null, loan_officer: 'Ronnie Gaydos' })
+  })
+  it('reads a note rate written with a percent sign', () => {
+    expect(rowToLoan({ 'Note Rate': '6.125%' }, { loName: LO }).rate).toBe(6.125)
+    expect(rowToLoan({ 'Note Rate': '6.125' }, { loName: LO }).rate).toBe(6.125)
   })
   it('flags scenario rows', () => {
     expect(rowToLoan(rows[2], { loName: LO }).scenario_auto).toBe(true)
@@ -109,5 +134,48 @@ describe('buildPreview', () => {
     expect(p.unknownStages).toEqual(['Underwriting Hold'])
     expect(p.missingIds).toEqual(['999999'])
     expect(p.loans[0].contact_id).toBe('c1')
+  })
+
+  it('treats a numeric string amount from PostgREST as unchanged', () => {
+    const first = buildPreview({ header, rows: [rows[0]], existing: [], contacts, loName: LO }).loans[0]
+    const p = buildPreview({ header, rows: [rows[0]], existing: [{ ...first, amount: '410000.00' }], contacts, loName: LO })
+    expect(p.counts).toMatchObject({ unchanged: 1, updated: 0, new: 0 })
+  })
+
+  describe('scenario override on an existing loan', () => {
+    const mk = (o) => ({ 'Primary Borrower': 'Gina Park', 'Primary Loan Officer Name': LO, 'ARIVE Loan Id': '7', 'Stage Name': 'App Intake', 'Total Loan Amount': '1', ...o })
+    const H = REQUIRED_HEADERS.concat(['Primary Borrower Email'])
+    const ctc = [{ id: 'c1', name: 'Gina Park', email: 'gina.park@example.com', phone: null }, { id: 'c9', name: 'Placeholder', email: 'aaa@gmail.com', phone: null }]
+
+    it('matches a placeholder-email loan the user marked as real, and does not count it as scenario', () => {
+      const row = mk({ 'Primary Borrower Email': 'aaa@gmail.com' })
+      const p = buildPreview({ header: H, rows: [row], existing: [{ arive_loan_id: '7', scenario_override: false }], contacts: ctc, loName: LO })
+      expect(p.loans[0].scenario_auto).toBe(true)
+      expect(p.loans[0].contact_id).toBe('c9')
+      expect(p.counts).toMatchObject({ scenario: 0, unmatched: 0 })
+      expect(p.loans[0]).not.toHaveProperty('scenario_override')
+    })
+
+    it('leaves a normal loan the user marked as scenario unmatched and counts it as scenario', () => {
+      const row = mk({ 'Primary Borrower Email': 'gina.park@example.com' })
+      const p = buildPreview({ header: H, rows: [row], existing: [{ arive_loan_id: '7', scenario_override: true }], contacts: ctc, loName: LO })
+      expect(p.loans[0].scenario_auto).toBe(false)
+      expect(p.loans[0].contact_id).toBeNull()
+      expect(p.counts).toMatchObject({ scenario: 1, unmatched: 0 })
+    })
+
+    it('falls back to detection when there is no override', () => {
+      const row = mk({ 'Primary Borrower Email': 'aaa@gmail.com' })
+      const p = buildPreview({ header: H, rows: [row], existing: [{ arive_loan_id: '7', scenario_override: null }], contacts: ctc, loName: LO })
+      expect(p.loans[0].contact_id).toBeNull()
+      expect(p.counts).toMatchObject({ scenario: 1, unmatched: 0 })
+    })
+  })
+
+  it('lists a blank stage among the unknown stages', () => {
+    const row = { 'Primary Borrower': 'A B', 'Primary Loan Officer Name': LO, 'ARIVE Loan Id': '8', 'Stage Name': '', 'Total Loan Amount': '1' }
+    const p = buildPreview({ header: REQUIRED_HEADERS, rows: [row], existing: [], contacts: [], loName: LO })
+    expect(p.loans[0].stage_group).toBe('other')
+    expect(p.unknownStages).toEqual(['(blank)'])
   })
 })
