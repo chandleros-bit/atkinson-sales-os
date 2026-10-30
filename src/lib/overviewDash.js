@@ -14,6 +14,7 @@ import { rollupMetrics, monthWindow, countWon, pipelineValue, inWindow, sprintRo
 import { niceMax, smoothPath } from './overviewCards'
 import { sourceTable } from './analytics'
 import { isLostStage } from './pipeline'
+import { isScenario } from './loans'
 
 export const CHART_DAYS = 30
 export const PRODUCTION_STAGES = new Set(['Application/Estimate Sent', 'Application Received', 'Disclosed'])
@@ -258,6 +259,14 @@ function clampedSmooth(pts, c) {
   })
 }
 
+// Funded Arive loans in the deal shape activitySeries reads, so the chart's
+// closings follow the loans once they are imported. Scenario files never count.
+export function fundedLoanDeals(loans) {
+  return loans
+    .filter((l) => l.funded_on && !isScenario(l))
+    .map((l) => ({ status: 'won', value: Number(l.amount || 0), expected_close: l.funded_on, business_id: 'bay' }))
+}
+
 // SVG geometry for the chart: both lines share one y scale (production is a
 // handful a day, touchpoints dozens, so production sits low, as in the mock).
 export function activityChart(points, c = ACT_CHART) {
@@ -362,6 +371,7 @@ export function incomeMix({ values: v, targets }) {
     pct: pctOf(total, targets.rev_combined_income),
     annualized: total * 12,
     share: total ? v.commission / total : 0,
+    fromArive: !!v.commissionFromArive,
   }
 }
 

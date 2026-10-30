@@ -41,6 +41,7 @@ import {
   incomeMix,
   sprintPace,
   fmtMoney,
+  fundedLoanDeals,
 } from '../lib/overviewDash'
 
 const BAY_MIX_STAGES = BAY_STAGES.slice(0, 5)
@@ -419,7 +420,9 @@ function IncomeCard({ model, biz }) {
           <div className="text-[12.5px] text-muted">Annualized {fmtMoney(model.annualized)}</div>
         </div>
       </div>
-      <div className="mx-5 mb-4 mt-auto text-[12px] text-dim">Entered in Reports</div>
+      <div className="mx-5 mb-4 mt-auto text-[12px] text-dim">
+        {!model.fromArive ? 'Entered in Reports' : biz === 'all' ? 'Commission estimated from Arive · residual entered in Reports' : 'Estimated from Arive'}
+      </div>
     </Card>
   )
 }
@@ -569,7 +572,10 @@ function useOverviewData(biz) {
         const settled = await Promise.all(keys.map((k) => q[k]))
         if (!alive) return
         const res = Object.fromEntries(keys.map((k, i) => [k, settled[i]]))
-        const err = keys.map((k) => res[k].error).find(Boolean)
+        // Loans are not fatal: without them the cards keep their FUB and
+        // entered sources, as before the first Arive import.
+        if (res.loans?.error) console.warn('Overview: loans failed to load', res.loans.error)
+        const err = keys.filter((k) => k !== 'loans').map((k) => res[k].error).find(Boolean)
         if (err) {
           setError(err.message)
           return
@@ -610,7 +616,8 @@ function buildView(biz, data) {
   return {
     alert: deriveAlert({ latestSync: data.latestSync, tasks: data.tasks, now }),
     kpis: kpiCards({ biz, values, targets: data.targets, mpgRows: data.mpgRows }),
-    series: activitySeries({ activities, pipeline: biz === 'mpg' ? [] : data.bayPipe, deals: biz === 'mpg' ? [] : data.deals, now }),
+    // Once loans are imported, chart closings are funded loans, like the KPI cards.
+    series: activitySeries({ activities, pipeline: biz === 'mpg' ? [] : data.bayPipe, deals: biz === 'mpg' ? [] : stats ? fundedLoanDeals(lb.loans) : data.deals, now }),
     goals: monthlyGoals({ biz, values, targets: data.targets, now }),
     sources: topSources(data.leads, biz, new Date(`${monthWindow(now).from}T00:00:00`).getTime()),
     income: incomeMix({ values, targets: data.targets }),

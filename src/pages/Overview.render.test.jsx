@@ -22,7 +22,9 @@ const TABLES = {
     { date: today, business_id: 'bay', metric_key: 'live_conversations', value: 12 },
     { date: monthFirst, business_id: 'mpg', metric_key: 'rev_monthly_residual', value: 8400 },
   ],
-  settings: { value: { calls: 100 } },
+  // Every settings key gets this row: as metric_targets it sets calls; as
+  // 'arive' resolveRates keeps primary_pct and drops calls (unknown key).
+  settings: { value: { calls: 100, primary_pct: 1.25 } },
   sync_log: { ran_at: new Date().toISOString(), status: 'ok', message: null },
   v_tasks: [{ id: 't1', business_id: 'bay', due_at: new Date().toISOString() }],
   v_active_pipeline: [
@@ -35,6 +37,10 @@ const TABLES = {
   deals: [
     { status: 'won', value: 340000, expected_close: today, business_id: 'bay' },
     { status: 'open', value: 215000, expected_close: today, business_id: 'bay' },
+  ],
+  // One primary loan funded today: Arive takes over Bayway's loan cards.
+  loans: [
+    { id: 'ln1', arive_loan_id: 'A-1', business_id: 'bay', role: 'primary', amount: 400000, stage: 'Funded', stage_group: 'funded', funded_on: today, scenario_auto: false, scenario_override: null, comp_override: null },
   ],
   v_priority_leads: [
     { id: 'l1', name: 'Jessica Chen', score: 92, tier: 'hot', last_activity_at: null, fub_profile_url: '#' },
@@ -109,8 +115,14 @@ describe('Overview dashboard', () => {
     // Today's calendar event, with its location.
     expect(text).toContain('Closing')
     expect(text).toContain('Title Co.')
-    // One won Bayway deal this month.
+    // One Arive loan funded this month.
     expect(document.querySelector('[data-kpi="closed"]').textContent).toContain('Bayway 1 loans · MPG 0 merchants')
+    // Commission is estimated from that loan: 400,000 × 1.25%.
+    const commission = document.querySelector('[data-kpi="commission"]').textContent
+    expect(commission).toContain('Est. from Arive')
+    expect(commission).toContain('$5,000')
+    expect(text).toContain('Commission estimated from Arive')
+    expect(text).not.toContain('Entered in Reports')
     // Old command-center cards are gone.
     expect(text).not.toContain('Priority Leads')
     expect(text).not.toContain('Bayway Sprint')
@@ -123,6 +135,10 @@ describe('Overview dashboard', () => {
     expect(text).toContain('Apps & estimates')
     expect(text).not.toContain('MPG residual')
     expect(document.querySelector('[data-goal="merchants"]')).toBeNull()
+    expect(document.querySelector('[data-kpi="commission"]').textContent).toContain('Est. from Arive')
+    expect(document.querySelector('[data-kpi="closed"]').textContent).toMatch(/Closed this month\s*1/)
+    expect(document.querySelector('[data-goal="closings"]').textContent).toContain('1 / 5')
+    expect(text).toContain('Estimated from Arive')
   })
 
   it('swaps in MPG cards in the MPG view', async () => {
@@ -133,5 +149,8 @@ describe('Overview dashboard', () => {
     expect(text).toContain('MPG leads by stage')
     expect(text).not.toContain('Pipeline value')
     expect(text).not.toContain('Apps & estimates')
+    // No Bayway commission on the MPG view, and its income note stays manual.
+    expect(text).not.toContain('Arive')
+    expect(text).toContain('Entered in Reports')
   })
 })

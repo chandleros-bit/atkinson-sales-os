@@ -77,6 +77,62 @@ export const METRICS = [
 // Metrics read from the Arive loans import (src/lib/loans.js loanStats).
 export const ARIVE_KEYS = ['loans_closed', 'loan_volume', 'pipeline_value', 'rev_closings', 'rev_loan_volume', 'rev_gross_commission', 'bay_funded_loans']
 
+// Revenue cards derived from commission: before the first import they carry
+// the same "no Arive import yet" note on the Bayway and all views.
+const DERIVED_FROM_COMMISSION = ['rev_combined_income', 'rev_annualized', 'rev_avg_per_closing']
+
+// stats: loanStats() from loans.js (null when nothing is imported). Takes the
+// computed stats rather than the loans because loans.js imports this file.
+// Bayway's Arive numbers never count on the MPG view.
+export function ariveValues(stats, biz = 'all') {
+  if (!stats || biz === 'mpg') return Object.fromEntries(ARIVE_KEYS.map((k) => [k, null]))
+  return {
+    loans_closed: stats.closed, loan_volume: stats.volume, pipeline_value: stats.pipeline,
+    rev_closings: stats.closed, rev_loan_volume: stats.volume, rev_gross_commission: stats.commission,
+    bay_funded_loans: stats.sprintFunded,
+  }
+}
+
+// Card sublines saying where the Arive numbers came from. lastImport: the
+// latest ok arive sync_log row ({ ran_at }) or null.
+export function ariveNotes({ loans = [], lastImport = null, biz = 'all' }) {
+  if (biz === 'mpg') return {}
+  if (!loans.length) {
+    return Object.fromEntries([...ARIVE_KEYS, ...DERIVED_FROM_COMMISSION].map((k) => [k, 'no Arive import yet']))
+  }
+  const text = lastImport?.ran_at
+    ? `Arive · imported ${new Date(lastImport.ran_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    : 'Arive · import date unknown'
+  return Object.fromEntries(ARIVE_KEYS.map((k) => [k, text]))
+}
+
+// Returns null (renders as "—", pace "none") rather than NaN/Infinity when the
+// denominator is missing: an unknown average must not read as $0.
+export function safeDiv(numerator, denominator) {
+  const n = Number(numerator || 0)
+  const d = Number(denominator || 0)
+  if (!d) return null
+  return n / d
+}
+
+// The Revenue tab. manual: metrics_daily rollup for the visible book(s).
+// arive: ariveValues() for the same view (all null on MPG, so combined and
+// annualized income are residual only there).
+export function revenueValues(manual, arive) {
+  const commission = arive.rev_gross_commission
+  const combined = Number(commission || 0) + Number(manual.rev_monthly_residual || 0)
+  return {
+    ...manual,
+    rev_closings: arive.rev_closings,
+    rev_loan_volume: arive.rev_loan_volume,
+    rev_gross_commission: commission,
+    rev_combined_income: combined,
+    rev_avg_per_closing: safeDiv(commission, arive.rev_closings),
+    rev_avg_residual: safeDiv(manual.rev_monthly_residual, manual.rev_active_merchants),
+    rev_annualized: combined * 12,
+  }
+}
+
 // Defaults straight from the doc. Editable at runtime via settings.metric_targets.
 export const DEFAULT_TARGETS = {
   calls: 100, live_conversations: 20, followups: 25, new_contacts: 5,

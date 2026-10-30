@@ -6,7 +6,8 @@ import {
   DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
   deriveStageCounts, periodDateFor,
-  sprintRows, sprintWindow, MPG_SPRINT, callsByDay, callsSince, ARIVE_KEYS,
+  sprintRows, sprintWindow, MPG_SPRINT, callsByDay, callsSince,
+  ariveValues, ariveNotes, revenueValues,
 } from '../lib/reports'
 import { fetchLoanBundle } from '../lib/loansData'
 import { loanStats, DEFAULT_RATES } from '../lib/loans'
@@ -31,15 +32,6 @@ function todayKey() {
   const d = new Date()
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-// Returns null (renders as "—", pace "none") rather than NaN/Infinity when the
-// denominator is missing — an unknown average must not read as $0.
-function safeDiv(numerator, denominator) {
-  const n = Number(numerator || 0)
-  const d = Number(denominator || 0)
-  if (!d) return null
-  return n / d
 }
 
 function MetricCard({ card }) {
@@ -250,8 +242,11 @@ export default function Reports() {
         fetchLoanBundle(),
       ])
       const err = active.error || bayContacts.error || mpgContacts.error || week.error ||
-        month.error || sprintMetrics.error || series.error || settings.error || callRows.error || loanBundle.error
+        month.error || sprintMetrics.error || series.error || settings.error || callRows.error
       if (err) { setError(err.message); return }
+      // Loans are not fatal: the rest of the scoreboard still renders, with the
+      // Arive cards reading "no Arive import yet".
+      if (loanBundle.error) console.warn('Reports: loans failed to load', loanBundle.error)
       setData({
         activeRows: active.data || [],
         bayContacts: bayContacts.count || 0,
@@ -310,7 +305,7 @@ export default function Reports() {
   const cards = useMemo(() => {
     if (!data) return []
     const values = computeValues(tab, biz, data)
-    return buildTabModel(metricsForTab(tab, biz), values, data.targets, ariveNotes(data))
+    return buildTabModel(metricsForTab(tab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
   }, [tab, biz, data])
 
   return (
@@ -475,22 +470,11 @@ function demoReportsData() {
   }
 }
 
-// Arive numbers for the switched metrics; every key null before the first import.
-function ariveValues(data) {
-  const s = loanStats(data.loans, data.loanRates, { month: monthWindow(), prev: prevMonthWindow(), sprint: sprintWindow() })
-  if (!s) return Object.fromEntries(ARIVE_KEYS.map((k) => [k, null]))
-  return {
-    loans_closed: s.closed, loan_volume: s.volume, pipeline_value: s.pipeline,
-    rev_closings: s.closed, rev_loan_volume: s.volume, rev_gross_commission: s.commission,
-    bay_funded_loans: s.sprintFunded,
-  }
-}
-
-function ariveNotes(data) {
-  const text = !data.loans.length
-    ? 'no Arive import yet'
-    : `Arive · imported ${new Date(data.lastLoanImport?.ran_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-  return Object.fromEntries(ARIVE_KEYS.map((k) => [k, text]))
+// Arive numbers for the switched metrics on this view; every key null before
+// the first import and on the MPG view.
+function ariveFor(data, biz) {
+  const stats = loanStats(data.loans, data.loanRates, { month: monthWindow(), prev: prevMonthWindow(), sprint: sprintWindow() })
+  return ariveValues(stats, biz)
 }
 
 // Maps each tab's metric keys to a number. Manual keys come from the
@@ -515,7 +499,7 @@ function computeValues(tab, biz, data) {
   if (tab === 'monthly') {
     const manual = rollupMetrics(bizFilter(data.month))
     const win = monthWindow()
-    const arive = ariveValues(data)
+    const arive = ariveFor(data, biz)
     // Board columns from the FUB stage tags (bay-stages.ts).
     const stageCounts = deriveStageCounts(data.activeRows, ['Application/Estimate Sent', 'Application Received', 'Disclosed'])
     const dbTotal =
@@ -535,21 +519,8 @@ function computeValues(tab, biz, data) {
     }
   }
   if (tab === 'sprint') {
-    return { ...rollupMetrics(bizFilter(sprintRows(data.sprint))), bay_funded_loans: ariveValues(data).bay_funded_loans }
+    return { ...rollupMetrics(bizFilter(sprintRows(data.sprint))), bay_funded_loans: ariveFor(data, biz).bay_funded_loans }
   }
   // revenue
-  const manual = rollupMetrics(bizFilter(data.month))
-  const arive = ariveValues(data)
-  const commission = arive.rev_gross_commission
-  const combined = Number(commission || 0) + Number(manual.rev_monthly_residual || 0)
-  return {
-    ...manual,
-    rev_closings: arive.rev_closings,
-    rev_loan_volume: arive.rev_loan_volume,
-    rev_gross_commission: commission,
-    rev_combined_income: combined,
-    rev_avg_per_closing: safeDiv(commission, arive.rev_closings),
-    rev_avg_residual: safeDiv(manual.rev_monthly_residual, manual.rev_active_merchants),
-    rev_annualized: combined * 12,
-  }
+  return revenueValues(rollupMetrics(bizFilter(data.month)), ariveFor(data, biz))
 }
