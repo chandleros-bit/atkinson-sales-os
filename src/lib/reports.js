@@ -44,7 +44,7 @@ export const METRICS = [
   // ---- Revenue -----------------------------------------------------------
   { key: 'rev_closings',        label: 'Closings (MTD)',        tab: 'revenue', biz: 'bay', source: 'live',    unit: 'count' },
   { key: 'rev_loan_volume',     label: 'Loan volume (MTD)',     tab: 'revenue', biz: 'bay', source: 'live',    unit: 'currency' },
-  { key: 'rev_gross_commission',label: 'Gross commission (MTD)',tab: 'revenue', biz: 'bay', source: 'manual',  unit: 'currency' },
+  { key: 'rev_gross_commission',label: 'Gross commission (MTD)',tab: 'revenue', biz: 'bay', source: 'live',    unit: 'currency' },
   { key: 'rev_active_merchants',label: 'Active merchants',      tab: 'revenue', biz: 'mpg', source: 'manual',  unit: 'count' },
   { key: 'rev_monthly_residual',label: 'Monthly residual',      tab: 'revenue', biz: 'mpg', source: 'manual',  unit: 'currency' },
   { key: 'rev_combined_income', label: 'Combined monthly income',tab: 'revenue',biz: 'both',source: 'derived', unit: 'currency' },
@@ -67,12 +67,15 @@ export const METRICS = [
   { key: 'bay_completed_applications',    label: 'Completed applications', tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
   { key: 'bay_qualified_preapprovals',    label: 'Qualified pre-approvals',tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
   { key: 'bay_contracts_refis',           label: 'Contracts/refi opps',    tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
-  { key: 'bay_funded_loans',              label: 'Funded loans',           tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
+  { key: 'bay_funded_loans',              label: 'Funded loans',           tab: 'sprint', biz: 'bay', source: 'live', unit: 'count' },
   { key: 'bay_referral_touches',          label: 'Referral touches',       tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
   { key: 'bay_pipeline_under_contract',   label: 'Under contract baseline',tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
   { key: 'bay_pipeline_preapproved',      label: 'Pre-approved baseline',  tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
   { key: 'bay_pipeline_waiting_docs',     label: 'Waiting docs baseline',  tab: 'sprint', biz: 'bay', source: 'manual', unit: 'count' },
 ]
+
+// Metrics read from the Arive loans import (src/lib/loans.js loanStats).
+export const ARIVE_KEYS = ['loans_closed', 'loan_volume', 'pipeline_value', 'rev_closings', 'rev_loan_volume', 'rev_gross_commission', 'bay_funded_loans']
 
 // Defaults straight from the doc. Editable at runtime via settings.metric_targets.
 export const DEFAULT_TARGETS = {
@@ -134,7 +137,8 @@ export function formatValue(value, unit) {
 }
 
 // metric: a METRICS entry. value: number | null. target: number | undefined.
-export function metricCardView(metric, value, target) {
+// note: an optional subline (where the number came from).
+export function metricCardView(metric, value, target, note = null) {
   const t = target ?? null
   const pct = value != null && t > 0 ? Math.min(100, Math.round((value / t) * 100)) : 0
   return {
@@ -146,12 +150,14 @@ export function metricCardView(metric, value, target) {
     targetText: t != null ? formatValue(t, metric.unit) : '—',
     pct,
     pace: pace(value, t),
+    note,
   }
 }
 
 // metrics: METRICS subset. values: { [key]: number|null }. targets: { [key]: number }.
-export function buildTabModel(metrics, values, targets = {}) {
-  return metrics.map((m) => metricCardView(m, values[m.key] ?? null, targets[m.key]))
+// notes: { [key]: string }.
+export function buildTabModel(metrics, values, targets = {}, notes = {}) {
+  return metrics.map((m) => metricCardView(m, values[m.key] ?? null, targets[m.key], notes[m.key] ?? null))
 }
 
 // Most-recent Monday (local), as a YYYY-MM-DD key matching metrics_daily.date.

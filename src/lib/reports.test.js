@@ -4,7 +4,7 @@ import {
   formatValue, metricCardView, buildTabModel, weekStart, monthWindow,
   rollupMetrics, sprintRows, weeksRemaining, neededPerWeek, sumWon, countWon,
   pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor,
-  callsByDay, callsSince,
+  callsByDay, callsSince, ARIVE_KEYS,
 } from './reports'
 
 describe('METRICS registry', () => {
@@ -305,5 +305,22 @@ describe('periodDateFor', () => {
   })
   it('writes sprint entries to the current day', () => {
     expect(periodDateFor('sprint', NOW_P)).toBe('2026-07-15')
+  })
+})
+
+describe('Arive-sourced metrics', () => {
+  it('commission and sprint funded loans are live now', () => {
+    const src = (k) => METRICS.find((m) => m.key === k).source
+    expect(src('rev_gross_commission')).toBe('live')
+    expect(src('bay_funded_loans')).toBe('live')
+    expect(ARIVE_KEYS).toEqual(['loans_closed', 'loan_volume', 'pipeline_value', 'rev_closings', 'rev_loan_volume', 'rev_gross_commission', 'bay_funded_loans'])
+  })
+
+  it('cards carry an optional note', () => {
+    const metric = METRICS.find((m) => m.key === 'loans_closed')
+    expect(metricCardView(metric, 2, 5, 'Arive · imported Oct 30').note).toBe('Arive · imported Oct 30')
+    expect(metricCardView(metric, 2, 5).note).toBeNull()
+    expect(buildTabModel([metric], { loans_closed: null }, {}, { loans_closed: 'no Arive import yet' })[0])
+      .toMatchObject({ valueText: '—', note: 'no Arive import yet' })
   })
 })
