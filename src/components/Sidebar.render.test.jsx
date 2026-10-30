@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The left nav: nine links, each lit on its own pages and on the old per-book
+// The left nav: ten links, each lit on its own pages and on the old per-book
 // routes it replaced; Settings carries the sync dot. BookPage: the merged
 // Pipeline / Contacts page follows the business switch, with a Bayway | MPG
 // toggle on All.
@@ -40,10 +40,10 @@ beforeEach(() => {
 })
 
 describe('Sidebar', () => {
-  it('lists nine links in four groups', async () => {
+  it('lists ten links in four groups', async () => {
     await render(<Sidebar />)
     const links = [...host.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.textContent)
-    expect(links).toEqual(['Overview', 'Workbench', 'Calendar', 'Tasks', 'Pipeline', 'Contacts', 'Activity', 'Reports', 'Settings'])
+    expect(links).toEqual(['Overview', 'Workbench', 'Calendar', 'Tasks', 'Pipeline', 'Loans', 'Contacts', 'Activity', 'Reports', 'Settings'])
     expect(host.querySelector('nav[aria-label="Main"]').textContent).toContain('Books')
     expect(host.querySelector('a[href="/pipeline"]')).not.toBeNull()
     expect(host.querySelector('a[href="/sync"] [data-sync-state="ok"]')).not.toBeNull()
