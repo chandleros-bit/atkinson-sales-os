@@ -6,6 +6,7 @@ import { useBusiness } from '../context/BusinessContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { groupForDisplay } from '../lib/priorityQueue'
 import UpNextRow from '../components/UpNextRow'
+import { SECTION_HEAD, SectionTitle } from '../components/CallSection'
 
 // Stage tracking (contacts.stage_since) began with migration 0029; "Stuck in
 // stage" can only fire stuck_days after a lead's first observed stage change.
@@ -25,7 +26,8 @@ function stuckNote(rules) {
 // hideIds: Workbench passes the dial list's leads so no one shows twice.
 // buckets: only these Up Next buckets; renders nothing when they're empty
 // (the Workbench places Up Next's sections around the dial lists).
-export default function Priority({ embedded = false, hideIds = null, buckets = null }) {
+// section: one bucket shown as its own Calls-lane box, under a bold header.
+export default function Priority({ embedded = false, hideIds = null, buckets = null, section = false }) {
   const { biz } = useBusiness()
   const { queue: all, rules, touchedToday, loading, error } = usePriorityQueue(biz)
   const queue = all.filter((r) => (!hideIds || !hideIds.has(r.id)) && (!buckets || buckets.includes(r.bucket)))
@@ -80,10 +82,16 @@ export default function Priority({ embedded = false, hideIds = null, buckets = n
         <div className={embedded ? 'flex flex-col' : 'mt-5 flex flex-col gap-5'}>
           {groups.map((g) => (
             <section key={g.id}>
-              <div className={`flex items-center gap-2 text-[12px] font-bold uppercase tracking-wide text-muted ${embedded ? 'border-b border-line px-4 pb-1.5 pt-3' : 'mb-1.5 px-1'}`}>
-                {g.label}
-                <span className="num font-semibold text-dim">{counts[g.id]}</span>
-              </div>
+              {section ? (
+                <div className={SECTION_HEAD}>
+                  <SectionTitle icon="clock" iconColor="var(--neg-ink)" count={counts[g.id]}>{g.label}</SectionTitle>
+                </div>
+              ) : (
+                <div className={`flex items-center gap-2 text-[12px] font-bold uppercase tracking-wide text-muted ${embedded ? 'border-b border-line px-4 pb-1.5 pt-3' : 'mb-1.5 px-1'}`}>
+                  {g.label}
+                  <span className="num font-semibold text-dim">{counts[g.id]}</span>
+                </div>
+              )}
               <div className={embedded ? 'border-b border-line px-3 sm:px-0' : 'rounded-card border border-line bg-panel px-3 sm:px-4'}>
                 {g.rows.map((r) => (
                   <UpNextRow key={r.id} row={r} dense={embedded} />

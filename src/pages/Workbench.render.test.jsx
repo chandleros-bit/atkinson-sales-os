@@ -155,6 +155,21 @@ describe('Workbench', () => {
     expect(host.querySelector('header').textContent).toContain('0 / 3')
   })
 
+  it('boxes the Calls sections in order: theme, overdue, lead cadence, then More with They reached out inside', async () => {
+    mobile = false
+    const host = await render()
+    const calls = host.querySelector('[aria-label="Calls"]')
+    const titles = [...calls.querySelectorAll('h3')].map((h) => h.textContent)
+    const at = (pred) => titles.findIndex(pred)
+    const theme = at((t) => t.startsWith("Today's theme") || t === 'Theme of the day')
+    expect(theme).toBe(0)
+    expect(at((t) => t === 'Lead cadence')).toBeGreaterThan(theme)
+    expect(titles.at(-1)).toBe('More from Up Next')
+    const more = calls.querySelector('details')
+    expect(more.querySelector('summary').textContent).toContain('incl. 1 reached out')
+    expect(more.textContent).toContain('Ana Inbound')
+  })
+
   it('shows the alerts rail: what is slipping, with names', async () => {
     mobile = false
     DATA.pipeline[1].docs_oldest_requested_at = iso(10)

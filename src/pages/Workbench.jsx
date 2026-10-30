@@ -22,6 +22,7 @@ import { useLoanAgents } from '../lib/loanAgents'
 import { buildDialList } from '../lib/dialList'
 import { buildThemeList } from '../lib/dialThemes'
 import ThemeList from '../components/ThemeList'
+import { CallBox, SECTION_HEAD, SectionTitle } from '../components/CallSection'
 import DialList from '../components/DialList'
 import Dialer from '../components/Dialer'
 
@@ -42,6 +43,8 @@ function Progress({ label, value, pct }) {
 // One lane as a card: a gray header with its count (the phone's tabs carry the
 // counts there), then the body, which scrolls on its own once the lanes sit
 // side by side (xl+).
+const MORE_BUCKETS = ['reached_out', 'new_lead', 'hot_cold', 'no_next_step', 'stuck', 'quiet']
+
 function Lane({ label, count, mobile, children }) {
   return (
     <section aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-card border border-line bg-panel shadow-[0_1px_2px_rgba(16,24,40,.05)]">
@@ -64,9 +67,10 @@ export default function Workbench() {
   const mobile = useIsMobile()
   const [lane, setLane] = useState('calls')
   const [adding, setAdding] = useState(false)
-  // The Calls lane (spec: The daily list): Up Next's "They reached out", the
-  // lead cadence (dialList.js), Up Next's overdue follow-ups, the weekday
-  // theme (dialThemes.js), then the rest of Up Next under More. dialRun is the
+  // The Calls lane, each section in its own box: the weekday theme
+  // (dialThemes.js), Up Next's overdue follow-ups, the lead cadence
+  // (dialList.js), then the rest of Up Next (They reached out first) under
+  // More. dialRun is the
   // list the dialer is walking, null while closed; themeDay previews another
   // weekday's theme (null = today).
   const dial = useDialList()
@@ -82,6 +86,9 @@ export default function Workbench() {
   const themeList = buildThemeList(dial.rows, { now: dial.now, day: themeDay, skips: dial.skips, inBook })
   const dialIds = new Set([...dialItems, ...themeList.items].map((i) => i.id))
   const callsToGo = toGo + dialDue.dueNow.length + (themeDay == null ? themeList.items.length : 0)
+  // More from Up Next: everyone in Up Next not in a section above.
+  const more = queue.filter((r) => !dialIds.has(r.id) && MORE_BUCKETS.includes(r.bucket))
+  const reachedOut = more.filter((r) => r.bucket === 'reached_out').length
   // Tuesday loans: their buyer's / seller's agents. While dialing, the list
   // being walked, so a borrower just called keeps their agents on screen.
   const loanAgents = useLoanAgents((dialRun ? dialRun.items : themeList.items).filter((i) => i.kind === 'loan_status').map((i) => i.id))
@@ -147,14 +154,27 @@ export default function Workbench() {
         {showCalls && (
           <Lane label="Calls" count={`${callsToGo} to go`} mobile={mobile}>
             {dial.error && <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{dial.error}</div>}
-            <Priority embedded hideIds={dialIds} buckets={['reached_out']} />
-            <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={dial.now} onDial={(i) => setDialRun({ items: dialItems, start: i })} />
-            <Priority embedded hideIds={dialIds} buckets={['overdue']} />
-            <ThemeList list={themeList} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeList.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
-            <details>
-              <summary className="cursor-pointer border-b border-line px-4 py-2.5 text-[12px] font-bold uppercase tracking-wide text-muted">More from Up Next</summary>
-              <Priority embedded hideIds={dialIds} buckets={['new_lead', 'hot_cold', 'no_next_step', 'stuck', 'quiet']} />
-            </details>
+            <div className="flex flex-col gap-3 p-3">
+              <CallBox>
+                <ThemeList list={themeList} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeList.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
+              </CallBox>
+              <CallBox>
+                <Priority embedded section hideIds={dialIds} buckets={['overdue']} />
+              </CallBox>
+              <CallBox>
+                <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={dial.now} onDial={(i) => setDialRun({ items: dialItems, start: i })} />
+              </CallBox>
+              <CallBox>
+                <details className="group">
+                  <summary className={`${SECTION_HEAD} cursor-pointer list-none border-b-0 group-open:border-b [&::-webkit-details-marker]:hidden`}>
+                    <SectionTitle icon="list" count={more.length}>More from Up Next</SectionTitle>
+                    {reachedOut > 0 && <span className="flex-none text-[12.5px] font-semibold text-[color:var(--neg-ink)]">incl. {reachedOut} reached out</span>}
+                    <span aria-hidden="true" className="ml-auto text-[12px] text-muted transition-transform group-open:rotate-180">▾</span>
+                  </summary>
+                  <Priority embedded hideIds={dialIds} buckets={MORE_BUCKETS} />
+                </details>
+              </CallBox>
+            </div>
           </Lane>
         )}
         {showWork && (
