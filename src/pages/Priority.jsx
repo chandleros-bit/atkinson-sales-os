@@ -23,17 +23,22 @@ function stuckNote(rules) {
 // embedded: the Workbench's Calls lane (no page header or width of its own;
 // the lane is the card, so groups are flat sections of dense rows).
 // hideIds: Workbench passes the dial list's leads so no one shows twice.
-export default function Priority({ embedded = false, hideIds = null }) {
+// buckets: only these Up Next buckets; renders nothing when they're empty
+// (the Workbench places Up Next's sections around the dial lists).
+export default function Priority({ embedded = false, hideIds = null, buckets = null }) {
   const { biz } = useBusiness()
   const { queue: all, rules, touchedToday, loading, error } = usePriorityQueue(biz)
-  const queue = hideIds ? all.filter((r) => !hideIds.has(r.id)) : all
+  const queue = all.filter((r) => (!hideIds || !hideIds.has(r.id)) && (!buckets || buckets.includes(r.bucket)))
   const [showAll, setShowAll] = useState(false)
 
   const cap = rules.daily_cap || 15
   const { groups, hiddenCount, counts } = groupForDisplay(queue, showAll ? queue.length : cap)
   const toGo = Math.min(queue.length, cap)
-  const note = stuckNote(rules)
+  // The stuck-tracking note belongs with the Stuck bucket (Workbench: under More).
+  const note = !buckets || buckets.includes('stuck') ? stuckNote(rules) : null
   const pad = embedded ? 'mx-4' : ''
+
+  if (buckets && (loading || error || isDemoMode || queue.length === 0)) return null
 
   return (
     <div className={embedded ? '' : 'mx-auto max-w-3xl'}>

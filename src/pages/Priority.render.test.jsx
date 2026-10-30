@@ -100,6 +100,27 @@ describe('Up Next page', () => {
     expect(host.textContent).toContain('Ben Overdue')
   })
 
+  it('shows only the given buckets, and nothing at all when they are empty', async () => {
+    mobile = false
+    DATA.signals = [
+      lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) }),
+      lead({ id: 'b', name: 'Ben Overdue', open_task_count: 1, oldest_open_due_at: iso(3) }),
+    ]
+    await refreshPriorityQueue()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    await act(async () => {
+      createRoot(host).render(React.createElement(MemoryRouter, null,
+        React.createElement(Priority, { embedded: true, buckets: ['overdue'] }),
+        React.createElement('div', { id: 'none' }, React.createElement(Priority, { embedded: true, buckets: ['stuck'] })),
+      ))
+    })
+    await act(async () => {})
+    expect(host.textContent).toContain('Ben Overdue')
+    expect(host.textContent).not.toContain('Ana Inbound')
+    expect(host.querySelector('#none').textContent).toBe('')
+  })
+
   it('makes the whole row a tel: link on a phone', async () => {
     mobile = true
     DATA.signals = [lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) })]
