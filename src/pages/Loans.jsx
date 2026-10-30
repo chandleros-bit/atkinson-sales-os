@@ -95,8 +95,8 @@ function PipelineStatus({ loans, hasDates }) {
         <div key={g.key} className="mb-3">
           <div className="mb-1 text-[12.5px] font-semibold">{g.label}</div>
           {g.rows.map((r) => (
-            <div key={r.stage} data-stage={r.stage} className="grid grid-cols-[minmax(0,1fr)_32px_64px_minmax(0,1.2fr)] items-center gap-2 text-[12.5px]">
-              <span className="truncate text-muted">{r.stage}</span>
+            <div key={r.stage} data-stage={r.stage} className="grid grid-cols-[minmax(0,1.6fr)_28px_56px_minmax(24px,0.8fr)] items-center gap-2 text-[12.5px]">
+              <span className="whitespace-normal leading-tight text-muted">{r.stage}</span>
               <span className="num text-right">{r.count}</span>
               <span className="num text-right text-muted">{fmtMoney(r.amount)}</span>
               <span className="h-2 rounded-sm" style={{ width: `${(r.count / max) * 100}%`, background: r.count ? 'var(--bay)' : 'transparent' }} />
@@ -166,7 +166,7 @@ function LoansFunded({ loans, year }) {
   const f = fundedByMonth(loans, year)
   const max = Math.max(1, ...f.months.map((m) => m.volume))
   return (
-    <Panel title={`${f.count} Loans Funded`} panel="loans-funded" right={<span className="text-[12px] text-muted">{year}</span>}>
+    <Panel title={`${f.count} ${f.count === 1 ? 'Loan' : 'Loans'} Funded`} panel="loans-funded" right={<span className="text-[12px] text-muted">{year}</span>}>
       <div className="num text-[30px] font-light">{fmtMoney(f.volume)}</div>
       <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[12.5px]">
         <div><b className="num">{f.purchase.count}</b> Purchase <span className="text-muted">{money(f.purchase.volume)}</span></div>

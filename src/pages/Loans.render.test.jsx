@@ -71,7 +71,7 @@ describe('Loans page', () => {
     const text = host.textContent
     expect(text).toContain('Pipeline Status')
     expect(text).toContain('Lender Spread')
-    expect(text).toContain('Loans Funded')
+    expect(text).toMatch(/Loans? Funded/)
     expect(text).toContain('Gina Park')
     expect(text).toContain('Omar Vale')
     expect(text).not.toContain('Test Test')
@@ -125,6 +125,17 @@ describe('Loans page', () => {
     DATA.loans = BASE_LOANS.filter((l) => !l.funded_on)
     const host = await render()
     expect(host.querySelector('[data-panel="lender-spread"] [role="img"]')).toBeNull()
+  })
+
+  it('Loans Funded title is singular for one loan and plural otherwise', async () => {
+    let host = await render()
+    const title = (h) => h.querySelector('[data-panel="loans-funded"]').textContent
+    expect(title(host)).toContain('2 Loans Funded')
+    document.body.innerHTML = ''
+    DATA.loans = BASE_LOANS.filter((l) => l.arive_loan_id !== '4')
+    host = await render()
+    expect(title(host)).toContain('1 Loan Funded')
+    expect(title(host)).not.toContain('1 Loans Funded')
   })
 
   it('Pipeline Status shows Now until a loan has an application date', async () => {
