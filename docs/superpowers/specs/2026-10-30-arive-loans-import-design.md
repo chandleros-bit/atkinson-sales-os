@@ -95,9 +95,11 @@ Index on `(funded_on)` and `(stage_group)`. RLS: authenticated users select,
 insert and update (the browser writes; no delete policy — the OS never deletes
 loans).
 
-`settings` rows (inserted `on conflict do nothing`):
-- `arive.lo_name` = `"Chandler Dean Atkinson"`
-- `arive.comp_pct` = `{ "primary": 1.25, "assisted": 0.75 }`
+One `settings` row, key `arive` (inserted `on conflict do nothing`; the app may
+update it): `{ "lo_name": "Chandler Dean Atkinson", "primary_pct": 1.25,
+"assisted_pct": 0.75 }`. The browser reads it with defaults filled in. RLS lets
+authenticated users write the `arive` settings row and insert `sync_log` rows
+with `source = 'arive'`.
 
 Each confirmed import writes `sync_log` (`source = 'arive'`,
 `records_upserted`, `status`, `message` = the preview summary).
@@ -118,7 +120,7 @@ Matching is case- and whitespace-insensitive. Display order follows the table.
 ### Derived values (computed in `src/lib/loans.js`, not stored)
 
 - `isScenario = scenario_override ?? scenario_auto`
-- `estComp = comp_override ?? amount × comp_pct[role] / 100` (null when amount is null)
+- `estComp = comp_override ?? amount × (primary_pct | assisted_pct by role) / 100` (null when amount is null)
 - `isOpen = stage_group in (prospect, processing, closing)`
 - `notInLatest = last_seen_at < latest arive sync_log ran_at`
 
@@ -133,7 +135,7 @@ trailing blank line, BOM. Returns header + rows as objects. No new dependency.
 2. **Row → loan:** trim strings, blanks → null; amounts via `Number` (strip
    `$` and `,`); dates `M/D/YYYY` → `YYYY-MM-DD`; phone → last 10 digits.
    Rows without a loan ID are skipped and counted.
-3. **Role:** `primary` when `loan_officer` equals `arive.lo_name`
+3. **Role:** `primary` when `loan_officer` equals the setting's `lo_name`
    (case-insensitive, collapsed spaces), else `assisted`.
 4. **Scenario detection** (`scenario_auto = true` if any):
    - email local part in `aaa`, `123`, `456`, `lead`, `test`, or domain in
@@ -163,7 +165,7 @@ small); on error, show the message and write a `sync_log` error row.
 Sidebar: a **Loans** item (Bayway only) under Pipeline.
 
 - **Header:** "Import CSV" button, "Last import <relative time> · N loans", and a
-  rates control (gear) to edit `arive.comp_pct` and `arive.lo_name` — the
+  rates control (gear) to edit the `arive` setting (rates and loan officer name) — the
   Settings page is still a placeholder.
 - **Import dialog** (`src/components/LoanImport.jsx`): pick file → preview
   counts and warnings → Confirm / Cancel.
@@ -186,8 +188,9 @@ Demo mode renders a fixed set of fake loans.
 
 ### Metrics switched to Arive
 
-All exclude scenario files and count both roles. "This month" = `funded_on` in
-the month window already used by Reports.
+All exclude scenario files and count both roles. A loan is funded in a window
+when its `funded_on` falls in it. "This month" is the month window already
+used by Reports.
 
 | Metric | New source |
 |---|---|
@@ -198,8 +201,10 @@ the month window already used by Reports.
 | Reports sprint `bay_funded_loans` | funded loans in the sprint window (becomes `live`) |
 | Overview "Loans closed", "Pipeline value", "Gross commission" | same as above; commission card tag changes from "Entered" to "Est. from Arive" |
 
-Each switched card's subline reads "Arive · imported <date>". With no import
-yet, they show `—` and "no Arive import yet", never `0`.
+Each switched Reports card's subline reads "Arive · imported <date>". With no
+loans imported yet, those cards show `—` and "no Arive import yet", never `0`;
+Overview keeps its current sources (FUB deals, entered commission) until the
+first import.
 
 `pre_approvals` and `applications` stay on FUB stages; they move to Arive in a
 later change once `Application Date` is in the export.
