@@ -1,6 +1,8 @@
 // Latest sync_log row per core feed, for the page header's sync dot. One
 // shared fetch for every page header; refetched when older than a minute
-// (page change, window focus). The dot's text ages with useNow.
+// (page change, window focus, tab shown, and every minute while visible). The
+// dot's text ages with useNow, so without the timer a page left open showed
+// the age of its last fetch, not of the last sync.
 import { useEffect, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 import { CORE_SOURCES } from './syncHealth'
@@ -45,11 +47,16 @@ export function useSyncHealth() {
     const maybeRefresh = () => {
       if (Date.now() - store.at > STALE_MS) refreshSyncHealth()
     }
+    const onVisible = () => document.visibilityState === 'visible' && maybeRefresh()
     maybeRefresh()
     window.addEventListener('focus', maybeRefresh)
+    document.addEventListener('visibilitychange', onVisible)
+    const id = setInterval(onVisible, STALE_MS / 2)
     return () => {
       listeners.delete(setState)
       window.removeEventListener('focus', maybeRefresh)
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(id)
     }
   }, [])
   return state.latest
