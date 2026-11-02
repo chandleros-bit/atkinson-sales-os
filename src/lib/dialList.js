@@ -17,6 +17,16 @@ const NURTURE_CALLS = 2
 const BAY_CADENCE = new Set(['New Lead', 'Attempted'])
 const MPG_CADENCE = new Set(['Not Contacted', 'Open', 'Attempted to Contact'])
 const PARKED = 'Nurture / Credit Repair'
+
+// Stages still on the 6-attempt call cadence. Their next step is the next
+// attempt on the call list, so they carry no follow-up task and are never
+// "No next step" or "Stuck in stage". Stage names don't overlap between the
+// books, so book is optional.
+export function isCadenceStage(stage, book) {
+  if (book === 'bay') return BAY_CADENCE.has(stage)
+  if (book === 'mpg') return MPG_CADENCE.has(stage)
+  return BAY_CADENCE.has(stage) || MPG_CADENCE.has(stage)
+}
 // The text offered after each attempt (dialTexts.js keys).
 const TEXT_AFTER = { 1: 'a1', 3: 'a3', 5: 'a5', 6: 'a6' }
 

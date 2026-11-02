@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { cardHealth } from '../lib/cardHealth'
 import { CRM_LABEL } from '../lib/crmActions'
+import { isCadenceStage } from '../lib/dialList'
 import QuickActions, { Sheet, quickActionTone } from './QuickActions'
 import { ScheduleButton, UpcomingEvents } from './ScheduleEvent'
 
@@ -287,6 +288,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
             contactName={person.name}
             hasPhone={!!person.phone}
             stage={biz === 'bay' && person.on_board ? person.stage : null}
+            cadence={isCadenceStage(person.stage, biz)}
             openTaskCount={board?.open_task_count}
             onDone={() => {
               load()

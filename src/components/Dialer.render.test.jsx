@@ -42,7 +42,7 @@ describe('Dialer', () => {
     expect(document.body.textContent).toContain('(913) 713-5946')
     expect(button('Call on phone').getAttribute('href')).toBe('tel:9137135946')
     await click(button('No answer'))
-    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'log_call', contact_id: 'a', payload: { outcome: 'No Answer', duration_min: 1, next_step: 'scheduled', set_stage: 'attempted' } })
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'log_call', contact_id: 'a', payload: { outcome: 'No Answer', duration_min: 1, next_step: 'cadence', set_stage: 'attempted' } })
     const text = button('Text')
     expect(text.getAttribute('href')).toMatch(/^sms:9137135946\?&body=Hi%20Sam%2C%20this%20is%20Chandler/)
     invoke.mockResolvedValue(ok(['add_note']))

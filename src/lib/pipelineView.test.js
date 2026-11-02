@@ -64,14 +64,15 @@ describe('pipelineKpis', () => {
     const rows = [
       row('a', { stage: 'New Lead', crm_created_at: new Date(NOW - 20 * 60000).toISOString() }),
       row('b', { stage: 'Application Received', docs_outstanding_count: 2, docs_oldest_requested_at: daysAgo(9), crm_created_at: daysAgo(30) }),
-      row('c', { stage: 'Attempted', stage_since: daysAgo(20), open_task_count: 1, oldest_open_due_at: daysAgo(2), crm_created_at: daysAgo(40) }),
+      row('c', { stage: 'Contacted/Working', stage_since: daysAgo(20), open_task_count: 1, oldest_open_due_at: daysAgo(2), crm_created_at: daysAgo(40) }),
     ]
     const k = pipelineKpis(rows, rules, 'bay', NOW)
     expect(k.map((x) => [x.id, x.value, x.foot])).toEqual([
       ['active', 3, '1 follow-up overdue'],
       ['new', 1, '1 past speed-to-lead'],
       ['received', 1, '1 with docs aging'],
-      ['stuck', 1, '2 with no next step'],
+      // 'a' (New Lead) is on the call cadence: neither stuck nor no next step.
+      ['stuck', 1, '1 with no next step'],
     ])
     expect(k[3].tone).toBe('neg')
   })

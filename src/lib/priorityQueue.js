@@ -10,6 +10,7 @@
 import { dayKey } from './calendar'
 import { dueDayKey } from './tasks'
 import { isLostStage } from './pipeline'
+import { isCadenceStage } from './dialList'
 
 export const BUCKETS = [
   { id: 'reached_out', label: 'They reached out' },
@@ -113,6 +114,10 @@ export function bucketsFor(row, rules, now = Date.now()) {
 
   const od = row.open_task_count > 0 ? overdueDays(row.oldest_open_due_at, now) : null
   if (od != null && od >= 1) out.push('overdue')
+
+  // A lead on the call cadence is worked from the call list (attempt N), not
+  // from Up Next: only a reply, a new lead or a real overdue task surfaces it.
+  if (isCadenceStage(row.stage, row.business_id)) return out
 
   const touchDays = daysSince(humanTouchAt(row, rules), now)
   const untouchedFor = (n) => touchDays == null || touchDays >= n

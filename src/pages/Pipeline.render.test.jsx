@@ -185,24 +185,34 @@ describe('Pipeline drag between stages', () => {
 
   it('offers a follow-up after a move that leaves nothing scheduled', async () => {
     invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
-    DATA.rows = [{ ...card('a', 'Ana Lead', 'New Lead'), open_task_count: 0 }]
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'Attempted'), open_task_count: 0 }]
     await mount()
-    await dragTo('a', 'Attempted')
+    await dragTo('a', 'Contacted/Working')
     await act(async () => {})
     expect(document.querySelector('[role="dialog"][aria-label="Next step for Ana?"]')).not.toBe(null)
   })
 
-  it('keeps the follow-up offer open when Move stage redraws the card in its new column', async () => {
+  it('offers no follow-up for a move onto the call cadence', async () => {
     invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
     DATA.rows = [{ ...card('a', 'Ana Lead', 'New Lead'), open_task_count: 0 }]
     await mount()
-    await act(async () => cardEl('a').querySelector('[aria-label="Move stage"]').click())
-    const attempted = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')].find((b) => b.textContent.trim() === 'Attempted')
-    // The reload after the move finds the lead in its new column.
-    DATA.rows = [{ ...card('a', 'Ana Lead', 'Attempted'), open_task_count: 0 }]
-    await act(async () => attempted.click())
+    await dragTo('a', 'Attempted')
     await act(async () => {})
-    expect(cardsIn('Attempted')).toEqual(['a'])
+    expect(invoke).toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
+  it('keeps the follow-up offer open when Move stage redraws the card in its new column', async () => {
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'Attempted'), open_task_count: 0 }]
+    await mount()
+    await act(async () => cardEl('a').querySelector('[aria-label="Move stage"]').click())
+    const working = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')].find((b) => b.textContent.trim() === 'Contacted/Working')
+    // The reload after the move finds the lead in its new column.
+    DATA.rows = [{ ...card('a', 'Ana Lead', 'Contacted/Working'), open_task_count: 0 }]
+    await act(async () => working.click())
+    await act(async () => {})
+    expect(cardsIn('Contacted/Working')).toEqual(['a'])
     expect(document.querySelector('[role="dialog"][aria-label="Next step for Ana?"]')).not.toBe(null)
   })
 
@@ -360,17 +370,26 @@ describe('Pipeline paging', () => {
 describe('Pipeline card health', () => {
   it('shows the next step, stuck days and a column summary, worst first', async () => {
     DATA.rows = [
-      { ...card('b', 'Ben Quiet', 'Attempted'), open_task_count: 0, oldest_open_due_at: null, stage_since: ago(9) },
-      { ...card('a', 'Ana Late', 'Attempted'), open_task_count: 1, oldest_open_due_at: ago(3), stage_since: ago(1) },
+      { ...card('b', 'Ben Quiet', 'Contacted/Working'), open_task_count: 0, oldest_open_due_at: null, stage_since: ago(9) },
+      { ...card('a', 'Ana Late', 'Contacted/Working'), open_task_count: 1, oldest_open_due_at: ago(3), stage_since: ago(1) },
     ]
     await mount()
     expect(cardEl('a').querySelector('[data-health="overdue"]').textContent).toContain('Follow-up 3 days overdue')
     expect(cardEl('b').querySelector('[data-health="none"]').textContent).toContain('No next step')
-    expect(cardEl('b').querySelector('[data-health="stuck"]').textContent).toBe('9d in Attempted')
+    expect(cardEl('b').querySelector('[data-health="stuck"]').textContent).toBe('9d in Contacted/Working')
     expect(cardEl('a').querySelector('[data-health="stuck"]')).toBeNull()
-    expect(column('Attempted').querySelector('[data-col-count]').textContent).toBe('2')
-    expect(column('Attempted').textContent).toContain('1 overdue · 1 stuck')
-    expect(cardsIn('Attempted')).toEqual(['a', 'b'])
+    expect(column('Contacted/Working').querySelector('[data-col-count]').textContent).toBe('2')
+    expect(column('Contacted/Working').textContent).toContain('1 overdue · 1 stuck')
+    expect(cardsIn('Contacted/Working')).toEqual(['a', 'b'])
+  })
+
+  it('shows an Attempted lead with no task as on the call cadence, never stuck', async () => {
+    DATA.rows = [{ ...card('t', 'Tia Trying', 'Attempted'), open_task_count: 0, oldest_open_due_at: null, stage_since: ago(20) }]
+    await mount()
+    expect(cardEl('t').querySelector('[data-health="cadence"]').textContent).toBe('Call cadence')
+    expect(cardEl('t').querySelector('[data-health="none"]')).toBeNull()
+    expect(cardEl('t').querySelector('[data-health="stuck"]')).toBeNull()
+    expect(column('Attempted').textContent).not.toContain('stuck')
   })
 
   it('tints the pills and steps each Bayway column toward Application Received', async () => {
@@ -407,7 +426,7 @@ describe('Pipeline speed-to-lead', () => {
     expect(timer.textContent).toContain('10m · not called')
     expect(timer.getAttribute('data-late')).toBe('true')
     expect(cardEl('c').querySelector('[data-health="speed"]')).toBeNull()
-    expect(cardEl('c').querySelector('[data-health="none"]')).not.toBeNull()
+    expect(cardEl('c').querySelector('[data-health="cadence"]')).not.toBeNull()
   })
 })
 

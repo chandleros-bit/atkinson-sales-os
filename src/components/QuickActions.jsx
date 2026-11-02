@@ -12,6 +12,7 @@ import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { showToast } from './Toaster'
 import { STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
 import { dueLabel } from '../lib/tasks'
+import { isCadenceStage } from '../lib/dialList'
 import {
   OUTCOMES,
   FOLLOW_UP_PRESETS,
@@ -283,12 +284,13 @@ function useSubmit({ businessId, onSuccess }) {
   return { busy, result, send, retry, setResult }
 }
 
-function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }) {
+function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, onSuccess }) {
   const [outcome, setOutcome] = useState(null)
   const [note, setNote] = useState('')
   const [duration, setDuration] = useState('')
   const [durationTouched, setDurationTouched] = useState(false)
-  // Required: 'follow_up' | 'scheduled' (a future task exists) | 'none' (+ reason).
+  // Required: 'follow_up' | 'scheduled' (a future task exists) | 'cadence'
+  // (next call attempt, no task) | 'none' (+ reason).
   const [nextStep, setNextStep] = useState(null)
   const [nextTouched, setNextTouched] = useState(false)
   const [reason, setReason] = useState(null)
@@ -332,7 +334,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }
   const pickOutcome = (o) => {
     setOutcome(o)
     if (!durationTouched) setDuration(String(defaultDurationMin(o)))
-    if (!nextTouched) setNextStep(defaultNextStep(o, !!futureTask))
+    if (!nextTouched) setNextStep(defaultNextStep(o, !!futureTask, onCadence))
   }
 
   const chooseNext = (k) => {
@@ -343,7 +345,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }
   const advance = callStageAdvance(businessId, stage)
   const parking = nextStep === 'none' && reason === PARK_REASON
   const nextReady =
-    nextStep === 'follow_up' ? !!safeDate(preset, picked) : nextStep === 'scheduled' ? !!futureTask : nextStep === 'none' ? !!reason : false
+    nextStep === 'follow_up' ? !!safeDate(preset, picked) : nextStep === 'scheduled' ? !!futureTask : nextStep === 'cadence' ? true : nextStep === 'none' ? !!reason : false
 
   const submit = () => {
     try {
@@ -400,6 +402,11 @@ function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }
 
       <div className="mb-1.5 mt-3 text-[12px] font-semibold text-muted">Next step</div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Next step">
+        {onCadence && (
+          <Chip t={t} active={nextStep === 'cadence'} onClick={() => chooseNext('cadence')}>
+            Next call attempt
+          </Chip>
+        )}
         <Chip t={t} active={nextStep === 'follow_up'} onClick={() => chooseNext('follow_up')}>
           Follow-up
         </Chip>
@@ -659,6 +666,8 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *   onDone      called after a write reached the CRM, so the page reloads
  *   onPending / onFailed  (kind, dueDate?) for optimistic task-row updates
  *   stage       the Bayway board column the lead is in; adds Move stage
+ *   cadence     the lead is on the call cadence (Log call then defaults to
+ *               "Next call attempt", no task); defaults from a Bayway stage
  *   openTaskCount  the lead's open tasks, when known; 0 makes Move stage
  *                  offer a follow-up afterwards
  *   onNeedsNextStep  show that offer yourself (a board that redraws the card
@@ -670,7 +679,7 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *   size        'sm': small outlined buttons stacked two to a row (Workbench)
  *               'xs': the same small buttons in one wrapping row (Pipeline board)
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, autoOpen = null, onSheetClose, size, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, cadence, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, autoOpen = null, onSheetClose, size, className = '' }) {
   const flags = useWritebackFlags()
   const [open, setOpen] = useState(autoOpen)
   // Tell a quick-add caller when its sheet has closed.
@@ -756,7 +765,7 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
 
       {open === 'call' && (
         <Sheet title="Log call" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
-          <LogCallForm businessId={businessId} contactId={contactId} contactName={contactName} stage={stage} t={t} onSuccess={success} />
+          <LogCallForm businessId={businessId} contactId={contactId} contactName={contactName} stage={stage} onCadence={cadence ?? isCadenceStage(stage, businessId)} t={t} onSuccess={success} />
         </Sheet>
       )}
       {open === 'note' && (

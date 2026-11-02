@@ -205,6 +205,32 @@ describe('QuickActions: Log call next step', () => {
     expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture', set_stage: 'nurture' })
   })
 
+  it('on the call cadence, an unanswered call defaults to the next attempt and writes no task', async () => {
+    ok()
+    await mount({ ...bay, stage: 'Attempted' })
+    await click(byLabel('Log call'))
+    await click(byText('No Answer'))
+    expect(document.querySelector('[aria-label="Next step"]').textContent).toContain('Next call attempt')
+    expect(save().disabled).toBe(false)
+    await click(save())
+    const payload = invoke.mock.calls[0][1].body.payload
+    expect(payload).toMatchObject({ outcome: 'No Answer', next_step: 'cadence' })
+    expect(payload.follow_up).toBeUndefined()
+  })
+
+  it('a caller can say the lead is on the cadence (MPG has no board stage); a worked lead is not', async () => {
+    ok()
+    await mount({ ...bay, cadence: true })
+    await click(byLabel('Log call'))
+    await click(byText('Left Message'))
+    await click(save())
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ next_step: 'cadence' })
+    document.body.innerHTML = ''
+    await mount({ ...bay, stage: 'Contacted/Working' })
+    await click(byLabel('Log call'))
+    expect(document.body.textContent).not.toContain('Next call attempt')
+  })
+
   it('moves a New Lead to Attempted with the call, and says so first', async () => {
     ok()
     await mount({ ...bay, stage: 'New Lead' })
@@ -348,9 +374,9 @@ describe('QuickActions: Move stage', () => {
 
   it('offers a follow-up when the move leaves nothing scheduled, and Skip closes it', async () => {
     invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
-    await mount({ ...bay, stage: 'New Lead', openTaskCount: 0 })
+    await mount({ ...bay, stage: 'Attempted', openTaskCount: 0 })
     await click(byLabel('Move stage'))
-    await click(byText('Attempted'))
+    await click(byText('Contacted/Working'))
     expect(document.querySelector('[role="dialog"]').getAttribute('aria-label')).toBe('Next step for Jo?')
     expect(byText('Schedule follow-up')).toBeTruthy()
     await click(byText('Skip'))
@@ -369,6 +395,15 @@ describe('QuickActions: Move stage', () => {
     await click(byText('Nurture'))
     expect(document.querySelector('[role="dialog"]')).toBe(null)
     expect(invoke.mock.calls.at(-1)[1].body.payload).toEqual({ target: 'nurture' })
+  })
+
+  it('does not prompt for a move onto the call cadence: the next attempt is the next step', async () => {
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await mount({ ...bay, stage: 'New Lead', openTaskCount: 0 })
+    await click(byLabel('Move stage'))
+    await click(byText('Attempted'))
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+    expect(invoke.mock.calls.at(-1)[1].body.payload).toEqual({ target: 'attempted' })
   })
 
   it('asks why before marking Lost, then sends the reason', async () => {
