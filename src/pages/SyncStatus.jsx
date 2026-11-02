@@ -3,6 +3,8 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { runSyncFunction } from '../lib/syncRun'
 import { summarizeWriteback } from '../lib/crmActions'
 import { timeAgo } from '../lib/syncHealth'
+import { refreshSyncHealth } from '../lib/useSyncHealth'
+import { useNow } from '../lib/useNow'
 import PageHeader from '../components/PageHeader'
 
 const SOURCE_LABELS = {
@@ -54,9 +56,10 @@ export default function SyncStatus() {
   const [running, setRunning] = useState(false)
   const [writeback, setWriteback] = useState(null)
 
-  const load = useCallback(async () => {
+  // quiet: the minute refresh, without swapping the table for the skeleton.
+  const load = useCallback(async ({ quiet = false } = {}) => {
     if (isDemoMode) return
-    setLoading(true)
+    if (!quiet) setLoading(true)
     setError(null)
     // Latest row per source: pull recent history and reduce client-side
     // rather than a DISTINCT ON query, so we can also show a short trail.
@@ -91,14 +94,26 @@ export default function SyncStatus() {
     setLoading(false)
   }, [])
 
+  // Fetched once, a page left open froze at its first read. Refresh every
+  // minute while visible and when the tab comes back; the "ago" text ticks
+  // with useNow between reads.
+  useNow(60_000)
   useEffect(() => {
     load()
+    const onVisible = () => document.visibilityState === 'visible' && load({ quiet: true })
+    const id = setInterval(onVisible, 60_000)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [load])
 
   const runNow = async () => {
     setRunning(true)
     const failure = await runSyncFunction(supabase, 'fub-sync')
-    await load()
+    await load({ quiet: true })
+    refreshSyncHealth()
     // After load(), which clears error on its way in.
     if (failure) setError(failure)
     setRunning(false)
