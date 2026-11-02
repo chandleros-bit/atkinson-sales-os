@@ -7,6 +7,7 @@ import { dueDayKey } from './tasks'
 import { calendarDaysSince, overdueDays, stuckDaysFor } from './priorityQueue'
 import { isLostStage } from './pipeline'
 import { sortByAttention } from './overview'
+import { isCadenceStage } from './dialList'
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -18,11 +19,14 @@ function dayLabel(key) {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-// The lead's next step, from its oldest open task.
-// { state: 'overdue' | 'today' | 'scheduled' | 'none' | 'parked', text }
+// The lead's next step, from its oldest open task. A lead on the call
+// cadence with no task has the next attempt as its next step.
+// { state: 'overdue' | 'today' | 'scheduled' | 'none' | 'cadence' | 'parked', text }
 export function nextStep(row, now = Date.now()) {
   if (isParked(row)) return { state: 'parked', text: '' }
-  if (!(row.open_task_count > 0)) return { state: 'none', text: 'No next step' }
+  if (!(row.open_task_count > 0)) {
+    return isCadenceStage(row.stage, row.business_id) ? { state: 'cadence', text: 'Call cadence' } : { state: 'none', text: 'No next step' }
+  }
   if (!row.oldest_open_due_at) return { state: 'scheduled', text: 'Task open · no date' }
   const late = overdueDays(row.oldest_open_due_at, now)
   if (late >= 1) return { state: 'overdue', text: `Follow-up ${plural(late, 'day')} overdue` }
@@ -31,9 +35,10 @@ export function nextStep(row, now = Date.now()) {
 }
 
 // { days, text } once the lead has sat in its stage for the stage's limit.
-// Unknown stage dates (stage predates tracking, 0029) are never stuck.
+// Unknown stage dates (stage predates tracking, 0029) are never stuck, and
+// neither is a lead on the call cadence (the cadence decides when it moves).
 export function stuckFor(row, rules, now = Date.now()) {
-  if (isParked(row)) return null
+  if (isParked(row) || isCadenceStage(row.stage, row.business_id)) return null
   const limit = stuckDaysFor(row.stage, rules)
   const days = calendarDaysSince(row.stage_since, now)
   if (limit == null || days == null || days < limit) return null
@@ -72,7 +77,7 @@ export function cardHealth(row, rules, now = Date.now()) {
 // The card's health as pills: { key, tone, text, late? }. key is the
 // data-health value; tone is neg (act now), warn (today), pos (on track) or
 // neutral. Speed-to-lead stands in for the next step on a new, uncalled lead.
-const NEXT_TONE = { overdue: 'neg', today: 'warn', scheduled: 'pos', none: 'neutral' }
+const NEXT_TONE = { overdue: 'neg', today: 'warn', scheduled: 'pos', none: 'neutral', cadence: 'neutral' }
 export function healthPills(h) {
   if (!h) return []
   const pills = []
@@ -84,7 +89,7 @@ export function healthPills(h) {
 
 // Smaller sorts first: uncalled new leads (late, then fresh), then overdue,
 // stuck, no next step, due today, scheduled.
-const NEXT_RANK = { overdue: 0, none: 2, today: 3, scheduled: 4, parked: 5 }
+const NEXT_RANK = { overdue: 0, none: 2, today: 3, scheduled: 4, cadence: 4, parked: 5 }
 export function healthRank(h) {
   if (h.speed) return h.speed.late ? -2 : -1
   if (h.next.state === 'overdue') return 0

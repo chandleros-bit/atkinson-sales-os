@@ -161,7 +161,8 @@ describe('SearchPalette', () => {
     const sheet = document.querySelector('[role="dialog"][aria-label="Jo Kim"]')
     expect(sheet.textContent).toContain('MPG · Open')
     expect(sheet.textContent).toContain('jo@deli.test')
-    expect(sheet.textContent).toContain('No next step')
+    // MPG Open is on the call cadence: its next step is the next attempt.
+    expect(sheet.textContent).toContain('Call cadence')
     expect(sheet.textContent).toContain('Open in Zoho')
     expect(sheet.querySelector('[aria-label="Log call"]')).not.toBe(null)
   })

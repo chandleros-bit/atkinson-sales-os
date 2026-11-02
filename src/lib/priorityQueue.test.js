@@ -135,24 +135,45 @@ describe('bucket 6: stuck in stage', () => {
   it('never fires without an observed stage start', () => {
     expect(bucketsFor(base({ is_active: true, stage: 'App Sent', stage_since: null }), rules, NOW)).not.toContain('stuck')
   })
-  it('uses the per-stage limit: Attempted is stuck at 5 days', () => {
-    const lead = (n) => base({ is_active: true, stage: 'Attempted', stage_since: daysAgo(n), open_task_count: 1, oldest_open_due_at: daysAgo(-1) })
-    expect(bucketsFor(lead(5), rules, NOW)).toContain('stuck')
-    expect(bucketsFor(lead(4), rules, NOW)).not.toContain('stuck')
+  it('uses the per-stage limit: Contacted/Working is stuck at 7 days', () => {
+    const lead = (n) => base({ is_active: true, stage: 'Contacted/Working', stage_since: daysAgo(n), open_task_count: 1, oldest_open_due_at: daysAgo(-1) })
+    expect(bucketsFor(lead(7), rules, NOW)).toContain('stuck')
+    expect(bucketsFor(lead(6), rules, NOW)).not.toContain('stuck')
+  })
+})
+
+describe('leads on the call cadence', () => {
+  // Old, untouched, no task, hot, long in stage: every "work this" bucket
+  // would fire for a worked lead.
+  const cadence = (o) => base({
+    is_active: true, is_hot: true, stage_since: daysAgo(30), last_outbound_at: daysAgo(20), last_outbound_call_at: daysAgo(20), ...o,
+  })
+  it('never lands in no next step, stuck, quiet or hot going cold', () => {
+    for (const [business_id, stage] of [['bay', 'New Lead'], ['bay', 'Attempted'], ['mpg', 'Not Contacted'], ['mpg', 'Open'], ['mpg', 'Attempted to Contact']]) {
+      expect(bucketsFor(cadence({ business_id, stage }), rules, NOW)).toEqual([])
+    }
+  })
+  it('still surfaces a reply, an uncalled new lead and a real overdue task', () => {
+    expect(bucketsFor(cadence({ stage: 'Attempted', last_inbound_at: daysAgo(0, '08:30:00') }), rules, NOW)).toEqual(['reached_out'])
+    expect(bucketsFor(cadence({ stage: 'New Lead', crm_created_at: daysAgo(1), last_outbound_at: null, last_outbound_call_at: null }), rules, NOW)).toEqual(['new_lead'])
+    expect(bucketsFor(cadence({ stage: 'Attempted', open_task_count: 1, oldest_open_due_at: daysAgo(2) }), rules, NOW)).toEqual(['overdue'])
+  })
+  it('a worked stage with the same row still fires', () => {
+    expect(bucketsFor(cadence({ stage: 'Contacted/Working' }), rules, NOW)).toEqual(['hot_cold', 'no_next_step', 'stuck', 'quiet'])
   })
 })
 
 describe('bucket 7: gone quiet', () => {
   it('fires for an active lead with no touch in quiet_days', () => {
-    expect(bucketsFor(base({ is_active: true, stage: 'New Lead', last_outbound_at: daysAgo(7), last_outbound_call_at: daysAgo(7) }), rules, NOW)).toContain('quiet')
+    expect(bucketsFor(base({ is_active: true, stage: 'Contacted/Working', last_outbound_at: daysAgo(7), last_outbound_call_at: daysAgo(7) }), rules, NOW)).toContain('quiet')
   })
   it('does not fire one day short', () => {
-    expect(bucketsFor(base({ is_active: true, stage: 'New Lead', last_outbound_at: daysAgo(6), last_outbound_call_at: daysAgo(6) }), rules, NOW)).not.toContain('quiet')
+    expect(bucketsFor(base({ is_active: true, stage: 'Contacted/Working', last_outbound_at: daysAgo(6), last_outbound_call_at: daysAgo(6) }), rules, NOW)).not.toContain('quiet')
   })
 })
 
 describe('human touch and the CRM fallback', () => {
-  const quietRow = base({ is_active: true, stage: 'New Lead', last_outbound_at: daysAgo(20), last_outbound_call_at: daysAgo(20), crm_last_activity_at: daysAgo(1) })
+  const quietRow = base({ is_active: true, stage: 'Contacted/Working', last_outbound_at: daysAgo(20), last_outbound_call_at: daysAgo(20), crm_last_activity_at: daysAgo(1) })
   it('ignores crm_last_activity_at with the fallback off', () => {
     expect(humanTouchAt(quietRow, rules)).toBe(daysAgo(20))
     expect(bucketsFor(quietRow, rules, NOW)).toContain('quiet')
@@ -184,14 +205,14 @@ describe('buildQueue', () => {
     const [row] = buildQueue([base({ is_active: true, stage: 'Waiting on Docs', open_task_count: 1, oldest_open_due_at: daysAgo(2) })], rules, NOW)
     expect(row.bucket).toBe('overdue')
     // 'no_next_step' needs zero open tasks, so add an unrelated second reason:
-    const [hot] = buildQueue([base({ is_hot: true, is_active: true, stage: 'New Lead', last_outbound_at: daysAgo(9), last_outbound_call_at: daysAgo(9), open_task_count: 1, oldest_open_due_at: daysAgo(2) })], rules, NOW)
+    const [hot] = buildQueue([base({ is_hot: true, is_active: true, stage: 'Contacted/Working', last_outbound_at: daysAgo(9), last_outbound_call_at: daysAgo(9), open_task_count: 1, oldest_open_due_at: daysAgo(2) })], rules, NOW)
     expect(hot.bucket).toBe('overdue')
     expect(hot.reasons).toEqual(['overdue', 'hot_cold', 'quiet'])
   })
 
   it('orders buckets by rank, oldest neglect first inside a bucket', () => {
     const q = buildQueue([
-      base({ id: 'quiet-old', is_active: true, stage: 'New Lead', last_outbound_at: daysAgo(30), last_outbound_call_at: daysAgo(30), open_task_count: 1, oldest_open_due_at: daysAgo(-3) }),
+      base({ id: 'quiet-old', is_active: true, stage: 'Contacted/Working', last_outbound_at: daysAgo(30), last_outbound_call_at: daysAgo(30), open_task_count: 1, oldest_open_due_at: daysAgo(-3) }),
       base({ id: 'overdue-1', open_task_count: 1, oldest_open_due_at: daysAgo(1) }),
       base({ id: 'overdue-5', open_task_count: 1, oldest_open_due_at: daysAgo(5) }),
       base({ id: 'reached', last_inbound_at: daysAgo(0, '08:30:00') }),
@@ -227,7 +248,7 @@ describe('groupForDisplay / urgentCount', () => {
   const q = buildQueue([
     base({ id: 'r', last_inbound_at: daysAgo(0, '08:30:00') }),
     od('o1', 1), od('o2', 2),
-    base({ id: 'q', is_active: true, stage: 'New Lead', last_outbound_at: daysAgo(9), last_outbound_call_at: daysAgo(9), open_task_count: 1, oldest_open_due_at: daysAgo(-1) }),
+    base({ id: 'q', is_active: true, stage: 'Contacted/Working', last_outbound_at: daysAgo(9), last_outbound_call_at: daysAgo(9), open_task_count: 1, oldest_open_due_at: daysAgo(-1) }),
   ], rules, NOW)
 
   it('caps the visible rows and groups them by bucket', () => {

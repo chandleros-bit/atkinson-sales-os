@@ -64,6 +64,20 @@ describe('outcome defaults', () => {
     expect(defaultNextStep('Not Interested', true)).toBeNull()
     expect(defaultNextStep('Bad Number')).toBeNull()
   })
+  it('on the call cadence, an unanswered call goes to the next attempt, no task', () => {
+    for (const o of ['Left Message', 'No Answer', 'Busy']) {
+      expect(defaultNextStep(o, false, true)).toBe('cadence')
+      expect(defaultNextStep(o, true, true)).toBe('cadence')
+    }
+    // A conversation takes the lead off the cadence: follow up as usual.
+    expect(defaultNextStep('Interested', false, true)).toBe('follow_up')
+    expect(defaultNextStep('Bad Number', false, true)).toBeNull()
+  })
+  it('a cadence next step writes no follow-up task', () => {
+    const { payload } = buildActionRequest({ action: 'log_call', contactId: 'c1', outcome: 'No Answer', durationMin: 1, nextStep: 'cadence' })
+    expect(payload.next_step).toBe('cadence')
+    expect(payload.follow_up).toBeUndefined()
+  })
   it('prefills 5 minutes for a conversation and 1 otherwise', () => {
     expect(defaultDurationMin('Interested')).toBe(5)
     expect(defaultDurationMin('Not Interested')).toBe(5)
@@ -273,14 +287,16 @@ describe('summarizeWriteback', () => {
 })
 
 describe('needsNextStepPrompt', () => {
-  it('prompts after a move when nothing is scheduled, never for Nurture or unknown counts', () => {
-    expect(needsNextStepPrompt('attempted', 0)).toBe(true)
-    expect(needsNextStepPrompt('attempted', 2)).toBe(false)
+  it('prompts after a move when nothing is scheduled, never for Nurture, the call cadence or unknown counts', () => {
+    expect(needsNextStepPrompt('working', 0)).toBe(true)
+    expect(needsNextStepPrompt('working', 2)).toBe(false)
+    expect(needsNextStepPrompt('attempted', 0)).toBe(false)
+    expect(needsNextStepPrompt('new_lead', 0)).toBe(false)
     expect(needsNextStepPrompt('credit_repair', 0)).toBe(false)
     expect(needsNextStepPrompt('nurture', 0)).toBe(false)
     expect(needsNextStepPrompt('lost', 0)).toBe(false)
-    expect(needsNextStepPrompt('attempted', undefined)).toBe(false)
-    expect(needsNextStepPrompt('attempted', null)).toBe(false)
+    expect(needsNextStepPrompt('working', undefined)).toBe(false)
+    expect(needsNextStepPrompt('working', null)).toBe(false)
   })
 })
 

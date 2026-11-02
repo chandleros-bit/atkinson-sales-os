@@ -66,7 +66,7 @@ describe('Up Next page', () => {
     DATA.signals = [
       lead({ id: 'a', name: 'Ana Inbound', last_inbound_at: iso(0, 1) }),
       lead({ id: 'b', name: 'Ben Overdue', open_task_count: 1, oldest_open_due_at: iso(3) }),
-      lead({ id: 'c', name: 'Cy Quiet', is_active: true, stage: 'New Lead', last_outbound_at: iso(20), last_outbound_call_at: iso(20), open_task_count: 1, oldest_open_due_at: iso(-2) }),
+      lead({ id: 'c', name: 'Cy Quiet', is_active: true, stage: 'Contacted/Working', last_outbound_at: iso(20), last_outbound_call_at: iso(20), open_task_count: 1, oldest_open_due_at: iso(-2) }),
     ]
     DATA.touched = [{ contact_id: 'c', business_id: 'bay' }, { contact_id: 'c', business_id: 'bay' }, { contact_id: 'zz', business_id: 'bay' }]
     const host = await render()

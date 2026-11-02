@@ -74,20 +74,27 @@ export const LOST_REASONS = ['Not interested', 'Went elsewhere', 'Unreachable', 
 // so there is no Undo: say so before the write.
 export const LOST_WARNING =
   "FollowUpBoss's Lost Leads plan will move this lead to stage Lost. Only the FUB account owner can move it back."
-export const NEXT_STEPS = ['follow_up', 'scheduled', 'none']
+// cadence: the lead is on the call cadence, so its next step is the next
+// attempt on the call list. No task is written.
+export const NEXT_STEPS = ['follow_up', 'scheduled', 'cadence', 'none']
 
-// The Next step the Log call form preselects. A task already on the books
-// beats a second follow-up; Not Interested / Bad Number preselect nothing so
-// the choice is deliberate.
-export function defaultNextStep(outcome, hasFutureTask = false) {
+// The Next step the Log call form preselects. On the call cadence an
+// unanswered call needs no task: the next attempt is the next step. Otherwise
+// a task already on the books beats a second follow-up; Not Interested / Bad
+// Number preselect nothing so the choice is deliberate.
+export function defaultNextStep(outcome, hasFutureTask = false, onCadence = false) {
   if (!FOLLOW_UP_ON.has(outcome)) return null
+  if (onCadence && !CONNECTED.has(outcome)) return 'cadence'
   return hasFutureTask ? 'scheduled' : 'follow_up'
 }
 
 // After a stage move: offer a follow-up when nothing is scheduled. Parking in
-// Nurture needs none, and callers that don't know the open-task count never prompt.
+// Nurture needs none, a lead moved onto the call cadence (New Lead, Attempted)
+// gets its next attempt instead, and callers that don't know the open-task
+// count never prompt.
+const NO_PROMPT_TARGETS = new Set(['nurture', 'credit_repair', 'lost', 'new_lead', 'attempted'])
 export function needsNextStepPrompt(targetKey, openTaskCount) {
-  if (targetKey === 'nurture' || targetKey === 'credit_repair' || targetKey === 'lost' || openTaskCount == null) return false
+  if (NO_PROMPT_TARGETS.has(targetKey) || openTaskCount == null) return false
   return !(openTaskCount > 0)
 }
 export const defaultDurationMin = (outcome) => (CONNECTED.has(outcome) ? 5 : 1)

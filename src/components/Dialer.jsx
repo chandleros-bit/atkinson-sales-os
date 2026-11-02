@@ -48,7 +48,7 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
 
   const logOutcome = (outcome) =>
     send(
-      buildActionRequest({ action: 'log_call', contactId: it.id, outcome, durationMin: 1, nextStep: 'scheduled', setStage: callStageAdvance(it.book, it.row.stage) }),
+      buildActionRequest({ action: 'log_call', contactId: it.id, outcome, durationMin: 1, nextStep: it.kind === 'attempt' ? 'cadence' : 'scheduled', setStage: callStageAdvance(it.book, it.row.stage) }),
       () => {
         setStats((s) => ({ ...s, calls: s.calls + 1 }))
         setPhase(outcome === 'Bad Number' ? 'bad' : 'after')
@@ -114,6 +114,7 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
           contactName={r.name}
           hasPhone={!!r.phone}
           stage={it.book === 'bay' ? r.stage : null}
+          cadence={it.kind === 'attempt'}
           only={[]}
           autoOpen="call"
           onDone={() => setStats((s) => ({ ...s, calls: s.calls + 1, connected: s.connected + 1 }))}

@@ -26,6 +26,7 @@ import PersonLink from './PersonLink'
 import { openPerson } from './PersonSheet'
 import QuickActions from './QuickActions'
 import { showToast } from './Toaster'
+import { isCadenceStage } from '../lib/dialList'
 
 export function useIsMobile() {
   const query = '(max-width: 639px)'
@@ -185,6 +186,7 @@ function ActionsSheet({ row, onClose }) {
                 contactName={row.name}
                 hasPhone={!!row.phone}
                 stage={row.business_id === 'bay' ? row.stage : null}
+                cadence={isCadenceStage(row.stage, row.business_id)}
                 onDone={() => {
                   refreshPriorityQueue()
                   onClose()
@@ -454,6 +456,7 @@ function DenseRow({ row }) {
           contactName={row.name}
           hasPhone={!!row.phone}
           stage={row.business_id === 'bay' ? row.stage : null}
+          cadence={isCadenceStage(row.stage, row.business_id)}
           only={['call', 'note', 'followup', 'stage']}
           onDone={() => refreshPriorityQueue()}
         />
@@ -564,6 +567,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
             contactName={row.name}
             hasPhone={!!row.phone}
                 stage={row.business_id === 'bay' ? row.stage : null}
+                cadence={isCadenceStage(row.stage, row.business_id)}
             only={['call', 'note', 'followup', 'stage']}
             onDone={() => refreshPriorityQueue()}
           />

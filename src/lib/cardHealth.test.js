@@ -14,7 +14,7 @@ const daysAgo = (n, hh = '09:00:00') => {
 const rules = DEFAULT_RULES
 const row = (o = {}) => ({
   id: o.id || 'x',
-  stage: 'Attempted',
+  stage: 'Contacted/Working',
   stage_since: null,
   open_task_count: 0,
   oldest_open_due_at: null,
@@ -25,6 +25,13 @@ const row = (o = {}) => ({
 describe('nextStep', () => {
   it('none when nothing is open', () => {
     expect(nextStep(row(), NOW)).toEqual({ state: 'none', text: 'No next step' })
+  })
+  it('a lead on the call cadence with nothing open is on the cadence, not "No next step"', () => {
+    for (const stage of ['New Lead', 'Attempted', 'Not Contacted', 'Open', 'Attempted to Contact']) {
+      expect(nextStep(row({ stage }), NOW)).toEqual({ state: 'cadence', text: 'Call cadence' })
+    }
+    // A real task on a cadence lead still shows.
+    expect(nextStep(row({ stage: 'Attempted', open_task_count: 1, oldest_open_due_at: daysAgo(2) }), NOW)).toMatchObject({ state: 'overdue' })
   })
   it('overdue by whole local days', () => {
     expect(nextStep(row({ open_task_count: 1, oldest_open_due_at: daysAgo(1) }), NOW)).toMatchObject({ state: 'overdue', text: 'Follow-up 1 day overdue' })
@@ -47,22 +54,27 @@ describe('nextStep', () => {
 
 describe('stuckFor', () => {
   it('flags at the per-stage limit', () => {
-    expect(stuckFor(row({ stage_since: daysAgo(5) }), rules, NOW)).toEqual({ days: 5, text: '5d in Attempted' })
-    expect(stuckFor(row({ stage_since: daysAgo(4) }), rules, NOW)).toBeNull()
+    expect(stuckFor(row({ stage_since: daysAgo(7) }), rules, NOW)).toEqual({ days: 7, text: '7d in Contacted/Working' })
+    expect(stuckFor(row({ stage_since: daysAgo(6) }), rules, NOW)).toBeNull()
   })
   it('falls back to stuck_days for MPG statuses', () => {
-    expect(stuckFor(row({ stage: 'Open', stage_since: daysAgo(14) }), rules, NOW)).toEqual({ days: 14, text: '14d in Open' })
-    expect(stuckFor(row({ stage: 'Open', stage_since: daysAgo(13) }), rules, NOW)).toBeNull()
+    expect(stuckFor(row({ stage: 'Pending', stage_since: daysAgo(14) }), rules, NOW)).toEqual({ days: 14, text: '14d in Pending' })
+    expect(stuckFor(row({ stage: 'Pending', stage_since: daysAgo(13) }), rules, NOW)).toBeNull()
   })
   it('never for unknown stage dates or parked leads', () => {
     expect(stuckFor(row({ stage_since: null }), rules, NOW)).toBeNull()
     expect(stuckFor(row({ stage: 'Nurture / Credit Repair', stage_since: daysAgo(90) }), rules, NOW)).toBeNull()
   })
+  it('never for a lead on the call cadence', () => {
+    expect(stuckFor(row({ stage: 'Attempted', stage_since: daysAgo(30) }), rules, NOW)).toBeNull()
+    expect(stuckFor(row({ stage: 'New Lead', stage_since: daysAgo(30) }), rules, NOW)).toBeNull()
+    expect(stuckFor(row({ stage: 'Open', stage_since: daysAgo(30) }), rules, NOW)).toBeNull()
+  })
 })
 
 describe('ordering and summary', () => {
   const overdue = row({ id: 'overdue', open_task_count: 1, oldest_open_due_at: daysAgo(2) })
-  const stuck = row({ id: 'stuck', open_task_count: 1, oldest_open_due_at: daysAgo(-3), stage_since: daysAgo(6) })
+  const stuck = row({ id: 'stuck', open_task_count: 1, oldest_open_due_at: daysAgo(-3), stage_since: daysAgo(8) })
   const none = row({ id: 'none' })
   const today = row({ id: 'today', open_task_count: 1, oldest_open_due_at: daysAgo(0, '15:00:00') })
   const scheduled = row({ id: 'scheduled', open_task_count: 1, oldest_open_due_at: daysAgo(-2) })
