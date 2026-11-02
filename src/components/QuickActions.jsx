@@ -31,6 +31,7 @@ import {
   retryRequestFor,
   summarizeResult,
 } from '../lib/crmActions'
+import { followUpEventRow, insertContactEvent, notifyContactEventsChanged } from '../lib/contactEvents'
 
 const FUB_TASK_TYPES = ['Follow Up', 'Call', 'Text', 'Email', 'Appointment', 'Showing', 'Closing', 'Open House', 'Thank You']
 
@@ -181,7 +182,9 @@ export function SubmitButton({ busy, disabled, children, t, onClick }) {
   )
 }
 
-function DatePresets({ preset, setPreset, picked, setPicked, t }) {
+// time / setTime (follow-ups only): an optional 'HH:MM' that also puts the
+// follow-up on the Calendar at that time.
+function DatePresets({ preset, setPreset, picked, setPicked, time, setTime, t }) {
   return (
     <>
       <div className="flex flex-wrap gap-2">
@@ -200,6 +203,20 @@ function DatePresets({ preset, setPreset, picked, setPicked, t }) {
           className={`${inputCls} mt-2`}
         />
       )}
+      {setTime && (
+        <label className="mt-2 flex items-center justify-between gap-3 text-[12px] font-semibold text-muted">
+          <span>
+            Time · optional<span className="block font-normal text-dim">Adds it to the Calendar</span>
+          </span>
+          <input
+            type="time"
+            aria-label="Follow-up time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="w-32 rounded-[10px] border border-line2 bg-panel px-2 py-2 text-[13px] text-[color:var(--text)]"
+          />
+        </label>
+      )}
     </>
   )
 }
@@ -210,6 +227,28 @@ const safeDate = (preset, picked) => {
   } catch {
     return null
   }
+}
+
+// A follow-up with a time also goes on the Calendar: a contact_events row,
+// written once the CRM task is saved (also when a Retry saves it). prepare()
+// builds the row before the send, so a past time stops the save.
+function useCalendarFollowUp(onSuccess) {
+  const pending = useRef(null)
+  const prepare = (fields) => {
+    pending.current = followUpEventRow(fields)
+  }
+  const onSaved = async (summary, opts) => {
+    const row = pending.current
+    const taskSaved = summary.tone === 'ok' || (summary.failed.length > 0 && !summary.failed.includes('create_task'))
+    if (row && taskSaved) {
+      pending.current = null
+      const { error } = await insertContactEvent(row)
+      if (error) showToast({ tone: 'error', text: `Follow-up saved, but not added to the Calendar: ${error.message}` })
+      else notifyContactEventsChanged()
+    }
+    onSuccess(summary, opts)
+  }
+  return { prepare, onSaved }
 }
 
 // One submit pipeline for every form: double-submit guard, invoke, summarize,
@@ -256,10 +295,12 @@ function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }
   const [futureTask, setFutureTask] = useState(null)
   const [preset, setPreset] = useState('tomorrow')
   const [picked, setPicked] = useState('')
+  const [time, setTime] = useState('')
   const [title, setTitle] = useState(defaultFollowUpTitle(contactName))
   const [openTask, setOpenTask] = useState(null)
   const [completeOpen, setCompleteOpen] = useState(true)
-  const { busy, result, send, retry, setResult } = useSubmit({ businessId, onSuccess })
+  const calendar = useCalendarFollowUp(onSuccess)
+  const { busy, result, send, retry, setResult } = useSubmit({ businessId, onSuccess: calendar.onSaved })
 
   // Oldest open task due today or earlier for this contact. Bounded (limit 1).
   useEffect(() => {
@@ -306,6 +347,8 @@ function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }
 
   const submit = () => {
     try {
+      const dueDate = nextStep === 'follow_up' ? followUpDate(preset, new Date(), picked) : null
+      calendar.prepare({ businessId, contactId, dayKey: dueDate, time: nextStep === 'follow_up' ? time : '', title })
       send(
         buildActionRequest({
           action: 'log_call',
@@ -314,7 +357,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }
           note,
           durationMin: Number(duration),
           nextStep,
-          followUp: nextStep === 'follow_up' ? { dueDate: followUpDate(preset, new Date(), picked), title } : null,
+          followUp: nextStep === 'follow_up' ? { dueDate, title } : null,
           noNextStepReason: nextStep === 'none' ? reason : null,
           completeTaskId: openTask && completeOpen ? openTask.id : null,
           setStage: advance,
@@ -371,7 +414,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, t, onSuccess }
       </div>
       {nextStep === 'follow_up' && (
         <div className="mt-2">
-          <DatePresets preset={preset} setPreset={setPreset} picked={picked} setPicked={setPicked} t={t} />
+          <DatePresets preset={preset} setPreset={setPreset} picked={picked} setPicked={setPicked} time={time} setTime={setTime} t={t} />
           <input aria-label="Follow-up title" value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputCls} mt-2`} />
         </div>
       )}
@@ -445,17 +488,21 @@ export function FollowUpForm({ businessId, contactId, contactName, t, onSuccess 
   const [picked, setPicked] = useState('')
   const [title, setTitle] = useState(defaultFollowUpTitle(contactName))
   const [type, setType] = useState('Follow Up')
-  const { busy, result, send, retry, setResult } = useSubmit({ businessId, onSuccess })
+  const [time, setTime] = useState('')
+  const calendar = useCalendarFollowUp(onSuccess)
+  const { busy, result, send, retry, setResult } = useSubmit({ businessId, onSuccess: calendar.onSaved })
   const submit = () => {
     try {
-      send(buildActionRequest({ action: 'create_task', contactId, dueDate: followUpDate(preset, new Date(), picked), title, type }))
+      const dueDate = followUpDate(preset, new Date(), picked)
+      calendar.prepare({ businessId, contactId, dayKey: dueDate, time, title })
+      send(buildActionRequest({ action: 'create_task', contactId, dueDate, title, type }))
     } catch (e) {
       setResult({ tone: 'error', text: e.message, failed: [] })
     }
   }
   return (
     <>
-      <DatePresets preset={preset} setPreset={setPreset} picked={picked} setPicked={setPicked} t={t} />
+      <DatePresets preset={preset} setPreset={setPreset} picked={picked} setPicked={setPicked} time={time} setTime={setTime} t={t} />
       <input aria-label="Task title" value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputCls} mt-3`} />
       {businessId === 'bay' && (
         <select aria-label="Task type" value={type} onChange={(e) => setType(e.target.value)} className={`${inputCls} mt-2`}>

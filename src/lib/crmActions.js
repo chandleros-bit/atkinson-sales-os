@@ -9,6 +9,7 @@ export const OUTCOMES = ['Interested', 'Not Interested', 'Left Message', 'No Ans
 export const CRM_LABEL = { bay: 'FollowUpBoss', mpg: 'Zoho' }
 
 export const FOLLOW_UP_PRESETS = [
+  { key: 'today', label: 'Today' },
   { key: 'tomorrow', label: 'Tomorrow' },
   { key: 'in3', label: 'In 3 days' },
   { key: 'nextMonday', label: 'Next Monday' },
@@ -30,10 +31,13 @@ function addDays(d, n) {
   return out
 }
 
-// preset: 'tomorrow' | 'in3' | 'nextMonday' | 'pick'. "Tomorrow" on a Friday,
-// Saturday or Sunday lands on Monday. "Next Monday" on a Monday is a week out.
+// preset: 'today' | 'tomorrow' | 'in3' | 'nextMonday' | 'pick'. "Tomorrow" on
+// a Friday, Saturday or Sunday lands on Monday. "Next Monday" on a Monday is a
+// week out. "Today" is today, weekend or not.
 export function followUpDate(preset, now = new Date(), picked) {
   switch (preset) {
+    case 'today':
+      return localDateKey(now)
     case 'tomorrow': {
       const t = addDays(now, 1)
       const day = t.getDay() // 0 Sun .. 6 Sat

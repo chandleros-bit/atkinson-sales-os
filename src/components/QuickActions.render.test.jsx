@@ -13,6 +13,8 @@ const invoke = vi.fn()
 const openTasks = { rows: [] }
 // Log call looks up two v_tasks slices: due by today (lte) and future (gt).
 const futureTasks = { rows: [] }
+// contact_events inserts (a follow-up with a time goes on the Calendar).
+const inserts = []
 
 function query(table) {
   const q = {}
@@ -22,6 +24,11 @@ function query(table) {
     future = true
     return q
   }
+  q.insert = (row) => {
+    inserts.push({ table, row })
+    return q
+  }
+  q.single = async () => ({ data: { id: 'ev1' }, error: null })
   q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { bay: true, mpg: false } } : null, error: null })
   q.then = (resolve) => resolve({ data: table === 'v_tasks' ? (future ? futureTasks.rows : openTasks.rows) : [], error: null })
   return q
@@ -63,6 +70,7 @@ beforeEach(() => {
   invoke.mockReset()
   openTasks.rows = []
   futureTasks.rows = []
+  inserts.length = 0
   resetWritebackFlags()
 })
 
@@ -229,6 +237,96 @@ describe('QuickActions: Log call next step', () => {
     const payload = invoke.mock.calls[0][1].body.payload
     expect(payload.next_step).toBe('scheduled')
     expect(payload.follow_up).toBeUndefined()
+  })
+})
+
+describe('QuickActions: Schedule follow-up', () => {
+  const ok = { data: { status: 'ok', results: [{ step: 'create_task', ok: true }] }, error: null }
+  const pad = (n) => String(n).padStart(2, '0')
+  const todayKey = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  }
+
+  it('offers Today first and schedules the task for today in one click', async () => {
+    invoke.mockResolvedValueOnce(ok)
+    await mount(bay)
+    await click(byLabel('Schedule follow-up'))
+    const chips = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')].map((b) => b.textContent)
+    expect(chips.slice(0, 5)).toEqual(['Today', 'Tomorrow', 'In 3 days', 'Next Monday', 'Pick a date'])
+    await click(byText('Today'))
+    await click(byText('Schedule follow-up'))
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'create_task', payload: { due_date: todayKey() } })
+  })
+
+  it('keeps a follow-up without a time off the Calendar', async () => {
+    invoke.mockResolvedValueOnce(ok)
+    await mount(bay)
+    await click(byLabel('Schedule follow-up'))
+    await click(byText('Schedule follow-up'))
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(inserts).toEqual([])
+  })
+
+  it('puts a follow-up with a time on the Calendar once the task is saved', async () => {
+    invoke.mockResolvedValueOnce(ok)
+    await mount(bay)
+    await click(byLabel('Schedule follow-up'))
+    await click(byText('Pick a date'))
+    await type(byLabel('Follow-up date'), '2099-03-04')
+    await type(byLabel('Follow-up time'), '14:30')
+    await click(byText('Schedule follow-up'))
+    expect(invoke.mock.calls[0][1].body.payload.due_date).toBe('2099-03-04')
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0].table).toBe('contact_events')
+    expect(inserts[0].row).toMatchObject({
+      business_id: 'bay',
+      contact_id: 'c1',
+      kind: 'follow_up',
+      starts_at: new Date(2099, 2, 4, 14, 30).toISOString(),
+      duration_min: 15,
+      note: 'Follow up: Jo',
+    })
+  })
+
+  it('refuses a time already past today, before anything is sent', async () => {
+    await mount(bay)
+    await click(byLabel('Schedule follow-up'))
+    await click(byText('Today'))
+    await type(byLabel('Follow-up time'), '00:00')
+    await click(byText('Schedule follow-up'))
+    expect(invoke).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="alert"]').textContent).toContain('That time is in the past')
+  })
+
+  it('does not add the Calendar entry when the task fails', async () => {
+    invoke.mockResolvedValueOnce({ data: { status: 'error', results: [{ step: 'create_task', ok: false, error: 'FUB 422' }] }, error: null })
+    await mount(bay)
+    await click(byLabel('Schedule follow-up'))
+    await click(byText('Pick a date'))
+    await type(byLabel('Follow-up date'), '2099-03-04')
+    await type(byLabel('Follow-up time'), '09:00')
+    await click(byText('Schedule follow-up'))
+    expect(inserts).toEqual([])
+  })
+
+  it('adds the Calendar entry from Log call once a retried follow-up saves', async () => {
+    invoke.mockResolvedValueOnce({
+      data: { status: 'partial', results: [{ step: 'log_call', ok: true }, { step: 'create_task', ok: false, error: 'FUB 422' }] },
+      error: null,
+    })
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('No Answer'))
+    await click(byText('Pick a date'))
+    await type(byLabel('Follow-up date'), '2099-03-04')
+    await type(byLabel('Follow-up time'), '10:15')
+    await click(byText('Log call'))
+    expect(inserts).toEqual([])
+    invoke.mockResolvedValueOnce(ok)
+    await click(byText('Retry follow-up'))
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0].row).toMatchObject({ kind: 'follow_up', starts_at: new Date(2099, 2, 4, 10, 15).toISOString() })
   })
 })
 

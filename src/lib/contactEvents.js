@@ -18,7 +18,12 @@ export const DEFAULT_REMIND_MIN = 10
 // a little late); after that it is dropped.
 export const REMIND_GRACE_MIN = 5
 
-const KIND_LABEL = { call: 'Call', meeting: 'Meeting' }
+// follow_up rows come from a follow-up scheduled with a time (followUpEventRow),
+// never from the Schedule form, so KINDS leaves it out.
+const KIND_LABEL = { call: 'Call', meeting: 'Meeting', follow_up: 'Follow-up' }
+export const kindLabel = (kind) => KIND_LABEL[kind] || 'Event'
+// A timed follow-up's slot on the Calendar.
+export const FOLLOW_UP_MIN = 15
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const pad = (n) => String(n).padStart(2, '0')
 const trimmed = (v) => (typeof v === 'string' ? v.trim() : '')
@@ -45,6 +50,17 @@ export function buildEventRow(form, now = new Date()) {
     remind_min: remind,
     note: trimmed(form.note) || null,
   }
+}
+
+// A follow-up with a time -> the contact_events row that puts it on the
+// Calendar (reminder included). No time -> null: the follow-up stays a
+// date-only CRM task, off the Calendar.
+export function followUpEventRow({ businessId, contactId, dayKey, time, title }, now = new Date()) {
+  if (!time) return null
+  return buildEventRow(
+    { businessId, contactId, kind: 'follow_up', dayKey, time, durationMin: FOLLOW_UP_MIN, remindMin: DEFAULT_REMIND_MIN, note: title },
+    now,
+  )
 }
 
 // The form's starting point: the next half hour, today (or tomorrow after 11:30 PM).
@@ -91,7 +107,7 @@ export function toCalendarEvent(row) {
   return {
     id: `os:${row.id}`,
     source_account: `os-${row.business_id}`,
-    title: `${KIND_LABEL[row.kind] || 'Event'} · ${name}`,
+    title: `${kindLabel(row.kind)} · ${name}`,
     starts_at: row.starts_at,
     ends_at: new Date(start.getTime() + (row.duration_min || 30) * 60000).toISOString(),
     is_all_day: false,

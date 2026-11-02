@@ -8,6 +8,9 @@ import {
   defaultStartTime,
   startsIn,
   REMIND_GRACE_MIN,
+  DEFAULT_REMIND_MIN,
+  followUpEventRow,
+  kindLabel,
 } from './contactEvents'
 import { sourceToBiz } from './calendar'
 
@@ -150,5 +153,38 @@ describe('dueReminders', () => {
   it('a zero-minute reminder fires at the start', () => {
     expect(dueReminders([{ ...ev, remind_min: 0 }], at(9, 29))).toEqual([])
     expect(dueReminders([{ ...ev, remind_min: 0 }], at(9, 30))).toHaveLength(1)
+  })
+})
+
+describe('followUpEventRow', () => {
+  const fields = { businessId: 'bay', contactId: 'c1', dayKey: '2026-10-29', title: 'Follow up: Jo' }
+
+  it('is null without a time: the follow-up stays off the Calendar', () => {
+    expect(followUpEventRow({ ...fields, time: '' }, NOW)).toBe(null)
+  })
+
+  it('builds a 15-minute follow_up row at that time, with the default reminder', () => {
+    expect(followUpEventRow({ ...fields, time: '14:30' }, NOW)).toEqual({
+      business_id: 'bay',
+      contact_id: 'c1',
+      kind: 'follow_up',
+      starts_at: local(2026, 10, 29, 14, 30).toISOString(),
+      duration_min: 15,
+      remind_min: DEFAULT_REMIND_MIN,
+      note: 'Follow up: Jo',
+    })
+  })
+
+  it('rejects a time already past', () => {
+    expect(() => followUpEventRow({ ...fields, time: '08:00' }, NOW)).toThrow(/past/i)
+  })
+
+  it('shows on the Calendar as a timed Follow-up', () => {
+    const row = { ...followUpEventRow({ ...fields, time: '14:30' }, NOW), id: 'e9', status: 'scheduled', contacts: { name: 'Jo Ramirez' } }
+    const ev = toCalendarEvent(row)
+    expect(ev).toMatchObject({ title: 'Follow-up · Jo Ramirez', is_all_day: false, kind: 'follow_up', os: true })
+    expect(new Date(ev.ends_at) - new Date(ev.starts_at)).toBe(15 * 60000)
+    expect(kindLabel('follow_up')).toBe('Follow-up')
+    expect(kindLabel('call')).toBe('Call')
   })
 })

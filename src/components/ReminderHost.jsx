@@ -18,6 +18,7 @@ import {
   markReminded,
   onContactEventsChanged,
   startsIn,
+  kindLabel,
 } from '../lib/contactEvents'
 
 const LOAD_MS = 5 * 60_000
@@ -47,13 +48,12 @@ function writeFired(ids) {
 }
 
 const notificationsSupported = () => typeof window !== 'undefined' && 'Notification' in window
-const kindLabel = (e) => (e.kind === 'meeting' ? 'Meeting' : 'Call')
 const nameOf = (e) => e.contacts?.name || 'contact'
 
 function desktopNotify(e) {
   if (!notificationsSupported() || window.Notification.permission !== 'granted') return
   try {
-    const n = new window.Notification(`${kindLabel(e)} with ${nameOf(e)} ${startsIn(e.starts_at)}`, {
+    const n = new window.Notification(`${kindLabel(e.kind)} with ${nameOf(e)} ${startsIn(e.starts_at)}`, {
       body: [timeLabel(e), e.note].filter(Boolean).join(' · '),
       tag: `contact-event-${e.id}`,
     })
@@ -158,7 +158,7 @@ export default function ReminderHost() {
           <div
             key={e.id}
             role="alertdialog"
-            aria-label={`Reminder: ${kindLabel(e)} with ${nameOf(e)}`}
+            aria-label={`Reminder: ${kindLabel(e.kind)} with ${nameOf(e)}`}
             data-reminder={e.id}
             className="rounded-[12px] border border-line bg-panel p-3.5 shadow-lg"
             style={{ borderLeft: `4px solid ${color}` }}
@@ -166,7 +166,7 @@ export default function ReminderHost() {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-dim">
-                  {kindLabel(e)} {startsIn(e.starts_at)}
+                  {kindLabel(e.kind)} {startsIn(e.starts_at)}
                 </div>
                 <div className="truncate text-[14px] font-bold">{nameOf(e)}</div>
                 <div className="num text-[12.5px] text-muted">
