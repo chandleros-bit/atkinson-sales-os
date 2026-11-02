@@ -21,6 +21,11 @@ import {
 const at = (iso) => new Date(iso)
 
 describe('followUpDate', () => {
+  it('returns today for "today", weekend included', () => {
+    expect(followUpDate('today', at('2026-10-14T10:00:00'))).toBe('2026-10-14')
+    expect(followUpDate('today', at('2026-10-17T10:00:00'))).toBe('2026-10-17') // Sat stays Sat
+    expect(followUpDate('today', at('2026-10-14T23:30:00'))).toBe('2026-10-14')
+  })
   it('moves "tomorrow" past the weekend', () => {
     expect(followUpDate('tomorrow', at('2026-10-14T10:00:00'))).toBe('2026-10-15') // Wed -> Thu
     expect(followUpDate('tomorrow', at('2026-10-16T10:00:00'))).toBe('2026-10-19') // Fri -> Mon

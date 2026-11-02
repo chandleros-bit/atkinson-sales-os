@@ -22,6 +22,7 @@ import {
   setContactEventStatus,
   notifyContactEventsChanged,
   onContactEventsChanged,
+  kindLabel,
 } from '../lib/contactEvents'
 
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || 'contact'
@@ -266,7 +267,7 @@ export function UpcomingEvents({ contactId }) {
       <ul className="flex flex-col gap-1.5">
         {rows.map((r) => (
           <li key={r.id} data-upcoming className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
-            <span className="font-semibold">{r.kind === 'call' ? 'Call' : 'Meeting'}</span>
+            <span className="font-semibold">{kindLabel(r.kind)}</span>
             <span className="num text-muted">
               {eventWhenLabel(r.starts_at)} · {r.duration_min} min
             </span>
