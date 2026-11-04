@@ -12,6 +12,10 @@ export async function sendGmail({ to, subject, text, html, fromName = 'Atkinson 
   try {
     await client.send({ from: `${fromName} <${user}>`, to, subject, content: text, html })
   } finally {
-    await client.close()
+    try {
+      await client.close()
+    } catch {
+      /* the message was already handed to Gmail */
+    }
   }
 }

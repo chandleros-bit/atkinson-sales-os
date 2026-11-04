@@ -52,4 +52,9 @@ describe('renderOwnerBriefing', () => {
     const { text } = renderOwnerBriefing(model(), { appUrl: 'https://x.app' })
     expect(text).toContain('10:00 AM · Deli <review> (MPG)')
   })
+  it('writes closing dates like Nov 6', () => {
+    const m = model()
+    m.today.closings = { count: 1, top: [{ name: 'Pat Lee', date: '2026-11-06' }] }
+    expect(renderOwnerBriefing(m, { appUrl: 'https://x.app' }).text).toContain('Pat Lee Nov 6')
+  })
 })
