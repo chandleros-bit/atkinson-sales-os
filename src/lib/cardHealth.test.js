@@ -187,6 +187,9 @@ describe('temperature pills', () => {
     const r = row({ temperature: 'cold', rating: { temperature: 'cold', score_at_rating: 5, current_score: 40 } })
     expect(healthPills(cardHealth(r, rules, NOW)).map((p) => p.key)).toContain('cold_active')
   })
+  it('ignores an unknown temperature', () => {
+    expect(healthPills(cardHealth(row({ temperature: 'lukewarm' }), rules, NOW)).map((p) => p.key)).toEqual(['none'])
+  })
   it('unrated cards are unchanged', () => {
     expect(healthPills(cardHealth(row(), rules, NOW)).map((p) => p.key)).toEqual(['none'])
   })

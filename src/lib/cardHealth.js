@@ -8,7 +8,7 @@ import { calendarDaysSince, overdueDays, stuckDaysFor } from './priorityQueue'
 import { isLostStage } from './pipeline'
 import { sortByAttention } from './overview'
 import { isCadenceStage } from './dialList'
-import { TEMP_LABEL, coldButActive } from './leadRatings'
+import { TEMPERATURES, TEMP_LABEL, coldButActive } from './leadRatings'
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -76,7 +76,7 @@ export function cardHealth(row, rules, now = Date.now()) {
     next: nextStep(row, now),
     stuck: stuckFor(row, rules, now),
     speed: speedToLead(row, rules, now),
-    temp: row.temperature || null,
+    temp: TEMPERATURES.includes(row.temperature) ? row.temperature : null,
     coldActive: coldButActive(row.rating),
   }
 }
