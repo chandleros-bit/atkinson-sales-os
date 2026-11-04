@@ -1170,7 +1170,7 @@ function section(title, block, href) {
 }
 function renderOwnerBriefing(m, { appUrl }) {
   const url = (p) => `${String(appUrl).replace(/\/$/, "")}${p}`;
-  const subject = `Briefing \xB7 ${m.dateLabel} \xB7 ${m.callFirstCount} to call first \xB7 ${money(m.numbers.forecast.expected)} forecast`;
+  const subject = `Briefing | ${m.dateLabel} | ${m.callFirstCount} to call first | ${money(m.numbers.forecast.expected)} forecast`;
   const f = m.numbers.forecast;
   const s = m.numbers.scorecard;
   const numbers = [

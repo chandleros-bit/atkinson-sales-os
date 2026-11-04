@@ -25,7 +25,9 @@ function section(title, block, href) {
 
 export function renderOwnerBriefing(m, { appUrl }) {
   const url = (p) => `${String(appUrl).replace(/\/$/, '')}${p}`
-  const subject = `Briefing · ${m.dateLabel} · ${m.callFirstCount} to call first · ${money(m.numbers.forecast.expected)} forecast`
+  // Subject stays plain ASCII: denomailer mis-encodes non-ASCII subject text,
+  // and Outlook then shows the raw =?utf-8?Q?…?= string.
+  const subject = `Briefing | ${m.dateLabel} | ${m.callFirstCount} to call first | ${money(m.numbers.forecast.expected)} forecast`
 
   const f = m.numbers.forecast
   const s = m.numbers.scorecard

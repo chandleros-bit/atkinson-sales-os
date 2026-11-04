@@ -24,7 +24,10 @@ const model = (o = {}) => ({
 
 describe('renderOwnerBriefing', () => {
   it('subject carries the date, call-first count and forecast', () => {
-    expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).subject).toBe('Briefing · Tue Nov 3 · 7 to call first · $12,400 forecast')
+    const { subject } = renderOwnerBriefing(model(), { appUrl: 'https://x.app' })
+    expect(subject).toBe('Briefing | Tue Nov 3 | 7 to call first | $12,400 forecast')
+    // ASCII only: denomailer mis-encodes non-ASCII subjects (raw =?utf-8?Q?…?= in Outlook).
+    expect(/^[ -~]*$/.test(subject)).toBe(true)
   })
   it('shows top five plus the count and a link', () => {
     const { text, html } = renderOwnerBriefing(model(), { appUrl: 'https://x.app' })
