@@ -16,7 +16,7 @@ export const FOLLOW_UP_PRESETS = [
   { key: 'pick', label: 'Pick a date' },
 ]
 
-const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'create_contact'])
+const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact'])
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -62,6 +62,8 @@ export function followUpDate(preset, now = new Date(), picked) {
 // Outcomes whose Next step defaults to a dated follow-up.
 const FOLLOW_UP_ON = new Set(['Interested', 'Left Message', 'No Answer', 'Busy'])
 const CONNECTED = new Set(['Interested', 'Not Interested'])
+// A real conversation: the Log call form then offers Hot / Warm / Cold.
+export const isConversation = (outcome) => CONNECTED.has(outcome)
 
 // Why a call ends with no next step. Audit-only (crm_actions.request): nothing
 // extra is written to the CRM. "Moving to Nurture" also parks a Bayway lead.
@@ -198,6 +200,10 @@ export function buildActionRequest(form) {
     for (const [k, v] of fields) if (trimmed(v)) payload[k] = trimmed(v)
     return { ...base, business_id: form.businessId, payload }
   }
+  if (action === 'set_temperature') {
+    if (!['hot', 'warm', 'cold'].includes(form.temperature)) throw new Error('Pick Hot, Warm or Cold')
+    return { ...base, contact_id: form.contactId, payload: { temperature: form.temperature } }
+  }
   if (action === 'set_stage') {
     const payload = { target: form.target }
     if (form.reason) payload.reason = form.reason
@@ -230,6 +236,7 @@ const DONE = {
   complete_task: 'task completed',
   push_task: 'task moved',
   set_stage: 'stage moved',
+  set_temperature: 'temperature saved',
   create_contact: 'lead created',
 }
 const LABEL = {
@@ -239,6 +246,7 @@ const LABEL = {
   complete_task: 'Completing the task',
   push_task: 'Moving the task',
   set_stage: 'Moving the stage',
+  set_temperature: 'Temperature tag',
   create_contact: 'Creating the lead',
 }
 
