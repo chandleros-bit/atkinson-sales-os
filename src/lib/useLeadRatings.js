@@ -57,6 +57,8 @@ export function refreshRatings() {
         if (res.error || started === gen) break
       }
       store = res.error ? { ...store, error: res.error.message, at: Date.now() } : { ratings: toRatingMap(res.data), error: null, at: Date.now() }
+    } catch (e) {
+      store = { ...store, error: String(e?.message || e), at: Date.now() }
     } finally {
       inflight = null
       emit()
@@ -68,7 +70,7 @@ export function refreshRatings() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('focus', () => {
-    if (listeners.size > 0 && Date.now() - store.at > STALE_MS) refreshRatings()
+    if (listeners.size > 0 && Date.now() - store.at > STALE_MS) refreshRatings().catch(() => {})
   })
 }
 
@@ -77,7 +79,7 @@ export function useLeadRatings() {
   const [snap, setSnap] = useState(store)
   useEffect(() => {
     listeners.add(setSnap)
-    if (!store.at && !inflight) refreshRatings()
+    if (!store.at && !inflight) refreshRatings().catch(() => {})
     else setSnap(store)
     return () => listeners.delete(setSnap)
   }, [])

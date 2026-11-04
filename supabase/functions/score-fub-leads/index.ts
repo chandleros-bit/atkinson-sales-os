@@ -1,6 +1,6 @@
 // Scheduled Priority-Leads scorer. Reads the shared `activities` table (calls,
-// notes, appointments, emails) plus each contact's FUB `HOT` tag, computes a
-// 0-100 score + tier per Bayway/FUB contact, and writes score/tier/
+// notes, appointments, emails) and open-pipeline stage, computes a 0-100
+// Engagement score + tier per Bayway/FUB contact, and writes score/tier/
 // last_activity_at back to the contact row. Read-only against FUB — it only
 // touches our own Supabase tables. Logs sync_log source 'score-fub-leads'.
 // See docs/phase-priority-leads-setup.md.
@@ -17,9 +17,10 @@ Deno.serve(async () => {
   try {
     const since = new Date(Date.now() - SIX_MONTHS_MS).toISOString()
 
-    // Bayway/FUB contacts (raw only for the HOT tag).
+    // Bayway/FUB contacts. The FUB Hot/Warm/Cold tags are Chandler's temperature
+    // (lead_ratings, spec 2026-11-03), so the scorer does not read tags.
     const contacts = await fetchAll(() =>
-      db.from('contacts').select('id, external_id, raw').eq('business_id', 'bay').eq('source_crm', 'fub'),
+      db.from('contacts').select('id, external_id').eq('business_id', 'bay').eq('source_crm', 'fub'),
     )
 
     // Scoring-window activities, grouped by contact.

@@ -151,6 +151,18 @@ describe('saveRating', () => {
     await refreshRatings()
   })
 
+  it('records a thrown refresh error and keeps the ratings it already had', async () => {
+    state.rows = [{ contact_id: 'c1', business_id: 'mpg', temperature: 'warm', est_amount: null, close_month: null, score_at_rating: 30, contact: { name: 'Ann', score: 30, tier: 'warm' } }]
+    await refreshRatings()
+    state.range = () => {
+      throw new Error('network down')
+    }
+    const after = await refreshRatings()
+    expect(after.error).toBe('network down')
+    expect(after.ratings.get('c1')).toMatchObject({ temperature: 'warm' })
+    expect((await readStore()).get('c1')).toMatchObject({ temperature: 'warm' })
+  })
+
   it('refreshes from the server after a save', async () => {
     await saveRating({ contactId: 'c1', businessId: 'mpg', temperature: 'warm' })
     await refreshRatings()
