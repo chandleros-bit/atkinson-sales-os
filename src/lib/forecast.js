@@ -190,3 +190,21 @@ export function sortPaysFirst(rows, lines) {
     return weighted(lb) - weighted(la)
   })
 }
+
+// Latest metrics_daily date that has BOTH the residual and the merchant count
+// (rows come newest first); a lone residual would divide by the wrong merchants.
+export function latestMpgMetrics(rows) {
+  const byDate = new Map()
+  for (const m of rows || []) {
+    if (m.value == null) continue
+    const d = byDate.get(m.date) || {}
+    d[m.metric_key] = m.value
+    byDate.set(m.date, d)
+  }
+  for (const d of byDate.values()) {
+    if (d.rev_monthly_residual != null && d.rev_active_merchants != null) {
+      return { residual: d.rev_monthly_residual, merchants: d.rev_active_merchants }
+    }
+  }
+  return { residual: null, merchants: null }
+}

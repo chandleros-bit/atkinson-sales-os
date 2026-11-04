@@ -6,7 +6,7 @@ import { supabase, isDemoMode } from './supabase'
 import { fetchLoanBundle } from './loansData'
 import { DEFAULT_RATES } from './loans'
 import { useLeadRatings, useLeadRatingsStatus } from './useLeadRatings'
-import { resolveForecast, avgFundedLoan, mpgPerAccount, forecastLines } from './forecast'
+import { resolveForecast, avgFundedLoan, mpgPerAccount, forecastLines, latestMpgMetrics } from './forecast'
 
 const EMPTY = { loans: [], rates: DEFAULT_RATES, settings: resolveForecast(null), mpgMetrics: {}, at: 0, error: null }
 let store = EMPTY
@@ -27,24 +27,6 @@ export function __resetForecastForTest() {
 // A thrown query becomes a { data: null, error } like a failed one, so the
 // other queries' results are still used.
 const settle = (p) => Promise.resolve(p).then((v) => v, (e) => ({ data: null, error: { message: String(e?.message || e) } }))
-
-// Latest metrics_daily date that has BOTH the residual and the merchant count
-// (rows come newest first); a lone residual would divide by the wrong merchants.
-function latestMpgMetrics(rows) {
-  const byDate = new Map()
-  for (const m of rows || []) {
-    if (m.value == null) continue
-    const d = byDate.get(m.date) || {}
-    d[m.metric_key] = m.value
-    byDate.set(m.date, d)
-  }
-  for (const d of byDate.values()) {
-    if (d.rev_monthly_residual != null && d.rev_active_merchants != null) {
-      return { residual: d.rev_monthly_residual, merchants: d.rev_active_merchants }
-    }
-  }
-  return { residual: null, merchants: null }
-}
 
 // One pass over all three sources. A source that failed leaves its part of the
 // store as it was; every failure message lands in `error`.
