@@ -15,11 +15,14 @@ const openTasks = { rows: [] }
 const futureTasks = { rows: [] }
 // contact_events inserts (a follow-up with a time goes on the Calendar).
 const inserts = []
+// lead_ratings upserts, and the rows a lead_ratings read returns.
+const upserts = []
+const ratingRows = { rows: [] }
 
 function query(table) {
   const q = {}
   let future = false
-  for (const m of ['select', 'eq', 'lte', 'order', 'limit']) q[m] = () => q
+  for (const m of ['select', 'eq', 'lte', 'order', 'limit', 'range']) q[m] = () => q
   q.gt = () => {
     future = true
     return q
@@ -28,9 +31,14 @@ function query(table) {
     inserts.push({ table, row })
     return q
   }
+  q.upsert = async (row) => {
+    upserts.push(row)
+    return { error: null }
+  }
   q.single = async () => ({ data: { id: 'ev1' }, error: null })
   q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { bay: true, mpg: false } } : null, error: null })
-  q.then = (resolve) => resolve({ data: table === 'v_tasks' ? (future ? futureTasks.rows : openTasks.rows) : [], error: null })
+  q.then = (resolve) =>
+    resolve({ data: table === 'v_tasks' ? (future ? futureTasks.rows : openTasks.rows) : table === 'lead_ratings' ? ratingRows.rows : [], error: null })
   return q
 }
 
@@ -42,6 +50,7 @@ vi.mock('../lib/supabase', () => ({
 const { default: QuickActions } = await import('./QuickActions')
 const { resetWritebackFlags } = await import('../lib/writeback')
 const { default: Toaster } = await import('./Toaster')
+const { __resetRatingsForTest } = await import('../lib/useLeadRatings')
 
 async function mount(props) {
   const host = document.createElement('div')
@@ -71,6 +80,9 @@ beforeEach(() => {
   openTasks.rows = []
   futureTasks.rows = []
   inserts.length = 0
+  upserts.length = 0
+  ratingRows.rows = []
+  __resetRatingsForTest()
   resetWritebackFlags()
 })
 
@@ -176,6 +188,77 @@ describe('QuickActions', () => {
 describe('QuickActions: Log call next step', () => {
   const save = () => byText('Log call')
   const ok = () => invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'log_call', ok: true }] }, error: null })
+
+  // Interested defaults to a "tomorrow" follow-up, so there is no date to pick.
+  const pickDate = async () => {}
+  const tempOk = () => invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_temperature', ok: true }] }, error: null })
+
+  it('offers Hot / Warm / Cold only after a conversation, and saves the rating with the call', async () => {
+    ok()
+    tempOk()
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('No Answer'))
+    expect(document.querySelector('[aria-label="Temperature"]')).toBe(null)
+    await click(byText('Interested'))
+    await click(byText('Hot'))
+    await type(byLabel('Estimated loan amount'), '350,000')
+    await pickDate()
+    await click(save())
+    expect(invoke.mock.calls[0][1].body.action).toBe('log_call')
+    expect(upserts[0]).toMatchObject({ contact_id: 'c1', business_id: 'bay', temperature: 'hot', est_amount: 350000 })
+    expect('close_month' in upserts[0]).toBe(false)
+    expect(invoke.mock.calls[1][1].body).toMatchObject({ action: 'set_temperature', payload: { temperature: 'hot' } })
+  })
+
+  it('a call with no temperature picked saves no rating', async () => {
+    ok()
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('Interested'))
+    await pickDate()
+    await click(save())
+    expect(upserts).toEqual([])
+  })
+
+  it('a blank amount does not wipe the amount already saved on the lead', async () => {
+    ratingRows.rows = [{ contact_id: 'c1', business_id: 'bay', temperature: 'hot', est_amount: 400000, close_month: null }]
+    ok()
+    tempOk()
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('Interested'))
+    await click(byText('Warm'))
+    await pickDate()
+    await click(save())
+    expect(upserts).toHaveLength(1)
+    expect(upserts[0]).toMatchObject({ contact_id: 'c1', temperature: 'warm' })
+    expect('est_amount' in upserts[0]).toBe(false)
+    expect('close_month' in upserts[0]).toBe(false)
+  })
+
+  it('does not save a rating when the call itself fails', async () => {
+    invoke.mockResolvedValueOnce({ data: { status: 'error', results: [{ step: 'log_call', ok: false, error: 'FUB 500' }] }, error: null })
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('Interested'))
+    await click(byText('Hot'))
+    await click(save())
+    expect(upserts).toEqual([])
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('toasts when the FUB tag is not updated', async () => {
+    ok()
+    invoke.mockResolvedValueOnce({ data: { status: 'error', results: [{ step: 'set_temperature', ok: false, error: 'FUB 500' }] }, error: null })
+    await mount(bay)
+    await click(byLabel('Log call'))
+    await click(byText('Interested'))
+    await click(byText('Cold'))
+    await click(save())
+    expect(upserts[0]).toMatchObject({ temperature: 'cold' })
+    expect(document.body.textContent).toContain('Temperature saved; FUB tag not updated')
+  })
 
   it('makes a dead-end call say why there is no next step before it saves', async () => {
     ok()
