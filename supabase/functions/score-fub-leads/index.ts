@@ -6,7 +6,7 @@
 // See docs/phase-priority-leads-setup.md.
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
-import { scoreContact, assignTier, isHotTag } from '../_shared/scoring.ts'
+import { scoreContact, assignTier } from '../_shared/scoring.ts'
 
 const SIX_MONTHS_MS = 182 * 86_400_000
 const SCORING_TYPES = ['call', 'note', 'appointment', 'email']
@@ -53,14 +53,14 @@ Deno.serve(async () => {
     const updates = []
     for (const c of contacts) {
       const acts = byContact.get(c.id) || []
-      const hasHotTag = isHotTag(c.raw?.tags)
-      const { score, lastActivityAt, activityCount } = scoreContact(acts, { hasHotTag })
+      // The Hot tag is Chandler's temperature now (lead_ratings, spec
+      // 2026-11-03), so Engagement is built from activity and stage only.
+      const { score, lastActivityAt, activityCount } = scoreContact(acts)
       const tier = assignTier({
         score,
         lastActivityAt,
         activityCount,
         inOpenPipeline: inOpenPipeline.has(c.id),
-        hasHotTag,
       })
       tierCounts[tier] += 1
       // Include the identity columns so the upsert's INSERT branch is valid;

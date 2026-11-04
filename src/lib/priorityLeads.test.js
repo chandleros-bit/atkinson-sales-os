@@ -47,7 +47,7 @@ describe('tierMeta / TIERS', () => {
     expect(TIERS.map((t) => t.key)).toEqual(['hot', 'warm', 'active', 'never_contacted'])
   })
   it('looks up by key and falls back for unknowns', () => {
-    expect(tierMeta('warm').label).toBe('Warm')
+    expect(tierMeta('warm').label).toBe('Medium engagement')
     expect(tierMeta('nope').key).toBe('never_contacted')
   })
 })

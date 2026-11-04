@@ -106,7 +106,8 @@ export function scoreContact(activities, { hasHotTag = false, now = Date.now() }
 // This account logs almost no FUB activity, so intent signals (the manual HOT
 // tag and pipeline stage) rank ABOVE activity volume — otherwise a HOT or
 // in-pipeline lead with no logged call would wrongly read as "never contacted".
-//  - hot: carries the HOT tag, OR high score AND recent activity.
+//  - hot: high score AND recent activity. (score-fub-leads no longer passes
+//    hasHotTag: the Hot tag is the temperature rating since 2026-11-03.)
 //  - active: currently in an open pipeline stage.
 //  - warm: has any logged activity but isn't hot/active.
 //  - never_contacted: no HOT tag, not in pipeline, and zero activity rows.

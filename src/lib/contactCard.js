@@ -64,7 +64,9 @@ export function loanView({ firstNote, board }, now = Date.now()) {
   }
 }
 
-const TIER = { hot: 'Hot', warm: 'Warm', active: 'Active', never_contacted: 'Never contacted' }
+// The nightly score's tier, labelled as Engagement so it never reads as the
+// Hot / Warm / Cold temperature Chandler sets (spec 2026-11-03).
+const TIER = { hot: 'Engagement: high', warm: 'Engagement: medium', active: 'Engagement: active', never_contacted: 'Engagement: none' }
 
 // The Priority Leads score (Bayway, scored daily), shown above the tabs.
 export function priorityLine(priority) {
