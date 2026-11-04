@@ -42,6 +42,10 @@ const TABLES = {
   loans: [
     { id: 'ln1', arive_loan_id: 'A-1', business_id: 'bay', role: 'primary', amount: 400000, stage: 'Funded', stage_group: 'funded', funded_on: today, scenario_auto: false, scenario_override: null, comp_override: null },
   ],
+  // A Hot Bayway rating with no loan: 60% of 400,000 x 1.25% = 3,000, due next month.
+  lead_ratings: [
+    { contact_id: 'r1', business_id: 'bay', temperature: 'hot', est_amount: 400000, close_month: null, rated_at: new Date().toISOString(), score_at_rating: 10, contact: { name: 'Rae Rated', score: 10, tier: 'warm' } },
+  ],
   v_priority_leads: [
     { id: 'l1', name: 'Jessica Chen', score: 92, tier: 'hot', last_activity_at: null, fub_profile_url: '#' },
   ],
@@ -85,6 +89,8 @@ vi.mock('../context/BusinessContext', () => ({
 }))
 
 const { default: Overview } = await import('./Overview')
+const { __resetRatingsForTest } = await import('../lib/useLeadRatings')
+const { __resetForecastForTest } = await import('../lib/useForecastInputs')
 
 async function render(biz) {
   globalThis.__biz = { biz, matches: () => true }
@@ -102,6 +108,8 @@ async function render(biz) {
 describe('Overview dashboard', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
+    __resetRatingsForTest()
+    __resetForecastForTest()
   })
 
   it('renders every card in the combined view', async () => {
@@ -152,5 +160,34 @@ describe('Overview dashboard', () => {
     // No Bayway commission on the MPG view, and its income note stays manual.
     expect(text).not.toContain('Arive')
     expect(text).toContain('Entered in Reports')
+  })
+
+  it('shows the forecast card with this month and next', async () => {
+    await render('all')
+    const card = document.querySelector('[data-card="forecast"]')
+    expect(card.textContent).toContain('Forecast')
+    expect(card.textContent).toContain('This month')
+    expect(card.textContent).toContain('Next month')
+    // Hot at 60% of 400,000 x 1.25% = 3,000, due next month by default.
+    expect(card.textContent).toContain('$3,000')
+    // The funded loan is already paid this month; nothing is undated yet.
+    expect(card.textContent).toContain('$5,000')
+    expect(card.textContent).not.toContain('no closing date')
+  })
+
+  it('counts an open loan with no closing date once, under the months', async () => {
+    const saved = TABLES.loans
+    TABLES.loans = [
+      ...saved,
+      { id: 'ln2', arive_loan_id: 'A-2', business_id: 'bay', role: 'primary', amount: 300000, stage: 'Processing', stage_group: 'processing', funded_on: null, firm_closing_on: null, contact_id: null, scenario_auto: false, scenario_override: null, comp_override: null },
+    ]
+    try {
+      await render('bay')
+    } finally {
+      TABLES.loans = saved
+    }
+    const card = document.querySelector('[data-card="forecast"]')
+    expect(card.textContent.match(/no closing date/g)).toHaveLength(1)
+    expect(card.textContent).toContain('1 open loan with no closing date')
   })
 })
