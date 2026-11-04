@@ -11,13 +11,20 @@ import { buildActionRequest } from './crmActions'
 const STALE_MS = 60_000
 let store = { ratings: new Map(), at: 0, error: null }
 let inflight = null
+// Bumped after every successful rating write. A refresh that started before a
+// write may have read the table before it, so its result is thrown away.
+let gen = 0
 const listeners = new Set()
 const emit = () => listeners.forEach((fn) => fn(store))
+// contact_id -> tail of that contact's save queue (see saveRating).
+const saving = new Map()
 
 // Tests share module state across renders; reset between them.
 export function __resetRatingsForTest() {
   store = { ratings: new Map(), at: 0, error: null }
   inflight = null
+  gen = 0
+  saving.clear()
 }
 
 // rows: lead_ratings with contact:contacts(name, score, tier) embedded.
@@ -30,17 +37,26 @@ export function toRatingMap(rows) {
   )
 }
 
+const MAX_FETCHES = 5
+
 export function refreshRatings() {
   if (isDemoMode) return Promise.resolve(store)
   inflight ??= (async () => {
     try {
-      const { data, error } = await fetchAllSettled(() =>
-        supabase
-          .from('lead_ratings')
-          .select('contact_id, business_id, temperature, est_amount, close_month, rated_at, score_at_rating, contact:contacts(name, score, tier)')
-          .order('contact_id'),
-      )
-      store = error ? { ...store, error: error.message, at: Date.now() } : { ratings: toRatingMap(data), error: null, at: Date.now() }
+      let res
+      // A save landed while the fetch was in the air: that result may predate
+      // it, so fetch again (bounded) before replacing the store.
+      for (let i = 0; i < MAX_FETCHES; i++) {
+        const started = gen
+        res = await fetchAllSettled(() =>
+          supabase
+            .from('lead_ratings')
+            .select('contact_id, business_id, temperature, est_amount, close_month, rated_at, score_at_rating, contact:contacts(name, score, tier)')
+            .order('contact_id'),
+        )
+        if (res.error || started === gen) break
+      }
+      store = res.error ? { ...store, error: res.error.message, at: Date.now() } : { ratings: toRatingMap(res.data), error: null, at: Date.now() }
     } finally {
       inflight = null
       emit()
@@ -52,7 +68,7 @@ export function refreshRatings() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('focus', () => {
-    if (Date.now() - store.at > STALE_MS) refreshRatings()
+    if (listeners.size > 0 && Date.now() - store.at > STALE_MS) refreshRatings()
   })
 }
 
@@ -69,21 +85,41 @@ export function useLeadRatings() {
 }
 
 // -> { ok: true } | { ok: true, tagError } (rating saved, FUB tag not) | { ok: false, error }
-export async function saveRating({ contactId, businessId, temperature, estAmount = null, closeMonth = null }) {
-  const row = {
-    contact_id: contactId,
-    business_id: businessId,
-    temperature,
-    est_amount: estAmount ?? null,
-    close_month: closeMonth ?? null,
-    rated_at: new Date().toISOString(),
-  }
+//
+// Partial updates: estAmount and closeMonth left undefined are not sent, so the
+// saved value stays; null (or 0 for the amount) clears it. temperature and a
+// fresh rated_at always go: the table's trigger re-snapshots score_at_rating
+// whenever either changes.
+//
+// Saves for one contact run one after another. The FUB tag write is a
+// read-then-PUT of the whole tag list, so two overlapping re-rates could land
+// out of order and leave the older temperature on the lead.
+export function saveRating(args) {
+  const key = args.contactId
+  const run = (saving.get(key) || Promise.resolve()).then(() => doSave(args))
+  const tail = run.catch(() => {})
+  saving.set(key, tail)
+  tail.then(() => {
+    if (saving.get(key) === tail) saving.delete(key)
+  })
+  return run
+}
+
+async function doSave({ contactId, businessId, temperature, estAmount, closeMonth }) {
+  if (isDemoMode) return { ok: false, error: 'Demo mode' }
+  const row = { contact_id: contactId, business_id: businessId, temperature, rated_at: new Date().toISOString() }
+  if (estAmount !== undefined) row.est_amount = Number(estAmount) > 0 ? Number(estAmount) : null
+  if (closeMonth !== undefined) row.close_month = closeMonth || null
   const { error } = await supabase.from('lead_ratings').upsert(row, { onConflict: 'contact_id' })
   if (error) return { ok: false, error: error.message }
+  gen += 1
+  const existing = store.ratings.get(contactId)
   const ratings = new Map(store.ratings)
-  ratings.set(contactId, { ...(store.ratings.get(contactId) || {}), ...row })
+  // The trigger just re-snapshotted score_at_rating to the contact's score.
+  ratings.set(contactId, { ...(existing || {}), ...row, score_at_rating: existing?.current_score ?? null })
   store = { ...store, ratings }
   emit()
+  refreshRatings() // not awaited: the server's copy lands when it lands
   if (businessId !== 'bay') return { ok: true }
   const res = await invokeCrmAction(buildActionRequest({ action: 'set_temperature', contactId, temperature }))
   if (res?.status === 'ok') return { ok: true }
