@@ -482,6 +482,30 @@ describe('crm-action run: set_temperature (Bayway FUB tag)', () => {
     expect(res.body.status).toBe('refused')
     expect(res.body.error).toMatch(/Bayway only/)
   })
+
+  it('replays the stored reply when the same submit arrives twice', async () => {
+    const first = await go(tempReq('c-t', 'hot', 63))
+    const second = await go(tempReq('c-t', 'hot', 63))
+    expect(bay.send.setTemperature).toHaveBeenCalledTimes(1)
+    expect(second.body).toEqual({ ...first.body, replay: true })
+    expect(db.tables.crm_actions.filter((r) => r.action === 'set_temperature')).toHaveLength(1)
+  })
+
+  it('refuses when Bayway write-back is off', async () => {
+    db.tables.settings[0].value = { bay: false, mpg: false }
+    const res = await go(tempReq('c-t', 'hot', 64))
+    expect(res.body).toEqual({ status: 'refused', error: 'Write-back is off for Bayway' })
+    expect(bay.send.setTemperature).not.toHaveBeenCalled()
+  })
+
+  it('reports an error and skips the mirror when FUB fails', async () => {
+    bay.send.setTemperature.mockRejectedValueOnce(new Error('FUB PUT /people/6001 -> 500: down'))
+    const res = await go(tempReq('c-t', 'hot', 65))
+    expect(res.body.status).toBe('error')
+    expect(res.body.results[0]).toMatchObject({ step: 'set_temperature', ok: false, error: 'FUB PUT /people/6001 -> 500: down' })
+    expect(db.calls.filter((c) => c[0] === 'upsert' && c[1] === 'contacts')).toEqual([])
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'set_temperature', status: 'error' })
+  })
 })
 
 describe('crm-action run: create_contact (new lead)', () => {
