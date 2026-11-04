@@ -44,7 +44,7 @@ Three pieces, built in this order:
 - **Card and person sheet:** a temperature chip that opens the same three choices plus amount and close month.
 - **Close month** defaults from the temperature: Hot = next month, Warm = two months out, Cold = three months out. Editable per lead.
 - **Launch backfill:** a one-time **Rate leads** screen listing active leads with a connected call and no rating. Keyboard: H / W / C, Enter for next. Leads that already carry a FUB `hot` tag pre-select Hot.
-- **No decay.** A rating stays until Chandler changes it. The existing **Hot, going cold** bucket (Hot with no touch in `hot_cold_days`, 3) now keys off temperature Hot when rated. New flag **Cold, but active**: rated Cold, Engagement tier reached `hot` or score rose by ≥ 20 since the rating. Shown on the card and in Up Next's chips.
+- **No decay.** A rating stays until Chandler changes it. The existing **Hot, going cold** bucket (Hot with no touch in `hot_cold_days`, 3) now keys off temperature Hot when rated. New flag **Cold, but active**: rated Cold and the Engagement score rose by ≥ 20 since the rating (re-rating, even at the same temperature, re-snapshots the score and clears it). Shown on the card and the Person sheet.
 
 ### Storage
 
@@ -59,7 +59,7 @@ create table lead_ratings (
   close_month  date,             -- first of month; null = default from temperature
   rated_at     timestamptz not null default now(),
   rated_by     uuid not null,    -- auth.uid()
-  score_at_rating int            -- for "Cold, but active"
+  score_at_rating numeric        -- for "Cold, but active"
 );
 ```
 
