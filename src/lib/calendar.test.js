@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { liveEvents, sourceToBiz, dayKey, eventDayKey, dayLabel, timeLabel, groupByDay } from './calendar'
+import { liveEvents, sourceToBiz, dayKey, eventDayKey, dayLabel, timeLabel, groupByDay, calendarDaysSince, keyDaysBetween } from './calendar'
 
 // Build local-time ISO strings so tests are deterministic regardless of env TZ.
 const local = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi).toISOString()
@@ -114,5 +114,56 @@ describe('liveEvents', () => {
     ]
     expect(liveEvents(rows).map((e) => e.id)).toEqual(['c', 'd'])
     expect(liveEvents(null)).toEqual([])
+  })
+})
+
+// Days are the rep's local calendar days (America/Chicago). In Chicago these
+// ranges cross DST: spring forward 2026-03-08, fall back 2026-11-01. Built
+// with local constructors, so the expectations hold in any TZ.
+describe('calendarDaysSince', () => {
+  const at = (y, mo, d, h = 12, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime()
+
+  it('is null for missing or unparseable input', () => {
+    expect(calendarDaysSince(null, at(2026, 11, 4))).toBe(null)
+    expect(calendarDaysSince('', at(2026, 11, 4))).toBe(null)
+    expect(calendarDaysSince('nope', at(2026, 11, 4))).toBe(null)
+  })
+
+  it('counts calendar days, not 24h blocks: noon 9 days ago is 9 on a morning', () => {
+    // The Pipeline "2 missing · 9d" regression: elapsed time is 8d 23h here.
+    expect(calendarDaysSince(new Date(at(2026, 10, 26, 12)).toISOString(), at(2026, 11, 4, 10))).toBe(9)
+  })
+
+  it('same day is 0 and late last night is 1', () => {
+    expect(calendarDaysSince(at(2026, 11, 4, 0, 5), at(2026, 11, 4, 23, 55))).toBe(0)
+    expect(calendarDaysSince(at(2026, 11, 3, 23, 55), at(2026, 11, 4, 0, 5))).toBe(1)
+  })
+
+  it('crosses fall back (25-hour day) without gaining or losing a day', () => {
+    for (const [fh, nh] of [[0, 0], [12, 10], [23, 1], [1, 23]]) {
+      expect(calendarDaysSince(at(2026, 10, 31, fh), at(2026, 11, 2, nh))).toBe(2)
+      expect(calendarDaysSince(at(2026, 10, 26, fh), at(2026, 11, 4, nh))).toBe(9)
+    }
+    expect(calendarDaysSince(at(2026, 11, 1, 0, 30), at(2026, 11, 1, 23, 30))).toBe(0)
+  })
+
+  it('crosses spring forward (23-hour day) without gaining or losing a day', () => {
+    for (const [fh, nh] of [[0, 0], [12, 10], [23, 1], [1, 23]]) {
+      expect(calendarDaysSince(at(2026, 3, 7, fh), at(2026, 3, 9, nh))).toBe(2)
+      expect(calendarDaysSince(at(2026, 3, 1, fh), at(2026, 3, 10, nh))).toBe(9)
+    }
+    expect(calendarDaysSince(at(2026, 3, 8, 0, 30), at(2026, 3, 8, 23, 30))).toBe(0)
+  })
+
+  it('accepts ms timestamps as well as ISO strings', () => {
+    expect(calendarDaysSince(at(2026, 11, 1), at(2026, 11, 4))).toBe(3)
+  })
+})
+
+describe('keyDaysBetween', () => {
+  it('differences date keys across both DST changes', () => {
+    expect(keyDaysBetween('2026-10-31', '2026-11-02')).toBe(2)
+    expect(keyDaysBetween('2026-03-07', '2026-03-09')).toBe(2)
+    expect(keyDaysBetween('2026-11-04', '2026-10-26')).toBe(-9)
   })
 })

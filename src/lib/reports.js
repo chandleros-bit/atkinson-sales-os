@@ -1,6 +1,6 @@
 // Pure helpers for the Reports scoreboard. No React, no I/O — unit-testable.
 // Spec: docs/superpowers/specs/2026-07-13-phase12-reports-design.md
-import { dayKey } from './calendar'
+import { dayKey, keyDaysBetween } from './calendar'
 
 // One row per KPI in the Atkinson Reports doc.
 // source: 'live' (computed from synced data) | 'derived' (live but caveated,
@@ -254,8 +254,8 @@ export function weeksRemaining(win = sprintWindow(), now = Date.now()) {
   const today = dayKey(new Date(now).toISOString())
   const start = today < win.from ? win.from : today
   if (start >= win.to) return 0
-  const ms = new Date(`${win.to}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()
-  return Math.max(0, Math.ceil(ms / (7 * 86_400_000)))
+  // Count days on date keys: a fall-back hour would push an exact week to 2.
+  return Math.max(0, Math.ceil(keyDaysBetween(start, win.to) / 7))
 }
 
 export function neededPerWeek(value, target, remainingWeeks) {

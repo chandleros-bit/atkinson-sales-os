@@ -2,13 +2,12 @@
 // No React, no I/O — everything here is unit-testable.
 // Spec: docs/superpowers/specs/2026-07-09-phase3-overview-design.md
 import { bucketByDue } from './tasks'
+import { calendarDaysSince } from './calendar'
 
 export const NEW_LEAD = 'New Lead'
 export const STALE_TOUCH_DAYS = 7
 // FUB syncs every 2 minutes (migration 0038): five missed runs is stuck.
 export const SYNC_STALE_MINUTES = 10
-
-const DAY_MS = 86_400_000
 
 // Bayway "Needs Attention" surfaces contacts tagged HOT in FollowUpBoss. Tags
 // live in contacts.raw.tags (a string array); match "hot" case-insensitively.
@@ -22,9 +21,10 @@ export function isMpgOpen(stage) {
   return String(stage || '').trim().toLowerCase() === 'open'
 }
 
+// Whole local calendar days, not elapsed 24-hour blocks (see calendar.js).
 export function daysSince(iso, now = Date.now()) {
   if (!iso) return null
-  return Math.floor((now - new Date(iso).getTime()) / DAY_MS)
+  return calendarDaysSince(iso, now)
 }
 
 export function lastTouchLabel(iso, now = Date.now()) {

@@ -178,6 +178,12 @@ describe('sprint helpers', () => {
     expect(rollupMetrics(sprintRows(rows))).toEqual({ mpg_merchants_signed: 3 })
   })
 
+  it('counts an exact week across fall back as one week, not two', () => {
+    const win = { from: '2026-10-29', to: '2026-11-05' }
+    expect(weeksRemaining(win, new Date(2026, 9, 29, 9).getTime())).toBe(1)
+    expect(weeksRemaining({ from: '2026-03-05', to: '2026-03-12' }, new Date(2026, 2, 5, 9).getTime())).toBe(1)
+  })
+
   it('calculates remaining weekly pace requirements', () => {
     const now = new Date(2026, 6, 30, 12, 0, 0).getTime()
     const remaining = weeksRemaining(undefined, now)
