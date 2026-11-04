@@ -74,7 +74,7 @@ RLS: the owner reads and writes; the assistant reads Bayway rows only (see secti
 
 - `isHotTag` stops reading tags: the `hot` tag now belongs to temperature. Tier `hot` comes from the score alone.
 - `is_hot` = temperature is Hot when the lead is rated, else Engagement tier `hot` (Bayway) or `mpg_hot_statuses` (MPG).
-- UI labels: the tier shows as **Engagement: high / medium / active / none**, never "hot"/"warm", so the words don't collide.
+- UI labels: the tier shows as **Engagement: high / medium / active / none** inline (Person sheet) and as **High engagement / Medium engagement / Active / Never Contacted** on the Priority Leads tabs; never bare "Hot"/"Warm", so the words don't collide.
 
 ### Where it shows
 
