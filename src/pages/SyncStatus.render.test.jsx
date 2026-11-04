@@ -30,7 +30,13 @@ vi.mock('../lib/supabase', () => {
         chain(() => {
           if (table !== 'sync_log') return { data: [], error: null }
           state.reads += 1
-          return { data: [{ source: 'fub', ran_at: state.fubAt, status: 'ok', records_upserted: 18, message: null }], error: null }
+          return {
+            data: [
+              { source: 'fub', ran_at: state.fubAt, status: 'ok', records_upserted: 18, message: null },
+              { source: 'briefing-owner', ran_at: state.fubAt, status: 'ok', records_upserted: 1, message: 'sent' },
+            ],
+            error: null,
+          }
         }),
       functions: { invoke: async () => ({ data: { ok: true }, error: null }) },
     },
@@ -69,6 +75,12 @@ describe('SyncStatus', () => {
     }
     expect(state.reads).toBeGreaterThan(first + 2)
     expect(el.textContent).toMatch(/FollowUpBoss \(Bayway\)BAYWAY(just now|1m ago)/)
+  })
+
+  it('lists the daily briefing source', async () => {
+    await act(async () => root.render(<MemoryRouter><SyncStatus /></MemoryRouter>))
+    await act(async () => {})
+    expect(el.textContent).toContain('Daily briefing (you)')
   })
 
   it('does not refetch while the tab is hidden, then catches up when shown', async () => {

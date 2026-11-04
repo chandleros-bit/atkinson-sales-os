@@ -17,6 +17,7 @@ const SOURCE_LABELS = {
   'zoho-activity': { label: 'Zoho activity (MPG)', biz: 'mpg' },
   'outlook-mpg': { label: 'Outlook — MPG', biz: 'mpg' },
   'outlook-bayway': { label: 'Outlook — Bayway', biz: 'bay' },
+  'briefing-owner': { label: 'Daily briefing (you)', biz: 'bay' },
 }
 
 // Quick Actions write-back health (crm_actions, last 24 hours).
