@@ -119,7 +119,7 @@ async function doSave({ contactId, businessId, temperature, estAmount, closeMont
   ratings.set(contactId, { ...(existing || {}), ...row, score_at_rating: existing?.current_score ?? null })
   store = { ...store, ratings }
   emit()
-  refreshRatings() // not awaited: the server's copy lands when it lands
+  refreshRatings().catch(() => {}) // not awaited: the server's copy lands when it lands
   if (businessId !== 'bay') return { ok: true }
   const res = await invokeCrmAction(buildActionRequest({ action: 'set_temperature', contactId, temperature }))
   if (res?.status === 'ok') return { ok: true }
