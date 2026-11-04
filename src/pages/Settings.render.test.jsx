@@ -9,6 +9,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const upserts = []
 let upsertError = null
+let loadError = null
 let refreshes = 0
 vi.mock('../lib/supabase', () => {
   // from(table): settings answers with the saved odds; sync_log (the header's
@@ -19,7 +20,10 @@ vi.mock('../lib/supabase', () => {
       eq: () => q,
       order: () => q,
       limit: () => q,
-      maybeSingle: async () => ({ data: table === 'settings' ? { value: { temp_odds: { hot: 70 } } } : null, error: null }),
+      maybeSingle: async () => ({
+        data: table === 'settings' && !loadError ? { value: { temp_odds: { hot: 70 } } } : null,
+        error: table === 'settings' ? loadError : null,
+      }),
       upsert: async (row) => {
         upserts.push(row)
         return { error: upsertError }
@@ -42,6 +46,7 @@ let el
 beforeEach(() => {
   upserts.length = 0
   upsertError = null
+  loadError = null
   refreshes = 0
   el = document.createElement('div')
   document.body.appendChild(el)
@@ -65,6 +70,7 @@ describe('Settings: forecast odds', () => {
     await act(async () => {})
     const hot = el.querySelector('input[aria-label="Hot odds"]')
     const warm = el.querySelector('input[aria-label="Warm odds"]')
+    expect(saveButton().disabled).toBe(false)
     expect(hot.value).toBe('70')
     expect(warm.value).toBe('30')
     await type(warm, '35')
@@ -84,5 +90,15 @@ describe('Settings: forecast odds', () => {
     expect(upserts[0].value.temp_odds.cold).toBe(100)
     expect(el.textContent).toContain('Not saved: denied')
     expect(refreshes).toBe(0)
+  })
+
+  it('keeps Save disabled after a load error', async () => {
+    loadError = { message: 'offline' }
+    await act(async () => root.render(<MemoryRouter><Settings /></MemoryRouter>))
+    await act(async () => {})
+    expect(el.textContent).toContain('Could not load saved odds: offline')
+    expect(saveButton().disabled).toBe(true)
+    await act(async () => saveButton().click())
+    expect(upserts).toHaveLength(0)
   })
 })

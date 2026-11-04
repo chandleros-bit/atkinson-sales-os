@@ -105,14 +105,17 @@ export function scoreContact(activities, { hasHotTag = false, now = Date.now() }
 }
 
 // Precedence: hot -> active -> warm -> never_contacted.
-// This account logs almost no FUB activity, so intent signals (the manual HOT
-// tag and pipeline stage) rank ABOVE activity volume — otherwise a HOT or
-// in-pipeline lead with no logged call would wrongly read as "never contacted".
-//  - hot: high score AND recent activity. (score-fub-leads no longer passes
-//    hasHotTag: the Hot tag is the temperature rating since 2026-11-03.)
+// This account logs almost no FUB activity, so pipeline stage ranks ABOVE
+// activity volume — otherwise an in-pipeline lead with no logged call would
+// wrongly read as "never contacted".
+// The nightly job (score-fub-leads) no longer passes hasHotTag: the FUB Hot
+// tag is the temperature rating since 2026-11-03, not an input to tier. So the
+// tier comes from score/recency and pipeline stage only. (hasHotTag stays a
+// parameter, default false, for tests and back-compat.)
+//  - hot: high score AND recent activity.
 //  - active: currently in an open pipeline stage.
 //  - warm: has any logged activity but isn't hot/active.
-//  - never_contacted: no HOT tag, not in pipeline, and zero activity rows.
+//  - never_contacted: not in pipeline and zero activity rows.
 export function assignTier({
   score,
   lastActivityAt,

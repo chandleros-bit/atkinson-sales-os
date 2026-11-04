@@ -21,6 +21,9 @@ const FIELDS = [
 export default function Settings() {
   const [form, setForm] = useState(() => resolveForecast(null))
   const [status, setStatus] = useState(null)
+  // Save stays off until the stored odds have loaded: saving the defaults
+  // over a failed or pending load would overwrite the real ones.
+  const [loaded, setLoaded] = useState(isDemoMode)
 
   useEffect(() => {
     if (isDemoMode) return undefined
@@ -29,7 +32,10 @@ export default function Settings() {
       .then(({ data, error }) => {
         if (!live) return
         if (error) setStatus(`Could not load saved odds: ${error.message}`)
-        else setForm(resolveForecast(data?.value))
+        else {
+          setForm(resolveForecast(data?.value))
+          setLoaded(true)
+        }
       })
       .catch((e) => live && setStatus(`Could not load saved odds: ${e?.message || e}`))
     return () => {
@@ -92,7 +98,12 @@ export default function Settings() {
           </label>
         </div>
         <div className="mt-4 flex items-center gap-3">
-          <button type="button" onClick={save} className="btn-primary rounded-[10px] px-4 py-2 text-[13px] font-semibold">
+          <button
+            type="button"
+            onClick={save}
+            disabled={!loaded}
+            className="btn-primary rounded-[10px] px-4 py-2 text-[13px] font-semibold disabled:opacity-50"
+          >
             Save odds
           </button>
           {status && <span className="text-[12.5px] text-muted">{status}</span>}
