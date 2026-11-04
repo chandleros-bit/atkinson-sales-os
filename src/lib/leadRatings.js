@@ -15,7 +15,9 @@ const firstOfMonth = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`
 export function defaultCloseMonth(temperature, now = Date.now(), offsets = DEFAULT_CLOSE_OFFSET) {
   const d = new Date(now)
   d.setDate(1)
-  d.setMonth(d.getMonth() + (offsets?.[temperature] ?? DEFAULT_CLOSE_OFFSET[temperature] ?? 1))
+  const raw = offsets?.[temperature]
+  const n = raw == null || raw === '' ? NaN : Number(raw)
+  d.setMonth(d.getMonth() + (Number.isFinite(n) ? n : DEFAULT_CLOSE_OFFSET[temperature] ?? 1))
   return firstOfMonth(d)
 }
 
@@ -39,13 +41,14 @@ export function effectiveHot(row) {
 
 const RANK = { hot: 0, warm: 1, cold: 3 }
 export function temperatureRank(row) {
-  return row?.temperature ? RANK[row.temperature] : 2
+  const t = row?.temperature
+  return t && Object.hasOwn(RANK, t) ? RANK[t] : 2
 }
 
-// rating carries current_score / current_tier from contacts (useLeadRatings).
+// rating carries current_score from contacts (useLeadRatings). Only the score
+// rise since the rating counts; a tier flag could never be dismissed.
 export function coldButActive(rating) {
   if (!rating || rating.temperature !== 'cold') return false
-  if (rating.current_tier === 'hot') return true
   const now = rating.current_score
   const then = rating.score_at_rating
   return now != null && then != null && now - then >= COLD_ACTIVE_RISE

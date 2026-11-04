@@ -2,8 +2,10 @@
 -- lead after a conversation: Hot / Warm / Cold, plus an optional estimated
 -- amount (Bayway) and expected close month. OS-owned; Bayway ratings are also
 -- mirrored to FUB as a tag by crm-action set_temperature.
--- score_at_rating snapshots contacts.score whenever the temperature changes,
--- so the UI can flag "Cold, but active" (score rose since the rating).
+-- score_at_rating snapshots contacts.score whenever the temperature changes or
+-- the lead is re-rated (rated_at changes), so the UI can flag "Cold, but
+-- active" (score rose since the rating). The trigger also pins business_id to
+-- the contact's, whatever the client sent.
 -- RLS: any signed-in user, as the rest of the schema today. The assistant
 -- login (spec section 3) tightens this.
 
@@ -15,7 +17,7 @@ create table if not exists public.lead_ratings (
   close_month     date check (close_month is null or extract(day from close_month) = 1),
   rated_at        timestamptz not null default now(),
   rated_by        uuid not null default auth.uid(),
-  score_at_rating int
+  score_at_rating numeric
 );
 
 create index if not exists lead_ratings_business_idx on public.lead_ratings (business_id);
@@ -41,10 +43,23 @@ create policy "authenticated delete lead_ratings" on public.lead_ratings
 create or replace function public.lead_ratings_snapshot()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
+declare
+  c_business text;
+  c_score numeric;
 begin
-  if tg_op = 'INSERT' or new.temperature is distinct from old.temperature then
-    new.score_at_rating := (select c.score from public.contacts c where c.id = new.contact_id);
+  select c.business_id, c.score into c_business, c_score
+    from public.contacts c where c.id = new.contact_id;
+  if not found then
+    raise exception 'lead_ratings: contact % not found', new.contact_id;
+  end if;
+  new.business_id := c_business;
+  if tg_op = 'INSERT'
+     or new.temperature is distinct from old.temperature
+     or new.rated_at is distinct from old.rated_at then
+    new.score_at_rating := c_score;
   end if;
   return new;
 end;
@@ -55,6 +70,7 @@ create trigger lead_ratings_snapshot
   before insert or update on public.lead_ratings
   for each row execute function public.lead_ratings_snapshot();
 
+-- Defaults mirror DEFAULT_CLOSE_OFFSET (src/lib/leadRatings.js) and DEFAULT_FORECAST (src/lib/forecast.js); change them together.
 insert into public.settings (key, value)
 values (
   'forecast',
@@ -66,3 +82,10 @@ values (
   }'::jsonb
 )
 on conflict (key) do nothing;
+
+drop policy if exists "authenticated insert forecast settings" on public.settings;
+create policy "authenticated insert forecast settings" on public.settings
+  for insert to authenticated with check (key = 'forecast');
+drop policy if exists "authenticated update forecast settings" on public.settings;
+create policy "authenticated update forecast settings" on public.settings
+  for update to authenticated using (key = 'forecast') with check (key = 'forecast');

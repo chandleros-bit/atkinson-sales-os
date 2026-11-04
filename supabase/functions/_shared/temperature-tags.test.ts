@@ -15,6 +15,9 @@ describe('retagTemperature', () => {
   it('refuses an unknown temperature', () => {
     expect(() => retagTemperature([], 'lukewarm')).toThrow('Unknown temperature: lukewarm')
   })
+  it('refuses names inherited from Object.prototype', () => {
+    expect(() => retagTemperature([], 'constructor')).toThrow('Unknown temperature: constructor')
+  })
   it('names the tags', () => {
     expect(TEMPERATURE_TAGS).toEqual({ hot: 'Hot', warm: 'Warm', cold: 'Cold' })
   })

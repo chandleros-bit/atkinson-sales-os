@@ -5,7 +5,7 @@ export const TEMPERATURE_TAGS = { hot: 'Hot', warm: 'Warm', cold: 'Cold' }
 const TEMP_NAMES = new Set(Object.keys(TEMPERATURE_TAGS))
 
 export function retagTemperature(tags, temperature) {
-  if (!TEMPERATURE_TAGS[temperature]) throw new Error(`Unknown temperature: ${temperature}`)
+  if (!Object.hasOwn(TEMPERATURE_TAGS, temperature)) throw new Error(`Unknown temperature: ${temperature}`)
   const kept = (Array.isArray(tags) ? tags : []).filter((t) => !TEMP_NAMES.has(String(t).trim().toLowerCase()))
   return [...kept, TEMPERATURE_TAGS[temperature]]
 }

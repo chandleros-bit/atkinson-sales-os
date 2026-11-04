@@ -21,9 +21,18 @@ describe('close month', () => {
   it('takes custom offsets', () => {
     expect(defaultCloseMonth('hot', NOW, { hot: 0 })).toBe('2026-11-01')
   })
+  it('coerces a string offset and ignores a non-numeric one', () => {
+    expect(defaultCloseMonth('hot', NOW, { hot: '2' })).toBe('2027-01-01')
+    expect(defaultCloseMonth('hot', NOW, { hot: 'soon' })).toBe('2026-12-01')
+  })
+  it('does not overflow at the end of a long month', () => {
+    expect(defaultCloseMonth('hot', new Date('2027-01-31T10:00:00').getTime())).toBe('2027-02-01')
+    expect(defaultCloseMonth('cold', new Date('2026-12-31T23:30:00').getTime())).toBe('2027-03-01')
+  })
   it('keeps a saved close month', () => {
     expect(closeMonthOf({ temperature: 'cold', close_month: '2026-11-01' }, NOW)).toBe('2026-11-01')
     expect(closeMonthOf({ temperature: 'hot', close_month: null }, NOW)).toBe('2026-12-01')
+    expect(closeMonthOf({ temperature: 'hot', close_month: '2026-11-01T00:00:00' }, NOW)).toBe('2026-11-01')
   })
 })
 
@@ -51,13 +60,20 @@ describe('effectiveHot and rank', () => {
   it('ranks Hot, Warm, unrated, Cold', () => {
     expect([{ temperature: 'cold' }, {}, { temperature: 'warm' }, { temperature: 'hot' }].map(temperatureRank)).toEqual([3, 2, 1, 0])
   })
+  it('treats an unknown temperature as unrated', () => {
+    expect(temperatureRank({ temperature: 'constructor' })).toBe(2)
+    expect(temperatureRank({ temperature: 'lukewarm' })).toBe(2)
+  })
 })
 
 describe('coldButActive', () => {
-  it('fires for a Cold lead whose score rose 20+ since the rating, or whose tier is hot', () => {
+  it('fires for a Cold lead whose score rose 20+ since the rating', () => {
     expect(coldButActive({ temperature: 'cold', score_at_rating: 10, current_score: 30 })).toBe(true)
     expect(coldButActive({ temperature: 'cold', score_at_rating: 10, current_score: 29 })).toBe(false)
-    expect(coldButActive({ temperature: 'cold', score_at_rating: null, current_score: 90, current_tier: 'hot' })).toBe(true)
+  })
+  it('only the score rise counts: a hot tier alone does not fire, missing scores do not fire', () => {
+    expect(coldButActive({ temperature: 'cold', score_at_rating: null, current_score: 90, current_tier: 'hot' })).toBe(false)
+    expect(coldButActive({ temperature: 'cold', score_at_rating: 10, current_score: null })).toBe(false)
   })
   it('never for other temperatures or no rating', () => {
     expect(coldButActive({ temperature: 'warm', score_at_rating: 0, current_score: 90 })).toBe(false)
