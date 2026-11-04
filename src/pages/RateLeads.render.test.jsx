@@ -10,7 +10,18 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 const saved = []
 let nextResult = { ok: true }
 const toasts = []
+const mocks = vi.hoisted(() => ({ demo: false, queueError: null, ratingsError: null }))
 vi.mock('../components/Toaster', () => ({ showToast: (t) => toasts.push(t) }))
+// The header's sync dot reads sync_log; give it an empty answer.
+vi.mock('../lib/supabase', () => {
+  const q = { select: () => q, eq: () => q, order: () => q, limit: () => q, maybeSingle: async () => ({ data: null, error: null }) }
+  return {
+    get isDemoMode() {
+      return mocks.demo
+    },
+    supabase: { from: () => q },
+  }
+})
 vi.mock('../lib/usePriorityQueue', () => ({
   usePriorityQueue: () => ({
     signals: [
@@ -20,13 +31,13 @@ vi.mock('../lib/usePriorityQueue', () => ({
       { id: 'd', business_id: 'bay', name: 'Di Rated', stage: 'Open', is_active: true, last_outbound_call_at: '2026-10-28T10:00:00Z' },
     ],
     loading: false,
-    error: null,
+    error: mocks.queueError,
   }),
 }))
 const ratingMap = new Map([['d', { temperature: 'warm' }]])
 vi.mock('../lib/useLeadRatings', () => ({
   useLeadRatings: () => ratingMap,
-  useLeadRatingsStatus: () => ({ loading: false, error: null }),
+  useLeadRatingsStatus: () => ({ loading: false, error: mocks.ratingsError }),
   saveRating: async (r) => {
     saved.push(r)
     return nextResult
@@ -41,6 +52,9 @@ beforeEach(() => {
   saved.length = 0
   toasts.length = 0
   nextResult = { ok: true }
+  mocks.demo = false
+  mocks.queueError = null
+  mocks.ratingsError = null
   el = document.createElement('div')
   document.body.appendChild(el)
   root = createRoot(el)
@@ -99,12 +113,67 @@ describe('Rate leads', () => {
     nextResult = { ok: false, error: 'boom' }
     await key('h')
     expect(toasts).toHaveLength(1)
-    expect(toasts[0]).toMatchObject({ tone: 'error' })
+    expect(toasts[0]).toMatchObject({ tone: 'error', text: expect.stringContaining('boom') })
     expect(el.textContent).toContain('Bo Called')
     nextResult = { ok: true, tagError: 'FUB down' }
     await key('w')
     expect(toasts).toHaveLength(2)
-    expect(toasts[1].text).toContain('FUB')
+    expect(toasts[1]).toMatchObject({ tone: 'error', text: 'Temperature saved; FUB tag not updated: FUB down' })
     expect(el.textContent).toContain('All rated')
+  })
+
+  it('ignores auto-repeat keydowns', async () => {
+    await mount()
+    await key('h', { repeat: true })
+    expect(saved).toHaveLength(0)
+    expect(el.textContent).toContain('Ann Active')
+  })
+
+  it('Enter with no suggestion skips without saving, and always swallows the Enter', async () => {
+    await mount()
+    await key('s') // Ann (suggested Hot) -> Bo, who has no suggestion
+    expect(el.textContent).toContain('Bo Called')
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    await act(async () => window.dispatchEvent(enter))
+    expect(enter.defaultPrevented).toBe(true)
+    expect(saved).toHaveLength(0)
+    expect(el.textContent).toContain('All rated')
+  })
+
+  it('ignores keys pressed inside a dialog opened over the page', async () => {
+    await mount()
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    const inner = document.createElement('div')
+    dialog.appendChild(inner)
+    document.body.appendChild(dialog)
+    await key('h', {}, inner)
+    await key('Enter', {}, inner)
+    expect(saved).toHaveLength(0)
+    expect(el.textContent).toContain('Ann Active')
+    dialog.remove()
+  })
+
+  it('shows a ratings error and neither a lead nor All rated', async () => {
+    mocks.ratingsError = 'ratings down'
+    await mount()
+    expect(el.textContent).toContain('ratings down')
+    expect(el.textContent).not.toContain('Ann Active')
+    expect(el.textContent).not.toContain('All rated')
+  })
+
+  it('does not say All rated when the queue failed to load', async () => {
+    mocks.queueError = 'queue down'
+    await mount()
+    expect(el.textContent).toContain('queue down')
+    expect(el.textContent).not.toContain('All rated')
+  })
+
+  it('says it is not available in demo mode instead of All rated', async () => {
+    mocks.demo = true
+    await mount()
+    expect(el.textContent).toContain('Not available in demo mode.')
+    expect(el.textContent).not.toContain('All rated')
+    expect(el.textContent).not.toContain('Ann Active')
   })
 })
