@@ -91,7 +91,36 @@ describe('forecastByMonth', () => {
       month: '2026-11',
       bay: { expected: 11000, funded: 5000, weighted: 6000, est: 1 },
       mpg: { expected: null, accounts: 0.9, est: 0 },
+      undated: { count: 0, weighted: 0 },
       total: 11000,
+    })
+  })
+  it('undated unfunded lines are counted across all lines, not per month', () => {
+    const lines = [
+      { book: 'bay', month: null, payout: 4000, odds: 75, funded: false, est: false },
+      { book: 'bay', month: null, payout: 1000, odds: 100, funded: true, est: false },
+      { book: 'bay', month: '2026-12', payout: 2000, odds: 50, funded: false, est: false },
+    ]
+    const r = forecastByMonth(lines, '2026-11')
+    expect(r.undated).toEqual({ count: 1, weighted: 3000 })
+    expect(r.total).toBe(0)
+    expect(forecastByMonth(lines, '2026-12').undated).toEqual({ count: 1, weighted: 3000 })
+  })
+  it('works end to end on forecastLines output', () => {
+    const lines = forecastLines({
+      ratings: map(rating({ contact_id: 'a', est_amount: 200000, close_month: '2026-11-01' })),
+      loans: [
+        loan({ id: 1, stage_group: 'funded', funded_on: '2026-11-02', amount: 400000 }),
+        loan({ id: 2, stage_group: 'closing', firm_closing_on: '2026-11-25', amount: 400000 }),
+      ],
+      rates, settings, avgLoan: null, mpgAccount: null, now: NOW,
+    })
+    expect(forecastByMonth(lines, '2026-11')).toEqual({
+      month: '2026-11',
+      bay: { expected: 5000 + 4750 + 1500, funded: 5000, weighted: 6250, est: 0 },
+      mpg: { expected: null, accounts: 0, est: 0 },
+      undated: { count: 0, weighted: 0 },
+      total: 11250,
     })
   })
 })
@@ -105,5 +134,108 @@ describe('sortPaysFirst', () => {
     ]
     const rows = ['none', 'late', 'soon-small', 'soon-big'].map((id) => ({ id }))
     expect(sortPaysFirst(rows, lines).map((r) => r.id)).toEqual(['soon-big', 'soon-small', 'late', 'none'])
+  })
+  it('ignores funded lines, and on a tie keeps the larger weighted line', () => {
+    const lines = [
+      { contactId: 'repeat', payDate: '2024-03-01', payout: 9000, odds: 100, funded: true },
+      { contactId: 'repeat', payDate: '2026-12-01', payout: 1000, odds: 60 },
+      { contactId: 'other', payDate: '2026-11-15', payout: 1000, odds: 60 },
+      { contactId: 'tie', payDate: '2026-11-20', payout: 100, odds: 60 },
+      { contactId: 'tie', payDate: '2026-11-20', payout: 9000, odds: 60 },
+      { contactId: 'tie2', payDate: '2026-11-20', payout: 3000, odds: 60 },
+    ]
+    const rows = ['repeat', 'other', 'tie', 'tie2'].map((id) => ({ id }))
+    expect(sortPaysFirst(rows, lines).map((r) => r.id)).toEqual(['other', 'tie', 'tie2', 'repeat'])
+  })
+})
+
+describe('resolveForecast bounds', () => {
+  it('clamps odds, truncates offsets, treats blank strings as unset', () => {
+    expect(resolveForecast({ temp_odds: { hot: 150, warm: -20, cold: ' ' } }).temp_odds).toEqual({ hot: 100, warm: 0, cold: 10 })
+    expect(resolveForecast({ arive_odds: { prospect: 150 } }).arive_odds.prospect).toBe(100)
+    expect(resolveForecast({ close_offset_months: { hot: 1.7, warm: -3, cold: ' ' } }).close_offset_months).toEqual({ hot: 1, warm: 0, cold: 3 })
+    expect(resolveForecast({ temp_odds: { hot: ' 45 ' } }).temp_odds.hot).toBe(45)
+  })
+})
+
+describe('avgFundedLoan scenarios', () => {
+  it('ignores scenario loans', () => {
+    const loans = [
+      loan({ id: 1, stage_group: 'funded', funded_on: '2026-09-01', amount: 300000 }),
+      loan({ id: 2, stage_group: 'funded', funded_on: '2026-09-01', amount: 900000, scenario_override: true }),
+    ]
+    expect(avgFundedLoan(loans, NOW)).toBe(300000)
+  })
+})
+
+describe('forecastLines: deal identity, overdue, undated, bad data', () => {
+  const run = (o) => forecastLines({ rates, settings, avgLoan: 400000, mpgAccount: null, now: NOW, loans: [], ratings: new Map(), ...o })
+
+  it('a past client funded long ago, rated Hot now, counts the rating as a new deal', () => {
+    const lines = run({
+      ratings: map(rating({ contact_id: 'c', rated_at: '2026-11-01T12:00:00' })),
+      loans: [loan({ id: 1, contact_id: 'c', stage_group: 'funded', funded_on: '2024-05-01' })],
+    })
+    expect(lines.map((l) => l.key).sort()).toEqual(['loan:1', 'rating:c'])
+  })
+  it('rated Hot, then the loan funds this month: only the funded loan counts', () => {
+    const lines = run({
+      ratings: map(rating({ contact_id: 'c', rated_at: '2026-10-15T12:00:00' })),
+      loans: [loan({ id: 1, contact_id: 'c', stage_group: 'funded', funded_on: '2026-11-02' })],
+    })
+    expect(lines.map((l) => l.key)).toEqual(['loan:1'])
+  })
+  it('an adverse loan updated before the rating does not hide it; one updated after does', () => {
+    const adverse = (updated_at) => loan({ id: 2, contact_id: 'c', stage_group: 'adverse', updated_at })
+    const r = map(rating({ contact_id: 'c', rated_at: '2026-11-03T08:00:00' }))
+    expect(run({ ratings: r, loans: [adverse('2026-10-05T10:00:00')] }).map((l) => l.key)).toEqual(['rating:c'])
+    expect(run({ ratings: r, loans: [adverse('2026-11-03T10:00:00')] })).toEqual([])
+    expect(run({ ratings: r, loans: [loan({ id: 3, contact_id: 'c', stage_group: 'adverse', last_seen_at: '2026-10-05T10:00:00' })] }).map((l) => l.key)).toEqual(['rating:c'])
+    expect(run({ ratings: r, loans: [loan({ id: 4, contact_id: 'c', stage_group: 'adverse' })] })).toEqual([])
+  })
+  it('a scenario loan never hides a rating', () => {
+    const lines = run({
+      ratings: map(rating({ contact_id: 'c' })),
+      loans: [loan({ id: 1, contact_id: 'c', scenario_auto: true, firm_closing_on: '2026-11-10' })],
+    })
+    expect(lines.map((l) => l.key)).toEqual(['rating:c'])
+  })
+  it('an unfunded line dated before this month moves into this month, flagged overdue', () => {
+    const lines = run({
+      ratings: map(rating({ contact_id: 'm', close_month: '2026-08-01' })),
+      loans: [loan({ id: 1, firm_closing_on: '2026-10-20' }), loan({ id: 2, stage_group: 'funded', funded_on: '2026-10-20' })],
+    })
+    expect(lines.find((l) => l.key === 'loan:1')).toMatchObject({ month: '2026-11', overdue: true, payDate: '2026-10-20' })
+    expect(lines.find((l) => l.key === 'rating:m')).toMatchObject({ month: '2026-11', overdue: true })
+    expect(lines.find((l) => l.key === 'loan:2')).toMatchObject({ month: '2026-10', overdue: false })
+  })
+  it('an open loan with no closing date and no rating is undated', () => {
+    const lines = run({ loans: [loan({ id: 1 })] })
+    expect(lines[0]).toMatchObject({ month: null, payDate: null, overdue: false })
+    expect(forecastByMonth(lines, '2026-11').undated).toEqual({ count: 1, weighted: 3750 })
+  })
+  it('an open loan with a rating but no firm closing date uses the rating close month', () => {
+    const lines = run({
+      ratings: map(rating({ contact_id: 'c', close_month: '2026-12-01' })),
+      loans: [loan({ id: 1, contact_id: 'c' })],
+    })
+    expect(lines[0]).toMatchObject({ month: '2026-12', payDate: '2026-12-01' })
+  })
+  it('an assisted loan pays at the assisted rate', () => {
+    const lines = run({ loans: [loan({ id: 1, role: 'assisted', firm_closing_on: '2026-11-20' })] })
+    expect(lines[0].payout).toBe(3000)
+  })
+  it('unknown temperature or stage emits no line and no NaN', () => {
+    const lines = run({
+      ratings: map(rating({ contact_id: 'x', temperature: 'lukewarm' }), rating({ contact_id: 'y' })),
+      loans: [loan({ id: 1, stage_group: 'mystery' })],
+    })
+    expect(lines.map((l) => l.key)).toEqual(['rating:y'])
+    const totals = forecastByMonth(lines, '2026-12')
+    expect(Number.isFinite(totals.total)).toBe(true)
+    expect(Number.isFinite(totals.bay.expected)).toBe(true)
+  })
+  it('an unknown business id is skipped', () => {
+    expect(run({ ratings: map(rating({ contact_id: 'z', business_id: 'other' })) })).toEqual([])
   })
 })
