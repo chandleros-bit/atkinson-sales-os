@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { useAuth } from './AuthContext'
 
 // biz: 'all' | 'mpg' | 'bay'
 const BusinessContext = createContext(null)
@@ -10,17 +11,21 @@ export const BIZ = {
 }
 
 export function BusinessProvider({ children }) {
-  const [biz, setBiz] = useState(() => localStorage.getItem('biz-filter') || 'all')
+  const { role } = useAuth() || {}
+  const [picked, setPicked] = useState(() => localStorage.getItem('biz-filter') || 'all')
+  // The assistant login is Bayway only: the switch is hidden and fixed.
+  const biz = role === 'assistant' ? 'bay' : picked
+  const setBiz = role === 'assistant' ? () => {} : setPicked
 
   useEffect(() => {
-    localStorage.setItem('biz-filter', biz)
+    if (role !== 'assistant') localStorage.setItem('biz-filter', biz)
     // Drives the --accent CSS variable swap for single-business theming.
     if (biz === 'all') {
       document.documentElement.removeAttribute('data-biz')
     } else {
       document.documentElement.setAttribute('data-biz', biz)
     }
-  }, [biz])
+  }, [biz, role])
 
   // matches(rowBiz) -> should a row tagged rowBiz be visible under the current filter
   const matches = (rowBiz) => biz === 'all' || rowBiz === biz

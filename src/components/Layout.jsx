@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
 import { lateLeadCount, titleFor } from '../lib/cardHealth'
+import { canVisit } from '../lib/roles'
 
 // Under 640px (phones) the sidebar becomes a slide-in menu behind a top bar,
 // and the pages used most get a bottom tab bar, so pages get the full width.
@@ -39,6 +40,7 @@ export const pageTitle = (path) => TITLES.find(([re]) => re.test(path))?.[1] || 
 
 function MobileBar({ onMenu }) {
   const { pathname } = useLocation()
+  const { role } = useAuth()
   return (
     <div className="sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-2 border-b border-line bg-panel/95 px-4 py-2 backdrop-blur sm:hidden">
       <button
@@ -52,9 +54,11 @@ function MobileBar({ onMenu }) {
       <div className="min-w-0 flex-1 truncate text-[15px] font-semibold" data-page-title>
         {pageTitle(pathname)}
       </div>
-      <div className="w-[164px] flex-none">
-        <BusinessFilter compact />
-      </div>
+      {role !== 'assistant' && (
+        <div className="w-[164px] flex-none">
+          <BusinessFilter compact />
+        </div>
+      )}
       <button
         type="button"
         onClick={openSearch}
@@ -70,15 +74,18 @@ function MobileBar({ onMenu }) {
 // Desktop top bar: the page's name, the business switch and + New.
 function TopBar() {
   const { pathname } = useLocation()
+  const { role } = useAuth()
   return (
     <div className="mb-7 hidden h-[72px] items-center justify-between gap-4 border-b border-line sm:flex">
       <div className="truncate text-[22px] font-semibold tracking-[-0.4px]" data-page-title>
         {pageTitle(pathname)}
       </div>
       <div className="flex flex-none items-center gap-3">
-        <div className="w-[248px]">
-          <BusinessFilter />
-        </div>
+        {role !== 'assistant' && (
+          <div className="w-[248px]">
+            <BusinessFilter />
+          </div>
+        )}
         <NewMenu />
       </div>
     </div>
@@ -89,6 +96,7 @@ function TopBar() {
 // filter (/pipeline picks the book).
 function BottomNav() {
   const { pathname } = useLocation()
+  const { role } = useAuth()
   const items = [
     { to: '/', label: 'Home', icon: 'home', on: pathname === '/' },
     { to: '/workbench', label: 'Workbench', icon: 'bench', on: /^\/(priority|workbench)/.test(pathname) },
@@ -96,12 +104,14 @@ function BottomNav() {
     { to: '/tasks', label: 'Tasks', icon: 'tasks', on: pathname.startsWith('/tasks') },
     { to: '/calendar', label: 'Calendar', icon: 'calendar', on: pathname.startsWith('/calendar') },
   ]
+  const shown = items.filter((it) => canVisit(role, it.to))
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
+      style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` }}
+      className="fixed inset-x-0 bottom-0 z-30 grid border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
     >
-      {items.map((it) => (
+      {shown.map((it) => (
         <NavLink
           key={it.label}
           to={it.to}

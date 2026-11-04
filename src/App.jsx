@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BusinessProvider } from './context/BusinessContext'
 import Layout from './components/Layout'
@@ -19,6 +19,7 @@ import Settings from './pages/Settings'
 import Loans from './pages/Loans'
 import BookPage from './components/BookPage'
 import SectionTabs from './components/SectionTabs'
+import { canVisit, homeFor } from './lib/roles'
 
 const REPORT_TABS = [
   ['/reports', 'Scoreboard'],
@@ -30,7 +31,8 @@ const SETTINGS_TABS = [
 ]
 
 function Protected({ children }) {
-  const { isAuthed, loading } = useAuth()
+  const { isAuthed, loading, role, roleError, signOut } = useAuth()
+  const { pathname } = useLocation()
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
@@ -38,7 +40,21 @@ function Protected({ children }) {
       </div>
     )
   }
-  return isAuthed ? children : <Navigate to="/login" replace />
+  if (!isAuthed) return <Navigate to="/login" replace />
+  // Signed in but not in user_roles (or the lookup failed): RLS shows nothing anyway.
+  if (!role) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted">
+        <p className="text-[15px] font-semibold text-[color:var(--text)]">This login has no access to the OS yet.</p>
+        {roleError && <p>Couldn't check access: {roleError}</p>}
+        <button type="button" onClick={signOut} className="rounded-[10px] border border-line2 px-3 py-1.5 font-semibold">
+          Sign out
+        </button>
+      </div>
+    )
+  }
+  if (!canVisit(role, pathname)) return <Navigate to={homeFor(role)} replace />
+  return children
 }
 
 export default function App() {

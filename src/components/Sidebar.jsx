@@ -11,6 +11,7 @@ import NewMenu from './NewMenu'
 import Icon, { LogoMark } from './Icon'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { urgentCount } from '../lib/priorityQueue'
+import { canVisit, roleLabel } from '../lib/roles'
 
 // Ten links. Pipeline, Contacts and Activity follow the business switch, so
 // one link covers both books; each also lights up on its old per-book pages
@@ -69,12 +70,16 @@ function GroupLabel({ children }) {
 }
 
 export default function Sidebar({ onNavigate }) {
-  const { signOut, isDemoMode } = useAuth()
+  const { signOut, isDemoMode, role, userName, session } = useAuth()
   const { biz } = useBusiness()
   const { pathname } = useLocation()
   // "Act now" count (buckets 1-3) for the current filter; same data as /priority.
   const { queue } = usePriorityQueue(biz)
   const urgent = urgentCount(queue)
+  // The assistant sees Workbench, Tasks and Pipeline only.
+  const groups = LINKS.map((g) => ({ ...g, items: g.items.filter((it) => canVisit(role, it.to)) })).filter((g) => g.items.length)
+  const shownName = userName || (role === 'owner' || isDemoMode ? 'Chandler Atkinson' : session?.user?.email || 'Signed in')
+  const initials = shownName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (
     <aside className="flex h-full w-[216px] flex-none flex-col gap-3 overflow-y-auto border-r border-line bg-panel2 px-3 py-4">
@@ -103,7 +108,7 @@ export default function Sidebar({ onNavigate }) {
       {onNavigate && <NewMenu onBeforePick={onNavigate} />}
 
       <nav aria-label="Main" className="flex flex-col gap-3">
-        {LINKS.map(({ group, items }) => (
+        {groups.map(({ group, items }) => (
           <div key={group || 'main'} className="flex flex-col gap-px">
             {group && <GroupLabel>{group}</GroupLabel>}
             {items.map((it) => (
@@ -125,12 +130,12 @@ export default function Sidebar({ onNavigate }) {
 
       <div className="mt-auto flex items-center gap-2 border-t border-line px-1 pt-2.5">
         <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-[#E4E7EC] text-[11.5px] font-semibold text-[#344054]">
-          CA
+          {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold">Chandler Atkinson</div>
+          <div className="truncate text-[13px] font-semibold">{shownName}</div>
           <div className="flex items-center gap-1 text-[11.5px] text-dim">
-            <span className="truncate">Super Admin</span>
+            <span className="truncate">{roleLabel(role)}</span>
             {!isDemoMode && (
               <button onClick={signOut} className="flex-none rounded px-1 text-[11.5px] text-dim hover:text-[color:var(--text)]">
                 Sign out
