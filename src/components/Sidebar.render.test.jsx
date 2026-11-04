@@ -46,7 +46,8 @@ describe('Sidebar', () => {
     expect(links).toEqual(['Overview', 'Workbench', 'Calendar', 'Tasks', 'Pipeline', 'Loans', 'Contacts', 'Activity', 'Reports', 'Settings'])
     expect(host.querySelector('nav[aria-label="Main"]').textContent).toContain('Books')
     expect(host.querySelector('a[href="/pipeline"]')).not.toBeNull()
-    expect(host.querySelector('a[href="/sync"] [data-sync-state="ok"]')).not.toBeNull()
+    // Settings opens the Settings tab (forecast odds, Rate leads); Sync status is its sibling tab.
+    expect(host.querySelector('a[href="/settings"] [data-sync-state="ok"]')).not.toBeNull()
   })
 
   it.each([
@@ -55,6 +56,8 @@ describe('Sidebar', () => {
     ['/bayway/activity', 'Activity'],
     ['/analytics', 'Reports'],
     ['/sync', 'Settings'],
+    ['/settings', 'Settings'],
+    ['/rate', 'Settings'],
     ['/bayway/priority-leads', 'Workbench'],
     ['/', 'Overview'],
   ])('lights the merged link on %s', async (path, label) => {

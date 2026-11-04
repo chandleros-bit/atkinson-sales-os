@@ -30,7 +30,7 @@ const LINKS = [
     { to: '/activity', icon: 'activity', label: 'Activity', on: /^\/((mpg|bayway)\/)?activity/ },
   ] },
   { group: 'Insights', items: [{ to: '/reports', icon: 'reports', label: 'Reports', on: /^\/(reports|analytics)/ }] },
-  { group: 'System', items: [{ to: '/sync', icon: 'settings', label: 'Settings', on: /^\/(sync|settings)/, sync: true }] },
+  { group: 'System', items: [{ to: '/settings', icon: 'settings', label: 'Settings', on: /^\/(sync|settings|rate)/, sync: true }] },
 ]
 
 // Green / amber / red: the last sync, at a glance (Sync Status has the detail).
