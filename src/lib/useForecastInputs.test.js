@@ -175,3 +175,40 @@ describe('useForecast', () => {
     expect(out.lines.find((l) => l.key === 'rating:m')).toMatchObject({ book: 'mpg', payout: null })
   })
 })
+
+describe('focus refresh', () => {
+  async function mountProbe() {
+    const Probe = () => {
+      useForecast(NOW)
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    await act(async () => root.render(React.createElement(Probe)))
+    await act(async () => { await tick() })
+    return root
+  }
+  const focusAt = async (offsetMs) => {
+    const real = Date.now()
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(real + offsetMs)
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await tick()
+    })
+    spy.mockRestore()
+  }
+
+  it('does nothing while no page is using the forecast', async () => {
+    await focusAt(120_000)
+    expect(state.bundleCalls).toBe(0)
+  })
+
+  it('refetches on window focus once the data is over a minute old', async () => {
+    const root = await mountProbe()
+    expect(state.bundleCalls).toBe(1)
+    await focusAt(30_000)
+    expect(state.bundleCalls).toBe(1)
+    await focusAt(61_000)
+    expect(state.bundleCalls).toBe(2)
+    await act(async () => root.unmount())
+  })
+})

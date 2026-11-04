@@ -16,6 +16,7 @@ let inflight = null
 let dirty = false
 const listeners = new Set()
 const MAX_FETCHES = 5
+const STALE_MS = 60_000
 
 export function __resetForecastForTest() {
   store = EMPTY
@@ -99,6 +100,14 @@ export function refreshForecastInputs() {
     return store
   })()
   return inflight
+}
+
+// Loans, rates and metrics change outside this tab (Arive import, Reports):
+// a page left open refetches when the window regains focus after a minute.
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', () => {
+    if (listeners.size > 0 && Date.now() - store.at > STALE_MS) refreshForecastInputs().catch(() => {})
+  })
 }
 
 // -> { lines, settings, loading, error }
