@@ -24,13 +24,15 @@ function plainText(html) {
 const same = (a, b) => plainText(a).replace(/\s+/g, ' ') === plainText(b).replace(/\s+/g, ' ')
 
 // firstNote: the lead form's note, pinned above the list, so left out of it.
-export function noteRows(activities, firstNote = null) {
+// assistantIds: activity ids the assistant wrote (v_assistant_writes).
+export function noteRows(activities, firstNote = null, assistantIds = null) {
   return (activities || [])
     .map((a) => {
       const raw = a.raw || {}
       const text = plainText(raw.body ?? raw.Note_Content ?? a.notes)
       const author = (typeof raw.createdBy === 'string' ? raw.createdBy : raw.Created_By?.name) || null
-      return { id: a.id, at: a.occurred_at, title: raw.Note_Title || raw.subject || null, text, author }
+      const row = { id: a.id, at: a.occurred_at, title: raw.Note_Title || raw.subject || null, text, author }
+      return assistantIds?.has(a.id) ? { ...row, byAssistant: true } : row
     })
     .filter((n) => n.text && !(firstNote && same(n.text, firstNote)))
     .sort((a, b) => new Date(b.at) - new Date(a.at))
@@ -42,12 +44,12 @@ const PAGE = 10
 // lead's full note list from FUB / Zoho and reloads. refreshError: why the
 // CRM couldn't be read (the mirrored notes still show).
 export function useContactNotes(contactId) {
-  const [state, setState] = useState({ notes: [], firstNote: null, loading: true, refreshing: false, refreshError: null, more: false })
+  const [state, setState] = useState({ notes: [], firstNote: null, loading: true, refreshing: false, refreshError: null, more: false, assistantTaskIds: new Set() })
   const [limit, setLimit] = useState(PAGE)
 
   const load = useCallback(async () => {
     if (!contactId || isDemoMode) return setState((s) => ({ ...s, loading: false }))
-    const [acts, contact] = await Promise.all([
+    const [acts, contact, writes] = await Promise.all([
       supabase
         .from('activities')
         .select('id, occurred_at, notes, raw')
@@ -56,14 +58,20 @@ export function useContactNotes(contactId) {
         .order('occurred_at', { ascending: false })
         .range(0, limit),
       supabase.from('contacts').select('first_note').eq('id', contactId).maybeSingle(),
+      // What the assistant wrote, for "by assistant". A failed read just means no labels.
+      Promise.resolve().then(() => supabase.from('v_assistant_writes').select('activity_id, task_id').eq('contact_id', contactId).limit(500)).catch(() => ({ data: [] })),
     ])
     const firstNote = contact.data?.first_note || null
     const rows = acts.data || []
+    const writeRows = writes?.data || []
+    const assistantIds = new Set(writeRows.map((w) => w.activity_id).filter(Boolean))
+    const assistantTaskIds = new Set(writeRows.map((w) => w.task_id).filter(Boolean))
     setState((s) => ({
       ...s,
       loading: false,
       firstNote,
-      notes: noteRows(rows.slice(0, limit), firstNote),
+      notes: noteRows(rows.slice(0, limit), firstNote, assistantIds),
+      assistantTaskIds,
       more: rows.length > limit,
     }))
   }, [contactId, limit])

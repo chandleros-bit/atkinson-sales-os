@@ -80,7 +80,10 @@ function Notes({ notes, crm }) {
         {notes.notes.map((n) => (
           <li key={n.id} data-note className="rounded-[10px] border border-line px-3 py-2">
             <div className="mb-0.5 flex flex-wrap items-baseline justify-between gap-x-2 text-[11.5px] text-dim">
-              <span className="font-semibold">{n.author || crm}</span>
+              <span className="font-semibold">
+                {n.author || crm}
+                {n.byAssistant && <span data-by-assistant className="font-normal"> · by assistant</span>}
+              </span>
               <span className="num">{when(n.at)}</span>
             </div>
             {n.title && <div className="text-[12.5px] font-semibold">{n.title}</div>}
@@ -180,7 +183,7 @@ function LoanTab({ loan }) {
   )
 }
 
-function DetailsTab({ rows, tasks }) {
+function DetailsTab({ rows, tasks, byAssistant = new Set() }) {
   return (
     <div className="flex flex-col gap-3" aria-label="Details">
       <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1.5 text-[13px]">
@@ -199,7 +202,10 @@ function DetailsTab({ rows, tasks }) {
           <ul className="flex flex-col gap-1">
             {tasks.map((t) => (
               <li key={t.id} className="flex items-baseline justify-between gap-3 text-[13px]">
-                <span className="min-w-0 break-words">{t.title}</span>
+                <span className="min-w-0 break-words">
+                  {t.title}
+                  {byAssistant.has(t.id) && <span data-by-assistant className="text-[11.5px] text-dim"> · by assistant</span>}
+                </span>
                 <span className="num flex-none text-[11.5px] text-dim">{t.due_at ? dueLabel(t.due_at) : 'No date'}</span>
               </li>
             ))}
@@ -342,7 +348,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
             {tab === 'notes' && <Notes notes={notes} crm={CRM_LABEL[biz]} />}
             {tab === 'activity' && <ActivityTab rows={extra.activity} loading={extra.loading} />}
             {tab === 'loan' && <LoanTab loan={loanView({ firstNote: notes.firstNote, board })} />}
-            {tab === 'details' && <DetailsTab rows={detailRows({ person, signal: extra.signal, contact: extra.contact })} tasks={extra.tasks} />}
+            {tab === 'details' && <DetailsTab rows={detailRows({ person, signal: extra.signal, contact: extra.contact })} tasks={extra.tasks} byAssistant={notes.assistantTaskIds} />}
           </div>
         </div>
       )}
