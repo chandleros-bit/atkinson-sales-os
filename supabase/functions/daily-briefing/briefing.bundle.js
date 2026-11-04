@@ -1002,7 +1002,7 @@ function chicagoParts(now = Date.now()) {
 }
 function shouldSend(now = Date.now()) {
   const { hour, weekday } = chicagoParts(now);
-  return weekday >= 1 && weekday <= 5 && hour === 7;
+  return weekday >= 1 && weekday <= 5 && (hour === 7 || hour === 8);
 }
 function offsetMinutes(t) {
   const p = parts(t);
@@ -1154,6 +1154,7 @@ function buildOwnerBriefing(data, now = Date.now()) {
 var money = (n) => `$${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
 var esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 var timeLabel = (t) => t === "All day" ? t : new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" }).format(new Date(t));
+var dayLabel = (d) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).format(/* @__PURE__ */ new Date(`${d}T00:00:00Z`));
 var BOOK = { bay: "Bayway", mpg: "MPG" };
 var STATUS = { hit: "hit", pace: "on pace", behind: "behind" };
 function goalLine(g) {
@@ -1179,7 +1180,7 @@ function renderOwnerBriefing(m, { appUrl }) {
   ];
   const today = [
     ...m.today.meetings.length ? m.today.meetings.map((e) => `${timeLabel(e.time)} \xB7 ${e.title} (${BOOK[e.book]})`) : ["No meetings today"],
-    ...m.today.closings.count ? [`Closing this week (${m.today.closings.count}): ${m.today.closings.top.map((c) => `${c.name} ${c.date.slice(5)}`).join(", ")}`] : []
+    ...m.today.closings.count ? [`Closing this week (${m.today.closings.count}): ${m.today.closings.top.map((c) => `${c.name} ${dayLabel(c.date)}`).join(", ")}`] : []
   ];
   const cf = m.callFirst;
   const callFirst = [

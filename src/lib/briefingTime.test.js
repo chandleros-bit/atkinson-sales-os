@@ -13,11 +13,14 @@ describe('chicagoParts', () => {
 })
 
 describe('shouldSend', () => {
-  it('only on weekdays at 7:xx Chicago', () => {
+  it('weekdays at 7:xx and 8:xx Chicago (8:xx retries a failed 7:xx run)', () => {
     expect(shouldSend(at('2026-11-04T13:30:00Z'))).toBe(true) // Wed 7:30 CST
     expect(shouldSend(at('2026-11-04T12:30:00Z'))).toBe(false) // Wed 6:30 CST
     expect(shouldSend(at('2026-10-28T12:30:00Z'))).toBe(true) // Wed 7:30 CDT
-    expect(shouldSend(at('2026-10-28T13:30:00Z'))).toBe(false) // Wed 8:30 CDT
+    expect(shouldSend(at('2026-10-28T13:30:00Z'))).toBe(true) // Wed 8:30 CDT
+    expect(shouldSend(at('2026-11-04T14:30:00Z'))).toBe(true) // Wed 8:30 CST
+    expect(shouldSend(at('2026-11-04T15:30:00Z'))).toBe(false) // Wed 9:30 CST
+    expect(shouldSend(at('2026-10-28T14:30:00Z'))).toBe(false) // Wed 9:30 CDT
     expect(shouldSend(at('2026-11-07T13:30:00Z'))).toBe(false) // Saturday
   })
 })

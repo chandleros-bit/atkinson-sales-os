@@ -19,11 +19,12 @@ export function chicagoParts(now = Date.now()) {
   return { dateKey: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour), minute: Number(p.minute), weekday: WEEKDAY[p.weekday] }
 }
 
-// Weekdays, 7:00-7:59 Chicago. pg_cron fires at 12:30 and 13:30 UTC; exactly
-// one of them lands in this window on any date, DST or not.
+// Weekdays, 7:00-8:59 Chicago. pg_cron fires at 12:30, 13:30 and 14:30 UTC:
+// the first in the window is the 7:30 send, and the next one (8:30) retries
+// after a failed run. The function's once-a-day claim stops a second send.
 export function shouldSend(now = Date.now()) {
   const { hour, weekday } = chicagoParts(now)
-  return weekday >= 1 && weekday <= 5 && hour === 7
+  return weekday >= 1 && weekday <= 5 && (hour === 7 || hour === 8)
 }
 
 // UTC offset (minutes, local minus UTC) of Chicago at instant t.

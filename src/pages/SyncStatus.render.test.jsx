@@ -34,6 +34,7 @@ vi.mock('../lib/supabase', () => {
             data: [
               { source: 'fub', ran_at: state.fubAt, status: 'ok', records_upserted: 18, message: null },
               { source: 'briefing-owner', ran_at: state.fubAt, status: 'ok', records_upserted: 1, message: 'sent' },
+              { source: 'briefing-owner-test', ran_at: state.fubAt, status: 'ok', records_upserted: 1, message: 'test sent' },
             ],
             error: null,
           }
@@ -81,6 +82,7 @@ describe('SyncStatus', () => {
     await act(async () => root.render(<MemoryRouter><SyncStatus /></MemoryRouter>))
     await act(async () => {})
     expect(el.textContent).toContain('Daily briefing (you)')
+    expect(el.textContent).toContain('Daily briefing (test)')
   })
 
   it('does not refetch while the tab is hidden, then catches up when shown', async () => {
