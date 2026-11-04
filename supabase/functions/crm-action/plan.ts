@@ -84,3 +84,11 @@ export function overallStatus(results) {
   if (ok === results.length) return 'ok'
   return ok === 0 ? 'error' : 'partial'
 }
+
+// The assistant login (spec 2026-11-03, section 3): notes, follow-ups and
+// completing tasks on Bayway, plus the two read-only refreshes the contact
+// card runs (contact_notes, contact_relationships). Everything else is
+// refused (and recorded) for her; whoami and smart_lists are 403.
+export const ASSISTANT_ACTIONS = new Set(['add_note', 'create_task', 'complete_task'])
+export const ASSISTANT_REFUSED = 'The assistant login cannot do that'
+export const ASSISTANT_BAYWAY_ONLY = 'The assistant login is Bayway only'

@@ -662,3 +662,49 @@ describe('crm-action run: contact_relationships (read-only)', () => {
     expect((await go(relReq(many))).body).toEqual({ status: 'refused', error: 'At most 25 contacts at a time' })
   })
 })
+
+describe('crm-action run: assistant role', () => {
+  const ASSISTANT = '00000000-0000-4000-8000-0000000000a1'
+  const asAssistant = (req, extra = {}) => go(req, { userId: ASSISTANT, role: 'assistant', ...extra })
+  const noteReq = (contactId = 'c-bay', n = 81) => ({ client_action_id: uuid(n), action: 'add_note', contact_id: contactId, payload: { body: 'Sent the doc list' } })
+
+  it('lets the assistant add a note on a Bayway contact, recorded under her id', async () => {
+    const res = await asAssistant(noteReq())
+    expect(res.http).toBe(200)
+    expect(res.body.status).toBe('ok')
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'add_note', status: 'ok', user_id: ASSISTANT })
+  })
+  it('lets the assistant complete a Bayway task and create a follow-up', async () => {
+    expect((await asAssistant({ client_action_id: uuid(82), action: 'complete_task', task_id: 't-open' })).body.status).toBe('ok')
+    expect((await asAssistant({ client_action_id: uuid(83), action: 'create_task', contact_id: 'c-bay', payload: { due_date: '2026-10-20', title: 'Follow up: Jo' } })).body.status).toBe('ok')
+  })
+  it('refuses Log call from the assistant and records the refusal', async () => {
+    const res = await asAssistant(logCallReq())
+    expect(res.http).toBe(200)
+    expect(res.body).toMatchObject({ status: 'refused', error: 'The assistant login cannot do that' })
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'log_call', status: 'refused', user_id: ASSISTANT })
+    expect(bay.send.logCall).not.toHaveBeenCalled()
+  })
+  it('refuses set_stage, set_temperature and push_task from the assistant', async () => {
+    expect((await asAssistant({ client_action_id: uuid(84), action: 'set_stage', contact_id: 'c-bay', payload: { target: 'working' } })).body.status).toBe('refused')
+    expect((await asAssistant({ client_action_id: uuid(85), action: 'set_temperature', contact_id: 'c-bay', payload: { temperature: 'hot' } })).body.status).toBe('refused')
+    expect((await asAssistant({ client_action_id: uuid(86), action: 'push_task', task_id: 't-open', payload: { due_date: '2026-10-21' } })).body.status).toBe('refused')
+  })
+  it('refuses an MPG contact for the assistant', async () => {
+    const res = await asAssistant(noteReq('c-mpg', 87))
+    expect(res.body).toMatchObject({ status: 'refused', error: 'The assistant login is Bayway only' })
+  })
+  it('refuses an MPG contact_notes read for the assistant', async () => {
+    const res = await asAssistant({ client_action_id: uuid(88), action: 'contact_notes', contact_id: 'c-mpg' })
+    expect(res.body).toMatchObject({ status: 'refused', error: 'The assistant login is Bayway only' })
+  })
+  it('403s whoami and smart_lists for the assistant', async () => {
+    expect((await asAssistant({ client_action_id: uuid(89), action: 'whoami' })).http).toBe(403)
+    expect((await asAssistant({ client_action_id: uuid(90), action: 'smart_lists' })).http).toBe(403)
+  })
+  it('403s a signed-in user with no role and writes nothing', async () => {
+    const res = await go(noteReq(), { userId: ASSISTANT, role: null })
+    expect(res.http).toBe(403)
+    expect(db.calls).toEqual([])
+  })
+})
