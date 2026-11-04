@@ -181,7 +181,25 @@ describe('SearchPalette', () => {
     expect(sheet.textContent).toContain('Call cadence')
     expect(sheet.textContent).toContain('Open in Zoho')
     expect(sheet.querySelector('[aria-label="Log call"]')).not.toBe(null)
-    expect(sheet.querySelector('[aria-label="Temperature"]')).not.toBe(null)
+    expect(sheet.querySelector('[aria-label="Lead temperature"]')).not.toBe(null)
+  })
+
+  it('the picker follows a newer saved amount instead of showing stale fields', async () => {
+    rpc.mockImplementation(() => ok([jo]))
+    ratingRows.rows = [{ contact_id: 'c1', business_id: 'bay', temperature: 'hot', est_amount: 300000, close_month: null }]
+    await mount()
+    await act(async () => openSearch())
+    await type('jo')
+    await settle()
+    await key(input(), 'Enter')
+    await act(async () => {})
+    const field = () => document.querySelector('[role="dialog"][aria-label="Jo Ramirez"] [aria-label="Estimated loan amount"]')
+    expect(field().value).toBe('300000')
+    const { saveRating } = await import('../lib/useLeadRatings')
+    await act(async () => {
+      await saveRating({ contactId: 'c1', businessId: 'bay', temperature: 'hot', estAmount: 500000 })
+    })
+    expect(field().value).toBe('500000')
   })
 
   it('rates from the sheet: a different temperature resets the month, the same one keeps it, Save clears a blanked amount', async () => {
@@ -209,17 +227,17 @@ describe('SearchPalette', () => {
     const tagCalls = () => invoke.mock.calls.map((c) => c[1].body).filter((b) => b.action === 'set_temperature')
     expect(tagCalls()[0]).toMatchObject({ payload: { temperature: 'warm' } })
 
-    // Same temperature, empty field: the saved amount is left alone, the month is sent.
+    // Same temperature, empty field: the saved amount is left alone; no month was pinned, so none is.
     await typeAmount('')
     await press('Warm')
     expect('est_amount' in upserts[1]).toBe(false)
-    expect(upserts[1].close_month).toMatch(/^\d{4}-\d{2}-01$/)
+    expect(upserts[1].close_month).toBe(null) // unpinned stays unpinned
 
     // Save with the field blanked on purpose clears the amount.
     await typeAmount('')
     await press('Save')
     expect(upserts[2]).toMatchObject({ temperature: 'warm', est_amount: null })
-    expect(upserts[2].close_month).toMatch(/^\d{4}-\d{2}-01$/)
+    expect(upserts[2].close_month).toBe(null)
   })
 
   it('opens the person sheet for a task\'s contact', async () => {

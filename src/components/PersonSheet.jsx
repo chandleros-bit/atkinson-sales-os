@@ -276,7 +276,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
               <HealthPills h={h} />
             </div>
           )}
-          <TemperaturePicker key={rating?.temperature || 'none'} contactId={person.id} businessId={biz} rating={rating} />
+          <TemperaturePicker key={`${rating?.temperature || 'none'}|${rating?.est_amount ?? ''}|${rating?.close_month ?? ''}`} contactId={person.id} businessId={biz} rating={rating} />
           {priority && (
             <div data-priority className="rounded-[10px] bg-panel2 px-3 py-2 text-[12.5px]">
               <span className="font-semibold">
