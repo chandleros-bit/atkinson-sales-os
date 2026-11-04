@@ -297,3 +297,24 @@ describe('stuckDaysFor', () => {
     expect(stuckDaysFor('Open', { ...rules, stuck_days_by_stage: undefined })).toBe(14)
   })
 })
+
+describe('temperature in Up Next', () => {
+  it('a Warm rating turns off hot-going-cold even when the view says hot', () => {
+    const row = base({ is_hot: true, is_active: true, stage: 'Contacted/Working', temperature: 'warm', last_outbound_at: daysAgo(9), last_outbound_call_at: daysAgo(9), open_task_count: 1, oldest_open_due_at: daysAgo(-2) })
+    expect(bucketsFor(row, rules, NOW)).not.toContain('hot_cold')
+  })
+  it('a Hot rating turns it on', () => {
+    const row = base({ is_hot: false, is_active: true, stage: 'Contacted/Working', temperature: 'hot', last_outbound_at: daysAgo(9), last_outbound_call_at: daysAgo(9), open_task_count: 1, oldest_open_due_at: daysAgo(-2) })
+    expect(bucketsFor(row, rules, NOW)).toContain('hot_cold')
+  })
+  it('inside a bucket: Hot, Warm, unrated, Cold', () => {
+    const od = { open_task_count: 1, oldest_open_due_at: daysAgo(2) }
+    const q = buildQueue([
+      base({ id: 'cold', temperature: 'cold', ...od }),
+      base({ id: 'none', ...od }),
+      base({ id: 'warm', temperature: 'warm', ...od }),
+      base({ id: 'hot', temperature: 'hot', ...od }),
+    ], rules, NOW)
+    expect(q.map((r) => r.id)).toEqual(['hot', 'warm', 'none', 'cold'])
+  })
+})

@@ -7,6 +7,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 import { fetchAllSettled } from './fetchAll'
 import { buildQueue, resolveRules } from './priorityQueue'
+import { useLeadRatings } from './useLeadRatings'
+import { withRatings } from './leadRatings'
 
 const STALE_MS = 60_000
 let store = { rows: [], rules: resolveRules(null), touched: [], loading: !isDemoMode, error: null, at: 0 }
@@ -67,6 +69,7 @@ if (typeof window !== 'undefined') {
 // the day's touched count (distinct leads in the candidate set).
 export function usePriorityQueue(biz = 'all') {
   const [snap, setSnap] = useState(store)
+  const ratings = useLeadRatings()
   useEffect(() => {
     listeners.add(setSnap)
     if (!store.at && !inflight) refreshPriorityQueue()
@@ -83,7 +86,7 @@ export function usePriorityQueue(biz = 'all') {
 
   return useMemo(() => {
     const inView = (r) => biz === 'all' || r.business_id === biz
-    const rows = snap.rows.filter(inView)
+    const rows = withRatings(snap.rows.filter(inView), ratings)
     const ids = new Set(rows.map((r) => r.id))
     const touchedToday = new Set(snap.touched.filter((t) => inView(t) && ids.has(t.contact_id)).map((t) => t.contact_id)).size
     return {
@@ -96,5 +99,5 @@ export function usePriorityQueue(biz = 'all') {
       error: snap.error,
       refresh: refreshPriorityQueue,
     }
-  }, [snap, biz])
+  }, [snap, biz, ratings])
 }

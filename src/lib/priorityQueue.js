@@ -11,6 +11,7 @@ import { dayKey } from './calendar'
 import { dueDayKey } from './tasks'
 import { isLostStage } from './pipeline'
 import { isCadenceStage } from './dialList'
+import { effectiveHot, temperatureRank } from './leadRatings'
 
 export const BUCKETS = [
   { id: 'reached_out', label: 'They reached out' },
@@ -121,7 +122,7 @@ export function bucketsFor(row, rules, now = Date.now()) {
 
   const touchDays = daysSince(humanTouchAt(row, rules), now)
   const untouchedFor = (n) => touchDays == null || touchDays >= n
-  if (row.is_hot && untouchedFor(rules.hot_cold_days)) out.push('hot_cold')
+  if (effectiveHot(row) && untouchedFor(rules.hot_cold_days)) out.push('hot_cold')
   if (row.is_active && !(row.open_task_count > 0)) out.push('no_next_step')
   const stageDays = daysSince(row.stage_since, now)
   const stuckLimit = stuckDaysFor(row.stage, rules)
@@ -165,6 +166,8 @@ export function buildQueue(rows, rules, now = Date.now()) {
   }
   return out.sort((a, b) => {
     if (a.bucket !== b.bucket) return RANK[a.bucket] - RANK[b.bucket]
+    const tr = temperatureRank(a) - temperatureRank(b)
+    if (tr) return tr
     const n = neglect(b, now) - neglect(a, now)
     if (n) return n
     const s = (b.score ?? -1) - (a.score ?? -1)
