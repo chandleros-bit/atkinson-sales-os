@@ -288,6 +288,25 @@ function useSubmit({ businessId, onSuccess }) {
   return { busy, result, send, retry, setResult }
 }
 
+// The rating belongs to a call that was logged. An error, a log_call that
+// failed beside other steps that went through, or a contact FUB no longer has
+// (a 'partial' with nothing to retry) all mean it was not.
+function callWasLogged(summary) {
+  if (!summary || summary.tone === 'error') return false
+  if (summary.failed?.includes('log_call')) return false
+  if (summary.tone === 'partial' && !summary.failed?.length) return false
+  return true
+}
+
+// Awaited so the FUB tag write finishes before anything else touches the tags;
+// a failed save offers Retry with the same arguments.
+async function saveRatingWithToast(args) {
+  const retry = () => saveRatingWithToast(args)
+  const saved = await saveRating(args)
+  if (!saved.ok) showToast({ tone: 'error', text: `Temperature not saved: ${saved.error}`, retry })
+  else if (saved.tagError) showToast({ tone: 'error', text: `Temperature saved; FUB tag not updated: ${saved.tagError}`, retry })
+}
+
 function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, onSuccess }) {
   const [outcome, setOutcome] = useState(null)
   const [note, setNote] = useState('')
@@ -379,13 +398,11 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
     // the lead's FUB tags (read, then PUT), so they must not interleave.
     const summary = await send(request)
     const temp = isConversation(outcome) ? temperature : null
-    if (!temp || !summary || summary.tone === 'error') return
-    // estAmount is sent only when typed (undefined leaves a saved amount alone);
-    // closeMonth is never sent from here.
-    const typed = businessId === 'bay' && (temp === 'hot' || temp === 'warm') && estAmount
-    const saved = await saveRating({ contactId, businessId, temperature: temp, estAmount: typed ? Number(estAmount) : undefined })
-    if (!saved.ok) showToast({ tone: 'error', text: `Temperature not saved: ${saved.error}` })
-    else if (saved.tagError) showToast({ tone: 'error', text: `Temperature saved; FUB tag not updated: ${saved.tagError}` })
+    if (!temp || !callWasLogged(summary)) return
+    // estAmount is sent only when typed and positive (undefined leaves a saved
+    // amount alone); closeMonth is never sent from here.
+    const typed = businessId === 'bay' && (temp === 'hot' || temp === 'warm') && Number(estAmount) > 0
+    await saveRatingWithToast({ contactId, businessId, temperature: temp, estAmount: typed ? Number(estAmount) : undefined })
   }
 
   return (
@@ -414,6 +431,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
               aria-label="Estimated loan amount"
               inputMode="numeric"
               placeholder="Est. loan amount (optional)"
+              maxLength={12}
               value={estAmount}
               onChange={(e) => setEstAmount(e.target.value.replace(/[^\d]/g, ''))}
               className={`${inputCls} mt-2`}
