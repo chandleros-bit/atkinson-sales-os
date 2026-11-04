@@ -103,3 +103,18 @@ export function previousBusinessDateKey(now = Date.now()) {
 export function previousBusinessDayRangeUtc(now = Date.now()) {
   return chicagoDayRangeUtc(now, backToBusinessDay(now))
 }
+
+// 'YYYY-MM-DD' plus n business days (Mon-Fri; federal holidays not counted).
+// Used for the TRID Loan Estimate deadline: 3 business days from application.
+export function addBusinessDays(dateKey, n) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ''))
+  if (!m) return null
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]))
+  let left = n
+  while (left > 0) {
+    d.setUTCDate(d.getUTCDate() + 1)
+    const wd = d.getUTCDay()
+    if (wd !== 0 && wd !== 6) left--
+  }
+  return d.toISOString().slice(0, 10)
+}

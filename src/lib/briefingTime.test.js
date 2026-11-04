@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chicagoParts, shouldSend, chicagoDayRangeUtc, businessDaysLeft, longDateLabel, previousBusinessDateKey, previousBusinessDayRangeUtc } from './briefingTime'
+import { chicagoParts, shouldSend, chicagoDayRangeUtc, businessDaysLeft, longDateLabel, previousBusinessDateKey, previousBusinessDayRangeUtc, addBusinessDays } from './briefingTime'
 
 // UTC instants; Chicago is UTC-5 in CDT (until Nov 1 2026) and UTC-6 in CST.
 const at = (iso) => new Date(iso).getTime()
@@ -59,5 +59,18 @@ describe('previousBusinessDayRangeUtc', () => {
   it('bounds that Chicago day in UTC', () => {
     expect(previousBusinessDayRangeUtc(at('2026-11-09T13:30:00Z'))).toEqual({ from: '2026-11-06T06:00:00.000Z', to: '2026-11-07T06:00:00.000Z' })
     expect(previousBusinessDayRangeUtc(at('2026-11-04T13:30:00Z'))).toEqual({ from: '2026-11-03T06:00:00.000Z', to: '2026-11-04T06:00:00.000Z' })
+  })
+})
+
+describe('addBusinessDays', () => {
+  it('skips weekends (TRID: Loan Estimate within 3 business days)', () => {
+    expect(addBusinessDays('2026-11-02', 3)).toBe('2026-11-05') // Mon -> Thu
+    expect(addBusinessDays('2026-11-06', 3)).toBe('2026-11-11') // Fri -> Wed
+    expect(addBusinessDays('2026-11-07', 3)).toBe('2026-11-11') // Sat -> Wed
+    expect(addBusinessDays('2026-11-08', 1)).toBe('2026-11-09') // Sun -> Mon
+  })
+  it('returns the same day for 0 and null for a bad key', () => {
+    expect(addBusinessDays('2026-11-04', 0)).toBe('2026-11-04')
+    expect(addBusinessDays(null, 3)).toBe(null)
   })
 })
