@@ -19,6 +19,8 @@ const SOURCE_LABELS = {
   'outlook-bayway': { label: 'Outlook — Bayway', biz: 'bay' },
   'briefing-owner': { label: 'Daily briefing (you)', biz: 'bay' },
   'briefing-owner-test': { label: 'Daily briefing (test)', biz: 'bay' },
+  'briefing-assistant': { label: 'Daily briefing (Shelby)', biz: 'bay' },
+  'briefing-assistant-test': { label: 'Daily briefing (Shelby, test)', biz: 'bay' },
 }
 
 // Quick Actions write-back health (crm_actions, last 24 hours).
