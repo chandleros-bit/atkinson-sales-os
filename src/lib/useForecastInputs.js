@@ -5,45 +5,95 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 import { fetchLoanBundle } from './loansData'
 import { DEFAULT_RATES } from './loans'
-import { useLeadRatings } from './useLeadRatings'
+import { useLeadRatings, useLeadRatingsStatus } from './useLeadRatings'
 import { resolveForecast, avgFundedLoan, mpgPerAccount, forecastLines } from './forecast'
 
 const EMPTY = { loans: [], rates: DEFAULT_RATES, settings: resolveForecast(null), mpgMetrics: {}, at: 0, error: null }
 let store = EMPTY
 let inflight = null
+// Set when a refresh is asked for while one is in the air: that fetch may have
+// read before whatever prompted the new request, so the run goes round again.
+let dirty = false
 const listeners = new Set()
+const MAX_FETCHES = 5
 
 export function __resetForecastForTest() {
   store = EMPTY
   inflight = null
+  dirty = false
 }
 
+// A thrown query becomes a { data: null, error } like a failed one, so the
+// other queries' results are still used.
+const settle = (p) => Promise.resolve(p).then((v) => v, (e) => ({ data: null, error: { message: String(e?.message || e) } }))
+
+// Latest metrics_daily date that has BOTH the residual and the merchant count
+// (rows come newest first); a lone residual would divide by the wrong merchants.
+function latestMpgMetrics(rows) {
+  const byDate = new Map()
+  for (const m of rows || []) {
+    if (m.value == null) continue
+    const d = byDate.get(m.date) || {}
+    d[m.metric_key] = m.value
+    byDate.set(m.date, d)
+  }
+  for (const d of byDate.values()) {
+    if (d.rev_monthly_residual != null && d.rev_active_merchants != null) {
+      return { residual: d.rev_monthly_residual, merchants: d.rev_active_merchants }
+    }
+  }
+  return { residual: null, merchants: null }
+}
+
+// One pass over all three sources. A source that failed leaves its part of the
+// store as it was; every failure message lands in `error`.
+async function loadOnce() {
+  const [bundle, settings, metrics] = await Promise.all([
+    settle(fetchLoanBundle()),
+    settle(supabase.from('settings').select('value').eq('key', 'forecast').maybeSingle()),
+    settle(
+      supabase
+        .from('metrics_daily')
+        .select('date, metric_key, value')
+        .eq('business_id', 'mpg')
+        .in('metric_key', ['rev_monthly_residual', 'rev_active_merchants'])
+        .order('date', { ascending: false })
+        .limit(120),
+    ),
+  ])
+  const bundleOk = !bundle?.error && !!bundle?.data
+  const errors = [bundle?.error, settings.error, metrics.error].filter(Boolean).map((e) => e.message || String(e))
+  if (!bundle?.error && !bundle?.data) errors.push('Loans did not load')
+  store = {
+    loans: bundleOk ? bundle.data.loans || [] : store.loans,
+    rates: bundleOk ? bundle.data.rates || DEFAULT_RATES : store.rates,
+    settings: settings.error ? store.settings : resolveForecast(settings.data?.value),
+    mpgMetrics: metrics.error ? store.mpgMetrics : latestMpgMetrics(metrics.data),
+    at: Date.now(),
+    error: errors.length ? errors.join('; ') : null,
+  }
+}
+
+// Resolves with the store once the fetch is done; a call made while a fetch is
+// in flight queues one more fetch and resolves after that one.
 export function refreshForecastInputs() {
   if (isDemoMode) return Promise.resolve(store)
-  inflight ??= (async () => {
+  if (inflight) {
+    dirty = true
+    return inflight
+  }
+  inflight = (async () => {
     try {
-      const [bundle, settings, metrics] = await Promise.all([
-        fetchLoanBundle(),
-        supabase.from('settings').select('value').eq('key', 'forecast').maybeSingle(),
-        supabase
-          .from('metrics_daily')
-          .select('date, metric_key, value')
-          .eq('business_id', 'mpg')
-          .in('metric_key', ['rev_monthly_residual', 'rev_active_merchants'])
-          .order('date', { ascending: false })
-          .limit(24),
-      ])
-      const latest = (key) => (metrics.data || []).find((m) => m.metric_key === key)?.value ?? null
-      store = {
-        loans: bundle.data?.loans || [],
-        rates: bundle.data?.rates || DEFAULT_RATES,
-        settings: resolveForecast(settings.data?.value),
-        mpgMetrics: { residual: latest('rev_monthly_residual'), merchants: latest('rev_active_merchants') },
-        at: Date.now(),
-        error: bundle.error?.message || settings.error?.message || metrics.error?.message || null,
+      for (let i = 0; i < MAX_FETCHES; i++) {
+        dirty = false
+        await loadOnce()
+        if (!dirty) break
       }
+    } catch (e) {
+      store = { ...store, error: String(e?.message || e), at: Date.now() }
     } finally {
       inflight = null
+      dirty = false
       listeners.forEach((fn) => fn(store))
     }
     return store
@@ -55,9 +105,10 @@ export function refreshForecastInputs() {
 export function useForecast(now = Date.now()) {
   const [snap, setSnap] = useState(store)
   const ratings = useLeadRatings()
+  const ratingsStatus = useLeadRatingsStatus()
   useEffect(() => {
     listeners.add(setSnap)
-    if (!store.at && !inflight) refreshForecastInputs()
+    if (!store.at && !inflight) refreshForecastInputs().catch(() => {})
     else setSnap(store)
     return () => listeners.delete(setSnap)
   }, [])
@@ -72,8 +123,13 @@ export function useForecast(now = Date.now()) {
       mpgAccount: mpgPerAccount(snap.mpgMetrics, snap.settings),
       now,
     })
-    return { lines, settings: snap.settings, loading: !snap.at && !isDemoMode, error: snap.error }
+    return {
+      lines,
+      settings: snap.settings,
+      loading: (!snap.at && !isDemoMode) || ratingsStatus.loading,
+      error: snap.error || ratingsStatus.error,
+    }
     // Recompute on new inputs or a new month, not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap, ratings, monthKey])
+  }, [snap, ratings, ratingsStatus.loading, ratingsStatus.error, monthKey])
 }

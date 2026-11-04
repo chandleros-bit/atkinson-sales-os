@@ -86,6 +86,19 @@ export function useLeadRatings() {
   return snap.ratings
 }
 
+// { loading, error } for the shared ratings fetch, so a page can tell "no
+// ratings yet" from "ratings not loaded".
+export function useLeadRatingsStatus() {
+  const [snap, setSnap] = useState(store)
+  useEffect(() => {
+    listeners.add(setSnap)
+    if (!store.at && !inflight) refreshRatings().catch(() => {})
+    else setSnap(store)
+    return () => listeners.delete(setSnap)
+  }, [])
+  return { loading: !snap.at && !isDemoMode, error: snap.error }
+}
+
 // -> { ok: true } | { ok: true, tagError } (rating saved, FUB tag not) | { ok: false, error }
 //
 // Partial updates: estAmount and closeMonth left undefined are not sent, so the

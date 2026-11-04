@@ -46,7 +46,7 @@ vi.mock('./writeback', () => ({
   },
 }))
 
-const { toRatingMap, saveRating, refreshRatings, useLeadRatings, __resetRatingsForTest } = await import('./useLeadRatings')
+const { toRatingMap, saveRating, refreshRatings, useLeadRatings, useLeadRatingsStatus, __resetRatingsForTest } = await import('./useLeadRatings')
 
 // Read the shared store through the real hook.
 async function readStore() {
@@ -246,5 +246,36 @@ describe('focus refresh', () => {
     window.dispatchEvent(new Event('focus'))
     await tick()
     expect(state.rangeCalls).toBe(0)
+  })
+})
+
+describe('useLeadRatingsStatus', () => {
+  async function readStatus() {
+    const seen = []
+    const Probe = () => {
+      seen.push(useLeadRatingsStatus())
+      return null
+    }
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    await act(async () => root.render(React.createElement(Probe)))
+    await act(async () => { await tick() })
+    await act(async () => root.unmount())
+    return seen
+  }
+  it('is loading until the first fetch lands, then clear', async () => {
+    const seen = await readStatus()
+    expect(seen[0]).toEqual({ loading: true, error: null })
+    expect(seen.at(-1)).toEqual({ loading: false, error: null })
+  })
+  it('reports a failed fetch as an error and not loading', async () => {
+    state.range = () => {
+      throw new Error('network down')
+    }
+    expect((await readStatus()).at(-1)).toEqual({ loading: false, error: 'network down' })
+  })
+  it('is never loading in demo mode', async () => {
+    state.demo = true
+    expect((await readStatus())[0]).toEqual({ loading: false, error: null })
   })
 })
