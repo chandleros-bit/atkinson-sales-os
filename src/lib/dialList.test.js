@@ -121,3 +121,27 @@ describe('whenLabel', () => {
     expect(whenLabel({ dueAt: at(28, 14, 30) }, at(28, 12))).toBe('2:30 PM')
   })
 })
+
+describe('buildDialList temperature', () => {
+  it('speed to lead first, then Hot, unrated, Cold, even when Hot is the oldest', () => {
+    const now = new Date('2026-11-03T15:00:00').getTime()
+    const due = (id, temperature, firstCall = '2026-10-20T09:00:00') => ({
+      id,
+      business_id: 'bay',
+      stage: 'Attempted',
+      crm_created_at: '2026-10-19T08:00:00',
+      outbound_calls: 1,
+      first_outbound_call_at: firstCall,
+      last_outbound_call_at: firstCall,
+      connected_at: null,
+      temperature,
+    })
+    // Fresh and uncalled: speed to lead outranks even a Cold rating.
+    const fresh = { ...lead({ id: 'fresh', temperature: 'cold' }), crm_created_at: '2026-11-03T10:00:00' }
+    // The Hot lead's attempt came due a day earlier, so recency alone puts it last.
+    const rows = [due('hot', 'hot', '2026-10-19T09:00:00'), due('cold', 'cold'), due('none'), fresh]
+    const { dueNow } = buildDialList(rows, { now })
+    expect(dueNow.map((i) => i.id)).toEqual(['fresh', 'hot', 'none', 'cold'])
+    expect(dueNow[0].hint).toBe('speed to lead')
+  })
+})

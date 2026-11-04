@@ -451,6 +451,63 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
   })
 })
 
+describe('crm-action run: set_temperature (Bayway FUB tag)', () => {
+  const mapContact = (p) => ({ business_id: 'bay', source_crm: 'fub', external_id: String(p.id), name: p.name, phone: null, person_stage: p.stage, raw: p })
+  const tempReq = (contactId, temperature, n = 60) => ({ client_action_id: uuid(n), action: 'set_temperature', contact_id: contactId, payload: { temperature } })
+
+  beforeEach(() => {
+    db.tables.contacts.push(
+      { id: 'c-t', business_id: 'bay', source_crm: 'fub', external_id: '6001', name: 'Temp Lead', phone: '1', person_stage: 'Lead' },
+    )
+    bay.send.setTemperature = vi.fn(async ({ externalId }) => ({ id: externalId, tags: ['Attempted', 'Hot'] }))
+    bay.read.person = async (id) => ({ id, name: 'Temp Lead', stage: 'Lead', tags: ['Attempted', 'Hot'] })
+    bay.map.contact = mapContact
+  })
+
+  it('writes the tag, then mirrors the person back', async () => {
+    const res = await go(tempReq('c-t', 'hot'))
+    expect(res.body.status).toBe('ok')
+    expect(bay.send.setTemperature).toHaveBeenCalledWith({ externalId: '6001', temperature: 'hot' })
+    expect(db.tables.contacts.find((c) => c.external_id === '6001').raw.tags).toEqual(['Attempted', 'Hot'])
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'set_temperature', status: 'ok' })
+  })
+
+  it('refuses an unknown temperature', async () => {
+    expect((await go(tempReq('c-t', 'lukewarm', 61))).body).toEqual({ status: 'refused', error: 'Unknown temperature: lukewarm' })
+    expect(bay.send.setTemperature).not.toHaveBeenCalled()
+  })
+
+  it('refuses MPG: temperature stays in the dashboard there', async () => {
+    const res = await go(tempReq('c-mpg', 'hot', 62))
+    expect(res.body.status).toBe('refused')
+    expect(res.body.error).toMatch(/Bayway only/)
+  })
+
+  it('replays the stored reply when the same submit arrives twice', async () => {
+    const first = await go(tempReq('c-t', 'hot', 63))
+    const second = await go(tempReq('c-t', 'hot', 63))
+    expect(bay.send.setTemperature).toHaveBeenCalledTimes(1)
+    expect(second.body).toEqual({ ...first.body, replay: true })
+    expect(db.tables.crm_actions.filter((r) => r.action === 'set_temperature')).toHaveLength(1)
+  })
+
+  it('refuses when Bayway write-back is off', async () => {
+    db.tables.settings[0].value = { bay: false, mpg: false }
+    const res = await go(tempReq('c-t', 'hot', 64))
+    expect(res.body).toEqual({ status: 'refused', error: 'Write-back is off for Bayway' })
+    expect(bay.send.setTemperature).not.toHaveBeenCalled()
+  })
+
+  it('reports an error and skips the mirror when FUB fails', async () => {
+    bay.send.setTemperature.mockRejectedValueOnce(new Error('FUB PUT /people/6001 -> 500: down'))
+    const res = await go(tempReq('c-t', 'hot', 65))
+    expect(res.body.status).toBe('error')
+    expect(res.body.results[0]).toMatchObject({ step: 'set_temperature', ok: false, error: 'FUB PUT /people/6001 -> 500: down' })
+    expect(db.calls.filter((c) => c[0] === 'upsert' && c[1] === 'contacts')).toEqual([])
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'set_temperature', status: 'error' })
+  })
+})
+
 describe('crm-action run: create_contact (new lead)', () => {
   const createReq = (business_id, payload, n) => ({ client_action_id: uuid(n), action: 'create_contact', business_id, payload })
   const fubPerson = (id) => ({ id, name: 'Sam Lee', firstName: 'Sam', lastName: 'Lee', stage: 'Lead', tags: [], phones: [{ value: '7135550100' }], emails: [], assignedUserId: 12 })

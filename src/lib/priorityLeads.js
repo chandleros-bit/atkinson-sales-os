@@ -6,8 +6,8 @@
 // business badge. Warm/active reuse the Bayway gold/green vars; hot is a
 // dedicated red; never-contacted is muted.
 export const TIERS = [
-  { key: 'hot', label: 'Hot', color: '#ff5c5c', soft: 'rgba(255,92,92,0.14)' },
-  { key: 'warm', label: 'Warm', color: 'var(--bay-gold)', soft: 'rgba(124,173,68,0.16)' },
+  { key: 'hot', label: 'High engagement', color: '#ff5c5c', soft: 'rgba(255,92,92,0.14)' },
+  { key: 'warm', label: 'Medium engagement', color: 'var(--bay-gold)', soft: 'rgba(124,173,68,0.16)' },
   { key: 'active', label: 'Active', color: 'var(--bay)', soft: 'var(--bay-soft)' },
   { key: 'never_contacted', label: 'Never Contacted', color: 'var(--dim)', soft: 'rgba(148,148,158,0.14)' },
 ]

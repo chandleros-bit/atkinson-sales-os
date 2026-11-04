@@ -6,6 +6,7 @@ import { isDemoMode } from '../lib/supabase'
 import { timeAgo } from '../lib/syncHealth'
 import { showToast } from '../components/Toaster'
 import { fetchLoanBundle, saveLoanPatch, saveRates } from '../lib/loansData'
+import { refreshForecastInputs } from '../lib/useForecastInputs'
 import {
   DEFAULT_RATES, filterLoans, pipelineStatus, lenderSpread, fundedByMonth, estComp, isScenario, isOpen, notInLatest, hasApplicationDates,
   periodWindow, inPeriod,
@@ -331,7 +332,7 @@ export default function Loans() {
     apply(p)
     if (isDemoMode) return
     const { error: err } = await saveLoanPatch(loan.id, p)
-    if (!err) return
+    if (!err) { refreshForecastInputs().catch(() => {}); return }
     apply(prev)
     showToast({ tone: 'error', text: `Couldn't save ${loan.borrower_name || 'this loan'}: ${err.message}`, retry: () => patch(loan, p) })
   }
@@ -342,6 +343,7 @@ export default function Loans() {
       const { error: err } = await saveRates(r)
       if (err) return { error: err }
     }
+    refreshForecastInputs().catch(() => {})
     setBundle((b) => ({ ...b, rates: r }))
     setEditingRates(false)
     return { error: null }
@@ -443,7 +445,7 @@ export default function Loans() {
           existing={bundle.loans}
           rates={bundle.rates}
           onClose={() => setImporting(false)}
-          onImported={async () => { setImporting(false); await load() }}
+          onImported={async () => { setImporting(false); refreshForecastInputs().catch(() => {}); await load() }}
         />
       )}
       {editingRates && bundle && <RatesEditor rates={bundle.rates} onSave={storeRates} onClose={() => setEditingRates(false)} />}

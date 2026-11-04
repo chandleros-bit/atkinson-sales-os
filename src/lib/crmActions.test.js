@@ -13,6 +13,7 @@ import {
   endOfTodayIso,
   buildActionRequest,
   retryRequestFor,
+  isConversation,
   summarizeResult,
   summarizeWriteback,
 } from './crmActions'
@@ -326,5 +327,18 @@ describe('create_contact (new lead)', () => {
   })
   it('reports a created lead', () => {
     expect(summarizeResult({ status: 'ok', results: [{ step: 'create_contact', ok: true }] }, 'bay').text).toBe('Lead created in FollowUpBoss')
+  })
+})
+
+describe('set_temperature', () => {
+  it('builds a request for one contact', () => {
+    const r = buildActionRequest({ action: 'set_temperature', contactId: 'c1', temperature: 'warm' })
+    expect(r).toMatchObject({ action: 'set_temperature', contact_id: 'c1', payload: { temperature: 'warm' } })
+  })
+  it('refuses anything but Hot, Warm or Cold', () => {
+    expect(() => buildActionRequest({ action: 'set_temperature', contactId: 'c1', temperature: 'lukewarm' })).toThrow('Pick Hot, Warm or Cold')
+  })
+  it('isConversation is true for Interested and Not Interested only', () => {
+    expect(['Interested', 'Not Interested', 'Left Message', 'No Answer'].map(isConversation)).toEqual([true, true, false, false])
   })
 })

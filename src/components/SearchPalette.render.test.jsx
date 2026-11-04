@@ -11,15 +11,25 @@ import React from 'react'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const rpc = vi.fn()
+const invoke = vi.fn()
 const DATA = { tasks: [], people: {}, board: {} }
+// lead_ratings: what a read returns; upsert merges into it like the table would.
+const ratingRows = { rows: [] }
+const upserts = []
 
 function query(table) {
   const q = {}
   let id = null
-  for (const m of ['select', 'order', 'limit', 'or', 'gte', 'gt', 'lte', 'range']) q[m] = () => q
+  for (const m of ['select', 'order', 'limit', 'or', 'gte', 'gt', 'lte', 'range', 'in']) q[m] = () => q
   q.eq = (c, v) => {
     if (c === 'id') id = v
     return q
+  }
+  q.upsert = async (row) => {
+    upserts.push(row)
+    const rest = ratingRows.rows.filter((r) => r.contact_id !== row.contact_id)
+    ratingRows.rows = [...rest, { ...(ratingRows.rows.find((r) => r.contact_id === row.contact_id) || {}), ...row }]
+    return { error: null }
   }
   q.maybeSingle = async () => {
     if (table === 'settings') return { data: { value: { bay: true, mpg: true } }, error: null }
@@ -27,19 +37,20 @@ function query(table) {
     if (table === 'v_active_pipeline' || table === 'v_mpg_contacts') return { data: DATA.board[id] ?? null, error: null }
     return { data: null, error: null }
   }
-  q.then = (resolve) => resolve({ data: table === 'v_tasks' ? DATA.tasks : [], error: null })
+  q.then = (resolve) => resolve({ data: table === 'v_tasks' ? DATA.tasks : table === 'lead_ratings' ? ratingRows.rows : [], error: null })
   return q
 }
 
 vi.mock('../lib/supabase', () => ({
   isDemoMode: false,
-  supabase: { from: (t) => query(t), rpc: (...a) => rpc(...a), functions: { invoke: vi.fn() } },
+  supabase: { from: (t) => query(t), rpc: (...a) => rpc(...a), functions: { invoke: (...a) => invoke(...a) } },
 }))
 vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: 'all', matches: () => true }) }))
 
 const { default: SearchPalette, openSearch } = await import('./SearchPalette')
 const { resetWritebackFlags } = await import('../lib/writeback')
 const { default: Toaster } = await import('./Toaster')
+const { __resetRatingsForTest } = await import('../lib/useLeadRatings')
 
 function Where() {
   return React.createElement('div', { 'data-where': true }, useLocation().pathname)
@@ -88,6 +99,11 @@ beforeEach(() => {
   DATA.tasks = []
   DATA.people = {}
   DATA.board = {}
+  ratingRows.rows = []
+  upserts.length = 0
+  invoke.mockReset()
+  invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_temperature', ok: true }] }, error: null })
+  __resetRatingsForTest()
   resetWritebackFlags()
 })
 
@@ -165,6 +181,63 @@ describe('SearchPalette', () => {
     expect(sheet.textContent).toContain('Call cadence')
     expect(sheet.textContent).toContain('Open in Zoho')
     expect(sheet.querySelector('[aria-label="Log call"]')).not.toBe(null)
+    expect(sheet.querySelector('[aria-label="Lead temperature"]')).not.toBe(null)
+  })
+
+  it('the picker follows a newer saved amount instead of showing stale fields', async () => {
+    rpc.mockImplementation(() => ok([jo]))
+    ratingRows.rows = [{ contact_id: 'c1', business_id: 'bay', temperature: 'hot', est_amount: 300000, close_month: null }]
+    await mount()
+    await act(async () => openSearch())
+    await type('jo')
+    await settle()
+    await key(input(), 'Enter')
+    await act(async () => {})
+    const field = () => document.querySelector('[role="dialog"][aria-label="Jo Ramirez"] [aria-label="Estimated loan amount"]')
+    expect(field().value).toBe('300000')
+    const { saveRating } = await import('../lib/useLeadRatings')
+    await act(async () => {
+      await saveRating({ contactId: 'c1', businessId: 'bay', temperature: 'hot', estAmount: 500000 })
+    })
+    expect(field().value).toBe('500000')
+  })
+
+  it('rates from the sheet: a different temperature resets the month, the same one keeps it, Save clears a blanked amount', async () => {
+    rpc.mockImplementation(() => ok([jo]))
+    ratingRows.rows = [{ contact_id: 'c1', business_id: 'bay', temperature: 'hot', est_amount: 300000, close_month: null }]
+    await mount()
+    await act(async () => openSearch())
+    await type('jo')
+    await settle()
+    await key(input(), 'Enter')
+    const sheet = () => document.querySelector('[role="dialog"][aria-label="Jo Ramirez"]')
+    const press = async (label) => act(async () => [...sheet().querySelectorAll('button')].find((b) => b.textContent === label).click())
+    const field = () => sheet().querySelector('[aria-label="Estimated loan amount"]')
+    const typeAmount = async (v) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field(), v)
+        field().dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    await act(async () => {}) // let the shared ratings load
+    expect(field().value).toBe('300000')
+
+    // Different temperature: month back to its default (null), amount from the field.
+    await press('Warm')
+    expect(upserts[0]).toMatchObject({ contact_id: 'c1', business_id: 'bay', temperature: 'warm', est_amount: 300000, close_month: null })
+    const tagCalls = () => invoke.mock.calls.map((c) => c[1].body).filter((b) => b.action === 'set_temperature')
+    expect(tagCalls()[0]).toMatchObject({ payload: { temperature: 'warm' } })
+
+    // Same temperature, empty field: the saved amount is left alone; no month was pinned, so none is.
+    await typeAmount('')
+    await press('Warm')
+    expect('est_amount' in upserts[1]).toBe(false)
+    expect(upserts[1].close_month).toBe(null) // unpinned stays unpinned
+
+    // Save with the field blanked on purpose clears the amount.
+    await typeAmount('')
+    await press('Save')
+    expect(upserts[2]).toMatchObject({ temperature: 'warm', est_amount: null })
+    expect(upserts[2].close_month).toBe(null)
   })
 
   it('opens the person sheet for a task\'s contact', async () => {

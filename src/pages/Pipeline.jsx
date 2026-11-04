@@ -19,7 +19,10 @@ import { useIsMobile } from '../components/UpNextRow'
 import Icon from '../components/Icon'
 import { openPerson } from '../components/PersonSheet'
 import { formatPhone } from '../lib/phone'
-import { VIEWS, SORTS, filterRows, sortRows, pipelineKpis, leadSource } from '../lib/pipelineView'
+import { VIEWS, SORTS, TEMP_FILTERS, filterRows, filterByTemperature, sortRows, pipelineKpis, leadSource } from '../lib/pipelineView'
+import { useLeadRatings } from '../lib/useLeadRatings'
+import { withRatings } from '../lib/leadRatings'
+import { useForecast } from '../lib/useForecastInputs'
 import { PAGE_SIZE, pageSlice } from '../lib/paging'
 import Pager from '../components/Pager'
 
@@ -95,7 +98,7 @@ function KpiCards({ kpis, biz }) {
   )
 }
 
-function Toolbar({ view, onView, sort, onSort, query, onQuery }) {
+function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
   return (
     <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2.5">
@@ -129,6 +132,20 @@ function Toolbar({ view, onView, sort, onSort, query, onQuery }) {
             {SORTS.map((o) => (
               <option key={o.id} value={o.id}>
                 Sort: {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex h-[42px] items-center gap-2 rounded-[10px] border border-line2 bg-panel px-3 text-muted">
+          <select
+            aria-label="Temperature"
+            value={temp}
+            onChange={(e) => onTemp(e.target.value)}
+            className="bg-transparent text-[14px] font-medium text-[#344054] outline-none"
+          >
+            {TEMP_FILTERS.map((o) => (
+              <option key={o.id} value={o.id}>
+                Temperature: {o.label}
               </option>
             ))}
           </select>
@@ -788,6 +805,9 @@ export default function Pipeline({ biz }) {
   // apply to every view (the board keeps its health order inside a column).
   const [view, setView] = useState(savedView)
   const [sort, setSort] = useState('urgent')
+  const [temp, setTemp] = useState('all')
+  const ratings = useLeadRatings()
+  const forecast = useForecast()
   const [query, setQuery] = useState('')
   const pickView = (v) => {
     setView(v)
@@ -903,14 +923,16 @@ export default function Pipeline({ biz }) {
 
   // The draggable Bayway board shows every column, so empty stages take drops.
   // A lead on its way to Lost leaves the board at once.
-  const visible = rows.filter((r) => pending[r.id] !== 'Lost')
-  const shown = withPendingMoves(filterRows(visible, query), pending)
+  const rated = withRatings(rows, ratings)
+  const visible = rated.filter((r) => pending[r.id] !== 'Lost')
+  const shown = withPendingMoves(filterByTemperature(filterRows(visible, query), temp), pending)
+  const extra = { lines: forecast.lines }
   const columns = buildColumns(shown, cfg.flowOrder, {
     // While searching, empty columns would only be noise.
     showAllFlow: canDrag && !query.trim(),
     sortCards: (cards) => sortByHealth(cards, rules, now),
   })
-  const groups = buildColumns(shown, cfg.flowOrder, { sortCards: (cards) => sortRows(cards, sort, rules, now) })
+  const groups = buildColumns(shown, cfg.flowOrder, { sortCards: (cards) => sortRows(cards, sort, rules, now, extra) })
   // The cards count the whole board, not the search.
   const kpis = pipelineKpis(visible, rules, biz, now)
 
@@ -944,15 +966,15 @@ export default function Pipeline({ biz }) {
       {!loading && !error && rows.length > 0 && (
         <>
           <KpiCards kpis={kpis} biz={biz} />
-          <Toolbar view={view} onView={pickView} sort={sort} onSort={setSort} query={query} onQuery={setQuery} />
+          <Toolbar view={view} onView={pickView} sort={sort} onSort={setSort} temp={temp} onTemp={setTemp} query={query} onQuery={setQuery} />
           {shown.length === 0 ? (
             <div className="mt-5 rounded-card border border-line bg-panel px-6 py-10 text-center text-sm text-muted">
-              No leads match “{query.trim()}”.
+              {query.trim() ? `No leads match “${query.trim()}”.` : 'No leads with that temperature.'}
             </div>
           ) : view === 'list' ? (
-            <ListView key={`${sort}|${query}`} rows={sortRows(shown, sort, rules, now)} biz={biz} rules={rules} now={now} />
+            <ListView key={`${sort}|${query}|${temp}`} rows={sortRows(shown, sort, rules, now, extra)} biz={biz} rules={rules} now={now} />
           ) : view === 'grouped' ? (
-            <GroupedView key={`${sort}|${query}`} columns={groups} biz={biz} rules={rules} now={now} />
+            <GroupedView key={`${sort}|${query}|${temp}`} columns={groups} biz={biz} rules={rules} now={now} />
           ) : (
             <Board
               columns={columns}

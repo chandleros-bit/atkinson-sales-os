@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterRows, sortRows, pipelineKpis, leadSource } from './pipelineView'
+import { filterRows, sortRows, pipelineKpis, leadSource, SORTS, TEMP_FILTERS, filterByTemperature } from './pipelineView'
 import { DEFAULT_RULES } from './priorityQueue'
 
 // Local times (no Z). 2026-10-18 is a Sunday.
@@ -93,5 +93,28 @@ describe('leadSource', () => {
     expect(leadSource({ lead_source: '<unspecified>' })).toBe(null)
     expect(leadSource({ lead_source: '-None-' })).toBe(null)
     expect(leadSource({})).toBe(null)
+  })
+})
+
+describe('temperature filter', () => {
+  const rows = [{ id: 'h', temperature: 'hot' }, { id: 'c', temperature: 'cold' }, { id: 'n' }]
+  it('lists All, Hot, Warm, Cold, Unrated', () => {
+    expect(TEMP_FILTERS.map((f) => f.id)).toEqual(['all', 'hot', 'warm', 'cold', 'unrated'])
+  })
+  it('filters by temperature, or unrated', () => {
+    expect(filterByTemperature(rows, 'all')).toBe(rows)
+    expect(filterByTemperature(rows, 'hot').map((r) => r.id)).toEqual(['h'])
+    expect(filterByTemperature(rows, 'unrated').map((r) => r.id)).toEqual(['n'])
+  })
+})
+
+describe('pays first sort', () => {
+  it('uses the forecast lines passed in', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }]
+    const lines = [{ contactId: 'b', payDate: '2026-11-05', payout: 100, odds: 60 }]
+    expect(sortRows(rows, 'pays_first', rules, NOW, { lines }).map((r) => r.id)).toEqual(['b', 'a'])
+  })
+  it('is offered as a sort', () => {
+    expect(SORTS.map((s) => s.id)).toContain('pays_first')
   })
 })

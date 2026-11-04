@@ -8,6 +8,7 @@
 
 import { fubGet, fubSend, mapContact } from '../_shared/fub.ts'
 import { retagForTarget, targetForStage } from '../_shared/bay-stages.ts'
+import { retagTemperature } from '../_shared/temperature-tags.ts'
 import { relationshipsOf } from '../_shared/fub-relationships.ts'
 import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, FUB_TASK_TYPES } from '../_shared/fub-write.ts'
 import { mapActivity as fubMapActivity } from '../_shared/fub-activity.ts'
@@ -74,6 +75,14 @@ export function fubAdapter(env) {
         await fubSend('PUT', `/people/${externalId}`, { tags })
         // previous: the column it left, so an Undo can put it back.
         return { id: externalId, tags, previous: targetForStage(person.tags || [], person.stage) }
+      },
+      // Temperature = one Hot/Warm/Cold tag (temperature-tags.ts). Same
+      // read-then-PUT as setStage: PUT /people replaces the whole tag list.
+      setTemperature: async ({ externalId, temperature }) => {
+        const person = await fubGet(`/people/${externalId}`)
+        const tags = retagTemperature(person.tags || [], temperature)
+        await fubSend('PUT', `/people/${externalId}`, { tags })
+        return { id: externalId, tags }
       },
       pushTask: async ({ externalId, dueDate, contactExternalId, title, type }) => {
         if (pushMode === 'complete_and_recreate') {

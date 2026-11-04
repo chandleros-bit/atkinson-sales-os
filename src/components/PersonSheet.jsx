@@ -20,6 +20,8 @@ import { dueLabel } from '../lib/tasks'
 import { supabase } from '../lib/supabase'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { cardHealth } from '../lib/cardHealth'
+import { useLeadRatings } from '../lib/useLeadRatings'
+import TemperaturePicker from './TemperaturePicker'
 import { CRM_LABEL } from '../lib/crmActions'
 import { isCadenceStage } from '../lib/dialList'
 import QuickActions, { Sheet, quickActionTone } from './QuickActions'
@@ -250,7 +252,9 @@ export default function PersonSheet({ id, initial = null, onClose }) {
 
   const biz = person?.business_id || 'bay'
   const t = quickActionTone(biz)
-  const h = board && rules ? cardHealth(board, rules) : null
+  const ratings = useLeadRatings()
+  const rating = person ? ratings.get(person.id) || null : null
+  const h = board && rules ? cardHealth({ ...board, temperature: rating?.temperature, rating }, rules) : null
   const priority = priorityLine(extra.priority)
   const tabs = cardTabs(biz)
 
@@ -272,6 +276,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
               <HealthPills h={h} />
             </div>
           )}
+          <TemperaturePicker key={`${rating?.temperature || 'none'}|${rating?.est_amount ?? ''}|${rating?.close_month ?? ''}`} contactId={person.id} businessId={biz} rating={rating} />
           {priority && (
             <div data-priority className="rounded-[10px] bg-panel2 px-3 py-2 text-[12.5px]">
               <span className="font-semibold">

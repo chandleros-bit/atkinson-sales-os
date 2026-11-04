@@ -66,6 +66,24 @@ describe('fubAdapter setStage', () => {
   })
 })
 
+describe('fubAdapter setTemperature', () => {
+  it('reads the person, swaps the temperature tag and PUTs the full list', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(response(200, { id: 3486, stage: 'Lead', tags: ['DSCR', 'Attempted', 'Cold'] }))
+      .mockResolvedValueOnce(response(200, {}))
+    const out = await fubAdapter(env()).send.setTemperature({ externalId: '3486', temperature: 'hot' })
+    expect(out.id).toBe('3486')
+    const [getUrl] = globalThis.fetch.mock.calls[0]
+    expect(String(getUrl)).toBe('https://api.followupboss.com/v1/people/3486')
+    const [url, init] = globalThis.fetch.mock.calls[1]
+    const sent = JSON.parse(init.body)
+    expect([String(url), init.method]).toEqual(['https://api.followupboss.com/v1/people/3486', 'PUT'])
+    expect(sent.tags).toEqual(expect.arrayContaining(['DSCR', 'Attempted', 'Hot']))
+    expect(sent.tags).not.toContain('Cold')
+    expect(out.tags).toEqual(sent.tags)
+  })
+})
+
 describe('fubAdapter createContact', () => {
   const now = new Date().toISOString()
   const old = '2024-01-01T00:00:00Z'

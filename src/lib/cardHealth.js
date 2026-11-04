@@ -8,6 +8,7 @@ import { calendarDaysSince, overdueDays, stuckDaysFor } from './priorityQueue'
 import { isLostStage } from './pipeline'
 import { sortByAttention } from './overview'
 import { isCadenceStage } from './dialList'
+import { TEMPERATURES, TEMP_LABEL, coldButActive } from './leadRatings'
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -71,19 +72,28 @@ export function speedToLead(row, rules, now = Date.now()) {
 }
 
 export function cardHealth(row, rules, now = Date.now()) {
-  return { next: nextStep(row, now), stuck: stuckFor(row, rules, now), speed: speedToLead(row, rules, now) }
+  return {
+    next: nextStep(row, now),
+    stuck: stuckFor(row, rules, now),
+    speed: speedToLead(row, rules, now),
+    temp: TEMPERATURES.includes(row.temperature) ? row.temperature : null,
+    coldActive: coldButActive(row.rating),
+  }
 }
 
 // The card's health as pills: { key, tone, text, late? }. key is the
 // data-health value; tone is neg (act now), warn (today), pos (on track) or
 // neutral. Speed-to-lead stands in for the next step on a new, uncalled lead.
+const TEMP_TONE = { hot: 'neg', warm: 'warn', cold: 'neutral' }
 const NEXT_TONE = { overdue: 'neg', today: 'warn', scheduled: 'pos', none: 'neutral', cadence: 'neutral' }
 export function healthPills(h) {
   if (!h) return []
   const pills = []
+  if (h.temp) pills.push({ key: 'temp', tone: TEMP_TONE[h.temp], text: TEMP_LABEL[h.temp] })
   if (h.speed) pills.push({ key: 'speed', tone: h.speed.late ? 'neg' : 'neutral', text: h.speed.text, late: h.speed.late })
   else if (h.next.state !== 'parked') pills.push({ key: h.next.state, tone: NEXT_TONE[h.next.state], text: h.next.text })
   if (h.stuck) pills.push({ key: 'stuck', tone: 'neg', text: h.stuck.text })
+  if (h.coldActive) pills.push({ key: 'cold_active', tone: 'warn', text: 'Cold, but active' })
   return pills
 }
 

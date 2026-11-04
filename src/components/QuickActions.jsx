@@ -31,7 +31,10 @@ import {
   buildActionRequest,
   retryRequestFor,
   summarizeResult,
+  isConversation,
 } from '../lib/crmActions'
+import { TEMPERATURES, TEMP_LABEL } from '../lib/leadRatings'
+import { saveRating } from '../lib/useLeadRatings'
 import { followUpEventRow, insertContactEvent, notifyContactEventsChanged } from '../lib/contactEvents'
 
 const FUB_TASK_TYPES = ['Follow Up', 'Call', 'Text', 'Email', 'Appointment', 'Showing', 'Closing', 'Open House', 'Thank You']
@@ -261,7 +264,7 @@ function useSubmit({ businessId, onSuccess }) {
   const lastRequest = useRef(null)
 
   const send = async (request) => {
-    if (busyRef.current) return
+    if (busyRef.current) return null
     busyRef.current = true
     setBusy(true)
     setResult(null)
@@ -276,12 +279,32 @@ function useSubmit({ businessId, onSuccess }) {
       // Something reached the CRM: let the page refresh behind the sheet.
       if (summary.tone === 'partial') onSuccess(summary, { keepOpen: true })
     }
+    return summary
   }
   const retry = (step) => {
     if (!lastRequest.current) return
     send(step ? retryRequestFor(step, lastRequest.current) : { ...lastRequest.current, client_action_id: crypto.randomUUID() })
   }
   return { busy, result, send, retry, setResult }
+}
+
+// The rating belongs to a call that was logged. An error, a log_call that
+// failed beside other steps that went through, or a contact FUB no longer has
+// (a 'partial' with nothing to retry) all mean it was not.
+function callWasLogged(summary) {
+  if (!summary || summary.tone === 'error') return false
+  if (summary.failed?.includes('log_call')) return false
+  if (summary.tone === 'partial' && !summary.failed?.length) return false
+  return true
+}
+
+// Awaited so the FUB tag write finishes before anything else touches the tags;
+// a failed save offers Retry with the same arguments.
+async function saveRatingWithToast(args) {
+  const retry = () => saveRatingWithToast(args)
+  const saved = await saveRating(args)
+  if (!saved.ok) showToast({ tone: 'error', text: `Temperature not saved: ${saved.error}`, retry })
+  else if (saved.tagError) showToast({ tone: 'error', text: `Temperature saved; FUB tag not updated: ${saved.tagError}`, retry })
 }
 
 function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, onSuccess }) {
@@ -294,6 +317,9 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
   const [nextStep, setNextStep] = useState(null)
   const [nextTouched, setNextTouched] = useState(false)
   const [reason, setReason] = useState(null)
+  // Optional after a conversation (spec 2026-11-03): saved with the call.
+  const [temperature, setTemperature] = useState(null)
+  const [estAmount, setEstAmount] = useState('')
   const [futureTask, setFutureTask] = useState(null)
   const [preset, setPreset] = useState('tomorrow')
   const [picked, setPicked] = useState('')
@@ -347,27 +373,36 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
   const nextReady =
     nextStep === 'follow_up' ? !!safeDate(preset, picked) : nextStep === 'scheduled' ? !!futureTask : nextStep === 'cadence' ? true : nextStep === 'none' ? !!reason : false
 
-  const submit = () => {
+  const submit = async () => {
+    let request
     try {
       const dueDate = nextStep === 'follow_up' ? followUpDate(preset, new Date(), picked) : null
       calendar.prepare({ businessId, contactId, dayKey: dueDate, time: nextStep === 'follow_up' ? time : '', title })
-      send(
-        buildActionRequest({
-          action: 'log_call',
-          contactId,
-          outcome,
-          note,
-          durationMin: Number(duration),
-          nextStep,
-          followUp: nextStep === 'follow_up' ? { dueDate, title } : null,
-          noNextStepReason: nextStep === 'none' ? reason : null,
-          completeTaskId: openTask && completeOpen ? openTask.id : null,
-          setStage: advance,
-        }),
-      )
+      request = buildActionRequest({
+        action: 'log_call',
+        contactId,
+        outcome,
+        note,
+        durationMin: Number(duration),
+        nextStep,
+        followUp: nextStep === 'follow_up' ? { dueDate, title } : null,
+        noNextStepReason: nextStep === 'none' ? reason : null,
+        completeTaskId: openTask && completeOpen ? openTask.id : null,
+        setStage: advance,
+      })
     } catch (e) {
       setResult({ tone: 'error', text: e.message, failed: [] })
+      return
     }
+    // The rating goes after the call is logged, never alongside it: both write
+    // the lead's FUB tags (read, then PUT), so they must not interleave.
+    const summary = await send(request)
+    const temp = isConversation(outcome) ? temperature : null
+    if (!temp || !callWasLogged(summary)) return
+    // estAmount is sent only when typed and positive (undefined leaves a saved
+    // amount alone); closeMonth is never sent from here.
+    const typed = businessId === 'bay' && (temp === 'hot' || temp === 'warm') && Number(estAmount) > 0
+    await saveRatingWithToast({ contactId, businessId, temperature: temp, estAmount: typed ? Number(estAmount) : undefined })
   }
 
   return (
@@ -380,6 +415,30 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
           </Chip>
         ))}
       </div>
+
+      {isConversation(outcome) && (
+        <>
+          <div className="mb-1.5 mt-3 text-[12px] font-semibold text-muted">Temperature (optional)</div>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Temperature">
+            {TEMPERATURES.map((k) => (
+              <Chip key={k} t={t} active={temperature === k} onClick={() => setTemperature(temperature === k ? null : k)}>
+                {TEMP_LABEL[k]}
+              </Chip>
+            ))}
+          </div>
+          {businessId === 'bay' && (temperature === 'hot' || temperature === 'warm') && (
+            <input
+              aria-label="Estimated loan amount"
+              inputMode="numeric"
+              placeholder="Est. loan amount (optional)"
+              maxLength={12}
+              value={estAmount}
+              onChange={(e) => setEstAmount(e.target.value.replace(/[^\d]/g, ''))}
+              className={`${inputCls} mt-2`}
+            />
+          )}
+        </>
+      )}
 
       <label className="mt-3 block text-[12px] font-semibold text-muted">
         Note

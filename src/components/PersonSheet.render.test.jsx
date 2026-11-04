@@ -140,7 +140,7 @@ describe('contact card tabs', () => {
     expect(tab(dialog, 'Notes').getAttribute('aria-selected')).toBe('true')
     expect(dialog.querySelector('[data-stage-step]').getAttribute('data-stage-step')).toBe('5')
     expect(dialog.querySelector('[data-health="overdue"]')).not.toBe(null)
-    expect(dialog.querySelector('[data-priority]').textContent).toBe('Priority score 88 · Hot')
+    expect(dialog.querySelector('[data-priority]').textContent).toBe('Priority score 88 · Engagement: high')
   })
 
   it('Activity lists calls, texts, emails and appointments', async () => {

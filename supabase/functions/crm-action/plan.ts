@@ -3,10 +3,10 @@
 // complete and a follow-up to create, and those run after the call, in that
 // order, so the user's "done" and "next" both hang off a call that happened.
 
-export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'create_contact', 'whoami', 'smart_lists', 'contact_notes', 'contact_relationships']
+export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact', 'whoami', 'smart_lists', 'contact_notes', 'contact_relationships']
 
 // Actions that act on one of our contacts / tasks (the request carries its uuid).
-export const CONTACT_ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'set_stage'])
+export const CONTACT_ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'set_stage', 'set_temperature'])
 export const TASK_ACTIONS = new Set(['complete_task', 'push_task'])
 
 export function planSteps(request) {
@@ -41,6 +41,8 @@ export function planSteps(request) {
       if (p.target === 'lost' && p.reason) steps.push({ step: 'add_note', subject: null, body: `Marked Lost: ${p.reason}` })
       return steps
     }
+    case 'set_temperature':
+      return [{ step: 'set_temperature', temperature: p.temperature }]
     case 'create_contact': {
       // A new lead from the dashboard; the note (optional) goes on it after.
       const s = (v) => (typeof v === 'string' ? v.trim() : '')

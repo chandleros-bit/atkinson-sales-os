@@ -14,8 +14,9 @@ import PriorityLeads from './pages/PriorityLeads'
 import Reports from './pages/Reports'
 import Analytics from './pages/Analytics'
 import Tasks from './pages/Tasks'
+import RateLeads from './pages/RateLeads'
+import Settings from './pages/Settings'
 import Loans from './pages/Loans'
-import PagePlaceholder from './components/PagePlaceholder'
 import BookPage from './components/BookPage'
 import SectionTabs from './components/SectionTabs'
 
@@ -65,6 +66,7 @@ export default function App() {
                 <Route path="/analytics" element={<Analytics />} />
               </Route>
               <Route path="/tasks" element={<Tasks />} />
+              <Route path="/rate" element={<RateLeads />} />
               {/* Follows the business filter; All merges both books. */}
               <Route path="/activity" element={<Activity />} />
               <Route path="/pipeline" element={<BookPage page={Pipeline} />} />
@@ -80,14 +82,7 @@ export default function App() {
               <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />
               <Route element={<SectionTabs label="Settings" tabs={SETTINGS_TABS} />}>
                 <Route path="/sync" element={<SyncStatus />} />
-                <Route
-                  path="/settings"
-                  element={
-                    <PagePlaceholder title="Settings" phase="2">
-                      Connected accounts, stage mapping, and metric targets.
-                    </PagePlaceholder>
-                  }
-                />
+                <Route path="/settings" element={<Settings />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

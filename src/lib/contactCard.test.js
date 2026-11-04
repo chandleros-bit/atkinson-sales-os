@@ -53,7 +53,7 @@ describe('loanView', () => {
 
 describe('priorityLine', () => {
   it('tier, rounded score and the note', () => {
-    expect(priorityLine({ tier: 'hot', score: 91.6, ai_note: 'Pre-approved, shopping' })).toEqual({ tier: 'Hot', score: 92, note: 'Pre-approved, shopping' })
+    expect(priorityLine({ tier: 'hot', score: 91.6, ai_note: 'Pre-approved, shopping' })).toEqual({ tier: 'Engagement: high', score: 92, note: 'Pre-approved, shopping' })
   })
   it('nothing when the lead is not scored', () => {
     expect(priorityLine(null)).toBeNull()

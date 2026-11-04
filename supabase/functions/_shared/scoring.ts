@@ -3,9 +3,11 @@
 // NO Deno or URL imports here on purpose; keep this file pure math.
 //
 // A lead's score blends how MUCH they engaged (weighted by channel + call
-// length) with how RECENTLY, plus a flat bonus for the manual FollowUpBoss
-// `HOT` tag. Tiers bucket the result. All tunables live at the top so they can
-// be adjusted without touching the logic (see priority-leads-spec §2).
+// length) with how RECENTLY. A flat bonus for the manual FollowUpBoss `HOT`
+// tag still exists (hasHotTag), but the nightly job no longer passes it; it is
+// kept for tests and back-compat. Tiers bucket the result. All tunables live
+// at the top so they can be adjusted without touching the logic (see
+// priority-leads-spec §2).
 
 // --- Tunable weights -------------------------------------------------------
 export const WEIGHTS = {
@@ -22,10 +24,10 @@ export const WEIGHTS = {
   // dominate. 1 pt/min up to 10 min => at most +10 per call.
   callDurationBonusPerMin: 1,
   callDurationCapMinutes: 10,
-  // Flat additive bonus when the contact carries the FUB `HOT` tag. Not
-  // recency-scaled — a manual HOT flag stays meaningful even if quiet lately.
-  // Sized so a bare HOT lead (no logged activity) still shows a mid score bar,
-  // since on this account the HOT tag is the primary intent signal, not calls.
+  // Flat additive bonus when hasHotTag is passed. The nightly job no longer
+  // passes it (the Hot tag is the user's temperature since 2026-11-03); kept
+  // for tests/back-compat. Not recency-scaled. Sized so a bare HOT lead (no
+  // logged activity) still shows a mid score bar.
   hotTagBonus: 40,
   // Raw score that maps to a full 100 on the UI bar. Tuning knob for spread.
   scoreMax: 90,
@@ -103,13 +105,17 @@ export function scoreContact(activities, { hasHotTag = false, now = Date.now() }
 }
 
 // Precedence: hot -> active -> warm -> never_contacted.
-// This account logs almost no FUB activity, so intent signals (the manual HOT
-// tag and pipeline stage) rank ABOVE activity volume — otherwise a HOT or
-// in-pipeline lead with no logged call would wrongly read as "never contacted".
-//  - hot: carries the HOT tag, OR high score AND recent activity.
+// This account logs almost no FUB activity, so pipeline stage ranks ABOVE
+// activity volume — otherwise an in-pipeline lead with no logged call would
+// wrongly read as "never contacted".
+// The nightly job (score-fub-leads) no longer passes hasHotTag: the FUB Hot
+// tag is the temperature rating since 2026-11-03, not an input to tier. So the
+// tier comes from score/recency and pipeline stage only. (hasHotTag stays a
+// parameter, default false, for tests and back-compat.)
+//  - hot: high score AND recent activity.
 //  - active: currently in an open pipeline stage.
 //  - warm: has any logged activity but isn't hot/active.
-//  - never_contacted: no HOT tag, not in pipeline, and zero activity rows.
+//  - never_contacted: not in pipeline and zero activity rows.
 export function assignTier({
   score,
   lastActivityAt,

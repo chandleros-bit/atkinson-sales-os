@@ -46,10 +46,13 @@ function query(table) {
   return q
 }
 
+const refreshSpy = vi.hoisted(() => vi.fn(() => Promise.resolve()))
+vi.mock('../lib/useForecastInputs', () => ({ refreshForecastInputs: refreshSpy }))
 vi.mock('../lib/supabase', () => ({ isDemoMode: false, supabase: { from: (t) => query(t) } }))
 
 beforeEach(() => {
   document.body.innerHTML = ''
+  refreshSpy.mockClear()
   DATA.updates = []
   DATA.upserts = []
   DATA.updateError = null
@@ -287,6 +290,7 @@ describe('Loans page', () => {
     await settle()
     const saved = DATA.upserts.find((u) => u.table === 'settings')
     expect(saved.rows.value).toMatchObject({ lo_name: 'Chandler Dean Atkinson', primary_pct: 1.25, assisted_pct: 0.75 })
+    expect(refreshSpy).toHaveBeenCalledTimes(1)
     expect(host.querySelector('[role="dialog"]')).toBeNull()
   })
 
@@ -334,6 +338,7 @@ describe('Loans page', () => {
     await settle()
     const up = DATA.upserts.find((u) => u.table === 'loans')
     expect(up.rows.map((r) => r.arive_loan_id)).toEqual(['100', '1'])
+    expect(refreshSpy).toHaveBeenCalled()
     expect(host.querySelector('[role="dialog"]')).toBeNull()
   })
 })

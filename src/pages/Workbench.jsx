@@ -3,7 +3,7 @@
 // applications and MPG tasks from CRM state plus your own work items, with
 // the app's status and notes on top (workbench.js, work_items).
 // Spec: docs/superpowers/specs/2026-10-22-workbench-design.md
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useBusiness } from '../context/BusinessContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
@@ -25,6 +25,8 @@ import ThemeList from '../components/ThemeList'
 import { CallBox, SECTION_HEAD, SectionTitle } from '../components/CallSection'
 import DialList from '../components/DialList'
 import Dialer from '../components/Dialer'
+import { useLeadRatings } from '../lib/useLeadRatings'
+import { withRatings } from '../lib/leadRatings'
 
 function Progress({ label, value, pct }) {
   return (
@@ -81,7 +83,9 @@ export default function Workbench() {
   const toGo = Math.min(queue.length, cap)
   const inBook = (book) => biz === 'all' || book === biz
   const now = Date.now()
-  const dialDue = buildDialList(dial.rows, { now: dial.now, skips: dial.skips, inBook })
+  const ratings = useLeadRatings()
+  const dialRows = useMemo(() => withRatings(dial.rows, ratings), [dial.rows, ratings])
+  const dialDue = buildDialList(dialRows, { now: dial.now, skips: dial.skips, inBook })
   const dialItems = [...dialDue.dueNow, ...dialDue.laterToday]
   const themeList = buildThemeList(dial.rows, { now: dial.now, day: themeDay, skips: dial.skips, inBook })
   const dialIds = new Set([...dialItems, ...themeList.items].map((i) => i.id))

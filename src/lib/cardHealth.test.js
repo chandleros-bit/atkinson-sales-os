@@ -176,3 +176,21 @@ describe('healthPills', () => {
     expect(healthPills(h({ next: { state: 'parked', text: '' } }))).toEqual([])
   })
 })
+
+describe('temperature pills', () => {
+  it('leads with the temperature pill, tinted by heat', () => {
+    expect(healthPills(cardHealth(row({ temperature: 'hot' }), rules, NOW))[0]).toEqual({ key: 'temp', tone: 'neg', text: 'Hot' })
+    expect(healthPills(cardHealth(row({ temperature: 'warm' }), rules, NOW))[0]).toEqual({ key: 'temp', tone: 'warn', text: 'Warm' })
+    expect(healthPills(cardHealth(row({ temperature: 'cold' }), rules, NOW))[0]).toEqual({ key: 'temp', tone: 'neutral', text: 'Cold' })
+  })
+  it('adds Cold, but active when the score rose since the rating', () => {
+    const r = row({ temperature: 'cold', rating: { temperature: 'cold', score_at_rating: 5, current_score: 40 } })
+    expect(healthPills(cardHealth(r, rules, NOW)).map((p) => p.key)).toContain('cold_active')
+  })
+  it('ignores an unknown temperature', () => {
+    expect(healthPills(cardHealth(row({ temperature: 'lukewarm' }), rules, NOW)).map((p) => p.key)).toEqual(['none'])
+  })
+  it('unrated cards are unchanged', () => {
+    expect(healthPills(cardHealth(row(), rules, NOW)).map((p) => p.key)).toEqual(['none'])
+  })
+})

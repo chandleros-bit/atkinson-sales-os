@@ -11,13 +11,27 @@ import { MemoryRouter } from 'react-router-dom'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const invoke = vi.fn()
-const DATA = { rows: [] }
+const DATA = { rows: [], ratings: [] }
 
 function query(table) {
   const q = {}
-  for (const m of ['select', 'eq', 'order', 'range', 'lte', 'limit', 'gte', 'or']) q[m] = () => q
-  q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { bay: true, mpg: false } } : null, error: null })
-  q.then = (resolve) => resolve({ data: table.startsWith('v_') && table !== 'v_tasks' ? DATA.rows : [], error: null })
+  let key = null
+  for (const m of ['select', 'order', 'range', 'lte', 'limit', 'gte', 'or', 'in']) q[m] = () => q
+  q.eq = (col, v) => {
+    if (col === 'key') key = v
+    return q
+  }
+  // The write-back flag rows have data; the forecast and Arive settings rows
+  // come back empty.
+  q.maybeSingle = async () => ({
+    data: table === 'settings' && key !== 'forecast' && key !== 'arive' ? { value: { bay: true, mpg: false } } : null,
+    error: null,
+  })
+  q.then = (resolve) =>
+    resolve({
+      data: table === 'lead_ratings' ? DATA.ratings : table.startsWith('v_') && table !== 'v_tasks' ? DATA.rows : [],
+      error: null,
+    })
   return q
 }
 
@@ -29,6 +43,8 @@ vi.mock('../lib/supabase', () => ({
 const { default: Pipeline } = await import('./Pipeline')
 const { default: Toaster } = await import('../components/Toaster')
 const { resetWritebackFlags } = await import('../lib/writeback')
+const { __resetRatingsForTest } = await import('../lib/useLeadRatings')
+const { __resetForecastForTest } = await import('../lib/useForecastInputs')
 
 const card = (id, name, stage) => ({ id, business_id: 'bay', name, phone: '1', email: null, last_touch_at: null, stage, crm_profile_url: '#' })
 
@@ -62,6 +78,9 @@ beforeEach(() => {
   document.body.innerHTML = ''
   invoke.mockReset()
   resetWritebackFlags()
+  __resetRatingsForTest()
+  __resetForecastForTest()
+  DATA.ratings = []
   // The board tests below open on the Board view; the views block resets this.
   localStorage.setItem('pipeline-view', 'board')
   DATA.rows = [card('a', 'Ana Lead', 'New Lead'), card('b', 'Ben Working', 'Contacted/Working')]
@@ -446,5 +465,23 @@ describe('Pipeline on a phone', () => {
     } finally {
       delete window.matchMedia
     }
+  })
+})
+
+describe('Pipeline temperature', () => {
+  it('shows the temperature pill and filters by it', async () => {
+    DATA.rows = [
+      { ...card('h', 'Hal Hot', 'Contacted/Working') },
+      { ...card('u', 'Uma Unrated', 'Contacted/Working') },
+    ]
+    DATA.ratings = [{ contact_id: 'h', business_id: 'bay', temperature: 'hot', est_amount: null, close_month: null, contact: { name: 'Hal Hot', score: 0, tier: 'warm' } }]
+    await mount()
+    expect(cardEl('h').querySelector('[data-health="temp"]').textContent).toBe('Hot')
+    const select = document.querySelector('select[aria-label="Temperature"]')
+    await act(async () => {
+      select.value = 'hot'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(cardEl('u')).toBeNull()
   })
 })

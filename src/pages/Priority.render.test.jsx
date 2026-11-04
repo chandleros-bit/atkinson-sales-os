@@ -24,14 +24,17 @@ const lead = (o) => ({
   open_task_count: 0, oldest_open_due_at: null, snooze_count_60d: 0, ...o,
 })
 
-const DATA = { signals: [], rules: { daily_cap: 2, use_crm_last_activity_fallback: false }, touched: [] }
+const DATA = { ratings: [], signals: [], rules: { daily_cap: 2, use_crm_last_activity_fallback: false }, touched: [] }
 
 function query(table) {
   const q = {}
   for (const m of ['select', 'eq', 'gte', 'order', 'range', 'or']) q[m] = () => q
   q.maybeSingle = () => ({ then: (r) => r({ data: table === 'settings' ? { value: DATA.rules } : null, error: null }) })
   q.then = (resolve) =>
-    resolve({ data: table === 'v_lead_signals' ? DATA.signals : table === 'activities' ? DATA.touched : [], error: null })
+    resolve({
+      data: table === 'v_lead_signals' ? DATA.signals : table === 'activities' ? DATA.touched : table === 'lead_ratings' ? DATA.ratings : [],
+      error: null,
+    })
   return q
 }
 
@@ -41,11 +44,14 @@ vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: 'all',
 let mobile = false
 beforeEach(() => {
   document.body.innerHTML = ''
+  DATA.ratings = []
+  __resetRatingsForTest()
   window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
 })
 
 const { default: Priority } = await import('./Priority')
 const { refreshPriorityQueue } = await import('../lib/usePriorityQueue')
+const { __resetRatingsForTest } = await import('../lib/useLeadRatings')
 
 // The queue cache is module-level; reload it from this test's DATA rather than
 // re-importing modules (which would load a second React).
@@ -191,6 +197,22 @@ describe('Up Next page', () => {
     expect(name.textContent).toBe('Maria Guadalupe Hernandez-Villarreal')
     expect(name.className).not.toContain('truncate')
     expect(name.parentElement.className).toContain('flex-wrap')
+  })
+
+  it('ranks a lead rated Hot above an otherwise-equal unrated one', async () => {
+    mobile = false
+    DATA.signals = [
+      lead({ id: 'u', name: 'Aaron Unrated', open_task_count: 1, oldest_open_due_at: iso(3) }),
+      lead({ id: 'h', name: 'Zed Rated', open_task_count: 1, oldest_open_due_at: iso(3) }),
+    ]
+    DATA.ratings = [
+      { contact_id: 'h', business_id: 'bay', temperature: 'hot', est_amount: null, close_month: null, rated_at: iso(1), score_at_rating: 0, contact: { name: 'Zed Rated', score: 0, tier: 'warm' } },
+    ]
+    const host = await render()
+    const text = host.textContent
+    expect(text).toContain('Aaron Unrated')
+    expect(text.indexOf('Zed Rated')).toBeGreaterThan(-1)
+    expect(text.indexOf('Zed Rated')).toBeLessThan(text.indexOf('Aaron Unrated'))
   })
 
   it('shows the empty state when nobody is slipping', async () => {

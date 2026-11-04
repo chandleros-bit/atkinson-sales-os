@@ -9,6 +9,7 @@ import {
   sprintRows, sprintWindow, MPG_SPRINT, callsByDay, callsSince,
   ariveValues, ariveNotes, revenueValues,
 } from '../lib/reports'
+import { refreshForecastInputs } from '../lib/useForecastInputs'
 import { fetchLoanBundle } from '../lib/loansData'
 import { loanStats, DEFAULT_RATES } from '../lib/loans'
 import { prevMonthWindow } from '../lib/overviewDash'
@@ -284,6 +285,7 @@ export default function Reports() {
       .upsert(rows, { onConflict: 'business_id,date,metric_key' })
     setSaving(false)
     if (upErr) { setError(upErr.message); return }
+    refreshForecastInputs().catch(() => {})
     await load()
   }
 
@@ -297,7 +299,7 @@ export default function Reports() {
       .from('settings')
       .upsert({ key: 'metric_targets', value: merged }, { onConflict: 'key' })
     setSaving(false)
-    if (upErr) { setError(upErr.message); return }
+    refreshForecastInputs().catch(() => {})
     setEditing(false)
     await load()
   }

@@ -14,8 +14,10 @@ import TodayAgenda from '../components/TodayAgenda'
 import BizBadge from '../components/BizBadge'
 import PersonLink from '../components/PersonLink'
 import Icon from '../components/Icon'
+import ForecastCard from '../components/ForecastCard'
 import PageHeader from '../components/PageHeader'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
+import { useForecast } from '../lib/useForecastInputs'
 import { urgentCount, reasonText } from '../lib/priorityQueue'
 import { deriveAlert } from '../lib/overview'
 import { MPG_LEAD_FLOW } from '../lib/pipeline'
@@ -629,6 +631,7 @@ export default function Overview() {
   const { biz } = useBusiness()
   const { data, loading, error } = useOverviewData(biz)
   const pq = usePriorityQueue(biz)
+  const forecast = useForecast()
   const view = useMemo(() => (data ? buildView(biz, data) : null), [biz, data])
 
   const subtitle =
@@ -679,6 +682,7 @@ export default function Overview() {
           </div>
 
           <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2 xl:grid-cols-3">
+            <ForecastCard forecast={forecast} biz={biz} />
             <IncomeCard model={view.income} biz={biz} />
             <UpNextCard queue={pq.queue} loading={pq.loading} error={pq.error} />
             <SprintCard model={view.sprint} />
