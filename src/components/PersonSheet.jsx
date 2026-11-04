@@ -22,6 +22,8 @@ import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { cardHealth } from '../lib/cardHealth'
 import { useLeadRatings } from '../lib/useLeadRatings'
 import TemperaturePicker from './TemperaturePicker'
+import { TEMP_LABEL } from '../lib/leadRatings'
+import { useAuth } from '../context/AuthContext'
 import { CRM_LABEL } from '../lib/crmActions'
 import { isCadenceStage } from '../lib/dialList'
 import QuickActions, { Sheet, quickActionTone } from './QuickActions'
@@ -253,6 +255,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
   const biz = person?.business_id || 'bay'
   const t = quickActionTone(biz)
   const ratings = useLeadRatings()
+  const { role } = useAuth() || {}
   const rating = person ? ratings.get(person.id) || null : null
   const h = board && rules ? cardHealth({ ...board, temperature: rating?.temperature, rating }, rules) : null
   const priority = priorityLine(extra.priority)
@@ -276,7 +279,15 @@ export default function PersonSheet({ id, initial = null, onClose }) {
               <HealthPills h={h} />
             </div>
           )}
-          <TemperaturePicker key={`${rating?.temperature || 'none'}|${rating?.est_amount ?? ''}|${rating?.close_month ?? ''}`} contactId={person.id} businessId={biz} rating={rating} />
+          {role === 'assistant' ? (
+            rating?.temperature ? (
+              <div data-temp-readonly className="text-[12.5px] text-muted">
+                Temperature: <span className="font-semibold text-[color:var(--text)]">{TEMP_LABEL[rating.temperature]}</span>
+              </div>
+            ) : null
+          ) : (
+            <TemperaturePicker key={`${rating?.temperature || 'none'}|${rating?.est_amount ?? ''}|${rating?.close_month ?? ''}`} contactId={person.id} businessId={biz} rating={rating} />
+          )}
           {priority && (
             <div data-priority className="rounded-[10px] bg-panel2 px-3 py-2 text-[12.5px]">
               <span className="font-semibold">

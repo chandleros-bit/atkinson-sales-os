@@ -25,6 +25,7 @@ import { withRatings } from '../lib/leadRatings'
 import { useForecast } from '../lib/useForecastInputs'
 import { PAGE_SIZE, pageSlice } from '../lib/paging'
 import Pager from '../components/Pager'
+import { useAuth } from '../context/AuthContext'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -99,6 +100,8 @@ function KpiCards({ kpis, biz }) {
 }
 
 function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
+  // "Pays first" is a money sort: not for the assistant login.
+  const { role } = useAuth() || {}
   return (
     <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2.5">
@@ -129,7 +132,7 @@ function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
             onChange={(e) => onSort(e.target.value)}
             className="bg-transparent text-[14px] font-medium text-[#344054] outline-none"
           >
-            {SORTS.map((o) => (
+            {SORTS.filter((o) => o.id !== 'pays_first' || role !== 'assistant').map((o) => (
               <option key={o.id} value={o.id}>
                 Sort: {o.label}
               </option>
@@ -791,7 +794,8 @@ export default function Pipeline({ biz }) {
   // Drag between stages: Bayway only, writes FUB tags via crm-action set_stage
   // (same as Quick Actions' Move stage). Touch screens use Move stage instead.
   const flags = useWritebackFlags()
-  const canDrag = biz === 'bay' && !isDemoMode && flags.bay === true
+  const { role } = useAuth() || {}
+  const canDrag = biz === 'bay' && !isDemoMode && flags.bay === true && role !== 'assistant'
   const [pending, setPending] = useState({})
   const [dragging, setDragging] = useState(null)
   const [over, setOver] = useState(null)

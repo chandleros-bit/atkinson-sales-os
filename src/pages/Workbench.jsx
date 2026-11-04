@@ -27,6 +27,7 @@ import DialList from '../components/DialList'
 import Dialer from '../components/Dialer'
 import { useLeadRatings } from '../lib/useLeadRatings'
 import { withRatings } from '../lib/leadRatings'
+import { useAuth } from '../context/AuthContext'
 
 function Progress({ label, value, pct }) {
   return (
@@ -67,6 +68,9 @@ export default function Workbench() {
   const { queue, signals, rules, touchedToday } = usePriorityQueue(biz)
   const work = useWorkLane()
   const mobile = useIsMobile()
+  const { role } = useAuth() || {}
+  // The assistant doesn't make calls from the OS: Work lane only.
+  const assistant = role === 'assistant'
   const [lane, setLane] = useState('calls')
   const [adding, setAdding] = useState(false)
   // The Calls lane, each section in its own box: the weekday theme
@@ -103,8 +107,8 @@ export default function Workbench() {
   const openWork = groups.reduce((n, g) => n + (g.id === 'waiting' ? 0 : g.items.length), 0)
   const progress = workProgress(work.workItems.filter((w) => inBook(w.business_id)), openWork, now)
   const alerts = buildAlerts({ queue, signals, pipeline: work.pipeline, tasks: work.tasks, workItems: work.workItems, rules, inBook, now })
-  const showCalls = !mobile || lane === 'calls'
-  const showWork = !mobile || lane === 'work'
+  const showCalls = !assistant && (!mobile || lane === 'calls')
+  const showWork = assistant || !mobile || lane === 'work'
 
   return (
     // xl+: the page fits the window (top bar 100px + bottom padding 48px) and
@@ -134,7 +138,7 @@ export default function Workbench() {
 
       <AlertsRail alerts={alerts} showBook={biz === 'all'} />
 
-      {mobile && (
+      {mobile && !assistant && (
         <div role="tablist" aria-label="Lane" className="grid grid-cols-2 rounded-xl bg-panel2 p-1">
           {[
             ['calls', `Calls · ${callsToGo}`],
