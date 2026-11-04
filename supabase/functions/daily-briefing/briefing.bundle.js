@@ -1207,12 +1207,12 @@ ${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${
     `Slipping
 ${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "Nothing slipping today."}`
   ];
-  const text = `${subject}
+  const text = plainSeparators(`${subject}
 
 ${textBlocks.join("\n\n")}
 
 Open the dashboard: ${url("/")}
-`;
+`);
   const h2 = (t) => `<h2 style="font:600 15px Arial,sans-serif;margin:20px 0 6px">${esc(t)}</h2>`;
   const ul = (items) => `<ul style="font:14px Arial,sans-serif;margin:0;padding-left:18px">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`;
   const blockHtml = (b) => `<p style="font:600 14px Arial,sans-serif;margin:10px 0 4px"><a href="${esc(url(b.href))}" style="color:#1d4ed8">${esc(b.title)}</a></p>${b.rows.length ? ul(b.rows) : ""}`;
@@ -1230,7 +1230,13 @@ Open the dashboard: ${url("/")}
     `<p style="font:13px Arial,sans-serif;margin-top:24px"><a href="${esc(url("/"))}">Open the dashboard</a></p>`,
     `</div>`
   ].join("");
-  return { subject, text, html };
+  return { subject, text, html: asciiHtml(html) };
+}
+function plainSeparators(s) {
+  return s.replace(/·/g, "|").replace(/—/g, "-").replace(/[  ]/g, " ");
+}
+function asciiHtml(s) {
+  return Array.from(s, (c) => c.codePointAt(0) > 126 ? `&#${c.codePointAt(0)};` : c).join("");
 }
 export {
   CORE_SOURCES,

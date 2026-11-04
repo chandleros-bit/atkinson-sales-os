@@ -43,17 +43,26 @@ describe('renderOwnerBriefing', () => {
     expect(html).not.toContain('Deli <review>')
   })
   it('shows a behind goal with its per-day need', () => {
-    expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).text).toContain('Calls 40 / 100 · behind · need 4 per business day')
+    expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).text).toContain('Calls 40 / 100 | behind | need 4 per business day')
   })
   it('labels the scorecard Yesterday by default and by weekday on Mondays', () => {
-    expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).text).toContain('Yesterday: 12 calls · 3 connects · 1 new applications · 4 texts')
+    expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).text).toContain('Yesterday: 12 calls | 3 connects | 1 new applications | 4 texts')
     const m = model()
     m.numbers.scorecard = { ...m.numbers.scorecard, label: 'Friday' }
     expect(renderOwnerBriefing(m, { appUrl: 'https://x.app' }).text).toContain('Friday: 12 calls')
   })
   it('formats a 16:00Z meeting as 10:00 AM Chicago in November', () => {
     const { text } = renderOwnerBriefing(model(), { appUrl: 'https://x.app' })
-    expect(text).toContain('10:00 AM · Deli <review> (MPG)')
+    expect(text).toContain('10:00 AM | Deli <review> (MPG)')
+  })
+  it('keeps the body ASCII-safe: no special separators in text, entities in HTML', () => {
+    const m = model()
+    m.callFirst.replied.top[0] = { name: 'José Núñez', detail: 'Called back' }
+    const { text, html } = renderOwnerBriefing(m, { appUrl: 'https://x.app' })
+    expect(text).not.toMatch(/[·— ]/)
+    expect(text).toContain('José Núñez - Called back')
+    expect(/^[\x09\x0a\x0d\x20-\x7e]*$/.test(html)).toBe(true)
+    expect(html).toContain('Jos&#233; N&#250;&#241;ez')
   })
   it('writes closing dates like Nov 6', () => {
     const m = model()

@@ -66,7 +66,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     `Call first\n${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : '- Nobody waiting'}`,
     `Slipping\n${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : 'Nothing slipping today.'}`,
   ]
-  const text = `${subject}\n\n${textBlocks.join('\n\n')}\n\nOpen the dashboard: ${url('/')}\n`
+  const text = plainSeparators(`${subject}\n\n${textBlocks.join('\n\n')}\n\nOpen the dashboard: ${url('/')}\n`)
 
   // ---- HTML ---------------------------------------------------------------
   const h2 = (t) => `<h2 style="font:600 15px Arial,sans-serif;margin:20px 0 6px">${esc(t)}</h2>`
@@ -84,5 +84,16 @@ export function renderOwnerBriefing(m, { appUrl }) {
     `</div>`,
   ].join('')
 
-  return { subject, text, html }
+  return { subject, text, html: asciiHtml(html) }
+}
+
+// The body goes out quoted-printable through denomailer; keep it ASCII where we
+// can so no client depends on its encoding. Text: our separators (and the
+// narrow space Intl puts before AM/PM) become plain characters; names keep
+// their accents. HTML: every non-ASCII character becomes a numeric entity.
+function plainSeparators(s) {
+  return s.replace(/·/g, '|').replace(/—/g, '-').replace(/[  ]/g, ' ')
+}
+function asciiHtml(s) {
+  return Array.from(s, (c) => (c.codePointAt(0) > 0x7e ? `&#${c.codePointAt(0)};` : c)).join('')
 }
