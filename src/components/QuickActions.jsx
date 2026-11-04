@@ -36,6 +36,8 @@ import {
 import { TEMPERATURES, TEMP_LABEL } from '../lib/leadRatings'
 import { saveRating } from '../lib/useLeadRatings'
 import { followUpEventRow, insertContactEvent, notifyContactEventsChanged } from '../lib/contactEvents'
+import { useAuth } from '../context/AuthContext'
+import { quickActionsFor } from '../lib/roles'
 
 const FUB_TASK_TYPES = ['Follow Up', 'Call', 'Text', 'Email', 'Appointment', 'Showing', 'Closing', 'Open House', 'Thank You']
 
@@ -738,9 +740,14 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *   size        'sm': small outlined buttons stacked two to a row (Workbench)
  *               'xs': the same small buttons in one wrapping row (Pipeline board)
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, cadence, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only, autoOpen = null, onSheetClose, size, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, cadence, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only: onlyProp, autoOpen = null, onSheetClose, size, className = '' }) {
+  // The assistant login gets note, follow-up and complete only (crm-action refuses the rest).
+  const { role } = useAuth() || {}
+  const only = quickActionsFor(role, onlyProp)
   const flags = useWritebackFlags()
-  const [open, setOpen] = useState(autoOpen)
+  // autoOpen may name a sheet with no button (only={[]}); the role still decides.
+  const allowed = quickActionsFor(role, undefined)
+  const [open, setOpen] = useState(autoOpen && (!allowed || allowed.includes(autoOpen)) ? autoOpen : null)
   // Tell a quick-add caller when its sheet has closed.
   const opened = useRef(!!autoOpen)
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderOwnerBriefing } from './briefingEmail'
+import { renderOwnerBriefing, renderAssistantBriefing } from './briefingEmail'
 
 const model = (o = {}) => ({
   dateLabel: 'Tue Nov 3',
@@ -68,5 +68,51 @@ describe('renderOwnerBriefing', () => {
     const m = model()
     m.today.closings = { count: 1, top: [{ name: 'Pat Lee', date: '2026-11-06' }] }
     expect(renderOwnerBriefing(m, { appUrl: 'https://x.app' }).text).toContain('Pat Lee Nov 6')
+  })
+})
+
+const amodel = (o = {}) => ({
+  dateLabel: 'Wed Nov 4',
+  closing: { count: 1, top: [{ name: 'Pat Lee', date: '2026-11-06', title: 'Lone Star Title', docs: ['W2'], buyerAgent: { name: 'Jo Ray', phone: '7135550100' }, sellerAgent: null }] },
+  disclosures: { count: 2, top: [{ name: 'Due Dan', dueBy: '2026-11-04', due: true }, { name: 'Fresh Fran', dueBy: '2026-11-06', due: false }] },
+  missingDocs: { count: 1, top: [{ name: 'Old Olga', docs: ['W2', 'Bank'], days: 10, chase: true }] },
+  newApps: { count: 0, top: [] },
+  waiting: { count: 0, top: [] },
+  closingCount: 1,
+  chaseCount: 1,
+  quiet: false,
+  ...o,
+})
+
+describe('renderAssistantBriefing', () => {
+  it('subject carries the date, closings and docs to chase, ASCII only', () => {
+    const { subject } = renderAssistantBriefing(amodel(), { appUrl: 'https://x.app' })
+    expect(subject).toBe('Bayway files | Wed Nov 4 | 1 closing this week | 1 doc to chase')
+    expect(/^[ -~]*$/.test(subject)).toBe(true)
+  })
+  it('pluralizes the subject counts', () => {
+    const { subject } = renderAssistantBriefing(amodel({ closingCount: 2, chaseCount: 5 }), { appUrl: 'https://x.app' })
+    expect(subject).toBe('Bayway files | Wed Nov 4 | 2 closing this week | 5 docs to chase')
+  })
+  it('shows closings with title, agents and docs; disclosures before missing docs', () => {
+    const { text } = renderAssistantBriefing(amodel(), { appUrl: 'https://x.app' })
+    expect(text).toContain('Pat Lee - closes Nov 6 | Title: Lone Star Title | Buyer agent: Jo Ray 7135550100 | Docs: W2')
+    expect(text).toContain('Due Dan - disclose by Nov 4 (DUE)')
+    expect(text).toContain('Fresh Fran - disclose by Nov 6')
+    expect(text).toContain('Old Olga - W2, Bank - 10 days - CHASE TODAY')
+    expect(text.indexOf('Disclosures due')).toBeLessThan(text.indexOf('Missing docs'))
+    expect(text).not.toContain('New applications')
+  })
+  it('marks due rows red in HTML and keeps HTML ASCII', () => {
+    const { html } = renderAssistantBriefing(amodel(), { appUrl: 'https://x.app' })
+    expect(html).toMatch(/<li style="color:#b42318">Due Dan - disclose by Nov 4 \(DUE\)<\/li>/)
+    expect(html).toContain('href="https://x.app/pipeline"')
+    expect(/^[\x09\x0a\x0d\x20-\x7e]*$/.test(html)).toBe(true)
+  })
+  it('says the files are quiet when nothing is listed', () => {
+    const empty = { count: 0, top: [] }
+    const m = amodel({ closing: empty, disclosures: empty, missingDocs: empty, closingCount: 0, chaseCount: 0, quiet: true })
+    const { text } = renderAssistantBriefing(m, { appUrl: 'https://x.app' })
+    expect(text).toContain('Nothing on the files today.')
   })
 })

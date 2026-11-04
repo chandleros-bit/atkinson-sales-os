@@ -1,7 +1,7 @@
 # Lead temperature, production forecast and daily briefings: Design
 
 **Date:** 2026-11-03
-**Status:** Sections 1-2 built on feat/lead-temperature (not deployed). Section 3 not built.
+**Status:** Sections 1-2 live (PR #83). Chandler's briefing live (PR #85). Section 3 assistant login and briefing built on feat/assistant-login (plan 2026-11-04-assistant-login-briefing.md); not deployed.
 **Decided with Chandler:** 2026-11-03 (discussion in the Claude Code session that shipped PRs #80–#82).
 **Set aside (not in this spec):** FUB email template editor, adding leads to FUB action plans from the OS, Brevo blast emails, OS-owned drips. FUB's API can list action plans, apply them to a person and pause or resume them, and create or edit email templates; it cannot create or edit action plans or send email (it only logs email-marketing events via `/emCampaigns` and `/emEvents`).
 

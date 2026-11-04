@@ -32,3 +32,15 @@ describe('noteRows', () => {
     expect(rows.map((r) => r.id)).toEqual(['b'])
   })
 })
+
+describe('noteRows by assistant', () => {
+  it('marks notes whose activity id the assistant wrote', () => {
+    const acts = [
+      { id: 'a1', occurred_at: '2026-11-04T15:00:00Z', raw: { body: 'Sent doc list' } },
+      { id: 'a2', occurred_at: '2026-11-04T14:00:00Z', raw: { body: 'Called' } },
+    ]
+    const rows = noteRows(acts, null, new Set(['a1']))
+    expect(rows.find((r) => r.id === 'a1').byAssistant).toBe(true)
+    expect(rows.find((r) => r.id === 'a2').byAssistant).toBeFalsy()
+  })
+})

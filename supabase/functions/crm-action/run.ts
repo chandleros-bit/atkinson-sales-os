@@ -5,6 +5,7 @@
 //   adapters:      { bay, mpg }, each { send, read, map } (see crm.ts)
 //   allowedUserId: the ALLOWED_USER_ID secret
 //   userId:        the caller's auth user id (from the verified JWT)
+//   role:          the caller's user_roles.role ('owner' | 'assistant' | null)
 //
 // THE RULE that matters most: mirror rows come from the same mappers the
 // scheduled syncs use (adapter.map.* is fub-activity / fub-tasks /
@@ -12,7 +13,7 @@
 // store activities as `${type}-${id}`; writing anything else here would make
 // the next sync insert a second copy and double the call counts.
 
-import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS } from './plan.ts'
+import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS, ASSISTANT_ACTIONS, ASSISTANT_REFUSED, ASSISTANT_BAYWAY_ONLY } from './plan.ts'
 import { isStageTarget } from '../_shared/bay-stages.ts'
 import { mapRelationship } from '../_shared/fub-relationships.ts'
 
@@ -234,8 +235,13 @@ async function mirror(db, adapter, step, out, target, now) {
   }
 }
 
-export async function run(req, { db, adapters, allowedUserId, userId, now = new Date() }) {
-  if (!allowedUserId || !userId || userId !== allowedUserId) return reply(403, { error: 'Forbidden' })
+export async function run(req, { db, adapters, allowedUserId, userId, role = null, now = new Date() }) {
+  // Chandler is ALLOWED_USER_ID; the assistant login is a user_roles 'assistant'.
+  const isOwner = !!allowedUserId && !!userId && userId === allowedUserId
+  const isAssistant = !isOwner && !!userId && role === 'assistant'
+  if (!isOwner && !isAssistant) return reply(403, { error: 'Forbidden' })
+  // Setup and Smart List reads are Chandler's alone.
+  if (isAssistant && (req?.action === 'whoami' || req?.action === 'smart_lists')) return reply(403, { error: 'Forbidden' })
   if (!req || !UUID_RE.test(String(req.client_action_id || ''))) {
     return reply(400, { error: 'client_action_id (uuid) is required' })
   }
@@ -267,6 +273,7 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
     if (!req.contact_id) return reply(200, { status: 'refused', error: 'contact_id is required' })
     const contact = await loadContact(db, req.contact_id)
     if (!contact) return reply(200, { status: 'refused', error: 'Contact not found' })
+    if (isAssistant && contact.business_id !== 'bay') return reply(200, { status: 'refused', error: ASSISTANT_BAYWAY_ONLY })
     const adapter = adapters[contact.business_id]
     try {
       const recs = await adapter.read.notesFor(String(contact.external_id))
@@ -344,6 +351,8 @@ export async function run(req, { db, adapters, allowedUserId, userId, now = new 
     await finish(db, req.client_action_id, { status: 'refused', results: [{ step: req.action, ok: false, error }] })
     return reply(200, { status: 'refused', error })
   }
+  if (isAssistant && !ASSISTANT_ACTIONS.has(req.action)) return refuse(ASSISTANT_REFUSED)
+  if (isAssistant && businessId !== 'bay') return refuse(ASSISTANT_BAYWAY_ONLY)
   if (!(await settingOn(db, 'writeback_enabled', businessId))) return refuse(`Write-back is off for ${BOOK_LABEL[businessId]}`)
   if (req.action === 'create_contact' && !(await settingOn(db, 'create_lead_enabled', businessId))) {
     return refuse(`New lead is off for ${BOOK_LABEL[businessId]}`)

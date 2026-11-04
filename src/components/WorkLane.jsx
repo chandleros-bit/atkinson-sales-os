@@ -23,6 +23,7 @@ import ContactTasks, { PopupTabs, taskCount } from './ContactTasks'
 import PersonSheet from './PersonSheet'
 import { Sheet, quickActionTone } from './QuickActions'
 import { showToast } from './Toaster'
+import { useAuth } from '../context/AuthContext'
 import { PERSON_LINK_CLS } from './PersonLink'
 
 const SENT = [
@@ -63,6 +64,7 @@ function StatusPill({ status }) {
 // canReview: write-back to FUB is on (Review complete writes there).
 // onReview(outcome, reason, notes): runs the CRM step; the lane records done.
 function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
+  const { role } = useAuth() || {}
   const [status, setStatus] = useState(item.status === 'waiting' || item.status === 'working' ? item.status : 'open')
   const [outcome, setOutcome] = useState(null)
   const [reason, setReason] = useState(null)
@@ -189,7 +191,7 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
                 <div className="mt-2 text-[12px] text-muted">{LOST_WARNING}</div>
               </div>
             )}
-            {!canReview && <div className="mt-2 text-[12px] text-[color:var(--neg-ink)]">Write-back to FollowUpBoss is off, so the outcome can't be sent.</div>}
+            {!canReview && <div className="mt-2 text-[12px] text-[color:var(--neg-ink)]">{role === 'assistant' ? 'Chandler sends review outcomes to FollowUpBoss.' : "Write-back to FollowUpBoss is off, so the outcome can't be sent."}</div>}
           </div>
         )}
         <textarea
@@ -288,6 +290,9 @@ function GroupTitle({ g, count, children }) {
 
 export default function WorkLane({ groups, onChanged }) {
   const flags = useWritebackFlags()
+  // The assistant login can't move stages (estimate sent, review outcomes).
+  const { role } = useAuth() || {}
+  const assistant = role === 'assistant'
   const [personId, setPersonId] = useState(null)
   const [picking, setPicking] = useState(null)
   const [updating, setUpdating] = useState(null)
@@ -332,7 +337,7 @@ export default function WorkLane({ groups, onChanged }) {
       key={it.key}
       it={it}
       showBook={g.book == null}
-      canDone={it.kind === 'custom' || it.kind === 'disclosed' || ((it.kind === 'estimate' || it.kind === 'mpg_task') && flags[it.book] === true)}
+      canDone={it.kind === 'custom' || it.kind === 'disclosed' || ((it.kind === 'estimate' || it.kind === 'mpg_task') && flags[it.book] === true && !assistant)}
       busy={busy === it.key}
       onOpen={() => setPersonId(it.contactId)}
       onUpdate={() => setUpdating(it)}
@@ -400,7 +405,7 @@ export default function WorkLane({ groups, onChanged }) {
       {updating && (
         <UpdateSheet
           item={updating}
-          canReview={flags.bay === true}
+          canReview={flags.bay === true && !assistant}
           onReview={(outcome, reason, notes) => {
             const item = updating
             setUpdating(null)

@@ -2,9 +2,9 @@
 // user's JWT via supabase.functions.invoke('crm-action', { body }).
 //
 // Unlike the sync functions (deployed --no-verify-jwt for pg_cron), this one is
-// deployed WITH JWT verification, and run.ts also checks the caller against the
-// ALLOWED_USER_ID secret: every table's read policy is `using (true)` for any
-// signed-in user, so that check is what keeps writes to Chandler alone.
+// deployed WITH JWT verification. run.ts lets ALLOWED_USER_ID (Chandler) do
+// everything and a user_roles 'assistant' add notes, create follow-ups and
+// complete tasks on Bayway only; anyone else gets 403.
 // Setup: docs/phase-writeback-setup.md.
 
 import { serviceClient } from '../_shared/db.ts'
@@ -29,6 +29,9 @@ Deno.serve(async (req) => {
   const { data, error } = token ? await db.auth.getUser(token) : { data: null, error: new Error('no token') }
   const userId = data?.user?.id
   if (error || !userId) return json(401, { error: 'Not signed in' })
+  // The caller's role (assistant login). A failed lookup means no role: only
+  // ALLOWED_USER_ID gets through then.
+  const { data: roleRow } = await db.from('user_roles').select('role').eq('user_id', userId).maybeSingle()
 
   let body
   try {
@@ -44,6 +47,7 @@ Deno.serve(async (req) => {
       adapters: { bay: fubAdapter(env), mpg: zohoAdapter(env, { db }) },
       allowedUserId: env('ALLOWED_USER_ID'),
       userId,
+      role: roleRow?.role ?? null,
     })
     return json(out.http, out.body)
   } catch (e) {

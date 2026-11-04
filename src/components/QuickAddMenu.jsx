@@ -15,9 +15,10 @@ export const QUICK_ADD = [
 const NEW_LEAD = { kind: 'lead', label: 'New lead…' }
 
 // showLead: offer "New lead…" (settings.create_lead_enabled plus write-back).
-export default function QuickAddMenu({ onPick, showLead = false, className = 'btn-primary', style }) {
+// hide: kinds this login can't use (the assistant has no Log call).
+export default function QuickAddMenu({ onPick, showLead = false, hide = [], className = 'btn-primary', style }) {
   const [open, setOpen] = useState(false)
-  const items = showLead ? [NEW_LEAD, ...QUICK_ADD] : QUICK_ADD
+  const items = (showLead ? [NEW_LEAD, ...QUICK_ADD] : QUICK_ADD).filter((i) => !hide.includes(i.kind))
   const box = useRef(null)
 
   useEffect(() => {

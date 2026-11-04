@@ -13,7 +13,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let filter = 'all'
 vi.mock('../lib/supabase', () => ({ isDemoMode: false, supabase: null }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ signOut: () => {}, isDemoMode: false }) }))
+let auth = { role: 'owner' }
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ signOut: () => {}, isDemoMode: false, ...auth }) }))
 vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: filter }) }))
 vi.mock('../lib/usePriorityQueue', () => ({ usePriorityQueue: () => ({ queue: [] }) }))
 vi.mock('../lib/useSyncHealth', () => ({ useSyncHealth: () => ({ fub: { finished_at: new Date().toISOString(), status: 'ok' } }) }))
@@ -36,10 +37,27 @@ const current = () => [...host.querySelectorAll('nav[aria-label="Main"] a[aria-c
 beforeEach(() => {
   document.body.innerHTML = ''
   filter = 'all'
+  auth = { role: 'owner' }
   localStorage.clear()
 })
 
 describe('Sidebar', () => {
+  it('shows the assistant Workbench, Tasks and Pipeline only, with her name and role', async () => {
+    auth = { role: 'assistant', userName: 'Shelby Atkinson' }
+    await render(<Sidebar />)
+    const links = [...host.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.textContent)
+    expect(links).toEqual(['Workbench', 'Tasks', 'Pipeline'])
+    expect(host.textContent).toContain('Shelby Atkinson')
+    expect(host.textContent).toContain('Assistant')
+    expect(host.textContent).not.toContain('Super Admin')
+  })
+
+  it('shows the owner as Chandler, Super Admin', async () => {
+    await render(<Sidebar />)
+    expect(host.textContent).toContain('Chandler Atkinson')
+    expect(host.textContent).toContain('Super Admin')
+  })
+
   it('lists ten links in four groups', async () => {
     await render(<Sidebar />)
     const links = [...host.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.textContent)

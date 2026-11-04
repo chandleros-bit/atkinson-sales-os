@@ -9,10 +9,13 @@ import PersonSheet from './PersonSheet'
 import QuickAddMenu from './QuickAddMenu'
 import { openSearch } from './SearchPalette'
 import { useWritebackFlags, useSettingFlags } from '../lib/writeback'
+import { useAuth } from '../context/AuthContext'
 
 // onBeforePick: close the phone menu before the person pick opens.
 export default function NewMenu({ onBeforePick }) {
   const { biz } = useBusiness()
+  const { role } = useAuth() || {}
+  const assistant = role === 'assistant'
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [newLeadOpen, setNewLeadOpen] = useState(false)
   // The lead just created (or an existing match) opens in a person sheet.
@@ -20,12 +23,13 @@ export default function NewMenu({ onBeforePick }) {
   // New lead needs both switches on for a book.
   const writeback = useWritebackFlags()
   const createLead = useSettingFlags('create_lead_enabled')
-  const leadBooks = ['bay', 'mpg'].filter((b) => writeback[b] === true && createLead[b] === true)
+  const leadBooks = assistant ? [] : ['bay', 'mpg'].filter((b) => writeback[b] === true && createLead[b] === true)
 
   return (
     <>
       <QuickAddMenu
         showLead={leadBooks.length > 0}
+        hide={assistant ? ['call'] : []}
         onPick={(kind) => {
           if (kind === 'task') return setNewTaskOpen(true)
           if (kind === 'lead') return setNewLeadOpen(true)

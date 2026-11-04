@@ -480,7 +480,7 @@ function buildAlerts({ queue = [], signals = [], pipeline = [], tasks = [], work
   );
   const statements = tasks.filter((t) => isStatementTask(t.title) && t.due_at && overdueDays(t.due_at, now) >= 1);
   const backs = workItems.filter((w) => w.status === "waiting" && w.check_back_on && overdueDays(w.check_back_on, now) >= 0);
-  const list2 = [
+  const list3 = [
     alert("new_leads", "neg", "New leads waiting", `Past ${rules.speed_to_lead_minutes}m, not called`, fresh.map((r) => person(r, speedToLead(r, rules, now).text)), null),
     inBook("bay") && alert("quiet_apps", "neg", "Applications gone quiet", `Application Received, no touch in ${QUIET_APP_DAYS}+ days`, quiet.map((r) => person(r, quietFor(r))), "bay"),
     inBook("bay") && alert(
@@ -515,7 +515,7 @@ function buildAlerts({ queue = [], signals = [], pipeline = [], tasks = [], work
     )
   ];
   const rank = { neg: 0, warn: 1 };
-  return list2.filter((a) => a && a.count > 0).sort((a, b) => rank[a.tone] - rank[b.tone]);
+  return list3.filter((a) => a && a.count > 0).sort((a, b) => rank[a.tone] - rank[b.tone]);
 }
 
 // src/lib/reports.js
@@ -746,7 +746,7 @@ function monthlyGoals({ biz, values: v, targets, now = Date.now() }) {
   const elapsed = monthElapsed(now);
   const bay = biz !== "mpg";
   const mpg = biz !== "bay";
-  const list2 = [
+  const list3 = [
     { id: "calls", label: "Calls", value: v.calls, target: targets.calls_monthly, unit: "count" },
     bay && { id: "closings", label: "Loans closed", value: v.loansClosed, target: targets.loans_closed, unit: "count" },
     bay && { id: "commission", label: "Gross commission", value: v.commission, target: targets.rev_gross_commission, unit: "currency" },
@@ -755,10 +755,10 @@ function monthlyGoals({ biz, values: v, targets, now = Date.now() }) {
     mpg && biz === "mpg" && { id: "residual", label: "MPG residual", value: v.residual, target: targets.rev_monthly_residual, unit: "currency" },
     mpg && biz === "mpg" && { id: "proposals", label: "Proposals delivered", value: v.proposals, target: targets.merchant_proposals_delivered, unit: "count" }
   ].filter(Boolean).map((g) => ({ ...g, pct: pctOf(g.value, g.target), status: goalStatus(g.value, g.target, elapsed) }));
-  const count = (s) => list2.filter((g) => g.status === s).length;
+  const count = (s) => list3.filter((g) => g.status === s).length;
   const counts = { hit: count("hit"), pace: count("pace"), behind: count("behind") };
-  const onPace = list2.length ? Math.round((counts.hit + counts.pace) / list2.length * 100) : 0;
-  return { goals: list2, counts, onPace };
+  const onPace = list3.length ? Math.round((counts.hit + counts.pace) / list3.length * 100) : 0;
+  return { goals: list3, counts, onPace };
 }
 
 // src/lib/forecast.js
@@ -938,7 +938,7 @@ function syncHealth(latest, now = Date.now()) {
   });
   const seen = detail.filter((d) => d.state !== "missing");
   if (seen.length === 0) return { state: "unknown", text: "No sync yet", detail };
-  const oldest = (list2) => list2.reduce((a, b) => new Date(b.ranAt) < new Date(a.ranAt) ? b : a);
+  const oldest = (list3) => list3.reduce((a, b) => new Date(b.ranAt) < new Date(a.ranAt) ? b : a);
   const failed = seen.filter((d) => d.state === "error");
   if (failed.length) return { state: "error", text: `${failed[0].label} sync failed`, detail };
   const stale = seen.filter((d) => d.state === "stale");
@@ -1058,6 +1058,18 @@ function previousBusinessDateKey(now = Date.now()) {
 function previousBusinessDayRangeUtc(now = Date.now()) {
   return chicagoDayRangeUtc(now, backToBusinessDay(now));
 }
+function addBusinessDays(dateKey, n) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  let left = n;
+  while (left > 0) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const wd = d.getUTCDay();
+    if (wd !== 0 && wd !== 6) left--;
+  }
+  return d.toISOString().slice(0, 10);
+}
 
 // src/lib/briefing.js
 var TOP = 5;
@@ -1150,6 +1162,58 @@ function buildOwnerBriefing(data, now = Date.now()) {
   };
 }
 
+// src/lib/assistantBriefing.js
+var TOP2 = 15;
+var CHASE_DAYS = 7;
+var WAIT_DAYS = 3;
+var APP_RECEIVED2 = "Application Received";
+var APP_SENT = "Application/Estimate Sent";
+var list2 = (rows, toItem) => ({ count: rows.length, top: rows.slice(0, TOP2).map(toItem) });
+var agent = (name, phone) => name ? { name, phone: phone || null } : null;
+var dayOf = (ts) => ts ? chicagoDateKey(new Date(ts).getTime()) : null;
+function buildAssistantBriefing(data, now = Date.now()) {
+  const pipeline = data.pipeline || [];
+  const byId = new Map(pipeline.map((r) => [r.id, r]));
+  const today = chicagoDateKey(now);
+  const weekOut = chicagoDateKey(now, 6);
+  const closingRows = (data.loans || []).filter((l) => !isScenario(l) && isOpen(l) && l.firm_closing_on && l.firm_closing_on >= today && l.firm_closing_on <= weekOut).sort((a, b) => a.firm_closing_on.localeCompare(b.firm_closing_on));
+  const closing = list2(closingRows, (l) => ({
+    name: l.borrower_name || "(no name)",
+    date: l.firm_closing_on,
+    title: l.title_company || null,
+    docs: byId.get(l.contact_id)?.docs_outstanding || [],
+    buyerAgent: agent(l.buyer_agent_name, l.buyer_agent_phone),
+    sellerAgent: agent(l.seller_agent_name, l.seller_agent_phone)
+  }));
+  const disclosureRows = pipeline.filter((r) => r.stage === APP_RECEIVED2 && r.stage_since).map((r) => ({ name: r.name || "(no name)", dueBy: addBusinessDays(dayOf(r.stage_since), 3) })).sort((a, b) => a.dueBy.localeCompare(b.dueBy)).map((r) => ({ ...r, due: today >= r.dueBy }));
+  const disclosures = list2(disclosureRows, (r) => r);
+  const docRows = pipeline.filter((r) => r.docs_tracked && (r.docs_outstanding_count || 0) > 0).sort((a, b) => String(a.docs_oldest_requested_at || "").localeCompare(String(b.docs_oldest_requested_at || ""))).map((r) => {
+    const days = daysSince(r.docs_oldest_requested_at, now);
+    return { name: r.name || "(no name)", docs: r.docs_outstanding || [], days, chase: days !== null && days >= CHASE_DAYS };
+  });
+  const missingDocs = list2(docRows, (r) => r);
+  const prevDay = previousBusinessDateKey(now);
+  const newApps = list2(
+    pipeline.filter((r) => r.stage === APP_RECEIVED2 && dayOf(r.stage_since) === prevDay),
+    (r) => ({ name: r.name || "(no name)" })
+  );
+  const stuck = pipeline.filter((r) => r.stage === APP_SENT && r.stage_since && daysSince(r.stage_since, now) >= WAIT_DAYS).sort((a, b) => String(a.stage_since).localeCompare(String(b.stage_since))).map((r) => ({ name: r.name || "(no name)", detail: `${APP_SENT} ${daysSince(r.stage_since, now)} days ago, no movement` }));
+  const checkBacks = (data.workItems || []).filter((w) => w.status !== "done" && (w.check_back_on && w.check_back_on <= today || w.due_on && w.due_on <= today)).map((w) => ({ name: w.contact_name || w.title || "Work item", detail: `Check back: ${w.title || w.kind}` }));
+  const waiting = list2(stuck.concat(checkBacks), (r) => r);
+  const chaseCount = docRows.filter((r) => r.chase).length;
+  return {
+    dateLabel: longDateLabel(now),
+    closing,
+    disclosures,
+    missingDocs,
+    newApps,
+    waiting,
+    closingCount: closing.count,
+    chaseCount,
+    quiet: !closing.count && !disclosures.count && !missingDocs.count && !newApps.count && !waiting.count
+  };
+}
+
 // src/lib/briefingEmail.js
 var money = (n) => `$${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
 var esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -1232,6 +1296,54 @@ Open the dashboard: ${url("/")}
   ].join("");
   return { subject, text, html: asciiHtml(html) };
 }
+var plural3 = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+function renderAssistantBriefing(m, { appUrl }) {
+  const url = (p) => `${String(appUrl).replace(/\/$/, "")}${p}`;
+  const subject = `Bayway files | ${m.dateLabel} | ${m.closingCount} closing this week | ${plural3(m.chaseCount, "doc", "docs")} to chase`;
+  const agentText = (label, a) => a ? `${label}: ${a.name}${a.phone ? ` ${a.phone}` : ""}` : null;
+  const block = (title, b, href, toRow) => {
+    if (!b.count) return null;
+    const rows = b.top.map(toRow);
+    if (b.count > b.top.length) rows.push({ text: `+${b.count - b.top.length} more`, alert: false });
+    return { title: `${title} (${b.count})`, rows, href };
+  };
+  const blocks = [
+    block("Closing in 7 days", m.closing, "/pipeline", (c) => ({
+      text: [
+        `${c.name} - closes ${dayLabel(c.date)}`,
+        c.title ? `Title: ${c.title}` : "Title: not set",
+        agentText("Buyer agent", c.buyerAgent),
+        agentText("Seller agent", c.sellerAgent),
+        c.docs.length ? `Docs: ${c.docs.join(", ")}` : "Docs: none outstanding"
+      ].filter(Boolean).join(" | "),
+      alert: false
+    })),
+    block("Disclosures due", m.disclosures, "/pipeline", (d) => ({ text: `${d.name} - disclose by ${dayLabel(d.dueBy)}${d.due ? " (DUE)" : ""}`, alert: d.due })),
+    block("Missing docs", m.missingDocs, "/pipeline", (d) => ({
+      text: `${d.name} - ${d.docs.join(", ")}${d.days != null ? ` - ${d.days} days` : ""}${d.chase ? " - CHASE TODAY" : ""}`,
+      alert: d.chase
+    })),
+    block("New applications", m.newApps, "/pipeline", (a) => ({ text: `${a.name} - set up the file and send the doc list`, alert: false })),
+    block("Waiting on borrower", m.waiting, "/workbench", (w) => ({ text: `${w.name} - ${w.detail}`, alert: false }))
+  ].filter(Boolean);
+  const textBody = blocks.length ? blocks.map((b) => [b.title, ...b.rows.map((r) => `  - ${r.text}`), `  ${url(b.href)}`].join("\n")).join("\n\n") : "Nothing on the files today.";
+  const text = plainSeparators(`${subject}
+
+${textBody}
+
+Open the OS: ${url("/workbench")}
+`);
+  const li = (r) => `<li${r.alert ? ' style="color:#b42318"' : ""}>${esc(r.text)}</li>`;
+  const blockHtml = (b) => `<p style="font:600 14px Arial,sans-serif;margin:14px 0 4px"><a href="${esc(url(b.href))}" style="color:#1d4ed8">${esc(b.title)}</a></p><ul style="font:14px Arial,sans-serif;margin:0;padding-left:18px">${b.rows.map(li).join("")}</ul>`;
+  const html = [
+    `<div style="max-width:600px">`,
+    `<p style="font:13px Arial,sans-serif;color:#667085;margin:0">${esc(m.dateLabel)} - Bayway files</p>`,
+    blocks.length ? blocks.map(blockHtml).join("") : `<p style="font:14px Arial,sans-serif">Nothing on the files today.</p>`,
+    `<p style="font:13px Arial,sans-serif;margin-top:24px"><a href="${esc(url("/workbench"))}">Open the OS</a></p>`,
+    `</div>`
+  ].join("");
+  return { subject, text, html: asciiHtml(html) };
+}
 function plainSeparators(s) {
   return s.replace(/·/g, "|").replace(/—/g, "-").replace(/[  ]/g, " ");
 }
@@ -1240,11 +1352,13 @@ function asciiHtml(s) {
 }
 export {
   CORE_SOURCES,
+  buildAssistantBriefing,
   buildOwnerBriefing,
   chicagoDateKey,
   chicagoDayRangeUtc,
   chicagoParts,
   previousBusinessDayRangeUtc,
+  renderAssistantBriefing,
   renderOwnerBriefing,
   shouldSend
 };
