@@ -87,6 +87,61 @@ export function renderOwnerBriefing(m, { appUrl }) {
   return { subject, text, html: asciiHtml(html) }
 }
 
+// Shelby's Bayway files briefing. Rows are { text, alert }: alert rows (a
+// disclosure due, a doc to chase) are red in HTML and upper-case in text.
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+
+export function renderAssistantBriefing(m, { appUrl }) {
+  const url = (p) => `${String(appUrl).replace(/\/$/, '')}${p}`
+  const subject = `Bayway files | ${m.dateLabel} | ${m.closingCount} closing this week | ${plural(m.chaseCount, 'doc', 'docs')} to chase`
+
+  const agentText = (label, a) => (a ? `${label}: ${a.name}${a.phone ? ` ${a.phone}` : ''}` : null)
+  const block = (title, b, href, toRow) => {
+    if (!b.count) return null
+    const rows = b.top.map(toRow)
+    if (b.count > b.top.length) rows.push({ text: `+${b.count - b.top.length} more`, alert: false })
+    return { title: `${title} (${b.count})`, rows, href }
+  }
+  const blocks = [
+    block('Closing in 7 days', m.closing, '/pipeline', (c) => ({
+      text: [
+        `${c.name} - closes ${dayLabel(c.date)}`,
+        c.title ? `Title: ${c.title}` : 'Title: not set',
+        agentText('Buyer agent', c.buyerAgent),
+        agentText('Seller agent', c.sellerAgent),
+        c.docs.length ? `Docs: ${c.docs.join(', ')}` : 'Docs: none outstanding',
+      ].filter(Boolean).join(' | '),
+      alert: false,
+    })),
+    block('Disclosures due', m.disclosures, '/pipeline', (d) => ({ text: `${d.name} - disclose by ${dayLabel(d.dueBy)}${d.due ? ' (DUE)' : ''}`, alert: d.due })),
+    block('Missing docs', m.missingDocs, '/pipeline', (d) => ({
+      text: `${d.name} - ${d.docs.join(', ')}${d.days != null ? ` - ${d.days} days` : ''}${d.chase ? ' - CHASE TODAY' : ''}`,
+      alert: d.chase,
+    })),
+    block('New applications', m.newApps, '/pipeline', (a) => ({ text: `${a.name} - set up the file and send the doc list`, alert: false })),
+    block('Waiting on borrower', m.waiting, '/workbench', (w) => ({ text: `${w.name} - ${w.detail}`, alert: false })),
+  ].filter(Boolean)
+
+  const textBody = blocks.length
+    ? blocks.map((b) => [b.title, ...b.rows.map((r) => `  - ${r.text}`), `  ${url(b.href)}`].join('\n')).join('\n\n')
+    : 'Nothing on the files today.'
+  const text = plainSeparators(`${subject}\n\n${textBody}\n\nOpen the OS: ${url('/workbench')}\n`)
+
+  const li = (r) => `<li${r.alert ? ' style="color:#b42318"' : ''}>${esc(r.text)}</li>`
+  const blockHtml = (b) =>
+    `<p style="font:600 14px Arial,sans-serif;margin:14px 0 4px"><a href="${esc(url(b.href))}" style="color:#1d4ed8">${esc(b.title)}</a></p>` +
+    `<ul style="font:14px Arial,sans-serif;margin:0;padding-left:18px">${b.rows.map(li).join('')}</ul>`
+  const html = [
+    `<div style="max-width:600px">`,
+    `<p style="font:13px Arial,sans-serif;color:#667085;margin:0">${esc(m.dateLabel)} - Bayway files</p>`,
+    blocks.length ? blocks.map(blockHtml).join('') : `<p style="font:14px Arial,sans-serif">Nothing on the files today.</p>`,
+    `<p style="font:13px Arial,sans-serif;margin-top:24px"><a href="${esc(url('/workbench'))}">Open the OS</a></p>`,
+    `</div>`,
+  ].join('')
+
+  return { subject, text, html: asciiHtml(html) }
+}
+
 // The body goes out quoted-printable through denomailer; keep it ASCII where we
 // can so no client depends on its encoding. Text: our separators (and the
 // narrow space Intl puts before AM/PM) become plain characters; names keep
