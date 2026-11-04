@@ -29,6 +29,8 @@ export const PAGES = [
   { label: 'MPG activity', to: '/mpg/activity', keywords: 'calls notes' },
   { label: 'MPG contacts', to: '/mpg/contacts', keywords: 'people zoho merchants' },
   { label: 'Sync status', to: '/sync', keywords: 'sync health' },
+  { label: 'Settings', to: '/settings', keywords: 'forecast odds' },
+  { label: 'Rate leads', to: '/rate', keywords: 'temperature hot warm cold' },
 ]
 
 export function matchPages(q, max = 4) {
