@@ -185,13 +185,12 @@ describe('forecastLines: deal identity, overdue, undated, bad data', () => {
     })
     expect(lines.map((l) => l.key)).toEqual(['loan:1'])
   })
-  it('an adverse loan updated before the rating does not hide it; one updated after does', () => {
-    const adverse = (updated_at) => loan({ id: 2, contact_id: 'c', stage_group: 'adverse', updated_at })
+  it('an adverse loan never hides a rating, whatever its dates (imports rewrite them)', () => {
     const r = map(rating({ contact_id: 'c', rated_at: '2026-11-03T08:00:00' }))
-    expect(run({ ratings: r, loans: [adverse('2026-10-05T10:00:00')] }).map((l) => l.key)).toEqual(['rating:c'])
-    expect(run({ ratings: r, loans: [adverse('2026-11-03T10:00:00')] })).toEqual([])
-    expect(run({ ratings: r, loans: [loan({ id: 3, contact_id: 'c', stage_group: 'adverse', last_seen_at: '2026-10-05T10:00:00' })] }).map((l) => l.key)).toEqual(['rating:c'])
-    expect(run({ ratings: r, loans: [loan({ id: 4, contact_id: 'c', stage_group: 'adverse' })] })).toEqual([])
+    const after = loan({ id: 2, contact_id: 'c', stage_group: 'adverse', updated_at: '2026-11-03T10:00:00', last_seen_at: '2026-11-03T10:00:00' })
+    const undated = loan({ id: 3, contact_id: 'c', stage_group: 'adverse' })
+    expect(run({ ratings: r, loans: [after] }).map((l) => l.key)).toEqual(['rating:c'])
+    expect(run({ ratings: r, loans: [undated] }).map((l) => l.key)).toEqual(['rating:c'])
   })
   it('a scenario loan never hides a rating', () => {
     const lines = run({

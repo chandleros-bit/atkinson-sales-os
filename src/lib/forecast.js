@@ -68,18 +68,17 @@ const ARIVE_OPEN = new Set(['prospect', 'processing', 'closing'])
 const validOdds = (n) => typeof n === 'number' && Number.isFinite(n)
 
 // Does this loan cover the deal the rating is about? An open loan always does.
-// A funded or adverse loan only does when the rating was made before it
-// closed out; a rating made after is a new deal (a repeat client). Missing
-// dates can't prove a new deal, so they suppress.
+// A funded loan only does when the rating was made before it funded; a rating
+// made after is a new deal (a repeat client). Missing dates can't prove a new
+// deal, so they suppress. An adverse (or other) loan never does: it emits no
+// line, so nothing is double counted, and its updated_at / last_seen_at are
+// rewritten by every Arive import, so they can't say when the deal ended.
 function loanCoversRating(l, r) {
   if (ARIVE_OPEN.has(l.stage_group)) return true
+  if (l.stage_group !== 'funded') return false
   const ratedMs = r.rated_at ? Date.parse(r.rated_at) : NaN
   if (Number.isNaN(ratedMs)) return true
-  if (l.stage_group === 'funded') {
-    return !l.funded_on || localDay(new Date(ratedMs)) <= String(l.funded_on).slice(0, 10)
-  }
-  const stamp = Date.parse(l.updated_at || l.last_seen_at || '')
-  return Number.isNaN(stamp) || ratedMs <= stamp
+  return !l.funded_on || localDay(new Date(ratedMs)) <= String(l.funded_on).slice(0, 10)
 }
 
 // One line per counted Arive loan and per rated lead with no loan for the same deal:
