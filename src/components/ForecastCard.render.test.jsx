@@ -44,4 +44,9 @@ describe('ForecastCard notes', () => {
     expect(text).toContain('2 open loans with no closing date')
     expect(text.match(/no closing date/g)).toHaveLength(1)
   })
+
+  it('hides the undated line on the MPG view', async () => {
+    const undated = (k) => line({ key: k, month: null, payDate: null })
+    expect(await render([undated('a'), undated('b')], 'mpg')).not.toContain('with no closing date')
+  })
 })

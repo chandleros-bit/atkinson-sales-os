@@ -43,8 +43,9 @@ export default function ForecastCard({ forecast, biz, now = Date.now() }) {
   const nextMonth = forecastByMonth(lines, monthKeyOf(now, 1))
   // Overdue lines are counted in this month, so they show on its Bayway line.
   const pastDue = lines.filter((l) => l.overdue && l.month === thisKey && l.book === 'bay').length
-  // Undated is the same for every month, so it shows once, under both.
-  const undated = thisMonth.undated.count
+  // Undated is the same for every month, so it shows once, under both. It
+  // counts Bayway (Arive) loans, so the MPG view leaves it out.
+  const undated = biz === 'mpg' ? 0 : thisMonth.undated.count
   return (
     <section data-card="forecast" className="rounded-card border border-line bg-panel p-5">
       <div className="flex items-center justify-between">
