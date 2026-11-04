@@ -141,6 +141,10 @@ function preflight(req, target) {
   if (TASK_ACTIONS.has(req.action) && task?.is_completed) return 'Task is already completed'
   if (req.action === 'log_call' && task?.is_completed) return 'That task is already completed'
   if (req.action === 'set_stage') return stageRefusal(businessId, contact, req.payload?.target)
+  if (req.action === 'set_temperature') {
+    if (businessId !== 'bay') return 'Temperature tags are Bayway only; MPG temperature stays in the dashboard'
+    if (!['hot', 'warm', 'cold'].includes(req.payload?.temperature)) return `Unknown temperature: ${req.payload?.temperature}`
+  }
   // "No next step: Moving to Nurture" parks the lead after the call.
   if (req.action === 'log_call' && req.payload?.set_stage) return stageRefusal(businessId, contact, req.payload.set_stage)
   return null
@@ -169,6 +173,8 @@ async function send(adapter, step, target) {
       return adapter.send.completeTask({ externalId: task.external_id })
     case 'set_stage':
       return adapter.send.setStage({ externalId: contact.external_id, target: step.target })
+    case 'set_temperature':
+      return adapter.send.setTemperature({ externalId: contact.external_id, temperature: step.temperature })
     case 'push_task':
       return adapter.send.pushTask({
         externalId: task.external_id, dueDate: step.dueDate,
@@ -199,7 +205,7 @@ async function mirror(db, adapter, step, out, target, now) {
     target.contact = data || null
     return
   }
-  if (step.step === 'set_stage') {
+  if (step.step === 'set_stage' || step.step === 'set_temperature') {
     // Re-read the person and upsert it through the people sync's own mapper;
     // the stage trigger then records the move (stage_key / stage_since).
     const rec = await adapter.read.person(out.id)

@@ -451,6 +451,39 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
   })
 })
 
+describe('crm-action run: set_temperature (Bayway FUB tag)', () => {
+  const mapContact = (p) => ({ business_id: 'bay', source_crm: 'fub', external_id: String(p.id), name: p.name, phone: null, person_stage: p.stage, raw: p })
+  const tempReq = (contactId, temperature, n = 60) => ({ client_action_id: uuid(n), action: 'set_temperature', contact_id: contactId, payload: { temperature } })
+
+  beforeEach(() => {
+    db.tables.contacts.push(
+      { id: 'c-t', business_id: 'bay', source_crm: 'fub', external_id: '6001', name: 'Temp Lead', phone: '1', person_stage: 'Lead' },
+    )
+    bay.send.setTemperature = vi.fn(async ({ externalId }) => ({ id: externalId, tags: ['Attempted', 'Hot'] }))
+    bay.read.person = async (id) => ({ id, name: 'Temp Lead', stage: 'Lead', tags: ['Attempted', 'Hot'] })
+    bay.map.contact = mapContact
+  })
+
+  it('writes the tag, then mirrors the person back', async () => {
+    const res = await go(tempReq('c-t', 'hot'))
+    expect(res.body.status).toBe('ok')
+    expect(bay.send.setTemperature).toHaveBeenCalledWith({ externalId: '6001', temperature: 'hot' })
+    expect(db.tables.contacts.find((c) => c.external_id === '6001').raw.tags).toEqual(['Attempted', 'Hot'])
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'set_temperature', status: 'ok' })
+  })
+
+  it('refuses an unknown temperature', async () => {
+    expect((await go(tempReq('c-t', 'lukewarm', 61))).body).toEqual({ status: 'refused', error: 'Unknown temperature: lukewarm' })
+    expect(bay.send.setTemperature).not.toHaveBeenCalled()
+  })
+
+  it('refuses MPG: temperature stays in the dashboard there', async () => {
+    const res = await go(tempReq('c-mpg', 'hot', 62))
+    expect(res.body.status).toBe('refused')
+    expect(res.body.error).toMatch(/Bayway only/)
+  })
+})
+
 describe('crm-action run: create_contact (new lead)', () => {
   const createReq = (business_id, payload, n) => ({ client_action_id: uuid(n), action: 'create_contact', business_id, payload })
   const fubPerson = (id) => ({ id, name: 'Sam Lee', firstName: 'Sam', lastName: 'Lee', stage: 'Lead', tags: [], phones: [{ value: '7135550100' }], emails: [], assignedUserId: 12 })

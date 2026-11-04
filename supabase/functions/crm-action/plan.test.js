@@ -53,6 +53,12 @@ describe('planSteps', () => {
     expect(planSteps({ action: 'whoami' })).toEqual([{ step: 'whoami' }])
   })
 
+  it('sets a temperature as one step', () => {
+    expect(planSteps({ action: 'set_temperature', payload: { temperature: 'hot' } })).toEqual([
+      { step: 'set_temperature', temperature: 'hot' },
+    ])
+  })
+
   it('throws on an unknown action', () => {
     expect(() => planSteps({ action: 'merge_contacts' })).toThrow(/Unknown action/)
   })
