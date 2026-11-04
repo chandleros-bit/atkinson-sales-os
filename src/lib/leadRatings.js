@@ -17,7 +17,7 @@ export function defaultCloseMonth(temperature, now = Date.now(), offsets = DEFAU
   d.setDate(1)
   const raw = offsets?.[temperature]
   const n = raw == null || raw === '' ? NaN : Number(raw)
-  d.setMonth(d.getMonth() + (Number.isFinite(n) ? n : DEFAULT_CLOSE_OFFSET[temperature] ?? 1))
+  d.setMonth(d.getMonth() + (Number.isFinite(n) ? n : Object.hasOwn(DEFAULT_CLOSE_OFFSET, temperature) ? DEFAULT_CLOSE_OFFSET[temperature] : 1))
   return firstOfMonth(d)
 }
 

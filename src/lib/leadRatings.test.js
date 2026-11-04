@@ -25,6 +25,9 @@ describe('close month', () => {
     expect(defaultCloseMonth('hot', NOW, { hot: '2' })).toBe('2027-01-01')
     expect(defaultCloseMonth('hot', NOW, { hot: 'soon' })).toBe('2026-12-01')
   })
+  it('ignores inherited keys on a bogus temperature', () => {
+    expect(defaultCloseMonth('constructor', NOW)).toBe('2026-12-01')
+  })
   it('does not overflow at the end of a long month', () => {
     expect(defaultCloseMonth('hot', new Date('2027-01-31T10:00:00').getTime())).toBe('2027-02-01')
     expect(defaultCloseMonth('cold', new Date('2026-12-31T23:30:00').getTime())).toBe('2027-03-01')
