@@ -25,6 +25,8 @@ import ThemeList from '../components/ThemeList'
 import { CallBox, SECTION_HEAD, SectionTitle } from '../components/CallSection'
 import DialList from '../components/DialList'
 import Dialer from '../components/Dialer'
+import { useLeadRatings } from '../lib/useLeadRatings'
+import { withRatings } from '../lib/leadRatings'
 
 function Progress({ label, value, pct }) {
   return (
@@ -81,7 +83,8 @@ export default function Workbench() {
   const toGo = Math.min(queue.length, cap)
   const inBook = (book) => biz === 'all' || book === biz
   const now = Date.now()
-  const dialDue = buildDialList(dial.rows, { now: dial.now, skips: dial.skips, inBook })
+  const ratings = useLeadRatings()
+  const dialDue = buildDialList(withRatings(dial.rows, ratings), { now: dial.now, skips: dial.skips, inBook })
   const dialItems = [...dialDue.dueNow, ...dialDue.laterToday]
   const themeList = buildThemeList(dial.rows, { now: dial.now, day: themeDay, skips: dial.skips, inBook })
   const dialIds = new Set([...dialItems, ...themeList.items].map((i) => i.id))

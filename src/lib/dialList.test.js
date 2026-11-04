@@ -121,3 +121,22 @@ describe('whenLabel', () => {
     expect(whenLabel({ dueAt: at(28, 14, 30) }, at(28, 12))).toBe('2:30 PM')
   })
 })
+
+describe('buildDialList temperature', () => {
+  it('puts Hot first among items due now, after speed to lead', () => {
+    const now = new Date('2026-11-03T15:00:00').getTime()
+    const due = (id, temperature) => ({
+      id,
+      business_id: 'bay',
+      stage: 'Attempted',
+      crm_created_at: '2026-10-20T08:00:00',
+      outbound_calls: 1,
+      first_outbound_call_at: '2026-10-20T09:00:00',
+      last_outbound_call_at: '2026-10-20T09:00:00',
+      connected_at: null,
+      temperature,
+    })
+    const { dueNow } = buildDialList([due('a', 'cold'), due('b'), due('c', 'hot')], { now })
+    expect(dueNow.map((i) => i.id)).toEqual(['c', 'b', 'a'])
+  })
+})

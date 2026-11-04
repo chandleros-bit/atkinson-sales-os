@@ -10,6 +10,8 @@
 //   Bayway after 6   "move to Nurture" (Chandler confirms; the OS never re-tags)
 //   MPG after 6      two weekly nurture calls, then cold every 30 days
 //   Bayway parked    Nurture: 2 weekly calls then cold; Credit Repair: every 30 days
+import { temperatureRank } from './leadRatings'
+
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
 export const ATTEMPTS = 6
@@ -132,7 +134,12 @@ export function buildDialList(rows, { now = Date.now(), skips = new Set(), inBoo
     .filter((i) => i && inBook(i.book) && !skips.has(i.id) && i.dueAt <= endOfDay(now))
   const dueNow = items
     .filter((i) => i.dueAt <= now)
-    .sort((a, b) => (a.hint === 'speed to lead' ? 0 : 1) - (b.hint === 'speed to lead' ? 0 : 1) || b.dueAt - a.dueAt)
+    .sort(
+      (a, b) =>
+        (a.hint === 'speed to lead' ? 0 : 1) - (b.hint === 'speed to lead' ? 0 : 1) ||
+        temperatureRank(a.row) - temperatureRank(b.row) ||
+        b.dueAt - a.dueAt,
+    )
   const laterToday = items.filter((i) => i.dueAt > now).sort((a, b) => a.dueAt - b.dueAt)
   return { dueNow, laterToday }
 }
