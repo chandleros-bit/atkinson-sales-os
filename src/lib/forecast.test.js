@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  DEFAULT_FORECAST, resolveForecast, monthKeyOf, avgFundedLoan, mpgPerAccount, forecastLines, forecastByMonth, sortPaysFirst,
+  DEFAULT_FORECAST, resolveForecast, monthKeyOf, avgFundedLoan, mpgPerAccount, forecastLines, forecastByMonth, sortPaysFirst, latestMpgMetrics,
 } from './forecast'
 
 const NOW = new Date('2026-11-03T09:00:00').getTime()
@@ -236,5 +236,19 @@ describe('forecastLines: deal identity, overdue, undated, bad data', () => {
   })
   it('an unknown business id is skipped', () => {
     expect(run({ ratings: map(rating({ contact_id: 'z', business_id: 'other' })) })).toEqual([])
+  })
+})
+
+describe('latestMpgMetrics', () => {
+  it('takes the newest date that has both residual and merchants', () => {
+    const rows = [
+      { date: '2026-11-01', metric_key: 'rev_monthly_residual', value: 900 },
+      { date: '2026-10-01', metric_key: 'rev_monthly_residual', value: 800 },
+      { date: '2026-10-01', metric_key: 'rev_active_merchants', value: 4 },
+    ]
+    expect(latestMpgMetrics(rows)).toEqual({ residual: 800, merchants: 4 })
+  })
+  it('is null/null with no shared date', () => {
+    expect(latestMpgMetrics([{ date: '2026-11-01', metric_key: 'rev_monthly_residual', value: 1 }])).toEqual({ residual: null, merchants: null })
   })
 })
