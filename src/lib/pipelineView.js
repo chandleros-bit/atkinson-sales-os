@@ -3,6 +3,7 @@
 import { cardHealth, sortByHealth, speedToLead, stuckFor } from './cardHealth'
 import { calendarDaysSince } from './priorityQueue'
 import { isDocAging } from './borrowerDocs'
+import { sortPaysFirst } from './forecast'
 
 export const VIEWS = [
   { id: 'list', label: 'List', icon: 'list' },
@@ -12,10 +13,25 @@ export const VIEWS = [
 
 export const SORTS = [
   { id: 'urgent', label: 'Most urgent' },
+  { id: 'pays_first', label: 'Pays first' },
   { id: 'touch', label: 'Oldest touch' },
   { id: 'newest', label: 'Newest lead' },
   { id: 'name', label: 'Name' },
 ]
+
+export const TEMP_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'hot', label: 'Hot' },
+  { id: 'warm', label: 'Warm' },
+  { id: 'cold', label: 'Cold' },
+  { id: 'unrated', label: 'Unrated' },
+]
+
+export function filterByTemperature(rows, temp) {
+  if (!temp || temp === 'all') return rows
+  if (temp === 'unrated') return rows.filter((r) => !r.temperature)
+  return rows.filter((r) => r.temperature === temp)
+}
 
 const digits = (s) => String(s || '').replace(/\D/g, '')
 
@@ -46,9 +62,10 @@ const time = (iso) => {
   return Number.isNaN(t) ? null : t
 }
 
-// A new array; ties keep their order.
-export function sortRows(rows, sort, rules, now = Date.now()) {
+// A new array; ties keep their order. extra.lines: forecast lines for 'pays_first'.
+export function sortRows(rows, sort, rules, now = Date.now(), extra = {}) {
   if (sort === 'urgent') return sortByHealth(rows, rules, now)
+  if (sort === 'pays_first') return sortPaysFirst(rows, extra.lines || [])
   const list = [...rows]
   if (sort === 'touch') {
     // Never touched first, then oldest touch.
