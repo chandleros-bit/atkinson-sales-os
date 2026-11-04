@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chicagoParts, shouldSend, chicagoDayRangeUtc, businessDaysLeft, longDateLabel } from './briefingTime'
+import { chicagoParts, shouldSend, chicagoDayRangeUtc, businessDaysLeft, longDateLabel, previousBusinessDateKey, previousBusinessDayRangeUtc } from './briefingTime'
 
 // UTC instants; Chicago is UTC-5 in CDT (until Nov 1 2026) and UTC-6 in CST.
 const at = (iso) => new Date(iso).getTime()
@@ -41,5 +41,20 @@ describe('businessDaysLeft', () => {
 describe('longDateLabel', () => {
   it('formats the subject date', () => {
     expect(longDateLabel(at('2026-11-03T13:30:00Z'))).toBe('Tue Nov 3')
+  })
+})
+
+describe('previousBusinessDateKey', () => {
+  it('is yesterday midweek and Friday on Monday (Chicago calendar)', () => {
+    expect(previousBusinessDateKey(at('2026-11-09T13:30:00Z'))).toBe('2026-11-06') // Mon -> Fri
+    expect(previousBusinessDateKey(at('2026-11-04T13:30:00Z'))).toBe('2026-11-03') // Wed -> Tue
+    expect(previousBusinessDateKey(at('2026-11-06T13:30:00Z'))).toBe('2026-11-05') // Fri -> Thu
+  })
+})
+
+describe('previousBusinessDayRangeUtc', () => {
+  it('bounds that Chicago day in UTC', () => {
+    expect(previousBusinessDayRangeUtc(at('2026-11-09T13:30:00Z'))).toEqual({ from: '2026-11-06T06:00:00.000Z', to: '2026-11-07T06:00:00.000Z' })
+    expect(previousBusinessDayRangeUtc(at('2026-11-04T13:30:00Z'))).toEqual({ from: '2026-11-03T06:00:00.000Z', to: '2026-11-04T06:00:00.000Z' })
   })
 })

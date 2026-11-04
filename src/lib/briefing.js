@@ -4,13 +4,14 @@
 import { buildQueue, resolveRules, reasonText } from './priorityQueue'
 import { buildDialList } from './dialList'
 import { buildAlerts } from './alerts'
-import { monthValues, monthlyGoals, prevMonthWindow } from './overviewDash'
+import { monthValues, monthlyGoals, prevMonthWindow, PRODUCTION_STAGES } from './overviewDash'
 import { DEFAULT_TARGETS, resolveTargets, monthWindow, sprintWindow } from './reports'
 import { loanStats, resolveRates, isOpen, isScenario } from './loans'
 import { resolveForecast, forecastLines, forecastByMonth, avgFundedLoan, mpgPerAccount, latestMpgMetrics, monthKeyOf } from './forecast'
 import { syncHealth } from './syncHealth'
 import { yesterdayScorecard, needPerDay } from './briefingScorecard'
-import { businessDaysLeft, longDateLabel, chicagoDateKey } from './briefingTime'
+import { withRatings } from './leadRatings'
+import { businessDaysLeft, longDateLabel, chicagoDateKey, previousBusinessDateKey } from './briefingTime'
 
 const TOP = 5
 // Goals shown in the briefing (Overview goals minus commission and residual).
@@ -23,6 +24,11 @@ function ratingsMap(rows) {
   return new Map((rows || []).map((r) => [r.contact_id, { ...r, name: r.contact?.name ?? null }]))
 }
 
+// data fields beyond the plan's contract:
+//   yesterdayActivities  the previous business day's (Chicago) activities; Monday looks at Friday
+//   pipeline             all Bayway board rows (new applications are picked by PRODUCTION_STAGES)
+//   mpgMetricRows        optional, newest-first rev_monthly_residual / rev_active_merchants rows
+//                        for latestMpgMetrics; falls back to `metrics` sorted newest first
 export function buildOwnerBriefing(data, now = Date.now()) {
   const rules = resolveRules(data.rules)
   const targets = resolveTargets(DEFAULT_TARGETS, data.targets)
@@ -35,26 +41,33 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     : null
   const values = monthValues({ biz: 'all', metrics: data.metrics || [], deals: data.deals || [], activities: data.activities || [], pipeline: data.pipeline || [], now, loanStats: stats })
   const daysLeft = businessDaysLeft(now)
+  // 'all' leaves out proposals (MPG only), so take that one from the MPG view.
+  const proposals = monthlyGoals({ biz: 'mpg', values, targets, now }).goals.find((g) => g.id === 'proposals')
   const goals = monthlyGoals({ biz: 'all', values, targets, now }).goals
     .filter((g) => GOAL_IDS.includes(g.id))
+    .concat(proposals ? [proposals] : [])
     .map((g) => ({ id: g.id, label: g.label, value: g.value, target: g.target, status: g.status, unit: g.unit, needPerDay: g.status === 'behind' ? needPerDay(g, daysLeft) : null }))
 
+  const mpgRows = data.mpgMetricRows || (data.metrics || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))
+  const rated = ratingsMap(data.ratings)
   const lines = forecastLines({
-    ratings: ratingsMap(data.ratings),
+    ratings: rated,
     loans: data.loans || [],
     rates,
     settings: fs,
     avgLoan: avgFundedLoan(data.loans || [], now),
-    mpgAccount: mpgPerAccount(latestMpgMetrics(data.metrics || []), fs),
+    mpgAccount: mpgPerAccount(latestMpgMetrics(mpgRows), fs),
     now,
   })
   const f = forecastByMonth(lines, monthKeyOf(now))
 
-  const yesterday = chicagoDateKey(now, -1)
+  const prevDay = previousBusinessDateKey(now)
   const newApplications = (data.pipeline || []).filter(
-    (r) => r.stage === 'Application Received' && r.stage_since && chicagoDateKey(new Date(r.stage_since).getTime()) === yesterday,
+    (r) => PRODUCTION_STAGES.has(r.stage) && r.stage_since && chicagoDateKey(new Date(r.stage_since).getTime()) === prevDay,
   )
-  const scorecard = yesterdayScorecard({ activities: data.yesterdayActivities || [], newApplications })
+  const [py, pm, pd] = prevDay.split('-').map(Number)
+  const label = prevDay === chicagoDateKey(now, -1) ? 'Yesterday' : new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long' }).format(new Date(Date.UTC(py, pm - 1, pd)))
+  const scorecard = { ...yesterdayScorecard({ activities: data.yesterdayActivities || [], newApplications }), label }
 
   // ---- Today --------------------------------------------------------------
   const meetings = (data.events || [])
@@ -68,10 +81,10 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     .sort((a, b) => a.firm_closing_on.localeCompare(b.firm_closing_on))
 
   // ---- Call first ---------------------------------------------------------
-  const queue = buildQueue(data.signals || [], rules, now)
+  const queue = buildQueue(withRatings(data.signals || [], rated), rules, now)
   const inBucket = (id) => queue.filter((r) => r.bucket === id)
   const person = (r) => ({ name: r.name || '(no name)', detail: reasonText(r, now) })
-  const dial = buildDialList(data.dialRows || [], { now, skips: new Set(data.dialSkips || []) })
+  const dial = buildDialList(withRatings(data.dialRows || [], rated), { now, skips: new Set(data.dialSkips || []) })
   const due = dial.dueNow.concat(dial.laterToday)
   const callFirst = {
     replied: list(inBucket('reached_out'), person),
@@ -98,7 +111,7 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     return { count: a.count, top: people.slice(0, TOP).map((p) => ({ name: p.name, detail: p.detail })) }
   }
   const health = syncHealth(data.syncLatest || {}, now)
-  const syncProblems = health.detail.filter((d) => d.state === 'error' || d.state === 'stale').map((d) => ({ label: d.label, text: d.text }))
+  const syncProblems = health.detail.filter((d) => d.state !== 'ok').map((d) => ({ label: d.label, text: d.text }))
   const slipping = {
     quietApps: alertList('quiet_apps'),
     docsAging: alertList('docs_aging'),

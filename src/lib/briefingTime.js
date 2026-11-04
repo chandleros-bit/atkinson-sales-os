@@ -86,3 +86,19 @@ export function businessDaysLeft(now = Date.now()) {
 export function longDateLabel(now = Date.now()) {
   return new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(now)).replace(',', '')
 }
+
+// Days back to the last business day: Monday looks at Friday (Sunday too).
+const backToBusinessDay = (now) => {
+  const wd = chicagoParts(now).weekday
+  return wd === 1 ? -3 : wd === 0 ? -2 : -1
+}
+
+// Chicago 'YYYY-MM-DD' of the previous business day (Mon -> Fri, else yesterday).
+export function previousBusinessDateKey(now = Date.now()) {
+  return chicagoDateKey(now, backToBusinessDay(now))
+}
+
+// UTC ISO bounds of that Chicago day.
+export function previousBusinessDayRangeUtc(now = Date.now()) {
+  return chicagoDayRangeUtc(now, backToBusinessDay(now))
+}
