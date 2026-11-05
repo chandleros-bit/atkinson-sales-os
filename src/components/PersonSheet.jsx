@@ -12,8 +12,9 @@ import { useContactNotes } from '../lib/contactNotes'
 import { useContactCard } from '../lib/useContactCard'
 import { cardTabs, detailRows, loanView, priorityLine } from '../lib/contactCard'
 import { TYPE_META, groupByDay, timeOfDay } from '../lib/activity'
-import HealthPills, { Pill } from './HealthPills'
+import HealthPills from './HealthPills'
 import StageProgress from './StageProgress'
+import DocsChecklist from './DocsChecklist'
 import { noteFacts } from '../lib/noteFacts'
 import { formatPhone, telHref } from '../lib/phone'
 import { dueLabel } from '../lib/tasks'
@@ -138,8 +139,8 @@ function ActivityTab({ rows, loading }) {
   )
 }
 
-// The lead form's scenario and the borrower docs (Bayway).
-function LoanTab({ loan }) {
+// The lead form's scenario and the borrower docs editor (Bayway).
+function LoanTab({ loan, contactId, onDocsChange }) {
   return (
     <div className="flex flex-col gap-3" aria-label="Loan">
       <div>
@@ -157,28 +158,7 @@ function LoanTab({ loan }) {
           <div className="whitespace-pre-line text-[12.5px] text-muted">{loan.snippet || 'No lead form on file.'}</div>
         )}
       </div>
-      <div>
-        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-dim">Docs</div>
-        {!loan.docs ? (
-          <div className="text-[12.5px] text-muted">Docs not tracked for this lead.</div>
-        ) : loan.docs.missing.length === 0 ? (
-          <div className="text-[12.5px] font-semibold" style={{ color: 'var(--pos-ink)' }}>✓ All docs received</div>
-        ) : (
-          <>
-            <div className="mb-1.5 flex flex-wrap gap-1">
-              {loan.docs.missing.map((d) => (
-                <Pill key={d} tone={loan.docs.aging ? 'warn' : 'neutral'} data-missing-doc>
-                  {d}
-                </Pill>
-              ))}
-            </div>
-            <div className="text-[12px] text-muted">
-              {loan.docs.missing.length} missing{loan.docs.oldestDays != null ? ` · oldest requested ${loan.docs.oldestDays}d ago` : ''}
-            </div>
-            {loan.docs.notes && <div className="mt-1 text-[12px] italic text-muted">“{loan.docs.notes}”</div>}
-          </>
-        )}
-      </div>
+      <DocsChecklist contactId={contactId} onChange={onDocsChange} />
     </div>
   )
 }
@@ -347,7 +327,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
           <div role="tabpanel" className="pt-1">
             {tab === 'notes' && <Notes notes={notes} crm={CRM_LABEL[biz]} />}
             {tab === 'activity' && <ActivityTab rows={extra.activity} loading={extra.loading} />}
-            {tab === 'loan' && <LoanTab loan={loanView({ firstNote: notes.firstNote, board })} />}
+            {tab === 'loan' && <LoanTab loan={loanView({ firstNote: notes.firstNote, board })} contactId={id} onDocsChange={load} />}
             {tab === 'details' && <DetailsTab rows={detailRows({ person, signal: extra.signal, contact: extra.contact })} tasks={extra.tasks} byAssistant={notes.assistantTaskIds} />}
           </div>
         </div>
