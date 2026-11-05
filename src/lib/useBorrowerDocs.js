@@ -34,6 +34,7 @@ export function useBorrowerDocs(contactId) {
       .select('id, doc_type, status, first_requested_at, received_at, received_by_name')
       .eq('tracking_id', t.id)
       .is('removed_at', null)
+      .limit(200) // one file's docs: a handful; the cap keeps the row-cap audit honest
     setState({ loading: false, tracked: true, docs: docs || [], note: t.notes ?? null, error: error?.message ?? null })
   }, [contactId])
 
