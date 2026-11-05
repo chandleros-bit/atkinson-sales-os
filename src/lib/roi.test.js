@@ -131,3 +131,52 @@ describe('kpis and formatUsd', () => {
     expect(formatUsd('free')).toBe('free')
   })
 })
+import { lastMonths, sheetLabels, spendCells, spendChanges, mergeRows, freeRows } from './roi'
+
+describe('spend sheet helpers', () => {
+  it('lastMonths lists month keys newest first', () => {
+    expect(lastMonths(3, NOW)).toEqual(['2026-11-01', '2026-10-01', '2026-09-01'])
+    expect(lastMonths(2, new Date(2026, 0, 15).getTime())).toEqual(['2026-01-01', '2025-12-01'])
+  })
+
+  it('sheetLabels joins lead labels and spend labels, sorted', () => {
+    const t = sourceTable(LEADS, 'bay', fromMs)
+    expect(sheetLabels(t, 'bay', SPEND, aliasMap(ALIASES))).toEqual(['Facebook', 'Lendgo', 'Realtor referral'])
+  })
+
+  it('spendCells keys amounts by label and month', () => {
+    expect(spendCells(SPEND, 'bay')).toEqual({ 'Lendgo|2026-10-01': '310', 'Lendgo|2026-11-01': '300', 'Facebook|2026-10-01': '31' })
+  })
+
+  it('spendChanges upserts edits, deletes cleared cells and skips unchanged ones', () => {
+    const cells = { 'Lendgo|2026-10-01': '310', 'Lendgo|2026-11-01': '', 'Facebook|2026-10-01': '$45', 'Lendgo|2026-09-01': '1,200' }
+    expect(spendChanges(SPEND, 'bay', cells)).toEqual({
+      upserts: [
+        { book: 'bay', source: 'Facebook', month: '2026-10-01', amount: 45 },
+        { book: 'bay', source: 'Lendgo', month: '2026-09-01', amount: 1200 },
+      ],
+      deletes: ['s2'],
+      problem: null,
+    })
+  })
+
+  it('spendChanges refuses text and negative amounts', () => {
+    expect(spendChanges(SPEND, 'bay', { 'Lendgo|2026-09-01': 'abc' }).problem).toBe('Enter a dollar amount for Lendgo, 2026-09.')
+    expect(spendChanges(SPEND, 'bay', { 'Lendgo|2026-09-01': '-5' }).problem).toBe('Enter a dollar amount for Lendgo, 2026-09.')
+  })
+
+  it('mergeRows makes one alias row per raw source', () => {
+    expect(mergeRows('bay', ['Chandler', 'Chandler Atkinson'], ' Self-sourced ')).toEqual([
+      { book: 'bay', raw: 'Chandler', label: 'Self-sourced', is_free: false },
+      { book: 'bay', raw: 'Chandler Atkinson', label: 'Self-sourced', is_free: false },
+    ])
+  })
+
+  it('freeRows flips every alias row of a label, or adds a self-alias', () => {
+    expect(freeRows('bay', 'Realtor referral', ALIASES, false)).toEqual([
+      { book: 'bay', raw: 'Realtor', label: 'Realtor referral', is_free: false },
+      { book: 'bay', raw: 'Realtor Referral', label: 'Realtor referral', is_free: false },
+    ])
+    expect(freeRows('bay', 'Lendgo', ALIASES, true)).toEqual([{ book: 'bay', raw: 'Lendgo', label: 'Lendgo', is_free: true }])
+  })
+})

@@ -4,6 +4,7 @@
 import { SOURCE_COLUMNS, cleanSource } from './analytics'
 import { estComp, isScenario } from './loans'
 import { dayKey, keyDaysBetween } from './calendar'
+import { parseAmount } from './calc/parse'
 
 export const NOT_LINKED = 'Not linked to a lead'
 
@@ -154,4 +155,67 @@ export function formatUsd(v) {
   if (v === 'free') return 'free'
   if (typeof v !== 'number' || !Number.isFinite(v)) return '—'
   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 })
+}
+
+// ---- Spend sheet ---------------------------------------------------------------
+
+const pad2 = (n) => String(n).padStart(2, '0')
+
+// The last n month keys ('YYYY-MM-01'), local calendar, newest first.
+export function lastMonths(n, now = Date.now()) {
+  const d = new Date(now)
+  return Array.from({ length: n }, (_, i) => {
+    const m = new Date(d.getFullYear(), d.getMonth() - i, 1)
+    return `${m.getFullYear()}-${pad2(m.getMonth() + 1)}-01`
+  })
+}
+
+// Grid rows: labels of the book's sources (a sourceTable, usually 12 months)
+// plus every label that has spend, sorted.
+export function sheetLabels(table, book, spendRows, map) {
+  const set = new Set(table.rows.map((r) => labelFor(r.source, book, map)))
+  for (const s of spendRows || []) if (s.book === book) set.add(s.source)
+  return [...set].sort((a, b) => a.localeCompare(b))
+}
+
+const cellKey = (label, month) => `${label}|${month}`
+
+// Spend rows -> { 'label|YYYY-MM-01': '310' } for the sheet's inputs.
+export function spendCells(spendRows, book) {
+  const out = {}
+  for (const s of spendRows || []) if (s.book === book) out[cellKey(s.source, String(s.month).slice(0, 10))] = String(Number(s.amount))
+  return out
+}
+
+// Edited cells vs saved rows -> { upserts, deletes (row ids), problem }.
+// A blank cell deletes its row; unchanged cells are skipped.
+export function spendChanges(spendRows, book, cells) {
+  const saved = new Map()
+  for (const s of spendRows || []) if (s.book === book) saved.set(cellKey(s.source, String(s.month).slice(0, 10)), s)
+  const upserts = []
+  const deletes = []
+  for (const [key, value] of Object.entries(cells)) {
+    const [source, month] = key.split('|')
+    const row = saved.get(key)
+    const text = String(value ?? '').trim()
+    if (text === '') {
+      if (row) deletes.push(row.id)
+      continue
+    }
+    const amount = parseAmount(text)
+    if (amount == null || amount < 0) return { upserts: [], deletes: [], problem: `Enter a dollar amount for ${source}, ${month.slice(0, 7)}.` }
+    if (!row || Number(row.amount) !== amount) upserts.push({ book, source, month, amount })
+  }
+  return { upserts, deletes, problem: null }
+}
+
+export function mergeRows(book, raws, label) {
+  return raws.map((raw) => ({ book, raw, label: label.trim(), is_free: false }))
+}
+
+// Alias rows (raw rows, not the map) -> upserts that set is_free on a label.
+export function freeRows(book, label, aliasRows, free) {
+  const mine = (aliasRows || []).filter((a) => a.book === book && a.label === label)
+  if (!mine.length) return [{ book, raw: label, label, is_free: free }]
+  return mine.map((a) => ({ book, raw: a.raw, label, is_free: free }))
 }
