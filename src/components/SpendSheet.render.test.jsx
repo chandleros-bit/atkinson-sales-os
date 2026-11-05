@@ -113,6 +113,17 @@ describe('SpendSheet', () => {
     expect(saveAliases).toHaveBeenCalledWith([{ book: 'bay', raw: 'Lendgo', label: 'Lendgo', is_free: true }])
   })
 
+  it('shows spend saved under a merged raw source on its label row, summed, and re-saves it under the label', async () => {
+    const aliases = [{ id: 'x1', book: 'bay', raw: 'Lendgo', label: 'Lendgo Ads', is_free: false }]
+    const spend = [...SPEND, { id: 's2', book: 'bay', source: 'Lendgo Ads', month: '2026-11-01', amount: '50.00' }]
+    await mount({ aliases, spend })
+    expect(document.querySelector('[data-spend-row="Lendgo"]')).toBe(null)
+    expect(input('Lendgo Ads Nov 26').value).toBe('350')
+    await type(input('Lendgo Ads Nov 26'), '400')
+    await act(async () => button('Save spend').click())
+    expect(saveSpend).toHaveBeenCalledWith({ upserts: [{ book: 'bay', source: 'Lendgo Ads', month: '2026-11-01', amount: 400 }], deletes: ['s1'] })
+  })
+
   it('unmerges a merged label', async () => {
     const aliases = [
       { id: 'x1', book: 'bay', raw: 'Chandler', label: 'Self-sourced', is_free: false },

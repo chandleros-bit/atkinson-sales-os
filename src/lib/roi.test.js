@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { sourceTable } from './analytics'
 import { DEFAULT_RATES } from './loans'
-import { aliasMap, labelFor, isFree, windowKeys, spendInWindow, fundedInWindow, roiTable, kpis, formatUsd, NOT_LINKED } from './roi'
+import {
+  aliasMap, labelFor, isFree, windowKeys, keyStartMs, spendInWindow, fundedInWindow, roiTable, kpis, formatUsd, NOT_LINKED,
+  lastMonths, sheetLabels, spendCells, spendChanges, mergeRows, freeRows,
+} from './roi'
 
 const NOW = new Date(2026, 10, 5, 10).getTime() // Thu 5 Nov 2026, 10:00 local
 const LEADS = [
@@ -131,7 +134,6 @@ describe('kpis and formatUsd', () => {
     expect(formatUsd('free')).toBe('free')
   })
 })
-import { lastMonths, sheetLabels, spendCells, spendChanges, mergeRows, freeRows } from './roi'
 
 describe('spend sheet helpers', () => {
   it('lastMonths lists month keys newest first', () => {
@@ -178,5 +180,146 @@ describe('spend sheet helpers', () => {
       { book: 'bay', raw: 'Realtor Referral', label: 'Realtor referral', is_free: false },
     ])
     expect(freeRows('bay', 'Lendgo', ALIASES, true)).toEqual([{ book: 'bay', raw: 'Lendgo', label: 'Lendgo', is_free: true }])
+  })
+})
+
+describe('keyStartMs', () => {
+  it('is local midnight of the key, the same day windowKeys counts from', () => {
+    expect(keyStartMs('2026-10-07')).toBe(new Date(2026, 9, 7).getTime())
+    expect(keyStartMs(keys.fromKey)).toBe(new Date(2026, 9, 7).getTime())
+  })
+  it('leads and spend share one window: a lead from the day before fromKey is out', () => {
+    const early = { id: 'e', business_id: 'bay', source: 'Lendgo', created: new Date(2026, 9, 6, 23).toISOString(), person_stage: 'Lead', tags: [] }
+    const late = { id: 'f', business_id: 'bay', source: 'Lendgo', created: new Date(2026, 9, 7, 0, 30).toISOString(), person_stage: 'Lead', tags: [] }
+    const t = sourceTable([early, late], 'bay', keyStartMs(keys.fromKey))
+    expect(t.total.leads).toBe(1)
+  })
+})
+
+describe('Postgres numeric strings', () => {
+  const STR = [{ id: 'n1', book: 'bay', source: 'Lendgo', month: '2026-11-01', amount: '300.00' }]
+  it('spendInWindow reads "300.00" as 300', () => {
+    expect(spendInWindow(STR, 'bay', 'Lendgo', '2026-11-01', '2026-11-30')).toBe(300)
+  })
+  it('spendCells shows "300"', () => {
+    expect(spendCells(STR, 'bay')).toEqual({ 'Lendgo|2026-11-01': '300' })
+  })
+  it('spendChanges skips an unchanged cell', () => {
+    expect(spendChanges(STR, 'bay', { 'Lendgo|2026-11-01': '300' })).toEqual({ upserts: [], deletes: [], problem: null })
+  })
+})
+
+describe('spendInWindow edges', () => {
+  it('a window inside one month prorates by its days', () => {
+    // 10 of 30 November days.
+    expect(spendInWindow([{ book: 'bay', source: 'X', month: '2026-11-01', amount: 300 }], 'bay', 'X', '2026-11-03', '2026-11-12')).toBe(100)
+  })
+  it('a window over December -> January takes the tail of one and the head of the next', () => {
+    const rows = [
+      { book: 'bay', source: 'X', month: '2026-11-01', amount: 999 },
+      { book: 'bay', source: 'X', month: '2026-12-01', amount: 310 },
+      { book: 'bay', source: 'X', month: '2027-01-01', amount: 310 },
+      { book: 'bay', source: 'X', month: '2027-02-01', amount: 999 },
+    ]
+    // Dec 20-31: 12 of 31 -> 120. Jan 1-10: 10 of 31 -> 100.
+    expect(spendInWindow(rows, 'bay', 'X', '2026-12-20', '2027-01-10')).toBe(220)
+  })
+})
+
+describe('roiTable edge cases', () => {
+  it('a funded loan whose contact is in the other book goes to "Not linked to a lead"', () => {
+    const loans = [...LOANS, loan({ id: 7, contact_id: 'm', funded_on: '2026-11-04', amount: 100000, role: 'assisted' })]
+    const t = roiTable(sourceTable(LEADS, 'bay', fromMs), {
+      book: 'bay', contactsById: BY_ID, loans, rates: DEFAULT_RATES, spendRows: SPEND, aliases: aliasMap(ALIASES), ...keys,
+    })
+    expect(t.rows.at(-1)).toMatchObject({ source: NOT_LINKED, funded: 2, commission: 1500 })
+    expect(row(t, 'Web Research')).toBe(undefined)
+  })
+
+  it('a free label with spend keeps the number and counts in the total; without spend it shows free', () => {
+    const aliases = aliasMap([...ALIASES, { book: 'bay', raw: 'Lendgo', label: 'Lendgo', is_free: true }])
+    const t = roiTable(sourceTable(LEADS, 'bay', fromMs), {
+      book: 'bay', contactsById: BY_ID, loans: LOANS, rates: DEFAULT_RATES, spendRows: SPEND, aliases, ...keys,
+    })
+    expect(row(t, 'Lendgo')).toMatchObject({ spend: 300, costPerLead: 150 })
+    expect(row(t, 'Realtor referral')).toMatchObject({ spend: 'free' })
+    expect(t.total.spend).toBe(325)
+  })
+})
+
+describe('spend saved under a raw source that is later merged', () => {
+  const MERGED = aliasMap([...ALIASES, { book: 'bay', raw: 'Lendgo', label: 'Lendgo Ads', is_free: false }])
+  const SPEND2 = [...SPEND, { id: 's5', book: 'bay', source: 'Lendgo Ads', month: '2026-11-01', amount: '50.00' }]
+
+  it('roiTable counts it under the label, with no stray raw-source row', () => {
+    const t = roiTable(sourceTable(LEADS, 'bay', fromMs), {
+      book: 'bay', contactsById: BY_ID, loans: LOANS, rates: DEFAULT_RATES, spendRows: SPEND, aliases: MERGED, ...keys,
+    })
+    expect(row(t, 'Lendgo')).toBe(undefined)
+    expect(row(t, 'Lendgo Ads')).toMatchObject({ leads: 2, spend: 300, costPerLead: 150 })
+    expect(spendInWindow(SPEND, 'bay', 'Lendgo Ads', keys.fromKey, keys.toKey, MERGED)).toBe(300)
+  })
+
+  it('a spend-only raw source shows under its label', () => {
+    const map = aliasMap([{ book: 'bay', raw: 'Facebook', label: 'Social', is_free: false }])
+    const t = roiTable(sourceTable(LEADS, 'bay', fromMs), {
+      book: 'bay', contactsById: BY_ID, loans: LOANS, rates: DEFAULT_RATES, spendRows: SPEND, aliases: map, ...keys,
+    })
+    expect(row(t, 'Facebook')).toBe(undefined)
+    expect(row(t, 'Social')).toMatchObject({ leads: 0, spend: 25 })
+  })
+
+  it('sheetLabels lists the label, not the raw source', () => {
+    const t = sourceTable(LEADS, 'bay', fromMs)
+    expect(sheetLabels(t, 'bay', SPEND, MERGED)).toEqual(['Facebook', 'Lendgo Ads', 'Realtor referral'])
+  })
+
+  it('spendCells keys by label and sums rows that land in one cell', () => {
+    expect(spendCells(SPEND2, 'bay', MERGED)).toEqual({ 'Lendgo Ads|2026-10-01': '310', 'Lendgo Ads|2026-11-01': '350', 'Facebook|2026-10-01': '31' })
+  })
+
+  it('spendChanges skips a cell equal to the group sum', () => {
+    const cells = { 'Lendgo Ads|2026-10-01': '310', 'Lendgo Ads|2026-11-01': '350.00' }
+    expect(spendChanges(SPEND2, 'bay', cells, MERGED)).toEqual({ upserts: [], deletes: [], problem: null })
+  })
+
+  it('spendChanges re-saves an edit under the label and deletes the old raw-source rows', () => {
+    const cells = { 'Lendgo Ads|2026-10-01': '400', 'Lendgo Ads|2026-11-01': '360' }
+    expect(spendChanges(SPEND2, 'bay', cells, MERGED)).toEqual({
+      upserts: [
+        { book: 'bay', source: 'Lendgo Ads', month: '2026-10-01', amount: 400 },
+        { book: 'bay', source: 'Lendgo Ads', month: '2026-11-01', amount: 360 },
+      ],
+      deletes: ['s1', 's2'],
+      problem: null,
+    })
+  })
+
+  it('spendChanges clears every row in a group when the cell is blank', () => {
+    expect(spendChanges(SPEND2, 'bay', { 'Lendgo Ads|2026-11-01': '' }, MERGED)).toEqual({ upserts: [], deletes: ['s2', 's5'], problem: null })
+  })
+})
+
+describe('spendChanges keys and rounding', () => {
+  it('a label containing "|" round-trips', () => {
+    const saved = [{ id: 'p1', book: 'bay', source: 'A|B', month: '2026-10-01', amount: '50.00' }]
+    const cells = spendCells(saved, 'bay')
+    expect(cells).toEqual({ 'A|B|2026-10-01': '50' })
+    expect(spendChanges(saved, 'bay', cells)).toEqual({ upserts: [], deletes: [], problem: null })
+    expect(spendChanges(saved, 'bay', { ...cells, 'A|B|2026-11-01': '75' })).toEqual({
+      upserts: [{ book: 'bay', source: 'A|B', month: '2026-11-01', amount: 75 }],
+      deletes: [],
+      problem: null,
+    })
+    expect(spendChanges(saved, 'bay', { 'A|B|2026-10-01': '' }).deletes).toEqual(['p1'])
+  })
+
+  it('"310.004" against a saved "310.00" is unchanged', () => {
+    const saved = [{ id: 'r1', book: 'bay', source: 'Lendgo', month: '2026-10-01', amount: '310.00' }]
+    expect(spendChanges(saved, 'bay', { 'Lendgo|2026-10-01': '310.004' })).toEqual({ upserts: [], deletes: [], problem: null })
+  })
+
+  it('upserts are rounded to cents', () => {
+    expect(spendChanges([], 'bay', { 'Lendgo|2026-10-01': '45.678' }).upserts).toEqual([{ book: 'bay', source: 'Lendgo', month: '2026-10-01', amount: 45.68 }])
   })
 })

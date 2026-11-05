@@ -13,7 +13,10 @@ const BOX = 'w-[72px] rounded-[8px] border border-line2 bg-panel2 px-1.5 py-1 te
 export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSaved, nowMs }) {
   const [now] = useState(() => nowMs ?? Date.now())
   const [book, setBook] = useState(biz === 'mpg' ? 'mpg' : 'bay')
-  const [cells, setCells] = useState(() => ({ bay: spendCells(spend, 'bay'), mpg: spendCells(spend, 'mpg') }))
+  const [cells, setCells] = useState(() => {
+    const m = aliasMap(aliases)
+    return { bay: spendCells(spend, 'bay', m), mpg: spendCells(spend, 'mpg', m) }
+  })
   const [picked, setPicked] = useState([])
   const [mergeLabel, setMergeLabel] = useState('')
   const [problem, setProblem] = useState(null)
@@ -44,7 +47,7 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
   }
 
   const saveGrid = () => {
-    const { upserts, deletes, problem: bad } = spendChanges(spend, book, mine)
+    const { upserts, deletes, problem: bad } = spendChanges(spend, book, mine, map)
     if (bad) return setProblem(bad)
     if (!upserts.length && !deletes.length) return onClose()
     return run(() => saveSpend({ upserts, deletes }), onClose)

@@ -38,6 +38,12 @@ export function windowKeys(days, now = Date.now()) {
   return { fromKey: addDays(toKey, -(days - 1)), toKey }
 }
 
+// Local midnight of a 'YYYY-MM-DD' key, so leads use the same window as spend.
+export function keyStartMs(key) {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d).getTime()
+}
+
 const monthDays = (monthKey) => {
   const [y, m] = monthKey.split('-').map(Number)
   return new Date(Date.UTC(y, m, 0)).getUTCDate()
@@ -48,13 +54,15 @@ const nextMonth = (monthKey) => {
 }
 
 // Spend on `label` in [fromKey, toKey], each month prorated by its days in the
-// window. null when no spend row overlaps (shown as "—", never $0).
-export function spendInWindow(rows, book, label, fromKey, toKey) {
+// window. Rows match by alias label when a map is given, so spend saved under a
+// raw source follows a later merge. null when no spend row overlaps (shown as
+// "—", never $0).
+export function spendInWindow(rows, book, label, fromKey, toKey, map) {
   const endExcl = addDays(toKey, 1)
   let sum = 0
   let any = false
   for (const r of rows || []) {
-    if (r.book !== book || r.source !== label) continue
+    if (r.book !== book || labelFor(r.source, book, map) !== label) continue
     const start = String(r.month).slice(0, 10)
     const lo = start > fromKey ? start : fromKey
     const monthEnd = nextMonth(start)
@@ -81,7 +89,8 @@ const divide = (spend, n) => (typeof spend === 'number' && n > 0 ? round2(spend 
 // sourceTable output -> the ROI table: rows merged by alias label, each with
 // funded, commission (Bayway; null on MPG), spend (number, null or 'free')
 // and costs. Labels with only spend, and funded loans with no lead in this
-// book ("Not linked to a lead"), get rows too, so no money is hidden.
+// book ("Not linked to a lead"), get rows too. A free label shows 'free' only
+// when it has no spend in the window; entered spend always shows and counts.
 export function roiTable(table, { book, contactsById, loans, rates, spendRows, aliases, fromKey, toKey }) {
   const bay = book === 'bay'
   const rateId = SOURCE_COLUMNS[book].rate
@@ -106,11 +115,12 @@ export function roiTable(table, { book, contactsById, loans, rates, spendRows, a
     }
   }
   for (const s of spendRows || []) {
-    if (s.book === book && spendInWindow([s], book, s.source, fromKey, toKey) != null) group(s.source)
+    if (s.book === book && spendInWindow([s], book, s.source, fromKey, toKey) != null) group(labelFor(s.source, book, aliases))
   }
 
   const finish = (g) => {
-    const spend = g.notLinked ? null : isFree(g.source, book, aliases) ? 'free' : spendInWindow(spendRows, book, g.source, fromKey, toKey)
+    const entered = g.notLinked ? null : spendInWindow(spendRows, book, g.source, fromKey, toKey, aliases)
+    const spend = entered == null && !g.notLinked && isFree(g.source, book, aliases) ? 'free' : entered
     return {
       ...g,
       raws: [...g.raws].sort(),
@@ -174,37 +184,62 @@ export function lastMonths(n, now = Date.now()) {
 // plus every label that has spend, sorted.
 export function sheetLabels(table, book, spendRows, map) {
   const set = new Set(table.rows.map((r) => labelFor(r.source, book, map)))
-  for (const s of spendRows || []) if (s.book === book) set.add(s.source)
+  for (const s of spendRows || []) if (s.book === book) set.add(labelFor(s.source, book, map))
   return [...set].sort((a, b) => a.localeCompare(b))
 }
 
+// Cell keys are 'label|YYYY-MM-01'. Labels are free text and may hold '|';
+// the month never does, so keys split on the last '|'.
 const cellKey = (label, month) => `${label}|${month}`
+const splitKey = (key) => {
+  const i = key.lastIndexOf('|')
+  return [key.slice(0, i), key.slice(i + 1)]
+}
 
-// Spend rows -> { 'label|YYYY-MM-01': '310' } for the sheet's inputs.
-export function spendCells(spendRows, book) {
+// Saved spend rows grouped by mapped label + month -> Map(key -> { rows, sum }).
+function spendGroups(spendRows, book, map) {
+  const out = new Map()
+  for (const s of spendRows || []) {
+    if (s.book !== book) continue
+    const key = cellKey(labelFor(s.source, book, map), String(s.month).slice(0, 10))
+    if (!out.has(key)) out.set(key, { rows: [], sum: 0 })
+    const g = out.get(key)
+    g.rows.push(s)
+    g.sum = round2(g.sum + (Number(s.amount) || 0))
+  }
+  return out
+}
+
+// Spend rows -> { 'label|YYYY-MM-01': '310' } for the sheet's inputs, keyed by
+// alias label; rows that land in one cell show their sum.
+export function spendCells(spendRows, book, map) {
   const out = {}
-  for (const s of spendRows || []) if (s.book === book) out[cellKey(s.source, String(s.month).slice(0, 10))] = String(Number(s.amount))
+  for (const [key, g] of spendGroups(spendRows, book, map)) out[key] = String(g.sum)
   return out
 }
 
 // Edited cells vs saved rows -> { upserts, deletes (row ids), problem }.
-// A blank cell deletes its row; unchanged cells are skipped.
-export function spendChanges(spendRows, book, cells) {
-  const saved = new Map()
-  for (const s of spendRows || []) if (s.book === book) saved.set(cellKey(s.source, String(s.month).slice(0, 10)), s)
+// A blank cell deletes every row in its cell; a cell equal (to the cent) to its
+// saved sum is skipped; any other amount is saved under the label and rows
+// still under an old raw source are deleted.
+export function spendChanges(spendRows, book, cells, map) {
+  const saved = spendGroups(spendRows, book, map)
   const upserts = []
   const deletes = []
   for (const [key, value] of Object.entries(cells)) {
-    const [source, month] = key.split('|')
-    const row = saved.get(key)
+    const [source, month] = splitKey(key)
+    const group = saved.get(key)
     const text = String(value ?? '').trim()
     if (text === '') {
-      if (row) deletes.push(row.id)
+      if (group) deletes.push(...group.rows.map((r) => r.id))
       continue
     }
-    const amount = parseAmount(text)
-    if (amount == null || amount < 0) return { upserts: [], deletes: [], problem: `Enter a dollar amount for ${source}, ${month.slice(0, 7)}.` }
-    if (!row || Number(row.amount) !== amount) upserts.push({ book, source, month, amount })
+    const parsed = parseAmount(text)
+    if (parsed == null || parsed < 0) return { upserts: [], deletes: [], problem: `Enter a dollar amount for ${source}, ${month.slice(0, 7)}.` }
+    const amount = round2(parsed)
+    if (group && group.sum === amount) continue
+    upserts.push({ book, source, month, amount })
+    if (group) deletes.push(...group.rows.filter((r) => r.source !== source).map((r) => r.id))
   }
   return { upserts, deletes, problem: null }
 }

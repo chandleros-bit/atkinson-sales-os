@@ -12,7 +12,7 @@ import { DEFAULT_TARGETS, resolveTargets } from '../lib/reports'
 import { heatmap, countByDay, sourceTable } from '../lib/analytics'
 import { fetchLoanBundle } from '../lib/loansData'
 import { fetchRoiInputs } from '../lib/roiData'
-import { aliasMap, roiTable, kpis, windowKeys, formatUsd } from '../lib/roi'
+import { aliasMap, roiTable, kpis, windowKeys, keyStartMs, formatUsd } from '../lib/roi'
 import SpendSheet from '../components/SpendSheet'
 import PageHeader from '../components/PageHeader'
 
@@ -286,8 +286,8 @@ export default function Analytics() {
   const tables = useMemo(() => {
     if (!data) return null
     const now = Date.now()
-    const fromMs = now - days * 86400000
     const keys = windowKeys(days, now)
+    const fromMs = keyStartMs(keys.fromKey) // leads share spend and loans' local-day window
     const contactsById = new Map(data.leads.map((l) => [l.id, l]))
     const aliases = aliasMap(data.aliases)
     const build = (book) =>
