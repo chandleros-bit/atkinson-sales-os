@@ -53,7 +53,8 @@ export async function invokeCrmAction(request) {
       // Lets other views (the Up Next queue and its badge) refresh.
       // A lead removed because FUB deleted it counts too: its card must go.
       if (data?.status === 'ok' || data?.status === 'partial' || data?.results?.some?.((r) => r.contact_removed)) {
-        window.dispatchEvent(new CustomEvent('crm-action:done', { detail: data }))
+        // The request rides along so AppEmailHost can see what moved.
+        window.dispatchEvent(new CustomEvent('crm-action:done', { detail: { ...data, request } }))
       }
       return data
     }

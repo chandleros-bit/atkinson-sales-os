@@ -74,3 +74,31 @@ export function buildFubLeadEvent({ firstName, lastName, phone, email }) {
   if (clean(email)) person.emails = [{ value: clean(email) }]
   return { source: 'Atkinson Sales OS', system: 'Atkinson Sales OS', type: 'Registration', person }
 }
+
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// PUT /v1/people/{id}: save the email (as primary) and/or first name the
+// Application email needs (crm-action send_app_email). FUB replaces the
+// emails list, so send it whole: the new one first, the others kept.
+// VERIFY on the test lead (docs/app-email-setup.md): isPrimary as 1/0.
+export function buildFubPersonUpdate({ person, email, firstName }) {
+  const body = {}
+  const e = clean(email)
+  if (e) {
+    if (!EMAIL_RE.test(e)) throw new Error(`Not an email address: ${e}`)
+    const others = (person?.emails || [])
+      .filter((x) => clean(x?.value) && clean(x.value).toLowerCase() !== e.toLowerCase())
+      .map((x) => ({ value: x.value, type: x.type || 'home', isPrimary: 0 }))
+    body.emails = [{ value: e, type: 'home', isPrimary: 1 }, ...others]
+  }
+  const f = clean(firstName)
+  if (f) body.firstName = f
+  if (!Object.keys(body).length) throw new Error('Nothing to update on the FUB person')
+  return body
+}
+
+// PUT /v1/templates/{id}: the Application email copy (app-email.ts).
+// VERIFY on the test lead: FUB's reference lists no fields for this call.
+export function buildFubTemplate({ name, subject, body }) {
+  return { name, subject, body }
+}

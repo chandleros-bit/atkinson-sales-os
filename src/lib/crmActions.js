@@ -16,7 +16,7 @@ export const FOLLOW_UP_PRESETS = [
   { key: 'pick', label: 'Pick a date' },
 ]
 
-const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact'])
+const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact', 'send_app_email'])
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -204,6 +204,13 @@ export function buildActionRequest(form) {
     if (!['hot', 'warm', 'cold'].includes(form.temperature)) throw new Error('Pick Hot, Warm or Cold')
     return { ...base, contact_id: form.contactId, payload: { temperature: form.temperature } }
   }
+  if (action === 'send_app_email') {
+    // Application Sent email: a typed email / first name is saved to FUB first.
+    const payload = { variant: form.variant }
+    if (trimmed(form.email)) payload.email = trimmed(form.email)
+    if (trimmed(form.firstName)) payload.first_name = trimmed(form.firstName)
+    return { ...base, contact_id: form.contactId, payload }
+  }
   if (action === 'set_stage') {
     const payload = { target: form.target }
     if (form.reason) payload.reason = form.reason
@@ -238,6 +245,8 @@ const DONE = {
   set_stage: 'stage moved',
   set_temperature: 'temperature saved',
   create_contact: 'lead created',
+  update_person: 'contact saved',
+  app_email: 'application email sent',
 }
 const LABEL = {
   log_call: 'Call',
@@ -248,6 +257,8 @@ const LABEL = {
   set_stage: 'Moving the stage',
   set_temperature: 'Temperature tag',
   create_contact: 'Creating the lead',
+  update_person: 'Saving the email',
+  app_email: 'Application email',
 }
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)

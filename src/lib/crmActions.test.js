@@ -342,3 +342,18 @@ describe('set_temperature', () => {
     expect(['Interested', 'Not Interested', 'Left Message', 'No Answer'].map(isConversation)).toEqual([true, true, false, false])
   })
 })
+
+describe('send_app_email (Application Sent email)', () => {
+  it('builds the request, dropping blank fields', () => {
+    const r = buildActionRequest({ action: 'send_app_email', contactId: 'c1', variant: 'refinance', email: ' a@b.co ', firstName: '' })
+    expect(r).toMatchObject({ action: 'send_app_email', contact_id: 'c1', payload: { variant: 'refinance', email: 'a@b.co' } })
+    expect(r.payload.first_name).toBeUndefined()
+    expect(buildActionRequest({ action: 'send_app_email', contactId: 'c1', variant: 'first_home', firstName: ' Mo ' }).payload)
+      .toEqual({ variant: 'first_home', first_name: 'Mo' })
+  })
+  it('summarizes the email steps', () => {
+    expect(summarizeResult({ status: 'ok', results: [{ step: 'app_email', ok: true }] }, 'bay').text).toBe('Application email sent in FollowUpBoss')
+    expect(summarizeResult({ status: 'error', results: [{ step: 'update_person', ok: false, error: 'bad' }] }, 'bay').text)
+      .toBe('Saving the email failed: bad.')
+  })
+})
