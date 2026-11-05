@@ -140,3 +140,12 @@ describe('REVIEWED_TAGS', () => {
     expect(REVIEWED_TAGS).toEqual(['pre-approved', 'disclosed'])
   })
 })
+
+describe('App Email tags (Application Sent email)', () => {
+  it('keeps the App Email tag through later stage moves', () => {
+    const tags = ['application sent', 'App Email - First Home']
+    expect(retagForTarget(tags, 'application_received')).toEqual(['App Email - First Home', 'application received'])
+    expect(retagForTarget(tags, 'lost')).toContain('App Email - First Home')
+    expect(retagForTarget(tags, 'nurture')).toContain('App Email - First Home')
+  })
+})

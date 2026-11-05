@@ -3,10 +3,10 @@
 // complete and a follow-up to create, and those run after the call, in that
 // order, so the user's "done" and "next" both hang off a call that happened.
 
-export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact', 'whoami', 'smart_lists', 'contact_notes', 'contact_relationships']
+export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'send_app_email', 'create_contact', 'whoami', 'smart_lists', 'contact_notes', 'contact_relationships']
 
 // Actions that act on one of our contacts / tasks (the request carries its uuid).
-export const CONTACT_ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'set_stage', 'set_temperature'])
+export const CONTACT_ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'set_stage', 'set_temperature', 'send_app_email'])
 export const TASK_ACTIONS = new Set(['complete_task', 'push_task'])
 
 export function planSteps(request) {
@@ -41,6 +41,15 @@ export function planSteps(request) {
       if (p.target === 'lost' && p.reason) steps.push({ step: 'add_note', subject: null, body: `Marked Lost: ${p.reason}` })
       return steps
     }
+    case 'send_app_email': {
+      // Application Sent email: save a typed email / first name to FUB first,
+      // then tag the lead so FUB's automation sends it (app-email-step.ts).
+      const s = (v) => (typeof v === 'string' ? v.trim() : '')
+      const steps = []
+      if (s(p.email) || s(p.first_name)) steps.push({ step: 'update_person', email: s(p.email) || null, firstName: s(p.first_name) || null })
+      steps.push({ step: 'app_email', variant: p.variant })
+      return steps
+    }
     case 'set_temperature':
       return [{ step: 'set_temperature', temperature: p.temperature }]
     case 'create_contact': {
@@ -64,7 +73,8 @@ export function planSteps(request) {
 // other failed step doesn't block the steps after it.
 // Likewise nothing runs after a failed create: there's no lead to attach to.
 export function shouldStop(step, ok) {
-  return (step === 'log_call' || step === 'create_contact') && !ok
+  // And no Application email is tagged when its email couldn't be saved.
+  return (step === 'log_call' || step === 'create_contact' || step === 'update_person') && !ok
 }
 
 // FollowUpBoss answers 404 on /people/<id> (and "Contact not found" on a note)

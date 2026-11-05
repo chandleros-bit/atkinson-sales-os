@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, FUB_OUTCOMES } from './fub-write.ts'
+import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, buildFubPersonUpdate, buildFubTemplate, FUB_OUTCOMES } from './fub-write.ts'
 import {
   buildZohoCall, buildZohoNote, buildZohoTask, buildZohoTaskUpdate,
   zohoDuration, zohoDateTime, zohoCallResult, zohoCreatedId, buildZohoLead,
@@ -137,5 +137,30 @@ describe('buildZohoLead', () => {
     expect(buildZohoLead({ firstName: ' Ana ', lastName: 'Ruiz', company: ' Ruiz Deli ', phone: '', email: 'ana@example.com' })).toEqual({
       data: [{ First_Name: 'Ana', Last_Name: 'Ruiz', Company: 'Ruiz Deli', Email: 'ana@example.com', Lead_Status: 'Not Contacted' }],
     })
+  })
+})
+
+describe('buildFubPersonUpdate', () => {
+  const person = { emails: [{ value: 'old@x.com', type: 'work', isPrimary: 1 }] }
+  it('puts the new email first as primary and keeps the others', () => {
+    expect(buildFubPersonUpdate({ person, email: ' New@X.com ' })).toEqual({
+      emails: [{ value: 'New@X.com', type: 'home', isPrimary: 1 }, { value: 'old@x.com', type: 'work', isPrimary: 0 }],
+    })
+  })
+  it('does not duplicate an email already on file', () => {
+    expect(buildFubPersonUpdate({ person, email: 'OLD@x.com' }).emails).toHaveLength(1)
+  })
+  it('sets the first name', () => {
+    expect(buildFubPersonUpdate({ person: {}, firstName: ' Miranda ' })).toEqual({ firstName: 'Miranda' })
+  })
+  it('refuses a bad email or nothing to change', () => {
+    expect(() => buildFubPersonUpdate({ person, email: 'nope' })).toThrow(/Not an email/)
+    expect(() => buildFubPersonUpdate({ person })).toThrow(/Nothing/)
+  })
+})
+
+describe('buildFubTemplate', () => {
+  it('sends name, subject and body', () => {
+    expect(buildFubTemplate({ name: 'N', subject: 'S', body: '<p>B</p>' })).toEqual({ name: 'N', subject: 'S', body: '<p>B</p>' })
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { planSteps, shouldStop, overallStatus } from './plan.ts'
+import { planSteps, shouldStop, overallStatus, ACTIONS, CONTACT_ACTIONS } from './plan.ts'
 
 describe('planSteps', () => {
   it('orders a full Log call as call, complete, follow-up', () => {
@@ -93,5 +93,28 @@ describe('planSteps: create_contact', () => {
   it('stops after a failed create', () => {
     expect(shouldStop('create_contact', false)).toBe(true)
     expect(shouldStop('create_contact', true)).toBe(false)
+  })
+})
+
+describe('send_app_email', () => {
+  it('is one app_email step when the lead has what it needs', () => {
+    expect(planSteps({ action: 'send_app_email', payload: { variant: 'first_home' } }))
+      .toEqual([{ step: 'app_email', variant: 'first_home' }])
+  })
+  it('saves a typed email / first name first', () => {
+    expect(planSteps({ action: 'send_app_email', payload: { variant: 'refinance', email: ' a@b.co ', first_name: 'Mo' } })).toEqual([
+      { step: 'update_person', email: 'a@b.co', firstName: 'Mo' },
+      { step: 'app_email', variant: 'refinance' },
+    ])
+    expect(planSteps({ action: 'send_app_email', payload: { variant: 'refinance', first_name: 'Mo' } })[0])
+      .toEqual({ step: 'update_person', email: null, firstName: 'Mo' })
+  })
+  it('stops after a failed update_person', () => {
+    expect(shouldStop('update_person', false)).toBe(true)
+    expect(shouldStop('update_person', true)).toBe(false)
+  })
+  it('is a contact action', () => {
+    expect(ACTIONS).toContain('send_app_email')
+    expect(CONTACT_ACTIONS.has('send_app_email')).toBe(true)
   })
 })
