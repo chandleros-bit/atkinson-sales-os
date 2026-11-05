@@ -10,12 +10,12 @@ import React from 'react'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const invoke = vi.fn()
-const DATA = { notes: [], firstNote: null, activity: [], board: null, signal: null, priority: null, tasks: [], onBoard: false }
+const DATA = { notes: [], firstNote: null, activity: [], board: null, signal: null, priority: null, tasks: [], onBoard: false, docs: [] }
 
 function query(table) {
   const q = {}
   let typed = false
-  for (const m of ['select', 'eq', 'order', 'range', 'gte', 'or', 'limit']) q[m] = () => q
+  for (const m of ['select', 'eq', 'order', 'range', 'gte', 'or', 'limit', 'is']) q[m] = () => q
   q.in = (col) => {
     if (col === 'type') typed = true
     return q
@@ -24,7 +24,8 @@ function query(table) {
     if (table === 'v_people') {
       return { data: { id: 'c1', business_id: 'bay', name: 'Cj Blackman', company: null, phone: '8325550100', email: null, stage: 'Application Received', on_board: DATA.onBoard, crm_profile_url: '#' }, error: null }
     }
-    if (table === 'contacts') return { data: { first_note: DATA.firstNote, owner: 'Chandler Atkinson', tags: ['DSCR'] }, error: null }
+    if (table === 'contacts') return { data: { first_note: DATA.firstNote, owner: 'Chandler Atkinson', tags: ['DSCR'], external_id: '2972' }, error: null }
+    if (table === 'borrower_doc_tracking') return { data: DATA.docs.length ? { id: 7, notes: null } : null, error: null }
     if (table === 'settings') return { data: { value: { bay: true, mpg: true } }, error: null }
     if (table === 'v_active_pipeline') return { data: DATA.board, error: null }
     if (table === 'v_lead_signals') return { data: DATA.signal, error: null }
@@ -32,7 +33,7 @@ function query(table) {
     return { data: null, error: null }
   }
   q.then = (resolve) =>
-    resolve({ data: table === 'activities' ? (typed ? DATA.activity : DATA.notes) : table === 'v_tasks' ? DATA.tasks : [], error: null })
+    resolve({ data: table === 'activities' ? (typed ? DATA.activity : DATA.notes) : table === 'v_tasks' ? DATA.tasks : table === 'borrower_docs' ? DATA.docs : [], error: null })
   return q
 }
 
@@ -54,6 +55,7 @@ beforeEach(() => {
   DATA.priority = null
   DATA.tasks = []
   DATA.activity = []
+  DATA.docs = []
   DATA.firstNote = 'Credit: 660-699 / loan type: DSCR Purchase / state: North Carolina / loan amount: $200K - $500K'
   DATA.notes = [
     { id: 'n1', occurred_at: '2026-10-20T15:00:00Z', notes: 'x', raw: { body: 'Asked for <b>bank statements</b>', isHtml: true, createdBy: 'Chandler Atkinson' } },
@@ -131,6 +133,10 @@ describe('contact card tabs', () => {
     DATA.signal = { lead_source: 'LendingFlow', crm_created_at: '2026-10-01T15:00:00Z', last_outbound_call_at: null }
     DATA.priority = { score: 88.2, tier: 'hot', ai_note: null }
     DATA.tasks = [{ id: 't1', title: 'Call about W2', due_at: '2026-01-02T15:00:00Z' }]
+    DATA.docs = [
+      { id: 1, doc_type: 'W2', status: 'needed', first_requested_at: '2026-01-01T15:00:00Z', received_at: null, received_by_name: null },
+      { id: 2, doc_type: 'Bank statements', status: 'needed', first_requested_at: '2026-01-02T15:00:00Z', received_at: null, received_by_name: null },
+    ]
     DATA.activity = [{ id: 'a1', type: 'call', occurred_at: '2026-10-22T16:00:00Z', notes: 'Left VM', direction: 'outbound' }]
   })
 
@@ -152,11 +158,12 @@ describe('contact card tabs', () => {
     expect(rows[0].textContent).toContain('outbound')
   })
 
-  it('Loan shows the lead form scenario and missing docs', async () => {
+  it('Loan shows the lead form scenario and the docs checklist', async () => {
     const dialog = await open()
     await pick(dialog, 'Loan')
     expect([...dialog.querySelectorAll('[data-loan-fact]')].map((d) => d.textContent)).toEqual(['660-699', 'DSCR Purchase', 'North Carolina', '$200K - $500K'])
-    expect([...dialog.querySelectorAll('[data-missing-doc]')].map((d) => d.textContent)).toEqual(['W2', 'Bank statements'])
+    await act(async () => {})
+    expect([...dialog.querySelectorAll('[data-doc]')].map((d) => d.getAttribute('data-doc'))).toEqual(['W2', 'Bank statements'])
   })
 
   it('Details shows source, owner, tags and open tasks', async () => {
