@@ -7,7 +7,7 @@
 //
 // Days are the rep's local calendar days (dayKey), the same convention as the
 // Tasks board; date-only task dues are read as their calendar date (dueDayKey).
-import { dayKey } from './calendar'
+import { dayKey, calendarDaysSince, keyDaysBetween } from './calendar'
 import { dueDayKey } from './tasks'
 import { isLostStage } from './pipeline'
 import { isCadenceStage } from './dialList'
@@ -74,18 +74,12 @@ const later = (a, b) => (!a ? b || null : !b ? a : ms(a) >= ms(b) ? a : b)
 // Whole local calendar days from `iso` to `now` (0 = same day).
 function daysSince(iso, now) {
   if (!iso) return null
-  const k = (key) => {
-    const [y, m, d] = key.split('-').map(Number)
-    return Date.UTC(y, m - 1, d) / 86400000
-  }
-  return k(dayKey(new Date(now).toISOString())) - k(dayKey(iso))
+  return calendarDaysSince(iso, now)
 }
 
 function overdueDays(dueIso, now) {
   if (!dueIso) return null
-  const [y, m, d] = dueDayKey(dueIso).split('-').map(Number)
-  const [ty, tm, td] = dayKey(new Date(now).toISOString()).split('-').map(Number)
-  return (Date.UTC(ty, tm - 1, td) - Date.UTC(y, m - 1, d)) / 86400000
+  return keyDaysBetween(dueDayKey(dueIso), dayKey(new Date(now).toISOString()))
 }
 
 // Latest human touch: logged outbound call / note / appointment or inbound

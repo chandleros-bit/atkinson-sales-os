@@ -4,6 +4,8 @@
 // match wins) and is due once their rhythm has passed since their last
 // outbound call; never called is due now. Someone not reached stays due and
 // shows again on the same weekday next week.
+import { calendarDaysSince } from './calendar'
+
 const DAY = 86_400_000
 export const THEME_CAP = 15
 export const THEMES = [
@@ -22,7 +24,8 @@ const NEW_REALTOR_DAYS = 90
 const OFF_BOARD = new Set(['Lost', 'Nurture / Credit Repair'])
 
 const ms = (iso) => (iso ? new Date(iso).getTime() : null)
-const days = (from, now) => Math.floor((now - from) / DAY)
+// Calendar days for the hint text ("last call 3 days ago"), not 24h blocks.
+const days = (from, now) => calendarDaysSince(from, now)
 
 export const themeForDay = (weekday) => THEMES.find((t) => t.day === weekday) || null
 

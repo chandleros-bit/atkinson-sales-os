@@ -5,6 +5,19 @@ function dayKey(iso) {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+function keyDaysBetween(a, b) {
+  const utc = (k) => {
+    const [y, m, d] = k.split("-").map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((utc(b) - utc(a)) / 864e5);
+}
+function calendarDaysSince(from, now = Date.now()) {
+  if (from == null || from === "") return null;
+  const t = new Date(from).getTime();
+  if (Number.isNaN(t)) return null;
+  return keyDaysBetween(dayKey(t), dayKey(now));
+}
 
 // src/lib/tasks.js
 function isDateOnly(iso) {
@@ -22,10 +35,9 @@ function dueDayKey(iso) {
 
 // src/lib/overview.js
 var STALE_TOUCH_DAYS = 7;
-var DAY_MS = 864e5;
 function daysSince(iso, now = Date.now()) {
   if (!iso) return null;
-  return Math.floor((now - new Date(iso).getTime()) / DAY_MS);
+  return calendarDaysSince(iso, now);
 }
 
 // supabase/functions/_shared/bay-stages.ts
@@ -296,17 +308,11 @@ var ms2 = (iso) => iso ? new Date(iso).getTime() : NaN;
 var later = (a, b) => !a ? b || null : !b ? a : ms2(a) >= ms2(b) ? a : b;
 function daysSince2(iso, now) {
   if (!iso) return null;
-  const k = (key) => {
-    const [y, m, d] = key.split("-").map(Number);
-    return Date.UTC(y, m - 1, d) / 864e5;
-  };
-  return k(dayKey(new Date(now).toISOString())) - k(dayKey(iso));
+  return calendarDaysSince(iso, now);
 }
 function overdueDays(dueIso, now) {
   if (!dueIso) return null;
-  const [y, m, d] = dueDayKey(dueIso).split("-").map(Number);
-  const [ty, tm, td] = dayKey(new Date(now).toISOString()).split("-").map(Number);
-  return (Date.UTC(ty, tm - 1, td) - Date.UTC(y, m - 1, d)) / 864e5;
+  return keyDaysBetween(dueDayKey(dueIso), dayKey(new Date(now).toISOString()));
 }
 function humanTouchAt(row, rules) {
   const logged = later(row.last_outbound_at, row.last_inbound_at);

@@ -25,6 +25,27 @@ export function dayKey(iso) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Whole days between two YYYY-MM-DD keys (b - a). Keys are plain dates, so
+// they are differenced as UTC midnights: no DST hour can leak in.
+export function keyDaysBetween(a, b) {
+  const utc = (k) => {
+    const [y, m, d] = k.split('-').map(Number)
+    return Date.UTC(y, m - 1, d)
+  }
+  return Math.round((utc(b) - utc(a)) / 86_400_000)
+}
+
+// Whole local calendar days from `from` to `now` (0 = same day, 1 = yesterday).
+// Never divide elapsed milliseconds by 86,400,000 for this: a time later in
+// the day than "now" comes up a day short, and a DST change adds or removes
+// an hour, so "9 days ago at noon" reads as 8 on a morning.
+export function calendarDaysSince(from, now = Date.now()) {
+  if (from == null || from === '') return null
+  const t = new Date(from).getTime()
+  if (Number.isNaN(t)) return null
+  return keyDaysBetween(dayKey(t), dayKey(now))
+}
+
 // The calendar day an event belongs to.
 //
 // A timed event is an instant: the local wall clock is what matters. An all-day

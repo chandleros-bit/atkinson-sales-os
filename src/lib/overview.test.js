@@ -22,8 +22,17 @@ describe('daysSince', () => {
   it('returns whole days elapsed', () => {
     expect(daysSince(daysAgo(3), NOW)).toBe(3)
   })
+  // Local calendar days, not 24h blocks (local constructors: any TZ).
+  const local = (d, h) => new Date(2026, 6, d, h).toISOString()
+  const morning = new Date(2026, 6, 9, 9).getTime()
   it('returns 0 for a touch earlier today', () => {
-    expect(daysSince(daysAgo(0.25), NOW)).toBe(0)
+    expect(daysSince(local(9, 1), morning)).toBe(0)
+  })
+  it('returns 1 for last night, though under 24 hours have passed', () => {
+    expect(daysSince(local(8, 20), morning)).toBe(1)
+  })
+  it('counts a later-in-the-day time 9 days back as 9, not 8', () => {
+    expect(daysSince(new Date(2026, 5, 30, 12).toISOString(), morning)).toBe(9)
   })
 })
 
@@ -31,8 +40,13 @@ describe('lastTouchLabel', () => {
   it('shows an em dash when unknown', () => {
     expect(lastTouchLabel(null, NOW)).toBe('—')
   })
-  it('shows "today" for touches under a day old', () => {
-    expect(lastTouchLabel(daysAgo(0.5), NOW)).toBe('today')
+  it('shows "today" for touches earlier today', () => {
+    const at = new Date(2026, 6, 9, 15).getTime()
+    expect(lastTouchLabel(new Date(2026, 6, 9, 2).toISOString(), at)).toBe('today')
+  })
+  it('shows 1d ago for last night, not "today"', () => {
+    const at = new Date(2026, 6, 9, 8).getTime()
+    expect(lastTouchLabel(new Date(2026, 6, 8, 21).toISOString(), at)).toBe('1d ago')
   })
   it('shows day counts otherwise', () => {
     expect(lastTouchLabel(daysAgo(9), NOW)).toBe('9d ago')
