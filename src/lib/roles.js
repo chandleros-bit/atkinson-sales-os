@@ -1,7 +1,7 @@
 // Who sees what (spec 2026-11-03, section 3, "The assistant's login"). The
 // database enforces it (RLS, crm-action); this only keeps the app from
 // offering what the server would refuse.
-const ASSISTANT_PATHS = /^\/(workbench|priority|tasks|pipeline|bayway\/pipeline)(\/|$)/
+const ASSISTANT_PATHS = /^\/(workbench|priority|tasks|pipeline|bayway\/pipeline|reference)(\/|$)/
 
 export const ASSISTANT_QUICK_ACTIONS = ['note', 'followup', 'done']
 

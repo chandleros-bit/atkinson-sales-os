@@ -42,11 +42,11 @@ beforeEach(() => {
 })
 
 describe('Sidebar', () => {
-  it('shows the assistant Workbench, Tasks and Pipeline only, with her name and role', async () => {
+  it('shows the assistant Workbench, Tasks, Pipeline and Reference only, with her name and role', async () => {
     auth = { role: 'assistant', userName: 'Shelby Atkinson' }
     await render(<Sidebar />)
     const links = [...host.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.textContent)
-    expect(links).toEqual(['Workbench', 'Tasks', 'Pipeline'])
+    expect(links).toEqual(['Workbench', 'Tasks', 'Pipeline', 'Reference'])
     expect(host.textContent).toContain('Shelby Atkinson')
     expect(host.textContent).toContain('Assistant')
     expect(host.textContent).not.toContain('Super Admin')
@@ -58,10 +58,10 @@ describe('Sidebar', () => {
     expect(host.textContent).toContain('Super Admin')
   })
 
-  it('lists ten links in four groups', async () => {
+  it('lists eleven links in four groups', async () => {
     await render(<Sidebar />)
     const links = [...host.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.textContent)
-    expect(links).toEqual(['Overview', 'Workbench', 'Calendar', 'Tasks', 'Pipeline', 'Loans', 'Contacts', 'Activity', 'Reports', 'Settings'])
+    expect(links).toEqual(['Overview', 'Workbench', 'Calendar', 'Tasks', 'Pipeline', 'Loans', 'Contacts', 'Activity', 'Reports', 'Reference', 'Settings'])
     expect(host.querySelector('nav[aria-label="Main"]').textContent).toContain('Books')
     expect(host.querySelector('a[href="/pipeline"]')).not.toBeNull()
     // Settings opens the Settings tab (forecast odds, Rate leads); Sync status is its sibling tab.

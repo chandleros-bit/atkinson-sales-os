@@ -15,6 +15,8 @@ import { TYPE_META, groupByDay, timeOfDay } from '../lib/activity'
 import HealthPills from './HealthPills'
 import StageProgress from './StageProgress'
 import DocsChecklist from './DocsChecklist'
+import { Link } from 'react-router-dom'
+import { leadAddress } from '../lib/referenceLinks'
 import { noteFacts } from '../lib/noteFacts'
 import { formatPhone, telHref } from '../lib/phone'
 import { dueLabel } from '../lib/tasks'
@@ -139,8 +141,9 @@ function ActivityTab({ rows, loading }) {
   )
 }
 
-// The lead form's scenario and the borrower docs editor (Bayway).
-function LoanTab({ loan, contactId, onDocsChange }) {
+// The lead form's scenario, a property lookup when FUB has a street address,
+// and the borrower docs editor (Bayway).
+function LoanTab({ loan, contactId, onDocsChange, address }) {
   return (
     <div className="flex flex-col gap-3" aria-label="Loan">
       <div>
@@ -158,6 +161,11 @@ function LoanTab({ loan, contactId, onDocsChange }) {
           <div className="whitespace-pre-line text-[12.5px] text-muted">{loan.snippet || 'No lead form on file.'}</div>
         )}
       </div>
+      {address && (
+        <Link data-lookup-property to={`/reference?tab=links&address=${encodeURIComponent(address)}`} className="self-start text-[12.5px] font-semibold text-[#1d4ed8]">
+          Look up property ↗
+        </Link>
+      )}
       <DocsChecklist contactId={contactId} onChange={onDocsChange} />
     </div>
   )
@@ -327,7 +335,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
           <div role="tabpanel" className="pt-1">
             {tab === 'notes' && <Notes notes={notes} crm={CRM_LABEL[biz]} />}
             {tab === 'activity' && <ActivityTab rows={extra.activity} loading={extra.loading} />}
-            {tab === 'loan' && <LoanTab loan={loanView({ firstNote: notes.firstNote, board })} contactId={id} onDocsChange={load} />}
+            {tab === 'loan' && <LoanTab loan={loanView({ firstNote: notes.firstNote, board })} contactId={id} onDocsChange={load} address={leadAddress({ addresses: extra.contact?.addresses })} />}
             {tab === 'details' && <DetailsTab rows={detailRows({ person, signal: extra.signal, contact: extra.contact })} tasks={extra.tasks} byAssistant={notes.assistantTaskIds} />}
           </div>
         </div>

@@ -7,7 +7,7 @@ describe('roles', () => {
     expect(canVisit('owner', '/reports')).toBe(true)
   })
   it('keeps the assistant to Workbench, Tasks and Pipeline', () => {
-    for (const p of ['/workbench', '/priority', '/tasks', '/pipeline', '/bayway/pipeline']) expect(canVisit('assistant', p)).toBe(true)
+    for (const p of ['/workbench', '/priority', '/tasks', '/pipeline', '/bayway/pipeline', '/reference']) expect(canVisit('assistant', p)).toBe(true)
     for (const p of ['/', '/reports', '/analytics', '/bayway/loans', '/settings', '/sync', '/rate', '/calendar', '/contacts', '/activity', '/mpg/pipeline', '/pipelines']) expect(canVisit('assistant', p)).toBe(false)
   })
   it('lets nobody in without a role', () => {

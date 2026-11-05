@@ -30,7 +30,10 @@ const LINKS = [
     { to: '/contacts', icon: 'users', label: 'Contacts', on: /^\/((mpg|bayway)\/)?contacts/ },
     { to: '/activity', icon: 'activity', label: 'Activity', on: /^\/((mpg|bayway)\/)?activity/ },
   ] },
-  { group: 'Insights', items: [{ to: '/reports', icon: 'reports', label: 'Reports', on: /^\/(reports|analytics)/ }] },
+  { group: 'Insights', items: [
+    { to: '/reports', icon: 'reports', label: 'Reports', on: /^\/(reports|analytics)/ },
+    { to: '/reference', icon: 'book', label: 'Reference', on: /^\/reference/ },
+  ] },
   { group: 'System', items: [{ to: '/settings', icon: 'settings', label: 'Settings', on: /^\/(sync|settings|rate)/, sync: true }] },
 ]
 

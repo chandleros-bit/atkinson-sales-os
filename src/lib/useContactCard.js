@@ -16,7 +16,7 @@ export function useContactCard(id, biz) {
     if (!id || !biz || isDemoMode) return setState((s) => ({ ...s, loading: false }))
     const [signal, contact, priority, tasks, activity] = await Promise.all([
       supabase.from('v_lead_signals').select('lead_source, crm_created_at, last_outbound_call_at').eq('id', id).maybeSingle(),
-      supabase.from('contacts').select('owner, tags:raw->tags').eq('id', id).maybeSingle(),
+      supabase.from('contacts').select('owner, tags:raw->tags, addresses:raw->addresses').eq('id', id).maybeSingle(),
       biz === 'bay' ? supabase.from('v_priority_leads').select('score, tier, ai_note').eq('id', id).maybeSingle() : { data: null },
       supabase.from('v_tasks').select('id, title, due_at').eq('contact_id', id).order('due_at', { ascending: true }).limit(50),
       supabase

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import React from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -24,7 +25,12 @@ function query(table) {
     if (table === 'v_people') {
       return { data: { id: 'c1', business_id: 'bay', name: 'Cj Blackman', company: null, phone: '8325550100', email: null, stage: 'Application Received', on_board: DATA.onBoard, crm_profile_url: '#' }, error: null }
     }
-    if (table === 'contacts') return { data: { first_note: DATA.firstNote, owner: 'Chandler Atkinson', tags: ['DSCR'], external_id: '2972' }, error: null }
+    if (table === 'contacts') {
+      return {
+        data: { first_note: DATA.firstNote, owner: 'Chandler Atkinson', tags: ['DSCR'], external_id: '2972', addresses: [{ street: '3042 Oak Forest Dr', city: 'Houston', state: 'TX', code: '77018' }] },
+        error: null,
+      }
+    }
     if (table === 'borrower_doc_tracking') return { data: DATA.docs.length ? { id: 7, notes: null } : null, error: null }
     if (table === 'settings') return { data: { value: { bay: true, mpg: true } }, error: null }
     if (table === 'v_active_pipeline') return { data: DATA.board, error: null }
@@ -69,7 +75,12 @@ async function mount() {
   document.body.appendChild(host)
   await act(async () => {
     createRoot(host).render(
-      React.createElement(React.Fragment, null, React.createElement(PersonLink, { id: 'c1', url: '#' }, 'Cj Blackman'), React.createElement(PersonSheetHost)),
+      React.createElement(
+        MemoryRouter,
+        null,
+        React.createElement(PersonLink, { id: 'c1', url: '#' }, 'Cj Blackman'),
+        React.createElement(PersonSheetHost),
+      ),
     )
   })
   return host
@@ -164,6 +175,8 @@ describe('contact card tabs', () => {
     expect([...dialog.querySelectorAll('[data-loan-fact]')].map((d) => d.textContent)).toEqual(['660-699', 'DSCR Purchase', 'North Carolina', '$200K - $500K'])
     await act(async () => {})
     expect([...dialog.querySelectorAll('[data-doc]')].map((d) => d.getAttribute('data-doc'))).toEqual(['W2', 'Bank statements'])
+    const look = dialog.querySelector('a[data-lookup-property]')
+    expect(look.getAttribute('href')).toBe('/reference?tab=links&address=3042%20Oak%20Forest%20Dr%2C%20Houston%2C%20TX%2077018')
   })
 
   it('Details shows source, owner, tags and open tasks', async () => {
