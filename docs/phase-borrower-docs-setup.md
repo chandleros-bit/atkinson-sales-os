@@ -1,5 +1,7 @@
 # Borrower Docs — setup
 
+> **Retired 2026-11-05.** Docs are now kept in the OS (Person sheet > Loan > Docs). The sheet sync is unscheduled by migration 0057. See `docs/superpowers/specs/2026-11-05-docs-in-os-design.md`. The rest of this page is history.
+
 Bayway pipeline cards show each borrower's outstanding documents and the last
 conversation note. Document status comes from a Google Sheet the assistant
 updates daily.
