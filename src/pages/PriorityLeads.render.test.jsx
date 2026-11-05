@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import React from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -13,7 +14,7 @@ const ROW = { id: 'c1', name: 'Cy Applied', owner: 'Chandler', score: 91, tier: 
 
 function query() {
   const q = {}
-  for (const m of ['select', 'eq', 'order', 'range']) q[m] = () => q
+  for (const m of ['select', 'eq', 'order', 'range', 'limit']) q[m] = () => q
   q.maybeSingle = async () => ({ data: { value: { bay: true, mpg: true } }, error: null })
   q.then = (resolve) => resolve({ data: [ROW], error: null })
   return q
@@ -28,7 +29,7 @@ describe('Priority Leads', () => {
   it("opens the contact card from a lead's name", async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
-    await act(async () => createRoot(host).render(React.createElement(PriorityLeads)))
+    await act(async () => createRoot(host).render(React.createElement(MemoryRouter, null, React.createElement(PriorityLeads))))
     await act(async () => {})
     const link = host.querySelector('[data-person-link]')
     expect(link.textContent).toBe('Cy Applied')

@@ -83,6 +83,8 @@ let mobile = false
 beforeEach(() => {
   document.body.innerHTML = ''
   invoke.mockReset()
+  // Opening a lead card reads its CRM notes; answer that read instead of resolving undefined.
+  invoke.mockResolvedValue({ data: { status: 'ok', results: [] }, error: null })
   writes.length = 0
   DATA.workItems = []
   DATA.contacts = []
