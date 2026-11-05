@@ -13,6 +13,7 @@ import { showToast } from './Toaster'
 import { STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
 import { dueLabel } from '../lib/tasks'
 import { isCadenceStage } from '../lib/dialList'
+import { openAppEmail } from '../lib/appEmail'
 import {
   OUTCOMES,
   FOLLOW_UP_PRESETS,
@@ -685,6 +686,18 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
           )
         })}
       </div>
+      {/* Application Sent email: send it after a Skip, or see that it went. */}
+      {businessId === 'bay' && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => openAppEmail(contactId)}
+          className="mt-3 min-h-[40px] w-full rounded-[10px] text-[12.5px] font-semibold disabled:opacity-50"
+          style={{ color: t.ink }}
+        >
+          Application email…
+        </button>
+      )}
       {busy && <div className="mt-3 text-[12.5px] text-muted">Updating tags in FollowUpBoss…</div>}
       <ResultBox result={result} onRetry={retry} busy={busy} />
     </>

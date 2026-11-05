@@ -574,6 +574,18 @@ describe('QuickActions: Move stage', () => {
     expect(document.body.textContent).toContain('Stage moved in FollowUpBoss')
   })
 
+  it('offers the Application email from the Move stage sheet (Bayway)', async () => {
+    const seen = []
+    const listen = (e) => seen.push(e.detail)
+    window.addEventListener('app-email:open', listen)
+    await mount({ ...bay, stage: 'Application/Estimate Sent' })
+    await click(byLabel('Move stage'))
+    await click(byText('Application email…'))
+    window.removeEventListener('app-email:open', listen)
+    expect(seen).toEqual([{ contactId: 'c1' }])
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
   it('offers a follow-up when the move leaves nothing scheduled, and Skip closes it', async () => {
     invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
     await mount({ ...bay, stage: 'Attempted', openTaskCount: 0 })

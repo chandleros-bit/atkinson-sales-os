@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Toaster from './Toaster'
 import ReminderHost from './ReminderHost'
+import AppEmailHost from './AppEmailHost'
 import SearchPalette, { openSearch } from './SearchPalette'
 import { PersonSheetHost } from './PersonSheet'
 import BusinessFilter from './BusinessFilter'
@@ -168,6 +169,7 @@ export default function Layout() {
       <Toaster />
       <SearchPalette />
       <PersonSheetHost />
+      <AppEmailHost />
       <ReminderHost />
     </div>
   )
