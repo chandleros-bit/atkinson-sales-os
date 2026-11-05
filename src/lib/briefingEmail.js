@@ -8,9 +8,45 @@ const timeLabel = (t) =>
 const dayLabel = (d) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(`${d}T00:00:00Z`))
 const BOOK = { bay: 'Bayway', mpg: 'MPG' }
 const STATUS = { hit: 'hit', pace: 'on pace', behind: 'behind' }
+const goalFmt = (g) => (v) => (g.unit === 'currency' ? money(v) : Math.round(Number(v) || 0))
+
+// ---- HTML tables ------------------------------------------------------------
+// Email-safe: plain <table>s with inline styles (clients drop <style> blocks).
+// The plain-text part stays a list.
+const C = { text: '#101828', muted: '#667085', line: '#e4e7ec', head: '#f2f4f7', link: '#1d4ed8', red: '#b42318' }
+const PILL = { hit: ['#ecfdf3', '#067647'], pace: ['#fffaeb', '#b54708'], behind: ['#fef3f2', '#b42318'] }
+const cell = (align) => `padding:6px 8px;border-bottom:1px solid ${C.line};text-align:${align || 'left'};vertical-align:top`
+
+// cols: [{ label, width?, align? }]. rows: { cells: [html], alert? } or { note: html }
+// (one muted cell across the row). Cells are HTML: escape text before passing it.
+function table(cols, rows) {
+  const head = `<tr>${cols
+    .map((c) => `<th${c.width ? ` width="${c.width}"` : ''} style="${cell(c.align)};background:${C.head};color:${C.muted};font-weight:600;font-size:12px">${esc(c.label)}</th>`)
+    .join('')}</tr>`
+  const body = rows
+    .map((r) =>
+      r.note != null
+        ? `<tr><td colspan="${cols.length}" style="${cell()};color:${C.muted}">${r.note}</td></tr>`
+        : `<tr${r.alert ? ` style="color:${C.red}"` : ''}>${r.cells.map((h, i) => `<td style="${cell(cols[i].align)}">${h}</td>`).join('')}</tr>`,
+    )
+    .join('')
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font:13px Arial,sans-serif;color:${C.text};margin:0 0 12px">${head}${body}</table>`
+}
+function pill(status) {
+  const [bg, fg] = PILL[status] || [C.head, C.muted]
+  return `<span style="background:${bg};color:${fg};padding:2px 7px;border-radius:6px;font-size:11px;white-space:nowrap">${esc(STATUS[status] || status)}</span>`
+}
+const heading = (title, href) =>
+  `<h2 style="font:600 15px Arial,sans-serif;margin:22px 0 8px;color:${C.text}">${
+    href ? `<a href="${esc(href)}" style="color:${C.link};text-decoration:none">${esc(title)}</a>` : esc(title)
+  }</h2>`
+const link = (href, label) => `<a href="${esc(href)}" style="color:${C.link}">${esc(label)}</a>`
+// A model block { count, top } as table rows, plus a "+N more" note.
+const blockRows = (b, toCells, alertOf = () => false) =>
+  b.top.map((p) => ({ cells: toCells(p), alert: alertOf(p) })).concat(b.count > b.top.length ? [{ note: esc(`+${b.count - b.top.length} more`) }] : [])
 
 function goalLine(g) {
-  const fmt = (v) => (g.unit === 'currency' ? money(v) : Math.round(Number(v) || 0))
+  const fmt = goalFmt(g)
   const need = g.needPerDay ? ` · need ${g.needPerDay} per business day` : ''
   return `${g.label} ${fmt(g.value)} / ${fmt(g.target)} · ${STATUS[g.status] || g.status}${need}`
 }
@@ -69,18 +105,65 @@ export function renderOwnerBriefing(m, { appUrl }) {
   const text = plainSeparators(`${subject}\n\n${textBlocks.join('\n\n')}\n\nOpen the dashboard: ${url('/')}\n`)
 
   // ---- HTML ---------------------------------------------------------------
-  const h2 = (t) => `<h2 style="font:600 15px Arial,sans-serif;margin:20px 0 6px">${esc(t)}</h2>`
-  const ul = (items) => `<ul style="font:14px Arial,sans-serif;margin:0;padding-left:18px">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`
-  const blockHtml = (b) =>
-    `<p style="font:600 14px Arial,sans-serif;margin:10px 0 4px"><a href="${esc(url(b.href))}" style="color:#1d4ed8">${esc(b.title)}</a></p>${b.rows.length ? ul(b.rows) : ''}`
+  const goalsTable = table(
+    [{ label: 'Goal', width: '34%' }, { label: 'MTD', align: 'right' }, { label: 'Target', align: 'right' }, { label: 'Pace' }, { label: 'Need / day', align: 'right' }],
+    m.numbers.goals.map((g) => {
+      const fmt = goalFmt(g)
+      return { cells: [esc(g.label), esc(fmt(g.value)), esc(fmt(g.target)), pill(g.status), g.needPerDay ? esc(g.needPerDay) : '-'] }
+    }),
+  )
+  const forecastTable = table(
+    [{ label: 'Forecast this month', width: '31%' }, { label: 'Funded', align: 'right' }, { label: 'Weighted', align: 'right' }, { label: 'MPG', align: 'right' }],
+    [{ cells: [`<b>${esc(money(f.expected))}</b>`, esc(money(f.funded)), esc(money(f.weighted)), esc(f.mpgExpected != null ? money(f.mpgExpected) : `${f.mpgAccounts} accounts`)] }],
+  )
+  const dayTable = table(
+    [{ label: 'Day', width: '28%' }, { label: 'Calls', align: 'right' }, { label: 'Connects', align: 'right' }, { label: 'New apps', align: 'right' }, { label: 'Texts', align: 'right' }],
+    [{ cells: [esc(s.label || 'Yesterday'), esc(s.calls), esc(s.connects), esc(s.applications), esc(s.texts)] }],
+  )
+
+  const todayRows = m.today.meetings
+    .map((e) => ({ cells: [esc(timeLabel(e.time)), esc(e.title), esc(BOOK[e.book] || '')] }))
+    .concat(blockRows(m.today.closings, (c) => [esc(dayLabel(c.date)), esc(`Closing: ${c.name}`), 'Bayway']))
+  const todayTable = table(
+    [{ label: 'When', width: '20%' }, { label: 'Meeting or closing' }, { label: 'Book', width: '16%' }],
+    todayRows.length ? todayRows : [{ note: 'No meetings or closings today' }],
+  )
+
+  const person = (why) => (p) => [esc(p.name), esc(why), esc(p.detail || ''), esc(BOOK[p.book] || '')]
+  const callRows = [
+    ...blockRows(cf.replied, person('They reached out')),
+    ...blockRows(cf.newLeads, person('New lead, not called')),
+    ...blockRows(cf.overdue, person('Overdue follow-up')),
+    ...blockRows(cf.hotCold, person('Hot, going cold')),
+  ]
+  if (cf.cadence.bay + cf.cadence.mpg) {
+    callRows.push({ note: `${esc(`Cadence due today: Bayway ${cf.cadence.bay}, MPG ${cf.cadence.mpg}`)} &middot; ${link(url('/workbench'), 'Open Workbench')}` })
+  }
+  const callTable = callRows.length
+    ? table([{ label: 'Name', width: '26%' }, { label: 'Why', width: '26%' }, { label: 'Detail' }, { label: 'Book', width: '14%' }], callRows)
+    : `<p style="font:14px Arial,sans-serif;margin:0">Nobody waiting.</p>`
+
+  const issue = (why) => (p) => [esc(p.name), esc(why), esc(p.detail || '')]
+  const slipRows = [
+    ...blockRows(sl.quietApps, issue('Application quiet')),
+    ...blockRows(sl.docsAging, issue('Docs aging')),
+    ...blockRows(sl.statementsLate, issue('MPG statement late')),
+    ...sl.syncProblems.map((p) => ({ cells: [esc(p.label), 'Sync problem', esc(p.text)] })),
+  ]
+  const slipCount = sl.quietApps.count + sl.docsAging.count + sl.statementsLate.count + sl.syncProblems.length
+  const slipTable =
+    m.nothingSlipping || !slipRows.length
+      ? `<p style="font:14px Arial,sans-serif;margin:0">Nothing slipping today.</p>`
+      : table([{ label: 'Name', width: '26%' }, { label: 'Issue', width: '26%' }, { label: 'Detail' }], slipRows)
+
   const html = [
-    `<div style="max-width:600px">`,
-    `<p style="font:13px Arial,sans-serif;color:#667085;margin:0">${esc(m.dateLabel)}</p>`,
-    h2('Numbers'), ul(numbers),
-    h2('Today'), ul(today),
-    h2('Call first'), callFirst.length ? callFirst.map(blockHtml).join('') : ul(['Nobody waiting']),
-    h2('Slipping'), slipping.length ? slipping.map(blockHtml).join('') : `<p style="font:14px Arial,sans-serif">Nothing slipping today.</p>`,
-    `<p style="font:13px Arial,sans-serif;margin-top:24px"><a href="${esc(url('/'))}">Open the dashboard</a></p>`,
+    `<div style="max-width:640px;font-family:Arial,sans-serif;color:${C.text}">`,
+    `<p style="font:13px Arial,sans-serif;color:${C.muted};margin:0">${esc(m.dateLabel)}</p>`,
+    heading('Numbers, month to date'), goalsTable, forecastTable, dayTable,
+    heading('Today'), todayTable,
+    heading(`Call first (${m.callFirstCount})`, url('/workbench')), callTable,
+    heading(m.nothingSlipping ? 'Slipping' : `Slipping (${slipCount})`, url('/workbench')), slipTable,
+    `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url('/'), 'Open the dashboard')}</p>`,
     `</div>`,
   ].join('')
 
@@ -127,15 +210,39 @@ export function renderAssistantBriefing(m, { appUrl }) {
     : 'Nothing on the files today.'
   const text = plainSeparators(`${subject}\n\n${textBody}\n\nOpen the OS: ${url('/workbench')}\n`)
 
-  const li = (r) => `<li${r.alert ? ' style="color:#b42318"' : ''}>${esc(r.text)}</li>`
-  const blockHtml = (b) =>
-    `<p style="font:600 14px Arial,sans-serif;margin:14px 0 4px"><a href="${esc(url(b.href))}" style="color:#1d4ed8">${esc(b.title)}</a></p>` +
-    `<ul style="font:14px Arial,sans-serif;margin:0;padding-left:18px">${b.rows.map(li).join('')}</ul>`
+  const agentHtml = (c) =>
+    [agentText('Buyer', c.buyerAgent), agentText('Seller', c.sellerAgent)].filter(Boolean).map(esc).join('<br>') || '-'
+  const sections = [
+    m.closing.count &&
+      heading(`Closing in 7 days (${m.closing.count})`, url('/pipeline')) +
+        table(
+          [{ label: 'Borrower', width: '20%' }, { label: 'Closes', width: '11%' }, { label: 'Title', width: '20%' }, { label: 'Agents', width: '27%' }, { label: 'Docs needed' }],
+          blockRows(m.closing, (c) => [esc(c.name), esc(dayLabel(c.date)), esc(c.title || 'Not set'), agentHtml(c), esc(c.docs.length ? c.docs.join(', ') : 'None')]),
+        ),
+    m.disclosures.count &&
+      heading(`Disclosures due (${m.disclosures.count})`, url('/pipeline')) +
+        table(
+          [{ label: 'Borrower', width: '40%' }, { label: 'Disclose by', width: '30%' }, { label: 'Status' }],
+          blockRows(m.disclosures, (d) => [esc(d.name), esc(dayLabel(d.dueBy)), d.due ? '<b>DUE</b>' : 'Upcoming'], (d) => d.due),
+        ),
+    m.missingDocs.count &&
+      heading(`Missing docs (${m.missingDocs.count})`, url('/pipeline')) +
+        table(
+          [{ label: 'Borrower', width: '26%' }, { label: 'Docs' }, { label: 'Days', width: '10%', align: 'right' }, { label: 'Action', width: '18%' }],
+          blockRows(m.missingDocs, (d) => [esc(d.name), esc(d.docs.join(', ')), d.days != null ? esc(d.days) : '-', d.chase ? '<b>Chase today</b>' : ''], (d) => d.chase),
+        ),
+    m.newApps.count &&
+      heading(`New applications (${m.newApps.count})`, url('/pipeline')) +
+        table([{ label: 'Borrower', width: '40%' }, { label: 'Next step' }], blockRows(m.newApps, (a) => [esc(a.name), 'Set up the file and send the doc list'])),
+    m.waiting.count &&
+      heading(`Waiting on borrower (${m.waiting.count})`, url('/workbench')) +
+        table([{ label: 'Borrower', width: '30%' }, { label: 'Detail' }], blockRows(m.waiting, (w) => [esc(w.name), esc(w.detail)])),
+  ].filter(Boolean)
   const html = [
-    `<div style="max-width:600px">`,
-    `<p style="font:13px Arial,sans-serif;color:#667085;margin:0">${esc(m.dateLabel)} - Bayway files</p>`,
-    blocks.length ? blocks.map(blockHtml).join('') : `<p style="font:14px Arial,sans-serif">Nothing on the files today.</p>`,
-    `<p style="font:13px Arial,sans-serif;margin-top:24px"><a href="${esc(url('/workbench'))}">Open the OS</a></p>`,
+    `<div style="max-width:640px;font-family:Arial,sans-serif;color:${C.text}">`,
+    `<p style="font:13px Arial,sans-serif;color:${C.muted};margin:0">${esc(m.dateLabel)} - Bayway files</p>`,
+    sections.length ? sections.join('') : `<p style="font:14px Arial,sans-serif">Nothing on the files today.</p>`,
+    `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url('/workbench'), 'Open the OS')}</p>`,
     `</div>`,
   ].join('')
 

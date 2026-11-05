@@ -61,6 +61,7 @@ describe('buildOwnerBriefing', () => {
     expect(b.today.meetings).toHaveLength(1)
     expect(b.today.meetings[0]).toMatchObject({ title: 'Deli review', book: 'mpg' })
     expect(b.callFirst.replied.top.map((r) => r.name)).toEqual(['Rita Reply'])
+    expect(b.callFirst.replied.top[0].book).toBeTruthy()
     expect(b.callFirst.overdue.top.map((r) => r.name)).toEqual(['Oscar Overdue'])
     expect(b.slipping.syncProblems.map((s) => s.label)).toEqual(['Outlook MPG'])
     expect(b.callFirstCount).toBe(2)

@@ -83,7 +83,7 @@ export function buildOwnerBriefing(data, now = Date.now()) {
   // ---- Call first ---------------------------------------------------------
   const queue = buildQueue(withRatings(data.signals || [], rated), rules, now)
   const inBucket = (id) => queue.filter((r) => r.bucket === id)
-  const person = (r) => ({ name: r.name || '(no name)', detail: reasonText(r, now) })
+  const person = (r) => ({ name: r.name || '(no name)', detail: reasonText(r, now), book: r.business_id || null })
   const dial = buildDialList(withRatings(data.dialRows || [], rated), { now, skips: new Set(data.dialSkips || []) })
   const due = dial.dueNow.concat(dial.laterToday)
   const callFirst = {
@@ -108,7 +108,7 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     const a = alerts.find((x) => x.id === id)
     if (!a) return { count: 0, top: [] }
     const people = a.people.concat(a.rest || [])
-    return { count: a.count, top: people.slice(0, TOP).map((p) => ({ name: p.name, detail: p.detail })) }
+    return { count: a.count, top: people.slice(0, TOP).map((p) => ({ name: p.name, detail: p.detail, book: p.book || null })) }
   }
   const health = syncHealth(data.syncLatest || {}, now)
   const syncProblems = health.detail.filter((d) => d.state !== 'ok').map((d) => ({ label: d.label, text: d.text }))
