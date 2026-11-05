@@ -133,7 +133,7 @@ export const SOURCE_COLUMNS = {
   },
 }
 
-const cleanSource = (s) => {
+export const cleanSource = (s) => {
   const v = String(s ?? '').trim()
   return v && v !== '<unspecified>' ? v : 'No source'
 }
