@@ -211,10 +211,11 @@ function spendGroups(spendRows, book, map) {
 }
 
 // Spend rows -> { 'label|YYYY-MM-01': '310' } for the sheet's inputs, keyed by
-// alias label; rows that land in one cell show their sum.
+// alias label; rows that land in one cell show their sum. Whole dollars stay
+// "300"; cents show two decimals ("50.50").
 export function spendCells(spendRows, book, map) {
   const out = {}
-  for (const [key, g] of spendGroups(spendRows, book, map)) out[key] = String(g.sum)
+  for (const [key, g] of spendGroups(spendRows, book, map)) out[key] = Number.isInteger(g.sum) ? String(g.sum) : g.sum.toFixed(2)
   return out
 }
 
@@ -244,8 +245,9 @@ export function spendChanges(spendRows, book, cells, map) {
   return { upserts, deletes, problem: null }
 }
 
-export function mergeRows(book, raws, label) {
-  return raws.map((raw) => ({ book, raw, label: label.trim(), is_free: false }))
+// `free`: whether the label merged into is free (isFree), so a merge keeps it.
+export function mergeRows(book, raws, label, free) {
+  return raws.map((raw) => ({ book, raw, label: label.trim(), is_free: !!free }))
 }
 
 // Alias rows (raw rows, not the map) -> upserts that set is_free on a label.

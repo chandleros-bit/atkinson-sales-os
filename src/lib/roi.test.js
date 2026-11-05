@@ -168,9 +168,16 @@ describe('spend sheet helpers', () => {
   })
 
   it('mergeRows makes one alias row per raw source', () => {
-    expect(mergeRows('bay', ['Chandler', 'Chandler Atkinson'], ' Self-sourced ')).toEqual([
+    expect(mergeRows('bay', ['Chandler', 'Chandler Atkinson'], ' Self-sourced ', false)).toEqual([
       { book: 'bay', raw: 'Chandler', label: 'Self-sourced', is_free: false },
       { book: 'bay', raw: 'Chandler Atkinson', label: 'Self-sourced', is_free: false },
+    ])
+  })
+
+  it('mergeRows keeps the free flag of the label it merges into', () => {
+    expect(mergeRows('bay', ['Realtor', 'Lendgo'], 'Realtor referral', isFree('Realtor referral', 'bay', aliasMap(ALIASES)))).toEqual([
+      { book: 'bay', raw: 'Realtor', label: 'Realtor referral', is_free: true },
+      { book: 'bay', raw: 'Lendgo', label: 'Realtor referral', is_free: true },
     ])
   })
 
@@ -203,6 +210,15 @@ describe('Postgres numeric strings', () => {
   })
   it('spendCells shows "300"', () => {
     expect(spendCells(STR, 'bay')).toEqual({ 'Lendgo|2026-11-01': '300' })
+  })
+  it('spendCells shows cents with two decimals: "50.50"', () => {
+    const rows = [
+      { id: 'c1', book: 'bay', source: 'Lendgo', month: '2026-11-01', amount: '50.50' },
+      { id: 'c2', book: 'bay', source: 'Facebook', month: '2026-11-01', amount: 20.25 },
+      { id: 'c3', book: 'bay', source: 'Facebook', month: '2026-11-01', amount: 0.25 },
+    ]
+    expect(spendCells(rows, 'bay')).toEqual({ 'Lendgo|2026-11-01': '50.50', 'Facebook|2026-11-01': '20.50' })
+    expect(spendChanges(rows, 'bay', spendCells(rows, 'bay'))).toEqual({ upserts: [], deletes: [], problem: null })
   })
   it('spendChanges skips an unchanged cell', () => {
     expect(spendChanges(STR, 'bay', { 'Lendgo|2026-11-01': '300' })).toEqual({ upserts: [], deletes: [], problem: null })

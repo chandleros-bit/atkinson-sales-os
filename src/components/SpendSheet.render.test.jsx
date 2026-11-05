@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Spend sheet: month x source grid, free sources, merges.
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import React from 'react'
@@ -27,17 +27,28 @@ const LEADS = [
 const SPEND = [{ id: 's1', book: 'bay', source: 'Lendgo', month: '2026-11-01', amount: 300 }]
 let onSaved
 let onClose
+let root
+let mounted
 
 async function mount(props = {}) {
   const host = document.createElement('div')
   document.body.appendChild(host)
+  root = createRoot(host)
+  mounted = { biz: 'bay', leads: LEADS, aliases: [], spend: SPEND, onClose, onSaved, nowMs: NOW, ...props }
   await act(async () => {
-    createRoot(host).render(
-      React.createElement(SpendSheet, { biz: 'bay', leads: LEADS, aliases: [], spend: SPEND, onClose, onSaved, nowMs: NOW, ...props }),
-    )
+    root.render(React.createElement(SpendSheet, mounted))
   })
   return host
 }
+// The parent re-renders the sheet with reloaded aliases/spend after onSaved.
+async function rerender(props) {
+  mounted = { ...mounted, ...props }
+  await act(async () => {
+    root.render(React.createElement(SpendSheet, mounted))
+  })
+}
+const tab = (name) => [...document.querySelectorAll('[role="tab"]')].find((b) => b.textContent === name)
+const rowOrder = () => [...document.querySelectorAll('[data-spend-row]')].map((r) => r.getAttribute('data-spend-row'))
 const input = (label) => document.querySelector(`input[aria-label="${label}"]`)
 const button = (label) => document.querySelector(`button[aria-label="${label}"]`)
 async function type(el, value) {
@@ -55,6 +66,11 @@ beforeEach(() => {
   removeAliases.mockReset().mockResolvedValue({ error: null })
   onSaved = vi.fn().mockResolvedValue(undefined)
   onClose = vi.fn()
+})
+// Unmount so an earlier sheet's Escape listener can't answer a later test.
+afterEach(async () => {
+  if (root) await act(async () => root.unmount())
+  root = null
 })
 
 describe('SpendSheet', () => {
@@ -91,7 +107,7 @@ describe('SpendSheet', () => {
     await type(input('Lendgo Oct 26'), 'abc')
     await act(async () => button('Save spend').click())
     expect(saveSpend).not.toHaveBeenCalled()
-    expect(document.querySelector('[role="dialog"]').textContent).toContain('Enter a dollar amount for Lendgo, 2026-10.')
+    expect(document.querySelector('[role="dialog"] [role="alert"]').textContent).toBe('Enter a dollar amount for Lendgo, 2026-10.')
   })
 
   it('merges picked sources under one label', async () => {
@@ -132,5 +148,164 @@ describe('SpendSheet', () => {
     await mount({ aliases })
     await act(async () => button('Unmerge Self-sourced').click())
     expect(removeAliases).toHaveBeenCalledWith(['x1', 'x2'])
+  })
+
+  it('merging into a free label keeps it free', async () => {
+    const aliases = [{ id: 'x1', book: 'bay', raw: 'Chandler', label: 'Self-sourced', is_free: true }]
+    await mount({ aliases })
+    await act(async () => input('Merge Chandler').click())
+    await act(async () => input('Merge Chandler Atkinson').click())
+    await type(input('Merged label'), 'Self-sourced')
+    await act(async () => button('Merge sources').click())
+    expect(saveAliases).toHaveBeenCalledWith([
+      { book: 'bay', raw: 'Chandler', label: 'Self-sourced', is_free: true },
+      { book: 'bay', raw: 'Chandler Atkinson', label: 'Self-sourced', is_free: true },
+    ])
+  })
+
+  describe('edits stay separate from saved spend', () => {
+    const REALTOR_LEADS = [
+      { id: 'r1', business_id: 'bay', source: 'Realtor', created: new Date(2026, 9, 20).toISOString(), person_stage: 'Lead', tags: [] },
+      { id: 'r2', business_id: 'bay', source: 'Realtor Referral', created: new Date(2026, 9, 21).toISOString(), person_stage: 'Lead', tags: [] },
+    ]
+    const REALTOR_SPEND = [
+      { id: 'p1', book: 'bay', source: 'Realtor', month: '2026-10-01', amount: 100 },
+      { id: 'p2', book: 'bay', source: 'Realtor Referral', month: '2026-10-01', amount: 50 },
+    ]
+
+    it('after a merge, Save with no edits writes nothing and closes', async () => {
+      await mount({ leads: REALTOR_LEADS, spend: REALTOR_SPEND })
+      expect(input('Realtor Referral Oct 26').value).toBe('50')
+      await act(async () => input('Merge Realtor').click())
+      await act(async () => input('Merge Realtor Referral').click())
+      await type(input('Merged label'), 'Realtor Referral')
+      await act(async () => button('Merge sources').click())
+      expect(saveAliases).toHaveBeenCalled()
+      await rerender({
+        aliases: [
+          { id: 'x1', book: 'bay', raw: 'Realtor', label: 'Realtor Referral', is_free: false },
+          { id: 'x2', book: 'bay', raw: 'Realtor Referral', label: 'Realtor Referral', is_free: false },
+        ],
+      })
+      expect(input('Realtor Referral Oct 26').value).toBe('150')
+      expect(input('Realtor Oct 26')).toBe(null)
+      await act(async () => button('Save spend').click())
+      expect(saveSpend).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('after an unmerge, Save with no edits writes nothing', async () => {
+      const spend = [{ id: 'a1', book: 'bay', source: 'A', month: '2026-10-01', amount: 100 }]
+      await mount({ spend, aliases: [{ id: 'y1', book: 'bay', raw: 'A', label: 'L', is_free: false }] })
+      expect(input('L Oct 26').value).toBe('100')
+      await act(async () => button('Unmerge L').click())
+      expect(removeAliases).toHaveBeenCalledWith(['y1'])
+      await rerender({ aliases: [] })
+      expect(input('A Oct 26').value).toBe('100')
+      await act(async () => button('Save spend').click())
+      expect(saveSpend).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('on All, Save writes edits from the book not on screen', async () => {
+      const spend = [...SPEND, { id: 'm1', book: 'mpg', source: 'Web', month: '2026-11-01', amount: 20 }]
+      await mount({ biz: 'all', spend })
+      await act(async () => tab('MPG').click())
+      await type(input('Web Oct 26'), '40')
+      await act(async () => tab('Bayway').click())
+      await type(input('Lendgo Oct 26'), '10')
+      await act(async () => button('Save spend').click())
+      expect(saveSpend).toHaveBeenCalledTimes(1)
+      expect(saveSpend).toHaveBeenCalledWith({
+        upserts: [
+          { book: 'bay', source: 'Lendgo', month: '2026-10-01', amount: 10 },
+          { book: 'mpg', source: 'Web', month: '2026-10-01', amount: 40 },
+        ],
+        deletes: [],
+      })
+    })
+
+    it('on All, a bad amount in the other book names the book and saves nothing', async () => {
+      const spend = [...SPEND, { id: 'm1', book: 'mpg', source: 'Web', month: '2026-11-01', amount: 20 }]
+      await mount({ biz: 'all', spend })
+      await act(async () => tab('MPG').click())
+      await type(input('Web Oct 26'), 'abc')
+      await act(async () => tab('Bayway').click())
+      await act(async () => button('Save spend').click())
+      expect(saveSpend).not.toHaveBeenCalled()
+      expect(document.querySelector('[role="alert"]').textContent).toBe('MPG: Enter a dollar amount for Web, 2026-10.')
+    })
+  })
+
+  it('a thrown save shows the problem and frees the buttons', async () => {
+    saveAliases.mockRejectedValue(new Error('network down'))
+    await mount()
+    await act(async () => input('Free Lendgo').click())
+    expect(document.querySelector('[role="alert"]').textContent).toBe('network down')
+    expect(button('Save spend').disabled).toBe(false)
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+
+  describe('closing', () => {
+    let confirm
+    beforeEach(() => {
+      confirm = vi.spyOn(window, 'confirm')
+    })
+    afterEach(() => confirm.mockRestore())
+
+    it('closes straight away with no edits', async () => {
+      confirm.mockReturnValue(false)
+      await mount()
+      await act(async () => button('Close').click())
+      expect(confirm).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('asks before discarding unsaved edits', async () => {
+      confirm.mockReturnValue(false)
+      await mount()
+      await type(input('Lendgo Oct 26'), '450')
+      await act(async () => button('Close').click())
+      expect(confirm).toHaveBeenCalledWith('Discard unsaved spend?')
+      expect(onClose).not.toHaveBeenCalled()
+      confirm.mockReturnValue(true)
+      await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('ignores close while a save is running', async () => {
+      confirm.mockReturnValue(true)
+      saveSpend.mockReturnValue(new Promise(() => {}))
+      await mount()
+      await type(input('Lendgo Oct 26'), '450')
+      await act(async () => button('Save spend').click())
+      expect(button('Save spend').disabled).toBe(true)
+      await act(async () => button('Close').click())
+      await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+      await act(async () => document.querySelector('[role="dialog"]').parentElement.click())
+      expect(onClose).not.toHaveBeenCalled()
+      expect(confirm).not.toHaveBeenCalled()
+    })
+  })
+
+  it('free sources keep their inputs, ticked, after paid rows under a Free sources heading', async () => {
+    const aliases = [{ id: 'f1', book: 'bay', raw: 'Lendgo', label: 'Lendgo', is_free: true }]
+    await mount({ aliases })
+    expect(rowOrder()).toEqual(['Chandler', 'Chandler Atkinson', 'Lendgo'])
+    const lendgo = document.querySelector('[data-spend-row="Lendgo"]')
+    expect(lendgo.previousElementSibling.textContent).toBe('Free sources')
+    expect(input('Free Lendgo').checked).toBe(true)
+    expect(input('Free Chandler').checked).toBe(false)
+    expect(input('Lendgo Nov 26').value).toBe('300')
+    await type(input('Lendgo Nov 26'), '')
+    await act(async () => button('Save spend').click())
+    expect(saveSpend).toHaveBeenCalledWith({ upserts: [], deletes: ['s1'] })
+  })
+
+  it('unticking a free source marks it paid', async () => {
+    const aliases = [{ id: 'f1', book: 'bay', raw: 'Lendgo', label: 'Lendgo', is_free: true }]
+    await mount({ aliases })
+    await act(async () => input('Free Lendgo').click())
+    expect(saveAliases).toHaveBeenCalledWith([{ book: 'bay', raw: 'Lendgo', label: 'Lendgo', is_free: false }])
   })
 })

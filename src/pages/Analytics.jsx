@@ -152,8 +152,10 @@ function RoiTable({ title, book, rateLabel, roi, ink }) {
               {[...roi.rows, roi.total].map((r) => {
                 const total = r === roi.total
                 const dash = r.notLinked
+                // Keys can't collide with a source literally named "Total" or "Not linked to a lead".
+                const key = total ? '__total' : dash ? '__notlinked' : `source:${r.source}`
                 return (
-                  <tr key={r.source} data-source={r.source} className={`border-b border-line last:border-b-0 ${total ? 'font-bold' : ''} ${dash ? 'text-muted' : ''}`}>
+                  <tr key={key} data-source={r.source} className={`border-b border-line last:border-b-0 ${total ? 'font-bold' : ''} ${dash ? 'text-muted' : ''}`}>
                     <td className="max-w-[240px] truncate py-2 pr-3">
                       {r.source}
                       {r.raws.length > 1 && <span className="ml-1 text-[11.5px] font-normal text-dim">({r.raws.length} merged)</span>}
@@ -227,9 +229,14 @@ export default function Analytics() {
   const [days, setDays] = useState(90)
   const [spendOpen, setSpendOpen] = useState(false)
 
+  // A failed reload keeps the aliases and spend already shown; it only says so.
   const reloadRoi = async () => {
     const roi = await fetchRoiInputs()
-    setData((d) => ({ ...d, aliases: roi.data?.aliases || [], spend: roi.data?.spend || [], roiError: roi.error?.message || d.loanError || null }))
+    setData((d) =>
+      roi.error
+        ? { ...d, roiError: roi.error.message || String(roi.error) }
+        : { ...d, aliases: roi.data?.aliases || [], spend: roi.data?.spend || [], roiError: d.loanError || null },
+    )
   }
 
   useEffect(() => {
@@ -301,7 +308,11 @@ export default function Analytics() {
       {isDemoMode && (
         <div className="rounded-card border border-line bg-panel px-6 py-8 text-center text-sm text-muted">Demo mode — connect Supabase to see analytics.</div>
       )}
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
       {!isDemoMode && !error && !data && <div className="text-sm text-muted">Loading analytics…</div>}
 
       {model && <Heatmap model={model} goal={data.goal} ink={ink} />}
@@ -335,7 +346,11 @@ export default function Analytics() {
               </button>
             </div>
           </div>
-          {data.roiError && <div className="text-[12px] text-[#b42318]">Couldn&apos;t load spend or loans: {data.roiError}</div>}
+          {data.roiError && (
+            <div role="alert" className="text-[12px] text-[#b42318]">
+              Couldn&apos;t load spend or loans: {data.roiError}
+            </div>
+          )}
           {inBook('bay') && <RoiTable title="Bayway · FollowUpBoss" book="bay" rateLabel="To app / estimate" roi={tables.bay} ink="var(--bay)" />}
           {inBook('mpg') && <RoiTable title="MPG · Zoho" book="mpg" rateLabel="To qualified" roi={tables.mpg} ink="var(--mpg)" />}
           {spendOpen && (

@@ -16,7 +16,7 @@ function query(table) {
   let from = 0
   let to = 999
   const q = {}
-  for (const m of ['select', 'eq', 'gte', 'order', 'limit', 'in']) q[m] = () => q
+  for (const m of ['select', 'eq', 'gte', 'order', 'limit', 'in', 'upsert', 'delete']) q[m] = () => q
   q.range = (a, b) => {
     from = a
     to = b
@@ -122,7 +122,35 @@ describe('Analytics', () => {
   it('keeps the lead rows and says so when spend cannot load', async () => {
     ERRORS.marketing_spend = { message: 'boom' }
     const host = await mount()
-    expect(host.textContent).toContain("Couldn't load spend or loans: boom")
+    expect(host.querySelector('[role="alert"]').textContent).toBe("Couldn't load spend or loans: boom")
     expect(host.querySelector('[aria-label="Bayway · FollowUpBoss"] [data-source="LendingFlow"] [data-rate]').textContent).toBe('50%')
+  })
+
+  it('a failed reload after a sheet action keeps the spend already shown', async () => {
+    const host = await mount()
+    const spendCell = () => host.querySelector('[aria-label="Bayway · FollowUpBoss"] [data-source="LendingFlow"] [data-spend]')
+    expect(spendCell().textContent).toBe('$300')
+    await act(async () => host.querySelector('button[aria-label="Spend"]').click())
+    ERRORS.marketing_spend = { message: 'reload failed' }
+    await act(async () => document.querySelector('input[aria-label="Free LendingFlow"]').click())
+    await act(async () => {})
+    expect(host.querySelector('[role="alert"]').textContent).toBe("Couldn't load spend or loans: reload failed")
+    expect(spendCell().textContent).toBe('$300')
+  })
+
+  it('a source literally named "Total" or "Not linked to a lead" gets its own row', async () => {
+    DATA.contacts.push(
+      { id: 'c5', business_id: 'bay', person_stage: 'Lead', bay_source: 'Total', bay_created: daysAgo(3), tags: [] },
+      { id: 'c6', business_id: 'bay', person_stage: 'Lead', bay_source: 'Not linked to a lead', bay_created: daysAgo(3), tags: [] },
+    )
+    DATA.loans.push({ ...DATA.loans[0], id: 2, contact_id: null })
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const host = await mount()
+    const dupes = errors.mock.calls.filter((c) => String(c[0]).includes('same key'))
+    errors.mockRestore()
+    expect(dupes).toEqual([])
+    const bay = host.querySelector('[aria-label="Bayway · FollowUpBoss"]')
+    expect(bay.querySelectorAll('[data-source="Total"]')).toHaveLength(2)
+    expect(bay.querySelectorAll('[data-source="Not linked to a lead"]')).toHaveLength(2)
   })
 })
