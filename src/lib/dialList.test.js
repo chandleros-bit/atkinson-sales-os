@@ -112,6 +112,19 @@ describe('buildDialList', () => {
     const list = buildDialList(rows, { now, skips: new Set(['new']), inBook: (b) => b === 'bay' })
     expect(list.dueNow.map((i) => i.id)).toEqual(['over'])
   })
+  it('leaves nurture and cold calls off while they are paused, keeping credit repair and move-to-Nurture', () => {
+    const parked = (o) => lead({ stage: 'Nurture / Credit Repair', stage_since: iso(at(20, 9)), ...o })
+    const extra = [
+      parked({ id: 'nurture', tags: ['nurture'] }),
+      parked({ id: 'cold', tags: ['nurture'], stage_since: iso(at(1, 9)), outbound_calls_since_stage: 2, last_outbound_call_at: iso(at(1, 11)) }),
+      parked({ id: 'repair', tags: ['credit repair'], stage_since: iso(at(1, 9)) }),
+      lead({ id: 'six', ...called(ATTEMPTS, at(13, 10), at(26, 10)) }),
+    ]
+    const later = at(28, 12) + 7 * DAY // Wed 11/4, everything above is due
+    const ids = (opts) => { const l = buildDialList(extra, { now: later, ...opts }); return [...l.dueNow, ...l.laterToday].map((i) => i.id).sort() }
+    expect(ids()).toEqual(['repair', 'six'])
+    expect(ids({ paused: new Set() })).toEqual(['cold', 'nurture', 'repair', 'six'])
+  })
 })
 
 describe('whenLabel', () => {
