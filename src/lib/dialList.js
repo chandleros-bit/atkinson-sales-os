@@ -124,14 +124,19 @@ const endOfDay = (now) => {
   return d.getTime()
 }
 
+// Item kinds kept off the list for now. Nurture (and the cold check-ins that
+// follow it) is paused while the database is cleaned up; empty this set to
+// bring them back.
+export const PAUSED_KINDS = new Set(['nurture', 'cold'])
+
 // rows -> { dueNow, laterToday }. Due now: leads that arrived in the last day
 // (speed to lead) first, then most recently due first, so an old backlog
 // doesn't bury today's follow-ups. Later today: by time. skips: contact ids
-// off the list today.
-export function buildDialList(rows, { now = Date.now(), skips = new Set(), inBook = () => true } = {}) {
+// off the list today. paused: item kinds left off the list.
+export function buildDialList(rows, { now = Date.now(), skips = new Set(), inBook = () => true, paused = PAUSED_KINDS } = {}) {
   const items = (rows || [])
     .map((r) => dialItem(r, now))
-    .filter((i) => i && inBook(i.book) && !skips.has(i.id) && i.dueAt <= endOfDay(now))
+    .filter((i) => i && !paused.has(i.kind) && inBook(i.book) && !skips.has(i.id) && i.dueAt <= endOfDay(now))
   const dueNow = items
     .filter((i) => i.dueAt <= now)
     .sort(
