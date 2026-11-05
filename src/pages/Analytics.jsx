@@ -1,14 +1,19 @@
 // Analytics: how consistently you call (a 26-week heatmap of outbound calls,
 // shaded against the busiest day, with days at the call goal counted) and
 // which lead sources turn into
-// applications (Bayway) or qualified merchants (MPG). Both follow the business
-// filter. Logic lives in lib/analytics.js.
+// applications, funded loans and commission (Bayway) or qualified merchants
+// (MPG), against what each source cost. Both follow the business filter.
+// Logic lives in lib/analytics.js and lib/roi.js.
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import { DEFAULT_TARGETS, resolveTargets } from '../lib/reports'
 import { heatmap, countByDay, sourceTable } from '../lib/analytics'
+import { fetchLoanBundle } from '../lib/loansData'
+import { fetchRoiInputs } from '../lib/roiData'
+import { aliasMap, roiTable, kpis, windowKeys, keyStartMs, formatUsd } from '../lib/roi'
+import SpendSheet from '../components/SpendSheet'
 import PageHeader from '../components/PageHeader'
 
 const WEEKS = 26
@@ -99,49 +104,103 @@ function DayRow({ label, cells, ink }) {
   )
 }
 
-function SourceTable({ title, rateLabel, table, ink }) {
+const money = (v) => formatUsd(v)
+
+function RoiTable({ title, book, rateLabel, roi, ink }) {
+  const bay = book === 'bay'
+  const k = kpis(roi)
+  const tiles = [
+    ['leads', 'New leads', String(k.leads)],
+    ['spend', 'Spend', money(k.spend)],
+    ['cpl', 'Cost per lead', money(k.costPerLead)],
+    ...(bay ? [['cpf', 'Cost per funded', money(k.costPerFunded)]] : []),
+  ]
   return (
     <section aria-label={title} className="rounded-card border border-line bg-panel p-4 sm:p-5">
       <h3 className="text-[15px] font-bold">{title}</h3>
-      {table.rows.length === 0 ? (
-        <div className="mt-3 text-[13px] text-muted">No leads created in this window.</div>
+      <div className={`mt-3 grid grid-cols-2 gap-2 ${bay ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+        {tiles.map(([id, label, value]) => (
+          <div key={id} data-kpi={id} className="rounded-xl bg-panel2 px-3 py-2">
+            <div className="text-[11.5px] text-muted">{label}</div>
+            <div className="num text-[17px] font-bold">{value}</div>
+          </div>
+        ))}
+      </div>
+      {roi.rows.length === 0 ? (
+        <div className="mt-3 text-[13px] text-muted">No leads, loans or spend in this window.</div>
       ) : (
         <div className="-mx-4 mt-3 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <table className="w-full min-w-[520px] text-[13px]">
+          <table className={`w-full text-[13px] ${bay ? 'min-w-[860px]' : 'min-w-[640px]'}`}>
             <thead>
               <tr className="border-b border-line text-left text-[11.5px] text-muted">
                 <th className="py-2 pr-3 font-semibold">Source</th>
                 <th className="num py-2 pr-3 text-right font-semibold">Leads</th>
-                {table.cols.map((c) => (
+                {roi.cols.map((c) => (
                   <th key={c.id} className="py-2 pr-3 text-right font-semibold">
                     {c.label}
                   </th>
                 ))}
-                <th className="py-2 text-right font-semibold">{rateLabel}</th>
+                <th className="py-2 pr-3 text-right font-semibold">{rateLabel}</th>
+                {bay && <th className="py-2 pr-3 text-right font-semibold">Funded</th>}
+                {bay && <th className="py-2 pr-3 text-right font-semibold">Commission</th>}
+                <th className="py-2 pr-3 text-right font-semibold">Spend</th>
+                <th className="py-2 pr-3 text-right font-semibold">Per lead</th>
+                {bay && <th className="py-2 text-right font-semibold">Per funded</th>}
               </tr>
             </thead>
             <tbody>
-              {[...table.rows, table.total].map((r) => {
-                const total = r === table.total
+              {[...roi.rows, roi.total].map((r) => {
+                const total = r === roi.total
+                const dash = r.notLinked
+                // Keys can't collide with a source literally named "Total" or "Not linked to a lead".
+                const key = total ? '__total' : dash ? '__notlinked' : `source:${r.source}`
                 return (
-                  <tr key={r.source} data-source={r.source} className={`border-b border-line last:border-b-0 ${total ? 'font-bold' : ''}`}>
-                    <td className="max-w-[220px] truncate py-2 pr-3">{r.source}</td>
-                    <td className="num py-2 pr-3 text-right">{r.leads}</td>
-                    {table.cols.map((c) => (
+                  <tr key={key} data-source={r.source} className={`border-b border-line last:border-b-0 ${total ? 'font-bold' : ''} ${dash ? 'text-muted' : ''}`}>
+                    <td className="max-w-[240px] truncate py-2 pr-3">
+                      {r.source}
+                      {r.raws.length > 1 && <span className="ml-1 text-[11.5px] font-normal text-dim">({r.raws.length} merged)</span>}
+                    </td>
+                    <td className="num py-2 pr-3 text-right">{dash ? '—' : r.leads}</td>
+                    {roi.cols.map((c) => (
                       <td key={c.id} className="num py-2 pr-3 text-right text-muted">
-                        {r.counts[c.id] || 0}
+                        {dash ? '—' : r.counts[c.id] || 0}
                       </td>
                     ))}
-                    <td className="py-2">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-line sm:block">
-                          <div className="h-full rounded-full" style={{ width: `${r.rate}%`, background: ink }} />
+                    <td className="py-2 pr-3">
+                      {dash ? (
+                        <div className="text-right">—</div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-line sm:block">
+                            <div className="h-full rounded-full" style={{ width: `${r.rate}%`, background: ink }} />
+                          </div>
+                          <span className="num w-10 text-right" data-rate>
+                            {r.rate}%
+                          </span>
                         </div>
-                        <span className="num w-10 text-right" data-rate>
-                          {r.rate}%
-                        </span>
-                      </div>
+                      )}
                     </td>
+                    {bay && (
+                      <td className="num py-2 pr-3 text-right" data-funded>
+                        {r.funded}
+                      </td>
+                    )}
+                    {bay && (
+                      <td className="num py-2 pr-3 text-right" data-commission>
+                        {money(r.commission)}
+                      </td>
+                    )}
+                    <td className={`num py-2 pr-3 text-right ${r.spend === 'free' ? 'text-dim' : ''}`} data-spend>
+                      {money(r.spend)}
+                    </td>
+                    <td className="num py-2 pr-3 text-right" data-cpl>
+                      {money(r.costPerLead)}
+                    </td>
+                    {bay && (
+                      <td className="num py-2 text-right" data-cpf>
+                        {money(r.costPerFunded)}
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -153,8 +212,9 @@ function SourceTable({ title, rateLabel, table, ink }) {
   )
 }
 
-// contacts rows -> { business_id, source, created, person_stage, tags }.
+// contacts rows -> { id, business_id, source, created, person_stage, tags }.
 const toLead = (c) => ({
+  id: c.id,
   business_id: c.business_id,
   person_stage: c.person_stage,
   tags: c.tags,
@@ -167,6 +227,19 @@ export default function Analytics() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [days, setDays] = useState(90)
+  const [spendOpen, setSpendOpen] = useState(false)
+
+  // A failed reload keeps the aliases and spend already shown; it only says so,
+  // here and (through the returned error) in the Spend sheet.
+  const reloadRoi = async () => {
+    const roi = await fetchRoiInputs()
+    setData((d) =>
+      roi.error
+        ? { ...d, roiError: roi.error.message || String(roi.error) }
+        : { ...d, aliases: roi.data?.aliases || [], spend: roi.data?.spend || [], roiError: d.loanError || null },
+    )
+    return { error: roi.error || null }
+  }
 
   useEffect(() => {
     if (isDemoMode) return
@@ -175,7 +248,7 @@ export default function Analytics() {
       const since = new Date()
       since.setHours(0, 0, 0, 0)
       since.setDate(since.getDate() - WEEKS * 7)
-      const [calls, contacts, settings] = await Promise.all([
+      const [calls, contacts, settings, loans, roi] = await Promise.all([
         // Six months of calls across both books passes 1,000 rows: paged.
         fetchAllSettled(() =>
           supabase.from('activities').select('occurred_at, business_id').eq('type', 'call').eq('direction', 'outbound').gte('occurred_at', since.toISOString()).order('id'),
@@ -183,18 +256,28 @@ export default function Analytics() {
         fetchAllSettled(() =>
           supabase
             .from('contacts')
-            .select('business_id, person_stage, bay_source:raw->>source, mpg_source:raw->>Lead_Source, bay_created:raw->>created, mpg_created:raw->>Created_Time, tags:raw->tags')
+            .select('id, business_id, person_stage, bay_source:raw->>source, mpg_source:raw->>Lead_Source, bay_created:raw->>created, mpg_created:raw->>Created_Time, tags:raw->tags')
             .order('id'),
         ),
         supabase.from('settings').select('value').eq('key', 'metric_targets').maybeSingle(),
+        fetchLoanBundle(),
+        fetchRoiInputs(),
       ])
       if (cancelled) return
       const err = calls.error || contacts.error || settings.error
       if (err) return setError(err.message)
+      // Loans and spend never blank the page: lead counts still show.
+      const loanError = loans.error?.message || null
       setData({
         calls: calls.data || [],
         leads: (contacts.data || []).map(toLead),
         goal: resolveTargets(DEFAULT_TARGETS, settings.data?.value).calls,
+        loans: loans.data?.loans || [],
+        rates: loans.data?.rates,
+        aliases: roi.data?.aliases || [],
+        spend: roi.data?.spend || [],
+        loanError,
+        roiError: roi.error?.message || loanError,
       })
     })()
     return () => {
@@ -211,8 +294,14 @@ export default function Analytics() {
   }, [data, biz])
   const tables = useMemo(() => {
     if (!data) return null
-    const fromMs = Date.now() - days * 86400000
-    return { bay: sourceTable(data.leads, 'bay', fromMs), mpg: sourceTable(data.leads, 'mpg', fromMs) }
+    const now = Date.now()
+    const keys = windowKeys(days, now)
+    const fromMs = keyStartMs(keys.fromKey) // leads share spend and loans' local-day window
+    const contactsById = new Map(data.leads.map((l) => [l.id, l]))
+    const aliases = aliasMap(data.aliases)
+    const build = (book) =>
+      roiTable(sourceTable(data.leads, book, fromMs), { book, contactsById, loans: data.loans, rates: data.rates, spendRows: data.spend, aliases, ...keys })
+    return { bay: build('bay'), mpg: build('mpg') }
   }, [data, days])
 
   return (
@@ -221,7 +310,11 @@ export default function Analytics() {
       {isDemoMode && (
         <div className="rounded-card border border-line bg-panel px-6 py-8 text-center text-sm text-muted">Demo mode — connect Supabase to see analytics.</div>
       )}
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+      {error && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </div>
+      )}
       {!isDemoMode && !error && !data && <div className="text-sm text-muted">Loading analytics…</div>}
 
       {model && <Heatmap model={model} goal={data.goal} ink={ink} />}
@@ -230,28 +323,41 @@ export default function Analytics() {
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-[17px] font-bold">Lead sources</h3>
+              <h3 className="text-[17px] font-bold">Lead sources and ROI</h3>
               <p className="mt-0.5 text-[12.5px] text-muted">
-                Leads created in the window, by where each one stands now. A lead that applied and later went Lost counts as Lost.
+                Leads created and loans funded in the window. Spend prorated by day. A lead that applied and later went Lost counts as Lost.
               </p>
             </div>
-            <div role="tablist" aria-label="Window" className="flex gap-1 rounded-xl bg-panel2 p-1">
-              {WINDOWS.map((w) => (
-                <button
-                  key={w.days}
-                  type="button"
-                  role="tab"
-                  aria-selected={days === w.days}
-                  onClick={() => setDays(w.days)}
-                  className={`min-h-[34px] rounded-lg px-3 text-[12.5px] font-semibold ${days === w.days ? 'bg-panel text-[color:var(--text)]' : 'text-muted'}`}
-                >
-                  {w.label}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div role="tablist" aria-label="Window" className="flex gap-1 rounded-xl bg-panel2 p-1">
+                {WINDOWS.map((w) => (
+                  <button
+                    key={w.days}
+                    type="button"
+                    role="tab"
+                    aria-selected={days === w.days}
+                    onClick={() => setDays(w.days)}
+                    className={`min-h-[34px] rounded-lg px-3 text-[12.5px] font-semibold ${days === w.days ? 'bg-panel text-[color:var(--text)]' : 'text-muted'}`}
+                  >
+                    {w.label}
+                  </button>
+                ))}
+              </div>
+              <button type="button" aria-label="Spend" onClick={() => setSpendOpen(true)} className="min-h-[34px] rounded-lg border border-line2 px-3 text-[12.5px] font-semibold">
+                Spend
+              </button>
             </div>
           </div>
-          {inBook('bay') && <SourceTable title="Bayway · FollowUpBoss" rateLabel="To app / estimate" table={tables.bay} ink="var(--bay)" />}
-          {inBook('mpg') && <SourceTable title="MPG · Zoho" rateLabel="To qualified" table={tables.mpg} ink="var(--mpg)" />}
+          {data.roiError && (
+            <div role="alert" className="text-[12px] text-[#b42318]">
+              Couldn&apos;t load spend or loans: {data.roiError}
+            </div>
+          )}
+          {inBook('bay') && <RoiTable title="Bayway · FollowUpBoss" book="bay" rateLabel="To app / estimate" roi={tables.bay} ink="var(--bay)" />}
+          {inBook('mpg') && <RoiTable title="MPG · Zoho" book="mpg" rateLabel="To qualified" roi={tables.mpg} ink="var(--mpg)" />}
+          {spendOpen && (
+            <SpendSheet biz={biz} leads={data.leads} aliases={data.aliases} spend={data.spend} onClose={() => setSpendOpen(false)} onSaved={reloadRoi} />
+          )}
         </>
       )}
     </div>
