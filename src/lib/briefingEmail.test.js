@@ -105,7 +105,7 @@ describe('renderAssistantBriefing', () => {
   })
   it('marks due rows red in HTML and keeps HTML ASCII', () => {
     const { html } = renderAssistantBriefing(amodel(), { appUrl: 'https://x.app' })
-    expect(html).toMatch(/<li style="color:#b42318">Due Dan - disclose by Nov 4 \(DUE\)<\/li>/)
+    expect(html).toMatch(/<tr style="color:#b42318">(?:(?!<\/tr>).)*Due Dan(?:(?!<\/tr>).)*DUE(?:(?!<\/tr>).)*<\/tr>/)
     expect(html).toContain('href="https://x.app/pipeline"')
     expect(/^[\x09\x0a\x0d\x20-\x7e]*$/.test(html)).toBe(true)
   })
@@ -114,5 +114,72 @@ describe('renderAssistantBriefing', () => {
     const m = amodel({ closing: empty, disclosures: empty, missingDocs: empty, closingCount: 0, chaseCount: 0, quiet: true })
     const { text } = renderAssistantBriefing(m, { appUrl: 'https://x.app' })
     expect(text).toContain('Nothing on the files today.')
+  })
+})
+
+
+// Table layout (HTML only; the plain-text part stays a list).
+const rowWith = (html, ...bits) => (html.match(/<tr[^>]*>(?:(?!<\/tr>).)*<\/tr>/g) || []).find((r) => bits.every((b) => r.includes(b)))
+
+describe('owner briefing tables', () => {
+  const m = () => {
+    const x = model()
+    x.callFirst.replied.top = x.callFirst.replied.top.map((p) => ({ ...p, book: 'bay' }))
+    x.slipping = { ...x.slipping, docsAging: { count: 1, top: [{ name: 'Ray Doc', detail: 'Bank statements, 12 days', book: 'bay' }] } }
+    x.nothingSlipping = false
+    x.today.closings = { count: 1, top: [{ name: 'Pat Lee', date: '2026-11-06' }] }
+    return x
+  }
+  it('lays goals out as rows with target, pace and need per day', () => {
+    const { html } = renderOwnerBriefing(m(), { appUrl: 'https://x.app' })
+    expect(html).toContain('<table')
+    const row = rowWith(html, '>Calls<')
+    expect(row).toBeTruthy()
+    expect(row).toContain('>40<')
+    expect(row).toContain('>100<')
+    expect(row).toContain('behind')
+    expect(row).toContain('>4<')
+  })
+  it('puts the forecast and yesterday in one-row tables', () => {
+    const { html } = renderOwnerBriefing(m(), { appUrl: 'https://x.app' })
+    expect(rowWith(html, '$12,400', '$5,000', '$7,400')).toBeTruthy()
+    expect(rowWith(html, '>Yesterday<', '>12<', '>3<')).toBeTruthy()
+  })
+  it('lists meetings and closings together under Today', () => {
+    const { html } = renderOwnerBriefing(m(), { appUrl: 'https://x.app' })
+    expect(rowWith(html, '10:00 AM', 'Deli &lt;review&gt;', '>MPG<')).toBeTruthy()
+    expect(rowWith(html, 'Nov 6', 'Closing: Pat Lee', '>Bayway<')).toBeTruthy()
+  })
+  it('call first rows carry the reason and book, then more and cadence', () => {
+    const { html } = renderOwnerBriefing(m(), { appUrl: 'https://x.app' })
+    expect(rowWith(html, '>R0<', 'They reached out', 'Called back', '>Bayway<')).toBeTruthy()
+    expect(rowWith(html, '+2 more')).toBeTruthy()
+    expect(rowWith(html, 'Cadence due today', 'Bayway 6', 'MPG 2')).toBeTruthy()
+  })
+  it('slipping rows carry the issue and detail', () => {
+    const { html } = renderOwnerBriefing(m(), { appUrl: 'https://x.app' })
+    expect(rowWith(html, '>Ray Doc<', 'Docs aging', 'Bank statements, 12 days')).toBeTruthy()
+  })
+  it('stays ASCII', () => {
+    expect(/^[\x09\x0a\x0d\x20-\x7e]*$/.test(renderOwnerBriefing(m(), { appUrl: 'https://x.app' }).html)).toBe(true)
+  })
+})
+
+describe('assistant briefing tables', () => {
+  it('closing rows show date, title, agent and docs in columns', () => {
+    const { html } = renderAssistantBriefing(amodel(), { appUrl: 'https://x.app' })
+    expect(rowWith(html, '>Pat Lee<', 'Nov 6', 'Lone Star Title', 'Jo Ray', '>W2<')).toBeTruthy()
+  })
+  it('missing docs show days and a red chase row', () => {
+    const { html } = renderAssistantBriefing(amodel(), { appUrl: 'https://x.app' })
+    const row = rowWith(html, '>Old Olga<')
+    expect(row).toContain('W2, Bank')
+    expect(row).toContain('>10<')
+    expect(row).toContain('Chase today')
+    expect(row.startsWith('<tr style="color:#b42318">')).toBe(true)
+  })
+  it('a disclosure not yet due is not red', () => {
+    const { html } = renderAssistantBriefing(amodel(), { appUrl: 'https://x.app' })
+    expect(rowWith(html, '>Fresh Fran<').startsWith('<tr style="color:#b42318">')).toBe(false)
   })
 })
