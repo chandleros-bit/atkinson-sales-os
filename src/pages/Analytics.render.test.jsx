@@ -8,21 +8,22 @@ import { MemoryRouter } from 'react-router-dom'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const DATA = { activities: [], contacts: [] }
+const DATA = { activities: [], contacts: [], loans: [], source_aliases: [], marketing_spend: [], sync_log: [] }
+const ERRORS = {}
 let filter = 'all'
 
 function query(table) {
   let from = 0
   let to = 999
   const q = {}
-  for (const m of ['select', 'eq', 'gte', 'order', 'limit']) q[m] = () => q
+  for (const m of ['select', 'eq', 'gte', 'order', 'limit', 'in']) q[m] = () => q
   q.range = (a, b) => {
     from = a
     to = b
     return q
   }
   q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { calls: 10 } } : null, error: null })
-  q.then = (resolve) => resolve({ data: (DATA[table] || []).slice(from, to + 1), error: null })
+  q.then = (resolve) => resolve(ERRORS[table] ? { data: null, error: ERRORS[table] } : { data: (DATA[table] || []).slice(from, to + 1), error: null })
   return q
 }
 
@@ -55,12 +56,19 @@ beforeEach(() => {
   DATA.activities = [
     ...Array.from({ length: 10 }, (_, i) => ({ occurred_at: today(9), business_id: i < 7 ? 'bay' : 'mpg' })),
   ]
+  for (const k of Object.keys(ERRORS)) delete ERRORS[k]
   DATA.contacts = [
-    { business_id: 'bay', person_stage: 'Lead', bay_source: 'LendingFlow', bay_created: daysAgo(10), tags: ['estimate sent'] },
-    { business_id: 'bay', person_stage: 'Lead', bay_source: 'LendingFlow', bay_created: daysAgo(20), tags: [] },
-    { business_id: 'bay', person_stage: 'Lead', bay_source: 'Old', bay_created: daysAgo(200), tags: [] },
-    { business_id: 'mpg', person_stage: 'Qualified', mpg_source: 'Web', mpg_created: daysAgo(5), tags: null },
+    { id: 'c1', business_id: 'bay', person_stage: 'Lead', bay_source: 'LendingFlow', bay_created: daysAgo(10), tags: ['estimate sent'] },
+    { id: 'c2', business_id: 'bay', person_stage: 'Lead', bay_source: 'LendingFlow', bay_created: daysAgo(20), tags: [] },
+    { id: 'c3', business_id: 'bay', person_stage: 'Lead', bay_source: 'Old', bay_created: daysAgo(200), tags: [] },
+    { id: 'c4', business_id: 'mpg', person_stage: 'Qualified', mpg_source: 'Web', mpg_created: daysAgo(5), tags: null },
   ]
+  const d = new Date()
+  const key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+  const lastMonth = new Date(d.getFullYear(), d.getMonth() - 1, 1)
+  DATA.loans = [{ id: 1, business_id: 'bay', stage_group: 'funded', funded_on: key(new Date(Date.now() - 3 * 86400000)), amount: 300000, role: 'primary', contact_id: 'c1', scenario_auto: false, scenario_override: null, comp_override: null }]
+  DATA.source_aliases = []
+  DATA.marketing_spend = [{ id: 's1', book: 'bay', source: 'LendingFlow', month: key(lastMonth), amount: 300 }]
 })
 
 describe('Analytics', () => {
@@ -88,5 +96,33 @@ describe('Analytics', () => {
     expect(host.querySelector('[aria-label="Calling heatmap"]').textContent).toContain('Days at goal (10)0')
     expect(host.querySelectorAll('[data-heat="4"]')).toHaveLength(1)
     expect(host.querySelector('[aria-label="MPG · Zoho"]')).toBeNull()
+  })
+
+  it('shows funded loans, commission, spend and costs per source, with KPI tiles', async () => {
+    const host = await mount()
+    const bay = host.querySelector('[aria-label="Bayway · FollowUpBoss"]')
+    const lf = bay.querySelector('[data-source="LendingFlow"]')
+    expect(lf.querySelector('[data-funded]').textContent).toBe('1')
+    expect(lf.querySelector('[data-commission]').textContent).toBe('$3,750')
+    expect(lf.querySelector('[data-spend]').textContent).toBe('$300')
+    expect(lf.querySelector('[data-cpl]').textContent).toBe('$150')
+    expect(lf.querySelector('[data-cpf]').textContent).toBe('$300')
+    expect(bay.querySelector('[data-kpi="cpl"]').textContent).toContain('$150')
+    const mpg = host.querySelector('[aria-label="MPG · Zoho"]')
+    expect(mpg.querySelector('[data-kpi="cpf"]')).toBeNull()
+    expect(mpg.querySelector('[data-source="Web"] [data-spend]').textContent).toBe('—')
+  })
+
+  it('opens the Spend sheet', async () => {
+    const host = await mount()
+    await act(async () => host.querySelector('button[aria-label="Spend"]').click())
+    expect(document.querySelector('[role="dialog"][aria-label="Marketing spend"]')).not.toBe(null)
+  })
+
+  it('keeps the lead rows and says so when spend cannot load', async () => {
+    ERRORS.marketing_spend = { message: 'boom' }
+    const host = await mount()
+    expect(host.textContent).toContain("Couldn't load spend or loans: boom")
+    expect(host.querySelector('[aria-label="Bayway · FollowUpBoss"] [data-source="LendingFlow"] [data-rate]').textContent).toBe('50%')
   })
 })
