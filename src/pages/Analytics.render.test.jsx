@@ -15,15 +15,22 @@ let filter = 'all'
 function query(table) {
   let from = 0
   let to = 999
+  let write = false
   const q = {}
-  for (const m of ['select', 'eq', 'gte', 'order', 'limit', 'in', 'upsert', 'delete']) q[m] = () => q
+  for (const m of ['select', 'eq', 'gte', 'order', 'limit', 'in']) q[m] = () => q
+  // ERRORS fail reads only, so a save can succeed and its reload fail.
+  for (const m of ['upsert', 'delete'])
+    q[m] = () => {
+      write = true
+      return q
+    }
   q.range = (a, b) => {
     from = a
     to = b
     return q
   }
   q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { calls: 10 } } : null, error: null })
-  q.then = (resolve) => resolve(ERRORS[table] ? { data: null, error: ERRORS[table] } : { data: (DATA[table] || []).slice(from, to + 1), error: null })
+  q.then = (resolve) => resolve(ERRORS[table] && !write ?{ data: null, error: ERRORS[table] } : { data: (DATA[table] || []).slice(from, to + 1), error: null })
   return q
 }
 
@@ -136,6 +143,24 @@ describe('Analytics', () => {
     await act(async () => {})
     expect(host.querySelector('[role="alert"]').textContent).toBe("Couldn't load spend or loans: reload failed")
     expect(spendCell().textContent).toBe('$300')
+    expect(document.querySelector('[role="dialog"] [role="alert"]').textContent).toBe("Saved, but couldn't reload: reload failed")
+  })
+
+  it('a failed reload after Save keeps the sheet open with the error in it', async () => {
+    const host = await mount()
+    await act(async () => host.querySelector('button[aria-label="Spend"]').click())
+    const cell = [...document.querySelectorAll('input[aria-label^="LendingFlow "]')].find((i) => i.value === '300')
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    await act(async () => {
+      set.call(cell, '400')
+      cell.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    ERRORS.marketing_spend = { message: 'reload failed' }
+    await act(async () => document.querySelector('button[aria-label="Save spend"]').click())
+    await act(async () => {})
+    const dialog = document.querySelector('[role="dialog"][aria-label="Marketing spend"]')
+    expect(dialog).not.toBe(null)
+    expect(dialog.querySelector('[role="alert"]').textContent).toBe("Saved, but couldn't reload: reload failed")
   })
 
   it('a source literally named "Total" or "Not linked to a lead" gets its own row', async () => {

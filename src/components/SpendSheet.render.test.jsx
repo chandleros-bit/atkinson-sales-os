@@ -172,6 +172,77 @@ describe('SpendSheet', () => {
       { id: 'p1', book: 'bay', source: 'Realtor', month: '2026-10-01', amount: 100 },
       { id: 'p2', book: 'bay', source: 'Realtor Referral', month: '2026-10-01', amount: 50 },
     ]
+    const MERGED = [
+      { id: 'x1', book: 'bay', raw: 'Realtor', label: 'Realtor Referral', is_free: false },
+      { id: 'x2', book: 'bay', raw: 'Realtor Referral', label: 'Realtor Referral', is_free: false },
+    ]
+    let confirm
+    beforeEach(() => {
+      confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    })
+    afterEach(() => confirm.mockRestore())
+    async function pickRealtorMerge() {
+      await act(async () => input('Merge Realtor').click())
+      await act(async () => input('Merge Realtor Referral').click())
+      await type(input('Merged label'), 'Realtor Referral')
+    }
+
+    it('an edit typed before a merge is dropped, not saved against the new grid', async () => {
+      await mount({ leads: REALTOR_LEADS, spend: REALTOR_SPEND })
+      await type(input('Realtor Oct 26'), '120')
+      await pickRealtorMerge()
+      await act(async () => button('Merge sources').click())
+      expect(confirm).toHaveBeenCalledWith('Discard unsaved spend for this book?')
+      expect(saveAliases).toHaveBeenCalled()
+      await rerender({ aliases: MERGED })
+      expect(input('Realtor Referral Oct 26').value).toBe('150')
+      await act(async () => button('Save spend').click())
+      expect(saveSpend).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('an edit typed before an unmerge is dropped, not saved against the new grid', async () => {
+      const spend = [{ id: 'a1', book: 'bay', source: 'A', month: '2026-10-01', amount: 100 }]
+      await mount({ spend, aliases: [{ id: 'y1', book: 'bay', raw: 'A', label: 'L', is_free: false }] })
+      await type(input('L Oct 26'), '120')
+      await act(async () => button('Unmerge L').click())
+      expect(confirm).toHaveBeenCalledWith('Discard unsaved spend for this book?')
+      expect(removeAliases).toHaveBeenCalledWith(['y1'])
+      await rerender({ aliases: [] })
+      expect(input('A Oct 26').value).toBe('100')
+      await act(async () => button('Save spend').click())
+      expect(saveSpend).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalled()
+    })
+
+    it('declining the discard keeps the edit and does not merge', async () => {
+      confirm.mockReturnValue(false)
+      await mount({ leads: REALTOR_LEADS, spend: REALTOR_SPEND })
+      await type(input('Realtor Oct 26'), '120')
+      await pickRealtorMerge()
+      await act(async () => button('Merge sources').click())
+      expect(saveAliases).not.toHaveBeenCalled()
+      expect(input('Realtor Oct 26').value).toBe('120')
+    })
+
+    it('declining the discard keeps the edit and does not unmerge', async () => {
+      confirm.mockReturnValue(false)
+      const spend = [{ id: 'a1', book: 'bay', source: 'A', month: '2026-10-01', amount: 100 }]
+      await mount({ spend, aliases: [{ id: 'y1', book: 'bay', raw: 'A', label: 'L', is_free: false }] })
+      await type(input('L Oct 26'), '120')
+      await act(async () => button('Unmerge L').click())
+      expect(removeAliases).not.toHaveBeenCalled()
+      expect(input('L Oct 26').value).toBe('120')
+    })
+
+    it('merging asks nothing when the book has no unsaved edits (an edit equal to saved is not one)', async () => {
+      await mount({ leads: REALTOR_LEADS, spend: REALTOR_SPEND })
+      await type(input('Realtor Oct 26'), '100.00')
+      await pickRealtorMerge()
+      await act(async () => button('Merge sources').click())
+      expect(confirm).not.toHaveBeenCalled()
+      expect(saveAliases).toHaveBeenCalled()
+    })
 
     it('after a merge, Save with no edits writes nothing and closes', async () => {
       await mount({ leads: REALTOR_LEADS, spend: REALTOR_SPEND })
@@ -235,6 +306,37 @@ describe('SpendSheet', () => {
       expect(saveSpend).not.toHaveBeenCalled()
       expect(document.querySelector('[role="alert"]').textContent).toBe('MPG: Enter a dollar amount for Web, 2026-10.')
     })
+  })
+
+  it('locks the grid inputs and book tabs while a save is running', async () => {
+    saveSpend.mockReturnValue(new Promise(() => {}))
+    await mount({ biz: 'all' })
+    expect(input('Lendgo Oct 26').disabled).toBe(false)
+    expect(tab('MPG').disabled).toBe(false)
+    await type(input('Lendgo Oct 26'), '450')
+    await act(async () => button('Save spend').click())
+    expect(input('Lendgo Oct 26').disabled).toBe(true)
+    expect(tab('MPG').disabled).toBe(true)
+    expect(tab('Bayway').disabled).toBe(true)
+  })
+
+  it('a failed reload after Save keeps the sheet open and says so', async () => {
+    onSaved.mockResolvedValue({ error: { message: 'reload failed' } })
+    await mount()
+    await type(input('Lendgo Oct 26'), '450')
+    await act(async () => button('Save spend').click())
+    expect(saveSpend).toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"] [role="alert"]').textContent).toBe("Saved, but couldn't reload: reload failed")
+    expect(button('Save spend').disabled).toBe(false)
+  })
+
+  it('a failed reload after Free shows in the sheet', async () => {
+    onSaved.mockResolvedValue({ error: { message: 'reload failed' } })
+    await mount()
+    await act(async () => input('Free Lendgo').click())
+    expect(saveAliases).toHaveBeenCalled()
+    expect(document.querySelector('[role="dialog"] [role="alert"]').textContent).toBe("Saved, but couldn't reload: reload failed")
   })
 
   it('a thrown save shows the problem and frees the buttons', async () => {

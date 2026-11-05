@@ -229,7 +229,8 @@ export default function Analytics() {
   const [days, setDays] = useState(90)
   const [spendOpen, setSpendOpen] = useState(false)
 
-  // A failed reload keeps the aliases and spend already shown; it only says so.
+  // A failed reload keeps the aliases and spend already shown; it only says so,
+  // here and (through the returned error) in the Spend sheet.
   const reloadRoi = async () => {
     const roi = await fetchRoiInputs()
     setData((d) =>
@@ -237,6 +238,7 @@ export default function Analytics() {
         ? { ...d, roiError: roi.error.message || String(roi.error) }
         : { ...d, aliases: roi.data?.aliases || [], spend: roi.data?.spend || [], roiError: d.loanError || null },
     )
+    return { error: roi.error || null }
   }
 
   useEffect(() => {

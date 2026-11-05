@@ -38,6 +38,12 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
       .reduce((acc, a) => ({ ...acc, [a.label]: [...(acc[a.label] || []), a] }), {}),
   )
 
+  // A book has unsaved edits when they would change saved spend or are invalid.
+  const pending = (b) => {
+    const c = spendChanges(spend, b, edits[b], map)
+    return !!(c.problem || c.upserts.length || c.deletes.length)
+  }
+
   // Edits of every book vs saved spend -> one combined change set.
   const changes = () => {
     const upserts = []
@@ -51,15 +57,19 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
     return { upserts, deletes, problem: null }
   }
 
-  const run = async (action, after) => {
+  // `done` runs once the write succeeds; `close` only if the reload succeeds
+  // too, so a failed reload shows here instead of behind the modal.
+  const run = async (action, { done, close: closeAfter } = {}) => {
     busyRef.current = true
     setBusy(true)
     try {
       const { error } = await action()
       if (error) return setProblem(error.message || String(error))
       setProblem(null)
-      await onSaved()
-      if (after) after()
+      if (done) done()
+      const reload = await onSaved()
+      if (reload?.error) return setProblem(`Saved, but couldn't reload: ${reload.error.message || String(reload.error)}`)
+      if (closeAfter) onClose()
     } catch (e) {
       setProblem(e?.message || String(e))
     } finally {
@@ -75,29 +85,40 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
       return setProblem(c.problem)
     }
     if (!c.upserts.length && !c.deletes.length) return onClose()
-    return run(() => saveSpend({ upserts: c.upserts, deletes: c.deletes }), onClose)
+    return run(() => saveSpend({ upserts: c.upserts, deletes: c.deletes }), { close: true })
   }
 
   // Backdrop, Escape and ✕: ignored mid-save; unsaved edits ask first.
   const close = () => {
     if (busyRef.current) return
-    const c = changes()
-    if ((c.problem || c.upserts.length || c.deletes.length) && !window.confirm('Discard unsaved spend?')) return
+    if (BOOK_IDS.some(pending) && !window.confirm('Discard unsaved spend?')) return
     onClose()
   }
 
   // A merge or unmerge moves cells between labels and changes saved sums, so
-  // this book's edits are dropped rather than saved against the new grid.
+  // this book's edits are dropped (after asking) rather than saved against the
+  // new grid.
   const clearEdits = (b) => setEdits((e) => ({ ...e, [b]: {} }))
+  const okToDiscard = () => !pending(book) || window.confirm('Discard unsaved spend for this book?')
 
   const merge = () => {
     if (picked.length < 2) return setProblem('Pick two or more sources to merge.')
     if (!mergeLabel.trim()) return setProblem('Enter a label for the merged sources.')
-    return run(() => saveAliases(mergeRows(book, picked, mergeLabel, isFree(mergeLabel.trim(), book, map))), () => {
-      clearEdits(book)
-      setPicked([])
-      setMergeLabel('')
+    if (!okToDiscard()) return
+    const b = book
+    return run(() => saveAliases(mergeRows(b, picked, mergeLabel, isFree(mergeLabel.trim(), b, map))), {
+      done: () => {
+        clearEdits(b)
+        setPicked([])
+        setMergeLabel('')
+      },
     })
+  }
+
+  const unmerge = (rows) => {
+    if (!okToDiscard()) return
+    const b = book
+    return run(() => removeAliases(rows.map((r) => r.id)), { done: () => clearEdits(b) })
   }
 
   const setCell = (key, value) => setEdits((e) => ({ ...e, [book]: { ...e[book], [key]: value } }))
@@ -112,7 +133,7 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
         const key = `${label}|${m}`
         return (
           <td key={m} className="px-1 py-0.5">
-            <input aria-label={`${label} ${monthLabel(m)}`} inputMode="decimal" value={edits[book][key] ?? saved[book][key] ?? ''} onChange={(e) => setCell(key, e.target.value)} className={BOX} />
+            <input aria-label={`${label} ${monthLabel(m)}`} inputMode="decimal" disabled={busy} value={edits[book][key] ?? saved[book][key] ?? ''} onChange={(e) => setCell(key, e.target.value)} className={BOX} />
           </td>
         )
       })}
@@ -124,7 +145,7 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
       {biz === 'all' && (
         <div role="tablist" aria-label="Book" className="mb-3 flex gap-1 rounded-xl bg-panel2 p-1">
           {Object.entries(BOOKS).map(([id, b]) => (
-            <button key={id} type="button" role="tab" aria-selected={book === id} onClick={() => setBook(id)} className={`flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${book === id ? 'bg-panel' : 'text-muted'}`}>
+            <button key={id} type="button" role="tab" aria-selected={book === id} disabled={busy} onClick={() => setBook(id)} className={`flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${book === id ? 'bg-panel' : 'text-muted'}`}>
               {b.name}
             </button>
           ))}
@@ -180,7 +201,7 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
             <span>
               {label}: {rows.map((r) => r.raw).join(', ')}
             </span>
-            <button type="button" aria-label={`Unmerge ${label}`} disabled={busy} onClick={() => run(() => removeAliases(rows.map((r) => r.id)), () => clearEdits(book))} className="text-[#1d4ed8]">
+            <button type="button" aria-label={`Unmerge ${label}`} disabled={busy} onClick={() => unmerge(rows)} className="text-[#1d4ed8]">
               Unmerge
             </button>
           </div>
