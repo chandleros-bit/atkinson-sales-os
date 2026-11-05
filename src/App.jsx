@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { BusinessProvider } from './context/BusinessContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import AcceptInvite from './pages/AcceptInvite'
 import Overview from './pages/Overview'
 import Workbench from './pages/Workbench'
 import SyncStatus from './pages/SyncStatus'
@@ -64,6 +65,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route
               element={
                 <Protected>
