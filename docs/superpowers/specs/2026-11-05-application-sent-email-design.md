@@ -102,11 +102,10 @@ It does not open, and shows a short toast instead, when:
 - **Subject and body**, rendered from the same module the server uses.
 - **Send** and **Skip.** Skip leaves nothing behind.
 
-**On the contact card** (`QuickActions` for a Bayway lead in Application/Estimate
-Sent with the `application sent` tag):
-- **Send application email** when no email has gone out, to send one after a
-  Skip;
-- otherwise "Application email sent `<date>` (`<version>`)".
+**On the contact card:** the Move stage sheet for any Bayway lead has an
+**Application email…** button. It opens the preview, which is how you send
+the email after a Skip. If the email already went out, the button shows the
+toast "Application email already sent `<date>`" instead.
 
 ### 2. The send (crm-action)
 
@@ -230,7 +229,7 @@ Tags, in Chandler's casing: `App Email - First Home`, `App Email - Next Home`,
 | `update_person` fails | "Couldn't save the email to FUB: ...". Nothing tagged. Retry from the dialog. |
 | Tag write fails | "Couldn't start the email in FUB: ...". Row is `failed`; the card offers Send again. |
 | Template publish fails, published before | Sent, with a warning toast about the W2 years. |
-| FUB automation off or broken | The OS can't see it. The lead has the tag but no email in FUB. The contact card shows "Tagged `<date>`", and FUB's email log on the lead is the check. |
+| FUB automation off or broken | The OS can't see it. The lead has the tag but no email in FUB. The OS counts the lead as sent ("already sent `<date>`"), so FUB's email log on the lead is the check. |
 
 ## Testing (vitest, fakes as in `run.test.js`)
 
