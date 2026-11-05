@@ -4,13 +4,16 @@
 //
 // VERIFY on the first live run (see docs/phase-writeback-setup.md): FUB's
 // single-record read paths (/calls/{id}, /notes/{id}, /tasks/{id}, /me) and
-// whether PUT /tasks/{id} accepts dueDate (FUB_PUSH_MODE).
+// whether PUT /tasks/{id} accepts dueDate (FUB_PUSH_MODE). Application email
+// (docs/app-email-setup.md): PUT /templates/{id} and PUT /people emails.
 
 import { fubGet, fubSend, mapContact } from '../_shared/fub.ts'
 import { retagForTarget, targetForStage } from '../_shared/bay-stages.ts'
 import { retagTemperature } from '../_shared/temperature-tags.ts'
 import { relationshipsOf } from '../_shared/fub-relationships.ts'
-import { buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, FUB_TASK_TYPES } from '../_shared/fub-write.ts'
+import {
+  buildFubCall, buildFubNote, buildFubTask, buildFubTaskUpdate, buildFubLeadEvent, buildFubPersonUpdate, buildFubTemplate, FUB_TASK_TYPES,
+} from '../_shared/fub-write.ts'
 import { mapActivity as fubMapActivity } from '../_shared/fub-activity.ts'
 import { mapTask as fubMapTask } from '../_shared/fub-tasks.ts'
 import { getAccessToken, zohoGet, zohoSend, mapContact as zohoMapContact } from '../_shared/zoho.ts'
@@ -83,6 +86,25 @@ export function fubAdapter(env) {
         const tags = retagTemperature(person.tags || [], temperature)
         await fubSend('PUT', `/people/${externalId}`, { tags })
         return { id: externalId, tags }
+      },
+      // Application email (app-email-step.ts): save a missing email / first name.
+      updatePerson: async ({ externalId, email, firstName }) => {
+        const person = await fubGet(`/people/${externalId}`)
+        await fubSend('PUT', `/people/${externalId}`, buildFubPersonUpdate({ person, email, firstName }))
+        return { id: externalId }
+      },
+      // One more tag, every other tag kept (PUT /people replaces the list).
+      addTag: async ({ externalId, tag }) => {
+        const person = await fubGet(`/people/${externalId}`)
+        const tags = person.tags || []
+        if (tags.some((t) => String(t).trim().toLowerCase() === tag.toLowerCase())) return { id: externalId, tags }
+        await fubSend('PUT', `/people/${externalId}`, { tags: [...tags, tag] })
+        return { id: externalId, tags: [...tags, tag] }
+      },
+      // The Application email copy into one FUB email template.
+      publishTemplate: async ({ id, name, subject, body }) => {
+        await fubSend('PUT', `/templates/${id}`, buildFubTemplate({ name, subject, body }))
+        return { id }
       },
       pushTask: async ({ externalId, dueDate, contactExternalId, title, type }) => {
         if (pushMode === 'complete_and_recreate') {

@@ -16,6 +16,7 @@
 import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS, ASSISTANT_ACTIONS, ASSISTANT_REFUSED, ASSISTANT_BAYWAY_ONLY } from './plan.ts'
 import { isStageTarget } from '../_shared/bay-stages.ts'
 import { mapRelationship } from '../_shared/fub-relationships.ts'
+import { loadAppEmailSettings, appEmailRefusal, sendAppEmail } from './app-email-step.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SOURCE_FOR = { bay: 'fub', mpg: 'zoho' }
@@ -32,7 +33,7 @@ const msg = (e) => String(e?.message || e).slice(0, 500)
 async function loadContact(db, id) {
   const { data, error } = await db
     .from('contacts')
-    .select('id, business_id, source_crm, external_id, name, phone, person_stage')
+    .select('id, business_id, source_crm, external_id, name, phone, email, person_stage')
     .eq('id', id)
     .maybeSingle()
   if (error) throw new Error(`contact lookup: ${error.message}`)
@@ -148,11 +149,15 @@ function preflight(req, target) {
   }
   // "No next step: Moving to Nurture" parks the lead after the call.
   if (req.action === 'log_call' && req.payload?.set_stage) return stageRefusal(businessId, contact, req.payload.set_stage)
+  if (req.action === 'send_app_email') {
+    if (businessId !== 'bay') return 'The application email is Bayway only'
+    return appEmailRefusal(target.appEmail, req.payload, contact)
+  }
   return null
 }
 
 // Run one step against the CRM. Returns what the mirror needs.
-async function send(adapter, step, target) {
+async function send(adapter, step, target, ctx) {
   const { contact, task } = target
   switch (step.step) {
     case 'log_call':
@@ -176,6 +181,14 @@ async function send(adapter, step, target) {
       return adapter.send.setStage({ externalId: contact.external_id, target: step.target })
     case 'set_temperature':
       return adapter.send.setTemperature({ externalId: contact.external_id, temperature: step.temperature })
+    case 'update_person':
+      return adapter.send.updatePerson({ externalId: contact.external_id, email: step.email, firstName: step.firstName })
+    case 'app_email':
+      return sendAppEmail({
+        db: ctx.db, adapter, contact, variant: step.variant, cfg: target.appEmail,
+        toEmail: ctx.req.payload?.email || contact.email,
+        clientActionId: ctx.req.client_action_id, now: ctx.now,
+      })
     case 'push_task':
       return adapter.send.pushTask({
         externalId: task.external_id, dueDate: step.dueDate,
@@ -206,7 +219,7 @@ async function mirror(db, adapter, step, out, target, now) {
     target.contact = data || null
     return
   }
-  if (step.step === 'set_stage' || step.step === 'set_temperature') {
+  if (['set_stage', 'set_temperature', 'update_person', 'app_email'].includes(step.step)) {
     // Re-read the person and upsert it through the people sync's own mapper;
     // the stage trigger then records the move (stage_key / stage_since).
     const rec = await adapter.read.person(out.id)
@@ -332,6 +345,7 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
   if (resolved.refuse) return reply(200, { status: 'refused', error: resolved.refuse })
   const target = resolved.target
   const { businessId } = target
+  if (req.action === 'send_app_email') target.appEmail = await loadAppEmailSettings(db)
 
   const claimed = await claim(db, {
     client_action_id: req.client_action_id,
@@ -367,13 +381,15 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
   for (const step of planSteps(req)) {
     const result = { step: step.step }
     try {
-      const out = await send(adapter, step, target)
+      const out = await send(adapter, step, target, { db, req, now })
       result.ok = true
       result.crm_id = out.id
       if (out.rescheduled) result.rescheduled = true
       // Where a stage move came from, so the UI can undo it.
       if (out.previous) result.previous_target = out.previous
       if (out.existing) result.existing = true
+      // Application email: sent, but FUB kept last year's W2 line.
+      if (out.warning) result.warning = out.warning
       try {
         await mirror(db, adapter, step, out, target, now)
       } catch (e) {

@@ -31,6 +31,9 @@ function fakeDb(seed) {
           if (table === 'crm_actions' && rows.some((r) => r.client_action_id === payload.client_action_id)) {
             return { error: { code: '23505', message: 'duplicate key' } }
           }
+          if (table === 'lead_emails' && rows.some((r) => r.contact_id === payload.contact_id && r.template_key === payload.template_key)) {
+            return { error: { code: '23505', message: 'duplicate key' } }
+          }
           for (const p of [].concat(payload)) rows.push({ ...p })
           return { error: null }
         }
@@ -39,8 +42,9 @@ function fakeDb(seed) {
           return { error: null }
         }
         if (op === 'update') {
-          rows.filter(match).forEach((r) => Object.assign(r, payload))
-          return { error: null }
+          const hit = rows.filter(match)
+          hit.forEach((r) => Object.assign(r, payload))
+          return { data: hit.map((r) => ({ ...r })), error: null }
         }
         if (op === 'upsert') {
           if (failUpsert.has(table)) return { error: { message: 'mirror down' } }
@@ -706,5 +710,154 @@ describe('crm-action run: assistant role', () => {
     const res = await go(noteReq(), { userId: ASSISTANT, role: null })
     expect(res.http).toBe(403)
     expect(db.calls).toEqual([])
+  })
+})
+
+describe('crm-action run: send_app_email (Application Sent email)', () => {
+  const mapContact = (p) => ({ business_id: 'bay', source_crm: 'fub', external_id: String(p.id), name: p.name, phone: null, person_stage: p.stage, raw: p })
+  const emailReq = (n, payload = {}, contactId = 'c-app') => ({
+    client_action_id: uuid(n), action: 'send_app_email', contact_id: contactId, payload: { variant: 'first_home', ...payload },
+  })
+  const cfg = (over = {}) => ({ enabled: true, templates: { first_home: 11, next_home: 12, refinance: 13 }, published_years: null, ...over })
+  let person
+  const order = []
+
+  beforeEach(() => {
+    order.length = 0
+    db.tables.settings.push({ key: 'app_email', value: cfg() })
+    db.tables.contacts.push(
+      { id: 'c-app', business_id: 'bay', source_crm: 'fub', external_id: '6001', name: 'Jo Ramirez', phone: '1', email: 'jo@x.com', person_stage: 'Lead' },
+      { id: 'c-noemail', business_id: 'bay', source_crm: 'fub', external_id: '6002', name: 'No Mail', phone: '1', email: null, person_stage: 'Lead' },
+    )
+    person = { id: 6001, name: 'Jo Ramirez', firstName: 'Jo', stage: 'Lead', tags: ['application sent'], emails: [{ value: 'jo@x.com' }] }
+    bay.read.person = vi.fn(async (id) => ({ ...person, id: Number(id) }))
+    bay.map.contact = mapContact
+    bay.send.publishTemplate = vi.fn(async (a) => { order.push(['publish', a.id]); return { id: a.id } })
+    bay.send.addTag = vi.fn(async (a) => { order.push(['tag', a.tag]); person.tags = [...person.tags, a.tag]; return { id: a.externalId } })
+    bay.send.updatePerson = vi.fn(async (a) => { order.push(['update', a.email]); if (a.email) person.emails = [{ value: a.email }]; return { id: a.externalId } })
+  })
+  const setting = () => db.tables.settings.find((r) => r.key === 'app_email').value
+  const row = (id = 'c-app') => db.tables.lead_emails?.find((r) => r.contact_id === id)
+
+  it('publishes the templates the first time, then tags the lead once', async () => {
+    const res = await go(emailReq(40))
+    expect(res.body.status).toBe('ok')
+    expect(res.body.results.map((r) => r.step)).toEqual(['app_email'])
+    expect(order).toEqual([['publish', 11], ['publish', 12], ['publish', 13], ['tag', 'App Email - First Home']])
+    const first = bay.send.publishTemplate.mock.calls[0][0]
+    expect(first).toMatchObject({ name: 'Sales OS - Application - First Home', subject: 'Your pre-approval: next steps' })
+    expect(first.body).toContain('Hey %contact_first_name%,')
+    expect(first.body).toContain('2024 &amp; 2025 W2s')
+    expect(setting().published_years).toBe('2024 & 2025')
+    expect(row()).toMatchObject({ status: 'tagged', variant: 'first_home', to_email: 'jo@x.com', template_key: 'application_sent' })
+    // Mirrored back so the board sees the new tag.
+    expect(db.tables.contacts.find((c) => c.external_id === '6001').raw.tags).toContain('App Email - First Home')
+  })
+
+  it('skips publishing when this year is already in FUB', async () => {
+    setting().published_years = '2024 & 2025'
+    await go(emailReq(41, { variant: 'refinance' }))
+    expect(bay.send.publishTemplate).not.toHaveBeenCalled()
+    expect(bay.send.addTag).toHaveBeenCalledWith({ externalId: '6001', tag: 'App Email - Refinance' })
+  })
+
+  it('never sends twice for the same lead', async () => {
+    await go(emailReq(42))
+    person.tags = ['application sent'] // even if the tag were gone from FUB
+    const res = await go(emailReq(43, { variant: 'next_home' }))
+    expect(res.body.status).toBe('error')
+    expect(res.body.results[0].error).toMatch(/already sent Oct 18/)
+    expect(bay.send.addTag).toHaveBeenCalledTimes(1)
+    expect(row().status).toBe('tagged')
+  })
+
+  it('lets only one of two racing sends tag the lead', async () => {
+    const [a, b] = await Promise.all([go(emailReq(44)), go(emailReq(45))])
+    expect(bay.send.addTag).toHaveBeenCalledTimes(1)
+    expect([a.body.status, b.body.status].sort()).toEqual(['error', 'ok'])
+  })
+
+  it('retries a failed send', async () => {
+    setting().published_years = '2024 & 2025'
+    bay.send.addTag = vi.fn(async () => { throw new Error('FUB PUT /people/6001 -> 500: boom') })
+    const res = await go(emailReq(46))
+    expect(res.body.status).toBe('error')
+    expect(row()).toMatchObject({ status: 'failed', error: 'FUB PUT /people/6001 -> 500: boom' })
+    bay.send.addTag = vi.fn(async (a) => ({ id: a.externalId }))
+    const again = await go(emailReq(47))
+    expect(again.body.status).toBe('ok')
+    expect(row()).toMatchObject({ status: 'tagged', client_action_id: uuid(47), error: null })
+  })
+
+  it('refuses while another send holds a fresh claim, takes over a stuck one', async () => {
+    db.tables.lead_emails = [{ contact_id: 'c-app', template_key: 'application_sent', variant: 'first_home', status: 'pending', client_action_id: uuid(90), updated_at: now.toISOString() }]
+    const busy = await go(emailReq(48))
+    expect(busy.body.results[0].error).toMatch(/already being sent/)
+    expect(bay.send.addTag).not.toHaveBeenCalled()
+    db.tables.lead_emails[0].updated_at = new Date(now.getTime() - 5 * 60_000).toISOString()
+    const took = await go(emailReq(49))
+    expect(took.body.status).toBe('ok')
+    expect(row()).toMatchObject({ status: 'tagged', client_action_id: uuid(49) })
+  })
+
+  it('treats an App Email tag already in FUB as sent', async () => {
+    person.tags = ['application sent', 'app email - next home']
+    const res = await go(emailReq(50))
+    expect(res.body.results[0].error).toMatch(/Already sent from FollowUpBoss/)
+    expect(bay.send.addTag).not.toHaveBeenCalled()
+    expect(row()).toMatchObject({ status: 'tagged' })
+  })
+
+  it('refuses a lead with no email when none is typed, before any claim', async () => {
+    const res = await go(emailReq(51, {}, 'c-noemail'))
+    expect(res.body).toEqual({ status: 'refused', error: 'No email on file in FollowUpBoss. Enter one to send.' })
+    expect(db.tables.lead_emails ?? []).toEqual([])
+  })
+
+  it('saves a typed email to FUB before tagging', async () => {
+    person = { ...person, id: 6002, emails: [] }
+    const res = await go(emailReq(52, { email: 'new@x.com' }, 'c-noemail'))
+    expect(res.body.status).toBe('ok')
+    expect(order.map((o) => o[0])).toEqual(['update', 'publish', 'publish', 'publish', 'tag'])
+    expect(row('c-noemail')).toMatchObject({ status: 'tagged', to_email: 'new@x.com' })
+  })
+
+  it('tags nothing when saving the email fails', async () => {
+    bay.send.updatePerson = vi.fn(async () => { throw new Error('FUB PUT /people/6002 -> 400: bad email') })
+    const res = await go(emailReq(53, { email: 'new@x.com' }, 'c-noemail'))
+    expect(res.body.results.map((r) => r.step)).toEqual(['update_person'])
+    expect(bay.send.addTag).not.toHaveBeenCalled()
+    expect(db.tables.lead_emails ?? []).toEqual([])
+  })
+
+  it('refuses a malformed typed email', async () => {
+    expect((await go(emailReq(54, { email: 'nope' }, 'c-noemail'))).body.error).toBe('Not an email address: nope')
+  })
+
+  it('fails the first send when the templates cannot be published', async () => {
+    bay.send.publishTemplate = vi.fn(async () => { throw new Error('FUB PUT /templates/11 -> 404: nope') })
+    const res = await go(emailReq(55))
+    expect(res.body.results[0].error).toMatch(/Couldn't publish the email templates/)
+    expect(bay.send.addTag).not.toHaveBeenCalled()
+    expect(row().status).toBe('failed')
+  })
+
+  it('still sends, with a warning, when only the yearly refresh fails', async () => {
+    setting().published_years = '2023 & 2024'
+    bay.send.publishTemplate = vi.fn(async () => { throw new Error('FUB PUT /templates/11 -> 500') })
+    const res = await go(emailReq(56))
+    expect(res.body.status).toBe('ok')
+    expect(res.body.results[0].warning).toMatch(/still show 2023 & 2024 W2s/)
+    expect(bay.send.addTag).toHaveBeenCalledTimes(1)
+    expect(setting().published_years).toBe('2023 & 2024')
+  })
+
+  it('is Bayway only, and off unless enabled with template ids', async () => {
+    expect((await go(emailReq(57, {}, 'c-mpg'))).body.error).toBe('The application email is Bayway only')
+    setting().templates = {}
+    expect((await go(emailReq(58))).body.error).toMatch(/No FUB template id for First home/)
+    setting().enabled = false
+    expect((await go(emailReq(59))).body.error).toMatch(/application email is off/)
+    expect(bay.send.addTag).not.toHaveBeenCalled()
   })
 })
