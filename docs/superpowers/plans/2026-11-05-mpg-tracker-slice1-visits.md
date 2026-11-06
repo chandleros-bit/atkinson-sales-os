@@ -27,7 +27,7 @@
 
 ## Files
 
-- **Create** `supabase/migrations/0053_mpg_touch_log.sql`: the three tables, indexes, own-row RLS and `updated_at` triggers.
+- **Create** `supabase/migrations/0060_mpg_touch_log.sql`: the three tables, indexes, own-row RLS and `updated_at` triggers.
 - **Create** `src/lib/mpgTracker.js` + `src/lib/mpgTracker.test.js`: pure helpers.
   - formatting: `phoneKey`, `cellText`, `sheetDate`, `yesNo`, `contactLabel`, `reachLabel`,
   - dates: `occurredAtFor`, `dayRange`,
@@ -48,7 +48,7 @@ Run single test files with `npx vitest run <path>`, and the whole suite with `np
 ### Task 1: Migration
 
 **Files:**
-- Create: `supabase/migrations/0053_mpg_touch_log.sql`
+- Create: `supabase/migrations/0060_mpg_touch_log.sql`
 
 - [ ] **Step 1: Write the migration**
 
@@ -166,7 +166,7 @@ Note: the spec's `mpg_touches_has_subject` check is dropped in favour of an app-
 - [ ] **Step 2: Commit**
 
 ```bash
-git add supabase/migrations/0053_mpg_touch_log.sql
+git add supabase/migrations/0060_mpg_touch_log.sql
 git commit -m "feat: MPG touch log tables (prospects, lists, touches)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -660,7 +660,7 @@ This file is thin I/O. It is exercised by the render tests in Tasks 5–7, which
 - [ ] **Step 1: Write the module**
 
 ```js
-// Supabase calls for the MPG touch log (migration 0053). App-owned, per user:
+// Supabase calls for the MPG touch log (migration 0060). App-owned, per user:
 // RLS limits every query to your own rows. Pure logic lives in mpgTracker.js.
 import { supabase, isDemoMode } from './supabase'
 import { cleanQuery } from './search'
@@ -1172,7 +1172,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Files:**
 - Modify: `src/components/QuickAddMenu.jsx`
 - Modify: `src/components/NewMenu.jsx`
-- Modify: `src/components/PersonSheet.jsx:296-305`
+- Modify: `src/components/PersonSheet.jsx` (the row holding `ScheduleButton`, around line 310)
 
 - [ ] **Step 1: QuickAddMenu: optional "Log visit…"**
 
@@ -1184,9 +1184,9 @@ const LOG_VISIT = { kind: 'visit', label: 'Log visit…' }
 
 // showLead: offer "New lead…" (settings.create_lead_enabled plus write-back).
 // showVisit: offer "Log visit…" (MPG walk-ins; hidden on the Bayway view).
-export default function QuickAddMenu({ onPick, showLead = false, showVisit = false, className = 'btn-primary', style }) {
+export default function QuickAddMenu({ onPick, showLead = false, showVisit = false, hide = [], className = 'btn-primary', style }) {
   const [open, setOpen] = useState(false)
-  const items = [...(showLead ? [NEW_LEAD] : []), ...(showVisit ? [LOG_VISIT] : []), ...QUICK_ADD]
+  const items = [...(showLead ? [NEW_LEAD] : []), ...(showVisit ? [LOG_VISIT] : []), ...QUICK_ADD].filter((i) => !hide.includes(i.kind))
 ```
 
 (The rest of the component is unchanged.)
@@ -1202,7 +1202,8 @@ import LogVisitDialog from './LogVisitDialog'
 // …
       <QuickAddMenu
         showLead={leadBooks.length > 0}
-        showVisit={biz !== 'bay'}
+        hide={assistant ? ['call'] : []}
+        showVisit={!assistant && biz !== 'bay'}
         onPick={(kind) => {
           if (kind === 'task') return setNewTaskOpen(true)
           if (kind === 'lead') return setNewLeadOpen(true)
@@ -1219,7 +1220,7 @@ import LogVisitDialog from './LogVisitDialog'
 
 - [ ] **Step 3: PersonSheet: "Log visit" for MPG people**
 
-In `src/components/PersonSheet.jsx`, import `LogVisitDialog`, add `const [visitOpen, setVisitOpen] = useState(false)` with the component's other state, and put the button in the row that holds `ScheduleButton` (around line 297):
+In `src/components/PersonSheet.jsx`, import `LogVisitDialog`, add `const [visitOpen, setVisitOpen] = useState(false)` with the component's other state, and put the button in the row that holds `ScheduleButton` (around line 310). The assistant login is Bayway-only, so `biz === 'mpg'` already keeps it away from them:
 
 ```jsx
 <div className="flex flex-wrap items-center gap-3">
@@ -1538,7 +1539,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [ ] **Step 1: Run the full suite**
 
 Run: `npx vitest run`
-Expected: all pass, apart from any failures that also happen on `main` before this branch. Compare against `git stash; npx vitest run; git stash pop` if unsure.
+Expected: all pass except the one failure already on `main`: `src/lib/briefingBundle.test.js > is up to date with src/lib`. Nothing in this plan touches the briefing bundle's inputs.
 
 - [ ] **Step 2: Build**
 
@@ -1557,7 +1558,7 @@ Ask the user first. Then:
 supabase db push --linked
 ```
 
-Expected: `0053_mpg_touch_log.sql` applied.
+Expected: `0060_mpg_touch_log.sql` applied.
 
 - [ ] **Step 5: Browser check**
 
