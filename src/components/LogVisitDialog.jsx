@@ -3,11 +3,12 @@
 // task). Promotion of new businesses to Zoho comes in slice 2.
 // Spec: docs/superpowers/specs/2026-11-05-mpg-tracker-touch-log-design.md
 import { useEffect, useRef, useState } from 'react'
-import { buildVisit, zohoVisitNote, OUTCOMES, TEMPERATURES } from '../lib/mpgTracker'
+import { buildVisit, zohoVisitNote, promotionDefault, OUTCOMES, TEMPERATURES } from '../lib/mpgTracker'
 import { searchMpgBusinesses, saveVisit, updateTouch, deleteTouch, notifyTouchesChanged } from '../lib/mpgTouches'
 import { localDateKey, buildActionRequest } from '../lib/crmActions'
-import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
+import { useWritebackFlags, useSettingFlags, invokeCrmAction } from '../lib/writeback'
 import { showToast } from './Toaster'
+import ZohoPromote from './ZohoPromote'
 
 const INPUT = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[16px] sm:text-[13px] text-[color:var(--text)]'
 const LABEL = 'mb-1 block text-[12px] font-semibold text-muted'
@@ -56,6 +57,7 @@ async function writeZoho(forms) {
 
 export default function LogVisitDialog({ onClose, preset = null, touch = null }) {
   const writeback = useWritebackFlags()
+  const createLead = useSettingFlags('create_lead_enabled')
   const [business, setBusiness] = useState(() => (touch ? { type: 'edit', name: touch.business_name } : preset))
   const [form, setForm] = useState(() => {
     if (touch) return formFromTouch(touch)
@@ -66,6 +68,8 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
   const [results, setResults] = useState([])
   const [problem, setProblem] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [zohoChoice, setZohoChoice] = useState(null) // null = follow the default
+  const [promoting, setPromoting] = useState(null) // the saved touch, while ZohoPromote runs
   const downOnBackdrop = useRef(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -94,6 +98,11 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
     }
   }, [query, business])
 
+  const canPromote = !touch && (business?.type === 'new' || business?.type === 'prospect')
+    && writeback.mpg === true && createLead.mpg === true
+  const promo = promotionDefault({ temperature: form.temperature, outcomes: form.outcomes })
+  const zohoOn = promo.forced || (zohoChoice ?? promo.on)
+
   function pick(b) {
     setBusiness(b)
     setForm((f) => ({ ...f, contactName: b.contactName || '', role: b.role || '', phone: b.phone || '', email: b.email || '' }))
@@ -110,7 +119,10 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
     }
     setSaving(true)
     if (touch && form.dayKey === localDateKey(new Date(touch.occurred_at))) delete built.touch.occurred_at
-    const { error, prospectId } = touch ? await updateTouch(touch.id, built.touch) : await saveVisit(built)
+    const wantZoho = canPromote && zohoOn
+    const { data: saved, error, prospectId } = touch
+      ? await updateTouch(touch.id, built.touch)
+      : await saveVisit(wantZoho ? { ...built, zohoWanted: true } : built)
     setSaving(false)
     if (prospectId) setBusiness({ type: 'prospect', id: prospectId, name: business.name })
     if (error) {
@@ -119,6 +131,12 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
     }
     notifyTouchesChanged()
     showToast({ tone: 'ok', text: touch ? 'Visit updated' : 'Visit logged' })
+    if (wantZoho && saved?.prospect_id) {
+      // The visit is saved; swap the form for the promotion step. It closes
+      // the dialog when done, and Escape/backdrop still close it meanwhile.
+      setPromoting(saved)
+      return
+    }
     onClose()
     if (!touch && business.type === 'contact' && writeback.mpg === true) {
       const forms = [{ action: 'add_note', contactId: business.id, subject: 'Walk-in', body: zohoVisitNote(built.touch) }]
@@ -158,6 +176,9 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
           <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">✕</button>
         </div>
 
+        {promoting ? (
+          <ZohoPromote prospectId={promoting.prospect_id} touch={promoting} onDone={() => onClose()} />
+        ) : (<>
         {!business ? (
           <div>
             <label className={LABEL}>
@@ -231,6 +252,21 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
           ))}
         </div>
 
+        {canPromote && (
+          <div className="mt-3">
+            <label className="flex min-h-[40px] items-center gap-2 text-[13px] font-semibold">
+              <input
+                type="checkbox"
+                checked={zohoOn}
+                disabled={promo.forced}
+                onChange={(e) => setZohoChoice(e.target.checked)}
+              />
+              Add to Zoho as Open
+            </label>
+            {promo.forced && <div className="text-[12px] text-muted">Statement or later always goes to Zoho</div>}
+          </div>
+        )}
+
         {problem && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{problem}</div>}
 
         <div className="mt-4 flex gap-2">
@@ -241,6 +277,7 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
             {saving ? 'Saving…' : 'Save visit'}
           </button>
         </div>
+        </>)}
       </div>
     </div>
   )
