@@ -1,6 +1,7 @@
-// Log a walk-in visit (MPG). Saves to the OS touch log only; a visit to a
-// business that is already a Zoho lead also drops a Zoho note (and a follow-up
-// task). Promotion of new businesses to Zoho comes in slice 2.
+// Log a walk-in visit (MPG). Saves to the OS touch log; a visit to a business
+// that is already a Zoho lead also drops a Zoho note (and a follow-up task),
+// and a new interested business can be promoted to Zoho as an Open lead (the
+// ZohoPromote step replaces the form after Save).
 // Spec: docs/superpowers/specs/2026-11-05-mpg-tracker-touch-log-design.md
 import { useEffect, useRef, useState } from 'react'
 import { buildVisit, zohoVisitNote, promotionDefault, OUTCOMES, TEMPERATURES } from '../lib/mpgTracker'
@@ -259,11 +260,12 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
                 type="checkbox"
                 checked={zohoOn}
                 disabled={promo.forced}
+                aria-describedby={promo.forced ? 'zoho-forced-hint' : undefined}
                 onChange={(e) => setZohoChoice(e.target.checked)}
               />
               Add to Zoho as Open
             </label>
-            {promo.forced && <div className="text-[12px] text-muted">Statement or later always goes to Zoho</div>}
+            {promo.forced && <div id="zoho-forced-hint" className="text-[12px] text-muted">Statement or later always goes to Zoho</div>}
           </div>
         )}
 

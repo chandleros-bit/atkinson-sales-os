@@ -191,6 +191,21 @@ describe('ZohoPromote', () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
+  it('does not call onDone when unmounted before the request resolves', async () => {
+    let resolve
+    invoke.mockReset()
+    invoke.mockReturnValueOnce(new Promise((r) => { resolve = r }))
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const onDone = vi.fn()
+    const root = createRoot(host)
+    await act(async () => { root.render(React.createElement(ZohoPromote, { prospectId: 'p1', touch: TOUCH, onDone })) })
+    await act(async () => { root.unmount() })
+    await act(async () => { resolve({ data: { status: 'ok', results: [{ step: 'promote', ok: true, lead_id: 'L1' }] }, error: null }) })
+    await wait(20)
+    expect(onDone).not.toHaveBeenCalled()
+  })
+
   it('refused "Already in Zoho" counts as success', async () => {
     reply({ status: 'refused', error: 'Already in Zoho' })
     const onDone = await mount()

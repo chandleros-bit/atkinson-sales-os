@@ -230,10 +230,13 @@ async function send(adapter, step, target) {
         externalId: contact.external_id, phone: contact.phone,
         outcome: step.outcome, note: step.note, durationMin: step.durationMin,
       })
-    case 'add_note':
-      // After a create, the lead must be mirrored before a note can attach.
-      if (!contact) throw new Error("The new lead isn't in the dashboard yet; add the note after the next sync")
-      return adapter.send.addNote({ externalId: contact.external_id, subject: step.subject, body: step.body })
+    case 'add_note': {
+      // After a create, the lead must be mirrored before a note can attach
+      // (a promotion falls back to the new lead id if the mirror failed).
+      const c = contact || target.fallbackContact
+      if (!c) throw new Error("The new lead isn't in the dashboard yet; add the note after the next sync")
+      return adapter.send.addNote({ externalId: c.external_id, subject: step.subject, body: step.body })
+    }
     case 'create_contact':
       return adapter.send.createContact(step.person)
     case 'promote': {
@@ -255,7 +258,7 @@ async function send(adapter, step, target) {
     }
     case 'create_task':
       return adapter.send.createTask({
-        externalId: contact.external_id, title: step.title, type: step.type, dueDate: step.dueDate,
+        externalId: (contact || target.fallbackContact).external_id, title: step.title, type: step.type, dueDate: step.dueDate,
       })
     case 'complete_task':
       return adapter.send.completeTask({ externalId: task.external_id })
@@ -280,7 +283,13 @@ async function mirror(db, adapter, step, out, target, now) {
   if (step.step === 'create_contact' || step.step === 'promote') {
     // Read the new (or linked) lead back and upsert it through the sync's own mapper, then
     // make it the run's contact so the note step attaches to it.
-    const rec = target.businessId === 'bay' ? await adapter.read.person(out.id) : await adapter.read.lead(out.id)
+    let rec = target.businessId === 'bay' ? await adapter.read.person(out.id) : await adapter.read.lead(out.id)
+    // A Zoho workflow can set a fresh lead to Initial lead; open it again so
+    // the sync doesn't drop it.
+    if (step.step === 'promote' && isExcludedLead(rec)) {
+      await adapter.send.setLeadOpen({ externalId: String(out.id) })
+      rec = await adapter.read.lead(out.id)
+    }
     const row = adapter.map.contact(rec)
     const { error } = await db.from('contacts').upsert(row, ON_CONFLICT)
     if (error) throw new Error(`contacts upsert: ${error.message}`)
@@ -376,7 +385,7 @@ async function takeLease(db, prospect, userId, now) {
     .eq('id', prospect.id)
     .eq('user_id', userId)
     .neq('status', 'promoted')
-    .or(`promoting_at.is.null,promoting_at.lt.${stale}`)
+    .or(`promoting_at.is.null,promoting_at.lt."${stale}"`)
     .select('id')
   if (error) return { error: `promotion lease: ${error.message}` }
   return { stamp: Array.isArray(data) && data.length ? stamp : null }
@@ -396,7 +405,10 @@ async function releaseLease(db, prospect, userId, stamp) {
   }
 }
 
-const replayOf = (r) => reply(200, { status: r?.status || 'pending', results: r?.results || [], replay: true })
+const replayOf = (r) => reply(200, {
+  status: r?.status || 'pending', results: r?.results || [], replay: true,
+  error: r?.results?.find((x) => !x.ok)?.error,
+})
 
 export async function run(req, { db, adapters, allowedUserId, userId, role = null, now = new Date() }) {
   // Chandler is ALLOWED_USER_ID; the assistant login is a user_roles 'assistant'.
@@ -580,6 +592,8 @@ async function perform({ db, adapters, req, target, userId, isAssistant, now, le
       if (step.step === 'promote') {
         if (target.contact) result.contact_id = target.contact.id
         result.lead_id = out.id
+        // If the mirror failed, the note and task still go to the new lead.
+        if (!target.contact) target.fallbackContact = { external_id: String(out.id) }
         result.linked = !!out.linked
         await markPromoted(db, target, result, userId, now)
       }

@@ -20,6 +20,7 @@ function fakeDb(seed) {
   const db = {
     tables,
     calls,
+    orExprs: [],
     failUpsertOn: (t) => failUpsert.add(t),
     // when(patch): which updates on the table fail (default: all of them).
     failUpdateOn: (t, when = () => true) => failUpdate.set(t, when),
@@ -76,9 +77,10 @@ function fakeDb(seed) {
         neq: (c, v) => { filters.push((r) => r[c] !== v); return q },
         // PostgREST or(): only "col.is.null" and "col.lt.<value>" are needed here.
         or: (expr) => {
+          db.orExprs.push(expr)
           const parts = expr.split(',').map((s) => {
             const [c, o, ...v] = s.split('.')
-            return [c, o, v.join('.')]
+            return [c, o, v.join('.').replace(/^"(.*)"$/, '$1')]
           })
           filters.push((r) => parts.some(([c, o, v]) => (o === 'is' && v === 'null' ? r[c] == null : o === 'lt' && r[c] != null && r[c] < v)))
           return q
@@ -1150,11 +1152,46 @@ describe('crm-action run: promote_prospect (MPG walk-in to a Zoho Open lead)', (
   it('still marks the prospect promoted when the lead read-back fails after a create', async () => {
     mpg.read.lead = vi.fn(async () => { throw new Error('Zoho GET Leads/Z-NEW-1 -> 500') })
     const res = await go(promoteReq({}, 182))
-    expect(res.body.status).toBe('partial')
+expect(res.body.status).toBe('ok')
     expect(res.body.results[0]).toMatchObject({ step: 'promote', ok: true, lead_id: 'Z-NEW-1', mirror_error: 'Zoho GET Leads/Z-NEW-1 -> 500' })
-    expect(res.body.results[1]).toMatchObject({ step: 'add_note', ok: false, error: expect.stringMatching(/isn't in the dashboard yet/) })
+    expect(res.body.results[1]).toMatchObject({ step: 'add_note', ok: true })
     expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1', zoho_wanted: false, promoting_at: null })
     expect(touchRow()).toMatchObject({ contact_id: null, crm_action_id: db.tables.crm_actions.at(-1).id })
+  })
+
+  it('still sends the note and task to the new lead when the mirror read-back fails', async () => {
+    mpg.read.lead = vi.fn(async () => { throw new Error('Zoho GET Leads/Z-NEW-1 -> 500') })
+    mpg.read.task = async () => { throw new Error('Zoho GET Tasks -> 500') }
+    const res = await go(promoteReq({ follow_up: { due_date: '2026-11-10', title: 'Bring statement' } }, 190))
+    expect(mpg.send.addNote).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'Z-NEW-1' }))
+    expect(mpg.send.createTask).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'Z-NEW-1', dueDate: '2026-11-10' }))
+    expect(res.body.results.map((r) => [r.step, r.ok])).toEqual([['promote', true], ['add_note', true], ['create_task', true]])
+    expect(res.body.results[1].mirror_error).toBeTruthy()
+    expect(res.body.results[2].mirror_error).toBeTruthy()
+    expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1' })
+  })
+
+  it('re-opens a created lead that a Zoho workflow set to Initial lead, before mirroring', async () => {
+    mpg.send.createLead = vi.fn(async () => {
+      leads.set('Z-NEW-1', zohoLeadRec('Z-NEW-1', 'Initial lead'))
+      return { id: 'Z-NEW-1' }
+    })
+    const res = await go(promoteReq({}, 191))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.setLeadOpen).toHaveBeenCalledWith({ externalId: 'Z-NEW-1' })
+    expect(db.tables.contacts.find((c) => c.external_id === 'Z-NEW-1')).toMatchObject({ person_stage: 'Open' })
+  })
+
+  it('replays a failed result with its error', async () => {
+    mpg.send.createLead = vi.fn(async () => { throw new Error('Zoho POST Leads -> 400: bad') })
+    await go(promoteReq({}, 192))
+    const again = await go(promoteReq({}, 192))
+    expect(again.body).toMatchObject({ replay: true, status: 'error', error: 'Zoho POST Leads -> 400: bad' })
+  })
+
+  it('quotes the lease timestamp in the or() filter', async () => {
+    await go(promoteReq({}, 193))
+    expect(db.orExprs[0]).toMatch(/promoting_at.lt."[^"]+"/)
   })
 
   it('marks the prospect promoted before the note and follow-up are sent', async () => {

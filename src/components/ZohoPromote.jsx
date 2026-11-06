@@ -25,6 +25,9 @@ export default function ZohoPromote({ prospectId, touch, onDone }) {
   function finish(result) {
     if (doneCalled.current) return
     doneCalled.current = true
+    // The user may have closed the step already; a late onDone would close
+    // whatever dialog is open now. Toasts still show.
+    if (!mounted.current) return
     onDone(result)
   }
 

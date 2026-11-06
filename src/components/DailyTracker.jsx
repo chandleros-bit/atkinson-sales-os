@@ -24,6 +24,7 @@ export default function DailyTracker({ initialDay }) {
   const [fallback, setFallback] = useState(null)
   const [editing, setEditing] = useState(null)
   const [retrying, setRetrying] = useState(null) // the touch whose Zoho promotion is being retried
+  const downOnBackdrop = useRef(false)
   const closeRetry = useCallback(() => setRetrying(null), [])
 
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function DailyTracker({ initialDay }) {
                     {r.temperature && <span className="text-muted">· {r.temperature[0].toUpperCase() + r.temperature.slice(1)}</span>}
                     <span className="ml-auto min-w-0 truncate text-[12px] text-dim">{OUTCOMES.filter((o) => r[o.key]).map((o) => o.label).join(', ')}</span>
                   </button>
-                  {zohoState(r) === 'in' && <span className="px-1 text-[12px] font-semibold text-green-700">In Zoho</span>}
+                  {zohoState(r) === 'in' && <span className="px-1 text-[12px] font-semibold text-[color:var(--pos-ink)]">In Zoho</span>}
                   {zohoState(r) === 'retry' && (
                     <span className="flex items-center gap-1 px-1 text-[12px] text-muted">
                       Not in Zoho yet ·
@@ -144,7 +145,8 @@ export default function DailyTracker({ initialDay }) {
         {fallback && <textarea readOnly rows={4} value={fallback} className="mt-3 w-full rounded-[10px] border border-line2 bg-panel p-2 font-mono text-[11px]" onFocus={(e) => e.target.select()} />}
       </div>
       {retrying && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) closeRetry() }}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={(e) => { downOnBackdrop.current = e.target === e.currentTarget }}
+          onClick={(e) => { if (downOnBackdrop.current && e.target === e.currentTarget) closeRetry() }}>
           <div role="dialog" aria-modal="true" aria-label="Add to Zoho" className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="text-[15px] font-bold">Add to Zoho</div>

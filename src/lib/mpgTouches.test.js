@@ -34,6 +34,19 @@ describe('saveVisit zoho_wanted on an existing prospect', () => {
     expect(calls).toContainEqual({ table: 'mpg_prospects', op: 'neq', c: 'status', v: 'promoted' })
   })
 
+  it('clears it when the visit is saved with the toggle off', async () => {
+    const res = await saveVisit({ prospect: null, touch: { prospect_id: 'p1' }, zohoWanted: false })
+    expect(res.error).toBeNull()
+    expect(calls).toContainEqual({ table: 'mpg_prospects', op: 'update', patch: { zoho_wanted: false } })
+    expect(calls).toContainEqual({ table: 'mpg_prospects', op: 'eq', c: 'id', v: 'p1' })
+  })
+
+  it('does not clear it when the touch insert fails', async () => {
+    state.touchError = { message: 'nope' }
+    await saveVisit({ prospect: null, touch: { prospect_id: 'p1' }, zohoWanted: false })
+    expect(calls.some((c) => c.op === 'update')).toBe(false)
+  })
+
   it('does not set it when the touch insert fails', async () => {
     state.touchError = { message: 'nope' }
     await saveVisit({ prospect: null, touch: { prospect_id: 'p1' }, zohoWanted: true })

@@ -184,7 +184,7 @@ describe('DailyTracker', () => {
       DATA.touches = [withProspect(touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z'), { mpg_prospects: { status: 'open', zoho_wanted: true } })]
       await render()
       expect(document.body.textContent).toContain('Not in Zoho yet')
-      expect(document.body.textContent).not.toContain('In Zoho' + ' ')
+      expect(document.body.textContent).not.toContain('In Zoho')
       await act(async () => { button('Retry').click() })
       expect(document.body.textContent).toContain('PROMOTE PANEL')
       expect(document.querySelector('[role="dialog"][aria-modal="true"]')).not.toBeNull()
