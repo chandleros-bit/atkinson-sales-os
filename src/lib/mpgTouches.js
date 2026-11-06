@@ -39,19 +39,28 @@ export async function searchMpgBusinesses(q) {
 
 // { prospect, touch } from buildVisit -> the saved touch. A new business's
 // prospect is inserted first so the touch can point at it.
-export async function saveVisit({ prospect, touch }) {
+export async function saveVisit({ prospect, touch, zohoWanted = false }) {
   let row = touch
   if (prospect) {
-    const { data, error } = await supabase.from('mpg_prospects').insert(prospect).select('id').single()
+    const { data, error } = await supabase.from('mpg_prospects').insert({ ...prospect, zoho_wanted: zohoWanted }).select('id').single()
     if (error) return { data: null, error }
     row = { ...touch, prospect_id: data.id }
   }
   if (!row.prospect_id && !row.contact_id) return { data: null, error: { message: 'A visit needs a business' } }
+  // An existing prospect: remember the wish to promote. The visit is saved
+  // either way, so an error here is ignored.
+  if (!prospect && zohoWanted && row.prospect_id) {
+    await supabase.from('mpg_prospects').update({ zoho_wanted: true }).eq('id', row.prospect_id)
+  }
   const res = await supabase.from('mpg_touches').insert(row).select('*').single()
   // A new prospect was inserted but the touch failed: hand back its id so a
   // retried Save reuses it instead of inserting a duplicate.
   if (res.error && prospect) return { data: null, error: res.error, prospectId: row.prospect_id }
   return res
+}
+
+export async function setZohoWanted(prospectId, wanted) {
+  return supabase.from('mpg_prospects').update({ zoho_wanted: !!wanted }).eq('id', prospectId)
 }
 
 export async function updateTouch(id, patch) {
@@ -68,7 +77,7 @@ export async function fetchTouchesForDay(dayKey, channel = 'walk_in') {
   const { from, to } = dayRange(dayKey)
   return supabase
     .from('mpg_touches')
-    .select('*')
+    .select('*, mpg_prospects(status, zoho_wanted)')
     .eq('channel', channel)
     .gte('occurred_at', from)
     .lt('occurred_at', to)

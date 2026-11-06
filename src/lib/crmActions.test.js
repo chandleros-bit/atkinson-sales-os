@@ -342,3 +342,26 @@ describe('set_temperature', () => {
     expect(['Interested', 'Not Interested', 'Left Message', 'No Answer'].map(isConversation)).toEqual([true, true, false, false])
   })
 })
+
+describe('promote_prospect', () => {
+  const base = { action: 'promote_prospect', prospectId: 'p1', touchId: 't1' }
+  it('builds the request with only what was given', () => {
+    const r = buildActionRequest({ ...base, note: ' Wants a quote ', followUp: { dueDate: '2026-11-10', title: 'Call back' } })
+    expect(r).toMatchObject({
+      action: 'promote_prospect', business_id: 'mpg', prospect_id: 'p1', touch_id: 't1',
+      payload: { note: 'Wants a quote', follow_up: { due_date: '2026-11-10', title: 'Call back' } },
+    })
+    expect(buildActionRequest(base).payload).toEqual({})
+  })
+  it('carries link and create-new choices', () => {
+    expect(buildActionRequest({ ...base, linkLeadId: 'z9' }).payload).toEqual({ link_lead_id: 'z9' })
+    expect(buildActionRequest({ ...base, createNew: true }).payload).toEqual({ create_new: true })
+  })
+  it('throws when an id is missing', () => {
+    expect(() => buildActionRequest({ ...base, prospectId: '' })).toThrow('Missing prospect')
+    expect(() => buildActionRequest({ ...base, touchId: undefined })).toThrow('Missing visit')
+  })
+  it('gives a fresh client_action_id each call', () => {
+    expect(buildActionRequest(base).client_action_id).not.toBe(buildActionRequest(base).client_action_id)
+  })
+})

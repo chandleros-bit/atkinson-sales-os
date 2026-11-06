@@ -55,6 +55,14 @@ export const OUTCOMES = [
   { key: 'application', label: 'Application submitted' },
   { key: 'boarded', label: 'Merchant boarded' },
 ]
+// Spec Decisions -> Visit promotion: Hot/Warm or any outcome turns "Add to Zoho"
+// on by default; statement received or later forces it.
+const FORCING = ['statement', 'demo_proposal', 'application', 'boarded']
+export function promotionDefault({ temperature, outcomes = {} }) {
+  const forced = FORCING.some((k) => !!outcomes[k])
+  const on = forced || temperature === 'hot' || temperature === 'warm' || OUTCOMES.some((o) => !!outcomes[o.key])
+  return { on, forced }
+}
 export const TEMPERATURES = [
   { key: 'hot', label: 'Hot' },
   { key: 'warm', label: 'Warm' },
