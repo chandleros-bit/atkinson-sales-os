@@ -8,17 +8,22 @@ import React from 'react'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-const DATA = { touches: [] }
+const DATA = { touches: [], pending: null }
 function query() {
   const q = {}
   for (const m of ['select', 'eq', 'gte', 'lt', 'order']) q[m] = () => q
-  q.then = (resolve) => resolve({ data: DATA.touches, error: null })
+  q.then = (resolve, reject) => {
+    if (DATA.pending) return DATA.pending().then(resolve, reject)
+    return resolve({ data: DATA.touches, error: null })
+  }
   return q
 }
 vi.mock('../lib/supabase', () => ({ isDemoMode: false, supabase: { from: () => query() } }))
 
 const { default: DailyTracker } = await import('./DailyTracker')
 const { default: Toaster } = await import('./Toaster')
+const dialogProps = []
+vi.mock('./LogVisitDialog', () => ({ default: (props) => { dialogProps.push(props); return React.createElement('div', null, 'EDIT DIALOG') } }))
 
 const touch = (id, business, createdAt) => ({
   id, channel: 'walk_in', occurred_at: '2026-11-05T18:00:00.000Z', created_at: createdAt,
@@ -31,6 +36,8 @@ let writeText
 beforeEach(() => {
   document.body.innerHTML = ''
   localStorage.clear()
+  DATA.pending = null
+  dialogProps.length = 0
   DATA.touches = [touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z')]
   writeText = vi.fn().mockResolvedValue()
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
@@ -57,6 +64,8 @@ describe('DailyTracker', () => {
       [sheetDay, 'NJR Salons', 'Jimmy / Manager', ' +1 832 474 7707', 'line one · line two', '', '', 'Hot', 'Yes', 'No', 'No', 'No', 'No'].join('\t'),
     )
     expect(document.body.textContent).toContain('Copied')
+    // Stamped with the newest copied row's server created_at, not the browser clock.
+    expect(localStorage.getItem('mpg-tracker-copied:2026-11-05:visits')).toBe('2026-11-05T18:01:00.000Z')
   })
 
   it('offers only the rows logged after the copy', async () => {
@@ -74,5 +83,66 @@ describe('DailyTracker', () => {
     await render()
     expect(document.body.textContent).toContain('No visits logged for this day.')
     expect(button('Copy rows')).toBeUndefined()
+  })
+
+  it('shows only the later day when responses resolve out of order', async () => {
+    const resolvers = []
+    DATA.pending = () => new Promise((res) => resolvers.push(res))
+    await render()
+    const input = document.querySelector('input[type="date"]')
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    await act(async () => { setter.call(input, '2026-11-06'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect(resolvers).toHaveLength(2)
+    await act(async () => { resolvers[1]({ data: [touch('b', 'Feges BBQ', '2026-11-06T18:01:00.000Z')], error: null }) })
+    await act(async () => { resolvers[0]({ data: [touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z')], error: null }) })
+    expect(document.body.textContent).toContain('Feges BBQ')
+    expect(document.body.textContent).not.toContain('NJR Salons')
+  })
+
+  it('clears the old rows at once when the day changes', async () => {
+    await render()
+    DATA.pending = () => new Promise(() => {})
+    const input = document.querySelector('input[type="date"]')
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    await act(async () => { setter.call(input, '2026-11-06'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect(document.body.textContent).not.toContain('NJR Salons')
+    expect(button('Copy rows')).toBeUndefined()
+  })
+
+  it('ignores an emptied date input', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await render()
+    const input = document.querySelector('input[type="date"]')
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    await act(async () => { setter.call(input, ''); input.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect(document.querySelector('input[type="date"]').value).toBe('2026-11-05')
+    expect(document.body.textContent).toContain('NJR Salons')
+    expect(err).not.toHaveBeenCalled()
+    err.mockRestore()
+  })
+
+  it('shows an error instead of throwing when the fetch rejects', async () => {
+    DATA.pending = () => Promise.reject(new Error('network down'))
+    await render()
+    expect(document.body.textContent).toContain('network down')
+  })
+
+  it('falls back to a textarea and an error toast when the copy is rejected', async () => {
+    await render()
+    writeText.mockRejectedValue(new Error('denied'))
+    await act(async () => { button('Copy rows').click() })
+    expect(document.body.textContent).toContain("Couldn't copy")
+    const ta = document.querySelector('textarea')
+    expect(ta).not.toBeNull()
+    expect(ta.value).toContain('NJR Salons')
+    expect(localStorage.getItem('mpg-tracker-copied:2026-11-05:visits')).toBeNull()
+  })
+
+  it('opens the edit dialog with the clicked row', async () => {
+    await render()
+    const row = [...document.querySelectorAll('li button')][0]
+    await act(async () => { row.click() })
+    expect(document.body.textContent).toContain('EDIT DIALOG')
+    expect(dialogProps.at(-1).touch.id).toBe('a')
   })
 })

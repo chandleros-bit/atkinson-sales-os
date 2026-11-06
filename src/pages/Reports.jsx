@@ -206,9 +206,7 @@ export default function Reports() {
   const [editing, setEditing] = useState(false)
   const tabs = TABS.filter((t) => !t.biz || t.biz === biz)
   // Leaving the MPG view while on its tracker falls back to Daily.
-  useEffect(() => {
-    if (!tabs.some((t) => t.key === tab)) setTab('daily')
-  }, [biz]) // eslint-disable-line react-hooks/exhaustive-deps
+  const activeTab = tabs.some((t) => t.key === tab) ? tab : 'daily'
 
   const load = useCallback(async () => {
     if (isDemoMode) {
@@ -283,7 +281,7 @@ export default function Reports() {
     const entries = Object.entries(draft).filter(([, v]) => v !== '' && v != null)
     if (entries.length === 0 || biz === 'all' || isDemoMode) return
     setSaving(true)
-    const date = periodDateFor(tab)
+    const date = periodDateFor(activeTab)
     const rows = entries.map(([metric_key, v]) => ({
       business_id: biz, date, metric_key, value: Number(v),
     }))
@@ -312,10 +310,10 @@ export default function Reports() {
   }
 
   const cards = useMemo(() => {
-    if (!data || tab === 'tracker') return []
-    const values = computeValues(tab, biz, data)
-    return buildTabModel(metricsForTab(tab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
-  }, [tab, biz, data])
+    if (!data || activeTab === 'tracker') return []
+    const values = computeValues(activeTab, biz, data)
+    return buildTabModel(metricsForTab(activeTab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
+  }, [activeTab, biz, data])
 
   return (
     <div>
@@ -330,17 +328,17 @@ export default function Reports() {
             <button
               key={t.key}
               role="tab"
-              aria-selected={tab === t.key}
+              aria-selected={activeTab === t.key}
               onClick={() => setTab(t.key)}
               className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${
-                tab === t.key ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
+                activeTab === t.key ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
               }`}
             >
               {t.label}
             </button>
           ))}
         </div>
-        {!isDemoMode && tab !== 'tracker' && (
+        {!isDemoMode && activeTab !== 'tracker' && (
           <button
             onClick={() => setEditing(true)}
             className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-[11.5px] text-muted hover:text-[color:var(--text)]"
@@ -350,7 +348,7 @@ export default function Reports() {
         )}
       </div>
 
-      {tab === 'tracker' ? (
+      {activeTab === 'tracker' ? (
         <DailyTracker />
       ) : (
       <>
@@ -366,7 +364,7 @@ export default function Reports() {
       )}
       {loading && <div className="mt-6 text-sm text-muted">Loading scoreboard…</div>}
       {!loading && !error && <CardGrid cards={cards} />}
-      {!loading && !error && data && tab === 'daily' && (() => {
+      {!loading && !error && data && activeTab === 'daily' && (() => {
         const manualSeries = dailySeries(
           biz === 'all' ? data.series : data.series.filter((r) => r.business_id === biz),
           'calls', todayKey(), 7,
@@ -384,10 +382,10 @@ export default function Reports() {
       })()}
       {!loading && !error && data && (
         <LogMetrics
-          key={`${tab}-${biz}`}
-          tab={tab}
+          key={`${activeTab}-${biz}`}
+          tab={activeTab}
           biz={biz}
-          values={computeValues(tab, biz, data)}
+          values={computeValues(activeTab, biz, data)}
           syncedCalls={(() => {
             const rows = biz === 'all' ? data.callRows : data.callRows.filter((r) => r.business_id === biz)
             return callsByDay(rows)[todayKey()] || 0
@@ -400,7 +398,7 @@ export default function Reports() {
       )}
       {editing && data && (
         <EditTargets
-          tab={tab}
+          tab={activeTab}
           biz={biz}
           targets={data.targets}
           onClose={() => setEditing(false)}

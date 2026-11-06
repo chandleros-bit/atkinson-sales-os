@@ -14,11 +14,13 @@ vi.mock('../components/DailyTracker', () => ({ default: () => React.createElemen
 
 const { default: Reports } = await import('./Reports')
 
+let root
 async function render(biz) {
   BIZ.current = biz
   const host = document.createElement('div')
   document.body.appendChild(host)
-  await act(async () => { createRoot(host).render(React.createElement(Reports)) })
+  root = createRoot(host)
+  await act(async () => { root.render(React.createElement(Reports)) })
   return host
 }
 const tabLabels = () => [...document.querySelectorAll('[role="tab"]')].map((t) => t.textContent)
@@ -37,5 +39,17 @@ describe('Reports tracker tab', () => {
   it.each(['bay', 'all'])('is absent on %s', async (biz) => {
     await render(biz)
     expect(tabLabels()).not.toContain('Daily tracker')
+  })
+
+  it('falls back to Daily when leaving MPG on the tracker tab', async () => {
+    await render('mpg')
+    const tab = [...document.querySelectorAll('[role="tab"]')].find((t) => t.textContent === 'Daily tracker')
+    await act(async () => { tab.click() })
+    BIZ.current = 'bay'
+    await act(async () => { root.render(React.createElement(Reports, { bump: 1 })) })
+    expect(document.body.textContent).not.toContain('TRACKER BODY')
+    expect(tabLabels()).not.toContain('Daily tracker')
+    const sel = [...document.querySelectorAll('[role="tab"]')].find((t) => t.getAttribute('aria-selected') === 'true')
+    expect(sel.textContent).toBe('Daily')
   })
 })
