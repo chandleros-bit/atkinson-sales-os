@@ -13,12 +13,14 @@ export const QUICK_ADD = [
 ]
 
 const NEW_LEAD = { kind: 'lead', label: 'New lead…' }
+const LOG_VISIT = { kind: 'visit', label: 'Log visit…' }
 
 // showLead: offer "New lead…" (settings.create_lead_enabled plus write-back).
+// showVisit: offer "Log visit…" (MPG walk-ins; hidden on the Bayway view).
 // hide: kinds this login can't use (the assistant has no Log call).
-export default function QuickAddMenu({ onPick, showLead = false, hide = [], className = 'btn-primary', style }) {
+export default function QuickAddMenu({ onPick, showLead = false, showVisit = false, hide = [], className = 'btn-primary', style }) {
   const [open, setOpen] = useState(false)
-  const items = (showLead ? [NEW_LEAD, ...QUICK_ADD] : QUICK_ADD).filter((i) => !hide.includes(i.kind))
+  const items = [...(showLead ? [NEW_LEAD] : []), ...(showVisit ? [LOG_VISIT] : []), ...QUICK_ADD].filter((i) => !hide.includes(i.kind))
   const box = useRef(null)
 
   useEffect(() => {

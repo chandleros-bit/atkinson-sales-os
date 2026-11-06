@@ -11,7 +11,7 @@ import { MemoryRouter } from 'react-router-dom'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const invoke = vi.fn()
-const DATA = { notes: [], firstNote: null, activity: [], board: null, signal: null, priority: null, tasks: [], onBoard: false, docs: [] }
+const DATA = { biz: 'bay', notes: [], firstNote: null, activity: [], board: null, signal: null, priority: null, tasks: [], onBoard: false, docs: [] }
 
 function query(table) {
   const q = {}
@@ -23,7 +23,7 @@ function query(table) {
   }
   q.maybeSingle = async () => {
     if (table === 'v_people') {
-      return { data: { id: 'c1', business_id: 'bay', name: 'Cj Blackman', company: null, phone: '8325550100', email: null, stage: 'Application Received', on_board: DATA.onBoard, crm_profile_url: '#' }, error: null }
+      return { data: { id: 'c1', business_id: DATA.biz, name: 'Cj Blackman', company: null, phone: '8325550100', email: null, stage: 'Application Received', on_board: DATA.onBoard, crm_profile_url: '#' }, error: null }
     }
     if (table === 'contacts') {
       return {
@@ -55,6 +55,7 @@ beforeEach(() => {
   document.body.innerHTML = ''
   invoke.mockReset()
   invoke.mockResolvedValue({ data: { status: 'ok', notes: 2 }, error: null })
+  DATA.biz = 'bay'
   DATA.onBoard = false
   DATA.board = null
   DATA.signal = null
@@ -121,6 +122,28 @@ describe('contact card', () => {
     const dialog = document.querySelector('[role="dialog"]')
     expect(dialog.textContent).toContain("Couldn't read every note from FollowUpBoss (NOT_SUPPORTED)")
     expect(dialog.querySelectorAll('[data-note]')).toHaveLength(2)
+  })
+})
+
+describe('contact card: Log visit', () => {
+  async function open(biz) {
+    DATA.biz = biz
+    const host = await mount()
+    await act(async () => host.querySelector('[data-person-link]').click())
+    await act(async () => {})
+    await act(async () => {})
+    return document.querySelector('[role="dialog"]')
+  }
+  const visitBtn = (d) => [...d.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Log visit')
+
+  it('shows Log visit for an MPG person', async () => {
+    const dialog = await open('mpg')
+    expect(visitBtn(dialog)).toBeTruthy()
+  })
+
+  it('does not show Log visit for a Bayway person', async () => {
+    const dialog = await open('bay')
+    expect(visitBtn(dialog)).toBeFalsy()
   })
 })
 

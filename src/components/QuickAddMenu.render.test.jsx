@@ -77,3 +77,27 @@ describe('QuickAddMenu: New lead', () => {
     expect(onPick).toHaveBeenLastCalledWith('lead')
   })
 })
+
+describe('QuickAddMenu: Log visit', () => {
+  it('offers Log visit… only when showVisit is on, after New lead…', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    await act(async () => {
+      createRoot(host).render(React.createElement(QuickAddMenu, { onPick, showLead: true, showVisit: true }))
+    })
+    await click(trigger())
+    expect(items().map((b) => b.textContent)).toEqual(['New lead…', 'Log visit…', 'Log call…', 'Note…', 'Follow-up…', 'Task…'])
+    await click(items()[1])
+    expect(onPick).toHaveBeenLastCalledWith('visit')
+  })
+
+  it('still honours hide', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    await act(async () => {
+      createRoot(host).render(React.createElement(QuickAddMenu, { onPick, showVisit: true, hide: ['call'] }))
+    })
+    await click(trigger())
+    expect(items().map((b) => b.textContent)).toEqual(['Log visit…', 'Note…', 'Follow-up…', 'Task…'])
+  })
+})

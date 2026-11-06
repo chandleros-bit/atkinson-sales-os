@@ -6,6 +6,7 @@ import { useBusiness } from '../context/BusinessContext'
 import NewTaskDialog from './NewTaskDialog'
 import NewLeadDialog from './NewLeadDialog'
 import PersonSheet from './PersonSheet'
+import LogVisitDialog from './LogVisitDialog'
 import QuickAddMenu from './QuickAddMenu'
 import { openSearch } from './SearchPalette'
 import { useWritebackFlags, useSettingFlags } from '../lib/writeback'
@@ -18,6 +19,7 @@ export default function NewMenu({ onBeforePick }) {
   const assistant = role === 'assistant'
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [newLeadOpen, setNewLeadOpen] = useState(false)
+  const [visitOpen, setVisitOpen] = useState(false)
   // The lead just created (or an existing match) opens in a person sheet.
   const [personId, setPersonId] = useState(null)
   // New lead needs both switches on for a book.
@@ -30,13 +32,19 @@ export default function NewMenu({ onBeforePick }) {
       <QuickAddMenu
         showLead={leadBooks.length > 0}
         hide={assistant ? ['call'] : []}
+        showVisit={!assistant && biz !== 'bay'}
         onPick={(kind) => {
           if (kind === 'task') return setNewTaskOpen(true)
           if (kind === 'lead') return setNewLeadOpen(true)
+          if (kind === 'visit') {
+            onBeforePick?.()
+            return setVisitOpen(true)
+          }
           onBeforePick?.()
           openSearch({ pick: kind })
         }}
       />
+      {visitOpen && <LogVisitDialog onClose={() => setVisitOpen(false)} />}
       {newTaskOpen && <NewTaskDialog onClose={() => setNewTaskOpen(false)} />}
       {newLeadOpen && (
         <NewLeadDialog

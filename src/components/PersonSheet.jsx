@@ -31,6 +31,7 @@ import { CRM_LABEL } from '../lib/crmActions'
 import { isCadenceStage } from '../lib/dialList'
 import QuickActions, { Sheet, quickActionTone } from './QuickActions'
 import { ScheduleButton, UpcomingEvents } from './ScheduleEvent'
+import LogVisitDialog from './LogVisitDialog'
 
 const BOOK = { bay: 'Bayway', mpg: 'MPG' }
 
@@ -221,6 +222,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
   const notes = useContactNotes(id)
   const extra = useContactCard(person ? id : null, person?.business_id)
   const [tab, setTab] = useState('notes')
+  const [visitOpen, setVisitOpen] = useState(false)
 
   const load = useCallback(async () => {
     let p = initial
@@ -308,12 +310,26 @@ export default function PersonSheet({ id, initial = null, onClose }) {
           />
           <div className="flex flex-wrap items-center gap-3">
             <ScheduleButton businessId={biz} contactId={person.id} contactName={person.name} />
+            {biz === 'mpg' && (
+              <button type="button" onClick={() => setVisitOpen(true)} className="text-[12.5px] font-semibold" style={{ color: t.ink }}>
+                Log visit
+              </button>
+            )}
             {person.crm_profile_url && (
               <a href={person.crm_profile_url} target="_blank" rel="noreferrer" className="text-[12.5px] font-semibold" style={{ color: t.ink }}>
                 Open in {CRM_LABEL[biz]} ↗
               </a>
             )}
           </div>
+          {visitOpen && (
+            <LogVisitDialog
+              onClose={() => setVisitOpen(false)}
+              preset={{
+                type: 'contact', id: person.id, name: person.company || person.name,
+                phone: person.phone, email: person.email, contactName: person.company ? person.name : null,
+              }}
+            />
+          )}
           <UpcomingEvents contactId={person.id} />
           <div role="tablist" aria-label="Contact card" className="mt-2 flex gap-1 border-b border-line">
             {tabs.map((x) => (
