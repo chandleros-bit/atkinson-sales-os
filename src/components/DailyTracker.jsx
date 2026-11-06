@@ -46,16 +46,17 @@ export default function DailyTracker({ initialDay }) {
     return () => { off(); requestId.current++ }
   }, [load])
 
-  const fresh = copiedAt ? newSinceCopy(rows, copiedAt) : []
+  const fresh = copiedAt ? newSinceCopy(rows, copiedAt.through) : []
 
   async function copy(list) {
     const text = toTsv(list.map(visitRow))
     try {
       if (!navigator.clipboard?.writeText) throw new Error('no clipboard')
       await navigator.clipboard.writeText(text)
-      // Server time only: the newest copied row's created_at, so "new since copy"
-      // never depends on this browser's clock.
-      const stamp = list.reduce((m, r) => (r.created_at > m ? r.created_at : m), list[0].created_at)
+      // through: server time of the newest copied row, so "new since copy" never
+      // depends on this browser's clock. at: the click time, shown to the user.
+      const through = list.reduce((m, r) => (r.created_at > m ? r.created_at : m), list[0].created_at)
+      const stamp = { through, at: new Date().toISOString() }
       writeCopied(day, 'visits', stamp)
       setCopiedAt(stamp)
       setFallback(null)
@@ -92,7 +93,7 @@ export default function DailyTracker({ initialDay }) {
         </div>
         {copiedAt && (
           <div className="mt-1 text-[12px] text-muted">
-            Copied {clock(copiedAt)}{fresh.length > 0 ? ` · ${plural(fresh.length, 'row')} logged since` : ''}
+            Copied{copiedAt.at ? ` ${clock(copiedAt.at)}` : ''}{fresh.length > 0 ? ` · ${plural(fresh.length, 'row')} logged since` : ''}
           </div>
         )}
         {rows.length === 0 ? (

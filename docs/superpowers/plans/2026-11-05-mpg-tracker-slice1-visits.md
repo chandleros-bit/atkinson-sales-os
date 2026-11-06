@@ -124,7 +124,6 @@ create table if not exists mpg_touches (
 -- A touch whose prospect or contact was deleted keeps its snapshot text, so the
 -- subject check applies on insert only (enforced in the app), not as a constraint.
 -- The export reads one user, one channel and an occurred_at range.
-drop index if exists mpg_touches_user_occurred;
 create index if not exists mpg_touches_user_channel_occurred on mpg_touches (user_id, channel, occurred_at);
 create index if not exists mpg_touches_prospect on mpg_touches (prospect_id) where prospect_id is not null;
 create index if not exists mpg_touches_contact on mpg_touches (contact_id) where contact_id is not null;
@@ -149,7 +148,8 @@ end $$;
 
 -- FK checks bypass RLS, so the generic insert/update policies above would let a
 -- user point a touch at another user's prospect, or a prospect at another user's
--- list. Recreate those four policies with explicit ownership checks on the parent.
+-- list, or at a contact outside MPG. Recreate those four policies with explicit
+-- ownership checks on the parent.
 drop policy if exists "own mpg_prospects insert" on mpg_prospects;
 create policy "own mpg_prospects insert" on mpg_prospects for insert to authenticated
   with check (
@@ -169,6 +169,7 @@ create policy "own mpg_touches insert" on mpg_touches for insert to authenticate
   with check (
     user_id = auth.uid()
     and (prospect_id is null or exists (select 1 from mpg_prospects p where p.id = prospect_id and p.user_id = auth.uid()))
+    and (contact_id is null or exists (select 1 from contacts c where c.id = contact_id and c.business_id = 'mpg' and public.can_read_book('mpg')))
   );
 drop policy if exists "own mpg_touches update" on mpg_touches;
 create policy "own mpg_touches update" on mpg_touches for update to authenticated
@@ -176,6 +177,7 @@ create policy "own mpg_touches update" on mpg_touches for update to authenticate
   with check (
     user_id = auth.uid()
     and (prospect_id is null or exists (select 1 from mpg_prospects p where p.id = prospect_id and p.user_id = auth.uid()))
+    and (contact_id is null or exists (select 1 from contacts c where c.id = contact_id and c.business_id = 'mpg' and public.can_read_book('mpg')))
   );
 
 create or replace function public.mpg_touch_log_touch()

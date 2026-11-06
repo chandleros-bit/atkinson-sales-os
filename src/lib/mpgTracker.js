@@ -174,20 +174,29 @@ export function newSinceCopy(rows, copiedAtIso) {
 }
 
 // When a block was copied, per day, in this browser only (a convenience: losing
-// it just means no "copied" hint). storage defaults to localStorage.
+// it just means no "copied" hint). Stored as JSON { through, at }: through is the
+// server created_at of the newest copied row ("new since copy"), at is the click
+// time shown to the user. A plain ISO string (older format) reads as through only.
+// storage defaults to localStorage.
 const copyKey = (dayKey, block) => `mpg-tracker-copied:${dayKey}:${block}`
 export function readCopied(dayKey, block, storage) {
   try {
     const s = storage ?? globalThis.localStorage
-    return s?.getItem(copyKey(dayKey, block)) ?? null
+    const raw = s?.getItem(copyKey(dayKey, block))
+    if (!raw) return null
+    if (raw.startsWith('{')) {
+      const o = JSON.parse(raw)
+      return o?.through ? { through: o.through, at: o.at || null } : null
+    }
+    return { through: raw, at: null }
   } catch {
     return null
   }
 }
-export function writeCopied(dayKey, block, iso, storage) {
+export function writeCopied(dayKey, block, { through, at }, storage) {
   try {
     const s = storage ?? globalThis.localStorage
-    s?.setItem(copyKey(dayKey, block), iso)
+    s?.setItem(copyKey(dayKey, block), JSON.stringify({ through, at: at || null }))
   } catch {
     // private window or blocked storage: the hint is optional
   }

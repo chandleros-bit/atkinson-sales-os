@@ -210,13 +210,17 @@ describe('copy state', () => {
     const store = new Map()
     const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }
     expect(readCopied('2026-11-05', 'visits', storage)).toBe(null)
-    writeCopied('2026-11-05', 'visits', '2026-11-05T23:00:00.000Z', storage)
-    expect(readCopied('2026-11-05', 'visits', storage)).toBe('2026-11-05T23:00:00.000Z')
+    writeCopied('2026-11-05', 'visits', { through: '2026-11-05T23:00:00.000Z', at: '2026-11-06T00:12:00.000Z' }, storage)
+    expect(readCopied('2026-11-05', 'visits', storage)).toEqual({ through: '2026-11-05T23:00:00.000Z', at: '2026-11-06T00:12:00.000Z' })
+  })
+  it('reads a plain ISO string as through with no at', () => {
+    const storage = { getItem: () => '2026-11-05T23:00:00.000Z', setItem: () => {} }
+    expect(readCopied('2026-11-05', 'visits', storage)).toEqual({ through: '2026-11-05T23:00:00.000Z', at: null })
   })
   it('never throws when storage is blocked', () => {
     const storage = { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') } }
     expect(readCopied('2026-11-05', 'visits', storage)).toBe(null)
-    expect(() => writeCopied('2026-11-05', 'visits', 'x', storage)).not.toThrow()
+    expect(() => writeCopied('2026-11-05', 'visits', { through: 'x', at: 'y' }, storage)).not.toThrow()
   })
 })
 
@@ -226,7 +230,7 @@ describe('copy state with a throwing localStorage', () => {
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('SecurityError') } })
     try {
       expect(readCopied('2026-11-05', 'visits')).toBe(null)
-      expect(() => writeCopied('2026-11-05', 'visits', 'x')).not.toThrow()
+      expect(() => writeCopied('2026-11-05', 'visits', { through: 'x', at: 'y' })).not.toThrow()
     } finally {
       if (had) Object.defineProperty(globalThis, 'localStorage', had)
       else delete globalThis.localStorage

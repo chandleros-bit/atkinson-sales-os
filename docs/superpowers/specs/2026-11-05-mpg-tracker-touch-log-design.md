@@ -1,7 +1,7 @@
 # MPG touch log, prospect lists and daily tracker export: Design
 
 **Date:** 2026-11-05
-**Status:** Draft for review. Nothing built.
+**Status:** Slice 1 built on `feat/mpg-tracker-visits`, not deployed. The rest is not built.
 **Decided with Chandler:** 2026-11-05 (Claude Code session reviewing `MPG_Chandler_Private_Tracker.xlsx`).
 **Set aside (not in this spec):** writing to the spreadsheet automatically (Microsoft Graph). Chandler does not want a Microsoft sign-in; the sheet is filled by copy-paste. Deriving the Reports sprint numbers (statements received, proposals sent) from the touch log is a natural follow-on, not part of this spec.
 
@@ -58,7 +58,7 @@ The Points and Entry status columns are formulas. The export never fills them.
 
 ## Data model
 
-Three new app-owned, per-user tables (same RLS and `updated_at` trigger pattern as `work_items`).
+Three new app-owned, per-user tables (same RLS and `updated_at` trigger pattern as `work_items`). Insert and update policies on `mpg_prospects` and `mpg_touches` also check that the parent rows are yours or MPG's: a prospect's list must be your own, and a touch's prospect must be your own and its contact must be an MPG contact you can read. Foreign-key checks bypass RLS, so the plain own-row policy would not stop a row pointing at someone else's data.
 
 ### `mpg_prospect_lists`
 
@@ -74,7 +74,7 @@ create table mpg_prospects (
   user_id        uuid not null default auth.uid(),
   kind           text not null default 'merchant' check (kind in ('merchant', 'isv')),
   list_id        uuid references mpg_prospect_lists(id) on delete set null, -- null = added at the door
-  business_name  text not null,
+  business_name  text not null check (nullif(trim(business_name), '') is not null),
   contact_name   text,
   contact_role   text,
   phone          text,
@@ -113,7 +113,7 @@ create table mpg_touches (
   prospect_id     uuid references mpg_prospects(id) on delete set null,
   contact_id      uuid references contacts(id) on delete set null,
   -- Snapshots, so an exported row reads the same as when it was logged.
-  business_name   text not null,
+  business_name   text not null check (nullif(trim(business_name), '') is not null),
   contact_label   text,           -- "Jimmy / Manager"
   reach_label     text,           -- "832-474-7707" or "jimmy@njr.com"
   notes           text,
@@ -127,12 +127,16 @@ create table mpg_touches (
   application     boolean not null default false,
   boarded         boolean not null default false,
   isv_stage       text,           -- ISV: stage after this touch
-  crm_action_id   uuid references crm_actions(id), -- the Zoho write this touch caused, if any
+  crm_action_id   uuid references crm_actions(id) on delete set null, -- the Zoho write this touch caused, if any (not filled in slice 1)
   created_at      timestamptz not null default now(),
-  constraint mpg_touches_has_subject check (prospect_id is not null or contact_id is not null)
+  updated_at      timestamptz not null default now()  -- maintained by a before-update trigger
 );
-create index on mpg_touches (user_id, occurred_at);
+create index on mpg_touches (user_id, channel, occurred_at);
+create index on mpg_touches (prospect_id) where prospect_id is not null;
+create index on mpg_touches (contact_id) where contact_id is not null;
 ```
+
+There is no `mpg_touches_has_subject` constraint: a touch whose prospect or contact is later deleted keeps its snapshot text, so "has a prospect or a contact" is checked in the app (`saveVisit`) when the touch is created, not in the database.
 
 The tracker date of a touch is the **local calendar day** of `occurred_at` (America/Chicago), computed in the browser with the existing `dayKey`.
 
@@ -142,15 +146,15 @@ All forms must work at 375 px wide. A walk-in is logged standing at the door.
 
 ### Log visit
 
-Opened from **New → Log visit** (MPG), from a prospect, or from an MPG contact card.
+Opened from **+ New → Log visit…** (shown on every view except Bayway, and never for the assistant), from a prospect, or from an MPG contact card.
 
-- **Business:** search across MPG contacts and prospects (by name or phone), or type a new one, which creates a prospect with `list_id = null`.
+- **Business:** search across MPG contacts and prospects (by business or contact name; phone search is deferred), or type a new one, which creates a prospect with `list_id = null`.
 - **Fields:** contact name, role, phone/email, notes, next step, follow-up date, Hot / Warm / Cold (optional), and five outcome checkboxes (decision-maker conversation, statement received, demo/proposal, application submitted, merchant boarded).
-- **Zoho toggle:** "Add to Zoho as Open" follows the promotion rule above and updates live as the fields change. It is hidden when the business is already in Zoho.
+- **Zoho toggle (slice 2):** "Add to Zoho as Open" follows the promotion rule above and updates live as the fields change. It is hidden when the business is already in Zoho.
 - **On save:**
   - Always insert an `mpg_touches` row (`channel = 'walk_in'`).
   - **Prospect + toggle on:** run promotion (below).
-  - **Business already in Zoho:** `crm-action` `add_note` writes "Walk-in: <notes>" on the lead.
+  - **Business already in Zoho:** `crm-action` `add_note` writes a note on the lead with subject "Walk-in" and body "Walk-in · <Temp> · <outcomes> — <notes>".
   - **Follow-up date set on a Zoho lead:** also create the Zoho task, as Log call already does.
 
 ### Cold-call dialer (prospect mode)
@@ -228,7 +232,7 @@ This is a new **Daily tracker** tab on Reports, visible on the MPG view.
   - **Quality:** `Hot` / `Warm` / `Cold`, or blank.
   - **Tabs and line breaks** in text become ` · ` so a note can't split into extra cells.
   - **Text starting with** `=`, `+`, `-` or `@` gets a leading space so Excel never reads it as a formula. This matters for phone numbers like `+1…`.
-- **Already copied.** The panel remembers in localStorage when each block was copied for each date. It warns "Copied 6:12 PM · 2 rows logged since" when touches for that date were created after the copy (a backdated entry, say), and offers **Copy new rows only**.
+- **Already copied.** The panel remembers in localStorage when each block was copied for each date. It warns "Copied 6:12 PM · 2 rows logged since" when touches for that date were created after the copy (a backdated entry, say). "Copied <time>" is the click time; "new since copy" compares against the server `created_at` of the newest copied row, so it never depends on the browser clock, and offers **Copy new rows only**.
 - **Rows are read-only here.** To fix one, Chandler edits the touch, which opens from the row, and copies again. Fixing a row already pasted into the sheet is done in the sheet by hand.
 
 ## Asks for the manager (sheet changes the OS can't make)
@@ -241,6 +245,7 @@ Until the manager changes the sheet, the cold-call line is copied into whatever 
 ## Error handling
 
 - **Capture never waits on Zoho.** The touch row saves first. Zoho writes (promotion, note, task) run afterwards, and their failures appear on the prospect or contact with Retry.
+- **Slice 1:** a Zoho failure shows an error toast with Retry, which resends only the failed write. `crm_action_id` isn't filled in yet.
 - **The export reads only `mpg_touches`,** so Zoho or sync outages can't change what is exported.
 - **Promotion is idempotent** (`client_action_id`). A double tap can't create two leads.
 - **Imports are all or nothing per file:** a parse error rejects the file and names the bad row.
@@ -256,7 +261,7 @@ Until the manager changes the sheet, the cold-call line is copied into whatever 
   - header guessing for the CSV mapping,
   - "Copy new rows only" selection.
 - **Edge function:** `promote_prospect` plan tests, following `crm-action/plan.test.js`. Cover no match, one match with Initial lead (status set to Open), several matches (refused), and a failed note step retried.
-- **Render tests:** Log visit (the toggle follows the rules; hidden for Zoho contacts), the dialer's prospect mode (result taps, 60 counter) and the Daily tracker panel (blocks, copy states).
+- **Render tests:** Log visit (the toggle follows the rules; hidden for Zoho contacts; the toggle and its test are slice 2), the dialer's prospect mode (result taps, 60 counter) and the Daily tracker panel (blocks, copy states).
 - **Manual check before launch:** paste one day's blocks into a copy of the real workbook. Confirm every row reads "Counted" and the points calculate.
 
 ## Build order

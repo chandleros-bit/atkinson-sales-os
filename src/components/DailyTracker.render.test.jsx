@@ -64,8 +64,25 @@ describe('DailyTracker', () => {
       [sheetDay, 'NJR Salons', 'Jimmy / Manager', ' +1 832 474 7707', 'line one · line two', '', '', 'Hot', 'Yes', 'No', 'No', 'No', 'No'].join('\t'),
     )
     expect(document.body.textContent).toContain('Copied')
-    // Stamped with the newest copied row's server created_at, not the browser clock.
-    expect(localStorage.getItem('mpg-tracker-copied:2026-11-05:visits')).toBe('2026-11-05T18:01:00.000Z')
+    // "through" is the newest copied row's server created_at; "at" is the click time.
+    const saved = JSON.parse(localStorage.getItem('mpg-tracker-copied:2026-11-05:visits'))
+    expect(saved.through).toBe('2026-11-05T18:01:00.000Z')
+    expect(Math.abs(Date.now() - new Date(saved.at).getTime())).toBeLessThan(60000)
+  })
+
+  it('shows the click time, not the newest row time', async () => {
+    localStorage.setItem('mpg-tracker-copied:2026-11-05:visits', JSON.stringify({ through: '2026-11-05T18:01:00.000Z', at: '2026-11-05T23:12:00.000Z' }))
+    await render()
+    const shown = new Date('2026-11-05T23:12:00.000Z').toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    expect(document.body.textContent).toContain(`Copied ${shown}`)
+  })
+
+  it('still reads a plain ISO string and hides the time', async () => {
+    localStorage.setItem('mpg-tracker-copied:2026-11-05:visits', '2026-11-05T19:00:00.000Z')
+    DATA.touches = [touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z'), touch('b', 'Feges BBQ', '2026-11-05T20:00:00.000Z')]
+    await render()
+    expect(document.body.textContent).toContain('1 row logged since')
+    expect(document.body.textContent).not.toMatch(/Copied \d/)
   })
 
   it('offers only the rows logged after the copy', async () => {
