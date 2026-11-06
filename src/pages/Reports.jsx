@@ -14,6 +14,7 @@ import { fetchLoanBundle } from '../lib/loansData'
 import { loanStats, DEFAULT_RATES } from '../lib/loans'
 import { prevMonthWindow } from '../lib/overviewDash'
 import PageHeader from '../components/PageHeader'
+import DailyTracker from '../components/DailyTracker'
 
 const TABS = [
   { key: 'daily', label: 'Daily' },
@@ -21,6 +22,7 @@ const TABS = [
   { key: 'monthly', label: 'Monthly' },
   { key: 'revenue', label: 'Revenue' },
   { key: 'sprint', label: 'Sprint' },
+  { key: 'tracker', label: 'Daily tracker', biz: 'mpg' },
 ]
 
 const PACE_STYLE = {
@@ -202,6 +204,11 @@ export default function Reports() {
 
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
+  const tabs = TABS.filter((t) => !t.biz || t.biz === biz)
+  // Leaving the MPG view while on its tracker falls back to Daily.
+  useEffect(() => {
+    if (!tabs.some((t) => t.key === tab)) setTab('daily')
+  }, [biz]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(async () => {
     if (isDemoMode) {
@@ -305,7 +312,7 @@ export default function Reports() {
   }
 
   const cards = useMemo(() => {
-    if (!data) return []
+    if (!data || tab === 'tracker') return []
     const values = computeValues(tab, biz, data)
     return buildTabModel(metricsForTab(tab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
   }, [tab, biz, data])
@@ -319,7 +326,7 @@ export default function Reports() {
 
       <div className="mt-5 flex items-end justify-between border-b border-line">
         <div role="tablist" className="flex gap-1">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.key}
               role="tab"
@@ -333,7 +340,7 @@ export default function Reports() {
             </button>
           ))}
         </div>
-        {!isDemoMode && (
+        {!isDemoMode && tab !== 'tracker' && (
           <button
             onClick={() => setEditing(true)}
             className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-[11.5px] text-muted hover:text-[color:var(--text)]"
@@ -343,6 +350,10 @@ export default function Reports() {
         )}
       </div>
 
+      {tab === 'tracker' ? (
+        <DailyTracker />
+      ) : (
+      <>
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
@@ -384,6 +395,8 @@ export default function Reports() {
           onSave={saveMetrics}
           saving={saving}
         />
+      )}
+      </>
       )}
       {editing && data && (
         <EditTargets
