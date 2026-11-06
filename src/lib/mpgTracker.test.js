@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   phoneKey, cellText, sheetDate, yesNo, contactLabel, reachLabel, toTsv,
-  buildVisit, visitRow, zohoVisitNote, occurredAtFor, dayRange, newSinceCopy, readCopied, writeCopied, OUTCOMES,
+  buildVisit, visitRow, zohoVisitNote, occurredAtFor, dayRange, newSinceCopy, readCopied, writeCopied, OUTCOMES, promotionDefault,
 } from './mpgTracker'
 
 describe('phoneKey', () => {
@@ -241,5 +241,24 @@ describe('copy state with a throwing localStorage', () => {
 describe('OUTCOMES', () => {
   it('lists the five sheet outcomes in column order', () => {
     expect(OUTCOMES.map((o) => o.key)).toEqual(['dm_conversation', 'statement', 'demo_proposal', 'application', 'boarded'])
+  })
+})
+
+describe('promotionDefault', () => {
+  const o = (x = {}) => ({ dm_conversation: false, statement: false, demo_proposal: false, application: false, boarded: false, ...x })
+  it('off for Cold or unrated with no outcomes', () => {
+    expect(promotionDefault({ temperature: 'cold', outcomes: o() })).toEqual({ on: false, forced: false })
+    expect(promotionDefault({ temperature: null, outcomes: o() })).toEqual({ on: false, forced: false })
+  })
+  it('on for Hot or Warm', () => {
+    expect(promotionDefault({ temperature: 'warm', outcomes: o() })).toEqual({ on: true, forced: false })
+  })
+  it('on for a decision-maker conversation even when Cold', () => {
+    expect(promotionDefault({ temperature: 'cold', outcomes: o({ dm_conversation: true }) })).toEqual({ on: true, forced: false })
+  })
+  it('forced from statement on', () => {
+    for (const k of ['statement', 'demo_proposal', 'application', 'boarded']) {
+      expect(promotionDefault({ temperature: null, outcomes: o({ [k]: true }) })).toEqual({ on: true, forced: true })
+    }
   })
 })

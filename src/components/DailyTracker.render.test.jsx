@@ -25,6 +25,9 @@ const { default: Toaster } = await import('./Toaster')
 const dialogProps = []
 vi.mock('./LogVisitDialog', () => ({ default: (props) => { dialogProps.push(props); return React.createElement('div', null, 'EDIT DIALOG') } }))
 
+const promoteProps = []
+vi.mock('./ZohoPromote', () => ({ default: (props) => { promoteProps.push(props); return React.createElement('div', null, 'PROMOTE PANEL') } }))
+
 const touch = (id, business, createdAt) => ({
   id, channel: 'walk_in', occurred_at: '2026-11-05T18:00:00.000Z', created_at: createdAt,
   business_name: business, contact_label: 'Jimmy / Manager', reach_label: '+1 832 474 7707',
@@ -38,6 +41,7 @@ beforeEach(() => {
   localStorage.clear()
   DATA.pending = null
   dialogProps.length = 0
+  promoteProps.length = 0
   DATA.touches = [touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z')]
   writeText = vi.fn().mockResolvedValue()
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
@@ -161,5 +165,51 @@ describe('DailyTracker', () => {
     await act(async () => { row.click() })
     expect(document.body.textContent).toContain('EDIT DIALOG')
     expect(dialogProps.at(-1).touch.id).toBe('a')
+  })
+
+  describe('Zoho status', () => {
+    const withProspect = (t, extra) => ({ ...t, prospect_id: 'p-' + t.id, ...extra })
+
+    it('shows In Zoho for a promoted prospect or a linked contact, without Retry', async () => {
+      DATA.touches = [
+        withProspect(touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z'), { mpg_prospects: { status: 'promoted', zoho_wanted: true } }),
+        withProspect(touch('b', 'Feges BBQ', '2026-11-05T18:02:00.000Z'), { contact_id: 'c1', mpg_prospects: null }),
+      ]
+      await render()
+      expect(document.body.textContent.match(/In Zoho/g)).toHaveLength(2)
+      expect(button('Retry')).toBeUndefined()
+    })
+
+    it('shows Retry for a wanted, unpromoted row and mounts ZohoPromote with it', async () => {
+      DATA.touches = [withProspect(touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z'), { mpg_prospects: { status: 'open', zoho_wanted: true } })]
+      await render()
+      expect(document.body.textContent).toContain('Not in Zoho yet')
+      expect(document.body.textContent).not.toContain('In Zoho')
+      await act(async () => { button('Retry').click() })
+      expect(document.body.textContent).toContain('PROMOTE PANEL')
+      expect(document.querySelector('[role="dialog"][aria-modal="true"]')).not.toBeNull()
+      expect(promoteProps.at(-1).prospectId).toBe('p-a')
+      expect(promoteProps.at(-1).touch.id).toBe('a')
+      expect(document.body.textContent).not.toContain('EDIT DIALOG')
+    })
+
+    it('shows neither tag on a plain row', async () => {
+      DATA.touches = [withProspect(touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z'), { mpg_prospects: { status: 'open', zoho_wanted: false } }), touch('b', 'Feges BBQ', '2026-11-05T18:02:00.000Z')]
+      await render()
+      expect(document.body.textContent).not.toContain('Zoho')
+      expect(button('Retry')).toBeUndefined()
+    })
+
+    it('closes the modal on onDone and on Escape, and never nests buttons', async () => {
+      DATA.touches = [withProspect(touch('a', 'NJR Salons', '2026-11-05T18:01:00.000Z'), { mpg_prospects: { status: 'open', zoho_wanted: true } })]
+      await render()
+      expect(document.querySelectorAll('button button')).toHaveLength(0)
+      await act(async () => { button('Retry').click() })
+      await act(async () => { promoteProps.at(-1).onDone() })
+      expect(document.body.textContent).not.toContain('PROMOTE PANEL')
+      await act(async () => { button('Retry').click() })
+      await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+      expect(document.body.textContent).not.toContain('PROMOTE PANEL')
+    })
   })
 })
