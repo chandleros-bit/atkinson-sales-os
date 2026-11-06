@@ -133,7 +133,7 @@ export default function DailyTracker({ initialDay }) {
                   {zohoState(r) === 'retry' && (
                     <span className="flex items-center gap-1 px-1 text-[12px] text-muted">
                       Not in Zoho yet ·
-                      <button type="button" onClick={() => setRetrying(r)} className="min-h-[40px] rounded-[10px] px-2 text-[12px] font-semibold text-ink underline">Retry</button>
+                      <button type="button" onClick={() => setRetrying(r)} className="min-h-[40px] rounded-[10px] px-2 text-[12px] font-semibold underline">Retry</button>
                     </span>
                   )}
                 </li>
