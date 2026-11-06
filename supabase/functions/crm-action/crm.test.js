@@ -194,8 +194,25 @@ describe('zohoAdapter', () => {
       ])
     })
 
-    it('has a lead reader for the contact mirror', () => {
-      expect(typeof zohoAdapter(env()).read.lead).toBe('function')
+    it('findLeads throws on a 2xx COQL error body', async () => {
+      globalThis.fetch = zohoFetch(response(200, { code: 'INVALID_QUERY', message: 'bad', status: 'error' }))
+      await expect(zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme' })).rejects.toThrow(/Zoho COQL -> INVALID_QUERY: bad/)
+    })
+
+    it('findLeads throws on a code/message body without status', async () => {
+      globalThis.fetch = zohoFetch(response(200, { code: 'X', message: 'oops' }))
+      await expect(zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme' })).rejects.toThrow(/Zoho COQL -> X: oops/)
+    })
+
+    it('findLeads throws on an HTTP error', async () => {
+      globalThis.fetch = zohoFetch(response(400, { code: 'SYNTAX_ERROR' }))
+      await expect(zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme' })).rejects.toThrow()
+    })
+
+    it('reads a lead from Leads/<id>', async () => {
+      globalThis.fetch = zohoFetch(response(200, { data: [{ id: 'L1' }] }))
+      expect(await zohoAdapter(env()).read.lead('L1')).toEqual({ id: 'L1' })
+      expect(String(apiCall()[0])).toMatch(/Leads\/L1$/)
     })
   })
 })

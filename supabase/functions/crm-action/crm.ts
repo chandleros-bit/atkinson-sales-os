@@ -217,6 +217,11 @@ export function zohoAdapter(env, { db = null } = {}) {
         const q = findLeadsQuery({ phoneKey, company })
         if (!q) return []
         const json = await send('POST', 'coql', { select_query: q })
+        // A 2xx body that is an error must not read as "no matches": that would
+        // let a duplicate lead through. Only an empty body (204) means no rows.
+        if (json && (json.code || json.message || String(json.status).toLowerCase() === 'error')) {
+          throw new Error(`Zoho COQL -> ${json.code || 'ERROR'}: ${json.message || 'query rejected'}`)
+        }
         return matchLeads(json?.data || [], { phoneKey, company })
       },
       createLead: async (p) => ({ id: zohoCreatedId(await send('POST', 'Leads', buildPromotedLead(p))) }),

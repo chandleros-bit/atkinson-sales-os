@@ -9,21 +9,27 @@ const trimmed = (v) => (typeof v === 'string' ? v.trim() : '')
 
 export const coqlString = (s) => `'${String(s).replace(/'/g, "''")}'`
 
+// 10 digits from a phone: an optional leading 1 is dropped, and anything past
+// 10 digits (an extension) is ignored. null if there are fewer than 10.
 const tenDigits = (raw) => {
   let d = String(raw ?? '').replace(/\D/g, '')
-  if (d.length === 11 && d.startsWith('1')) d = d.slice(1)
-  return d.length === 10 ? d : null
+  if (d.length > 10 && d.startsWith('1')) d = d.slice(1)
+  return d.length >= 10 ? d.slice(0, 10) : null
 }
 const norm = (s) => trimmed(String(s ?? '')).replace(/\s+/g, ' ').toLowerCase()
 
 // COQL for leads that might be this business: same phone tail or same company.
 export function findLeadsQuery({ phoneKey, company }) {
   const parts = []
-  if (phoneKey) {
-    const tail = coqlString(`%${phoneKey.slice(-4)}`)
+  const phone = tenDigits(phoneKey)
+  if (phone) {
+    const tail = coqlString(`%${phone.slice(-4)}`)
     parts.push(`(Phone like ${tail} or Mobile like ${tail})`)
   }
-  if (trimmed(company)) parts.push(`Company = ${coqlString(trimmed(company))}`)
+  // Backslash handling in COQL strings is ambiguous, so such names are not
+  // searched by company; neither are names too long to be a real company.
+  const name = trimmed(company).replace(/\s+/g, ' ')
+  if (name && !name.includes('\\') && name.length <= 100) parts.push(`Company = ${coqlString(name)}`)
   if (!parts.length) return null
   return `select ${FIELDS} from Leads where (${parts.join(' or ')}) limit 50`
 }
@@ -32,8 +38,9 @@ export function findLeadsQuery({ phoneKey, company }) {
 // company ignoring case and spacing. -> picker-ready candidates.
 export function matchLeads(records, { phoneKey, company }) {
   const want = norm(company)
+  const phone = tenDigits(phoneKey)
   return (records || [])
-    .filter((r) => (phoneKey && (tenDigits(r.Phone) === phoneKey || tenDigits(r.Mobile) === phoneKey)) || (want && norm(r.Company) === want))
+    .filter((r) => (phone && (tenDigits(r.Phone) === phone || tenDigits(r.Mobile) === phone)) || (want && norm(r.Company) === want))
     .map((r) => ({
       id: String(r.id),
       company: r.Company || '',
@@ -57,8 +64,8 @@ export function buildPromotedLead({ business, contactName, role, phone, email, a
   const { firstName, lastName } = splitName(contactName)
   const lead = {}
   if (firstName) lead.First_Name = firstName
-  lead.Last_Name = lastName || company
-  lead.Company = company
+  lead.Last_Name = (lastName || company).slice(0, 80)
+  lead.Company = company.slice(0, 100)
   if (trimmed(phone)) lead.Phone = trimmed(phone)
   if (trimmed(email)) lead.Email = trimmed(email)
   if (trimmed(role)) lead.Designation = trimmed(role)
