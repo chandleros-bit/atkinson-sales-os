@@ -62,13 +62,17 @@ create table if not exists mpg_touches (
   application     boolean not null default false,
   boarded         boolean not null default false,
   isv_stage       text,
-  crm_action_id   uuid references crm_actions(id),
+  crm_action_id   uuid references crm_actions(id) on delete set null,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
 -- A touch whose prospect or contact was deleted keeps its snapshot text, so the
 -- subject check applies on insert only (enforced in the app), not as a constraint.
-create index if not exists mpg_touches_user_occurred on mpg_touches (user_id, occurred_at);
+-- The export reads one user, one channel and an occurred_at range.
+drop index if exists mpg_touches_user_occurred;
+create index if not exists mpg_touches_user_channel_occurred on mpg_touches (user_id, channel, occurred_at);
+create index if not exists mpg_touches_prospect on mpg_touches (prospect_id) where prospect_id is not null;
+create index if not exists mpg_touches_contact on mpg_touches (contact_id) where contact_id is not null;
 
 -- Own-row RLS on all three, same four policies as work_items.
 do $$
@@ -87,6 +91,37 @@ begin
     execute format('create policy "own %1$s delete" on %1$I for delete to authenticated using (user_id = auth.uid())', t);
   end loop;
 end $$;
+
+-- FK checks bypass RLS, so the generic insert/update policies above would let a
+-- user point a touch at another user's prospect, or a prospect at another user's
+-- list. Recreate those four policies with explicit ownership checks on the parent.
+drop policy if exists "own mpg_prospects insert" on mpg_prospects;
+create policy "own mpg_prospects insert" on mpg_prospects for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and (list_id is null or exists (select 1 from mpg_prospect_lists l where l.id = list_id and l.user_id = auth.uid()))
+  );
+drop policy if exists "own mpg_prospects update" on mpg_prospects;
+create policy "own mpg_prospects update" on mpg_prospects for update to authenticated
+  using (user_id = auth.uid())
+  with check (
+    user_id = auth.uid()
+    and (list_id is null or exists (select 1 from mpg_prospect_lists l where l.id = list_id and l.user_id = auth.uid()))
+  );
+
+drop policy if exists "own mpg_touches insert" on mpg_touches;
+create policy "own mpg_touches insert" on mpg_touches for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and (prospect_id is null or exists (select 1 from mpg_prospects p where p.id = prospect_id and p.user_id = auth.uid()))
+  );
+drop policy if exists "own mpg_touches update" on mpg_touches;
+create policy "own mpg_touches update" on mpg_touches for update to authenticated
+  using (user_id = auth.uid())
+  with check (
+    user_id = auth.uid()
+    and (prospect_id is null or exists (select 1 from mpg_prospects p where p.id = prospect_id and p.user_id = auth.uid()))
+  );
 
 create or replace function public.mpg_touch_log_touch()
 returns trigger
