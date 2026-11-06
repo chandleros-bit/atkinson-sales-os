@@ -16,12 +16,19 @@
 import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS, ASSISTANT_ACTIONS, ASSISTANT_REFUSED, ASSISTANT_BAYWAY_ONLY } from './plan.ts'
 import { isStageTarget } from '../_shared/bay-stages.ts'
 import { mapRelationship } from '../_shared/fub-relationships.ts'
+import { INITIAL_LEAD } from '../_shared/zoho-leads.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SOURCE_FOR = { bay: 'fub', mpg: 'zoho' }
 const BOOK_LABEL = { bay: 'Bayway', mpg: 'MPG' }
 const CRM_LABEL = { bay: 'FUB', mpg: 'Zoho' }
 const ON_CONFLICT = { onConflict: 'source_crm,external_id' }
+
+// Actions that make a lead, so they also need create_lead_enabled.
+const CREATES_LEAD = new Set(['create_contact', 'promote_prospect'])
+// A Zoho record id as the Leads API takes it in a path.
+const ZOHO_ID_RE = /^[A-Za-z0-9_-]{1,40}$/
+const PROSPECT_COLS = 'id, user_id, business_name, contact_name, contact_role, phone, phone_key, email, address, temperature, status, zoho_lead_id'
 
 const RELATIONSHIP_TTL_MS = 60 * 60_000
 const RELATIONSHIP_MAX = 25
@@ -55,8 +62,27 @@ async function dealMapFor(db, task) {
   return data ? new Map([[String(data.external_id), data.id]]) : new Map()
 }
 
+// An MPG walk-in and the visit that asked for it to go to Zoho. The function
+// runs with the service role, so RLS does not apply: these ownership checks
+// are the boundary. Anything not the caller's reads as not found.
+async function resolvePromotion(db, req, userId) {
+  if (!req.prospect_id || !req.touch_id) return { refuse: 'prospect_id and touch_id are required' }
+  const p = await db.from('mpg_prospects').select(PROSPECT_COLS).eq('id', req.prospect_id).maybeSingle()
+  if (p.error) throw new Error(`prospect lookup: ${p.error.message}`)
+  const t = await db.from('mpg_touches').select('id, user_id, prospect_id, temperature').eq('id', req.touch_id).maybeSingle()
+  if (t.error) throw new Error(`touch lookup: ${t.error.message}`)
+  const prospect = p.data
+  const touch = t.data
+  if (!userId || !prospect || !touch || prospect.user_id !== userId || touch.user_id !== userId || touch.prospect_id !== prospect.id) {
+    return { refuse: 'Prospect not found' }
+  }
+  if (prospect.status === 'promoted') return { refuse: 'Already in Zoho' }
+  return { target: { businessId: 'mpg', contact: null, task: null, prospect, touch } }
+}
+
 // Resolve the request onto our rows. Returns { target } or { refuse }.
-async function resolve(db, req) {
+async function resolve(db, req, userId) {
+  if (req.action === 'promote_prospect') return resolvePromotion(db, req, userId)
   // A new lead: no contact yet; the book comes with the request.
   if (req.action === 'create_contact') {
     if (!SOURCE_FOR[req.business_id]) return { refuse: `Unknown book: ${req.business_id}` }
@@ -123,6 +149,39 @@ function stageRefusal(businessId, contact, key) {
   return null
 }
 
+// Every refusal that is recorded on the crm_actions row, in order. null = go.
+async function refusalFor(db, req, target, isAssistant, adapters) {
+  const { businessId } = target
+  if (isAssistant && !ASSISTANT_ACTIONS.has(req.action)) return ASSISTANT_REFUSED
+  if (isAssistant && businessId !== 'bay') return ASSISTANT_BAYWAY_ONLY
+  if (!(await settingOn(db, 'writeback_enabled', businessId))) return `Write-back is off for ${BOOK_LABEL[businessId]}`
+  if (CREATES_LEAD.has(req.action) && !(await settingOn(db, 'create_lead_enabled', businessId))) {
+    return `New lead is off for ${BOOK_LABEL[businessId]}`
+  }
+  const pre = preflight(req, target)
+  if (pre) return pre
+  if (!adapters[businessId]) return `No ${CRM_LABEL[businessId] || businessId} adapter`
+  return null
+}
+
+// Read-only Zoho duplicate check for promote_prospect, before anything is
+// claimed. Returns a reply to send now, or null to go on (with
+// target.linkLeadId set when exactly one lead matched).
+async function searchBeforePromote(adapter, req, target) {
+  const p = req.payload || {}
+  if (p.link_lead_id || p.create_new || target.prospect.zoho_lead_id) return null
+  let candidates
+  try {
+    candidates = await adapter.send.findLeads({ phoneKey: target.prospect.phone_key, company: target.prospect.business_name })
+  } catch (e) {
+    return reply(200, { status: 'error', error: msg(e) })
+  }
+  candidates = Array.isArray(candidates) ? candidates : []
+  if (candidates.length > 1) return reply(200, { status: 'choose', candidates })
+  if (candidates.length === 1) target.linkLeadId = String(candidates[0].id)
+  return null
+}
+
 function preflight(req, target) {
   const { businessId, contact, task } = target
   if (contact && contact.source_crm !== SOURCE_FOR[businessId]) return 'Contact is not from this book\'s CRM'
@@ -138,6 +197,10 @@ function preflight(req, target) {
       if (!has('last_name')) return 'Zoho needs a last name for a new lead'
       if (!has('company')) return 'Zoho needs a company for a new lead'
     }
+  }
+  if (req.action === 'promote_prospect') {
+    const link = req.payload?.link_lead_id
+    if (link != null && link !== '' && !ZOHO_ID_RE.test(String(link))) return 'Unknown Zoho lead id'
   }
   if (TASK_ACTIONS.has(req.action) && task?.is_completed) return 'Task is already completed'
   if (req.action === 'log_call' && task?.is_completed) return 'That task is already completed'
@@ -166,6 +229,20 @@ async function send(adapter, step, target) {
       return adapter.send.addNote({ externalId: contact.external_id, subject: step.subject, body: step.body })
     case 'create_contact':
       return adapter.send.createContact(step.person)
+    case 'promote': {
+      // Link an existing lead (an "Initial lead" is opened), or create one.
+      if (target.linkLeadId) {
+        const id = String(target.linkLeadId)
+        const rec = await adapter.read.lead(id)
+        if (String(rec?.Lead_Status || '').trim().toLowerCase() === INITIAL_LEAD) await adapter.send.setLeadOpen({ externalId: id })
+        return { id, linked: true }
+      }
+      const { prospect } = target
+      return adapter.send.createLead({
+        business: prospect.business_name, contactName: prospect.contact_name, role: prospect.contact_role,
+        phone: prospect.phone, email: prospect.email, address: prospect.address,
+      })
+    }
     case 'create_task':
       return adapter.send.createTask({
         externalId: contact.external_id, title: step.title, type: step.type, dueDate: step.dueDate,
@@ -190,8 +267,8 @@ async function send(adapter, step, target) {
 async function mirror(db, adapter, step, out, target, now) {
   const { contact, task } = target
   const contactMap = contact ? new Map([[String(contact.external_id), contact.id]]) : new Map()
-  if (step.step === 'create_contact') {
-    // Read the new lead back and upsert it through the sync's own mapper, then
+  if (step.step === 'create_contact' || step.step === 'promote') {
+    // Read the new (or linked) lead back and upsert it through the sync's own mapper, then
     // make it the run's contact so the note step attaches to it.
     const rec = target.businessId === 'bay' ? await adapter.read.person(out.id) : await adapter.read.lead(out.id)
     const row = adapter.map.contact(rec)
@@ -233,6 +310,41 @@ async function mirror(db, adapter, step, out, target, now) {
     const { error } = await db.from('tasks').upsert(row, ON_CONFLICT)
     if (error) throw new Error(`tasks upsert: ${error.message}`)
   }
+}
+
+// After a promote that worked: mark the prospect promoted, point the touch at
+// the contact and this crm_actions row, and record the visit's temperature.
+// Zoho has the lead either way, so a failed write goes on the promote result
+// as mirror_error and leaves the run's status alone.
+async function bookkeepPromotion(db, req, target, result, userId, now) {
+  if (result?.step !== 'promote' || !result.ok) return
+  const at = now.toISOString()
+  const errors = []
+  const attempt = async (label, fn) => {
+    try {
+      const r = await fn()
+      if (r?.error) errors.push(`${label}: ${r.error.message}`)
+      return r
+    } catch (e) {
+      errors.push(`${label}: ${msg(e)}`)
+      return null
+    }
+  }
+  await attempt('mpg_prospects update', () => db.from('mpg_prospects')
+    .update({ zoho_lead_id: String(result.lead_id), status: 'promoted', promoted_at: at, zoho_wanted: false })
+    .eq('id', target.prospect.id).eq('user_id', userId))
+  const action = await attempt('crm_actions lookup', () => db.from('crm_actions').select('id').eq('client_action_id', req.client_action_id).maybeSingle())
+  await attempt('mpg_touches update', () => db.from('mpg_touches')
+    .update({ contact_id: target.contact?.id ?? null, crm_action_id: action?.data?.id ?? null })
+    .eq('id', target.touch.id).eq('user_id', userId))
+  const temperature = target.touch.temperature || target.prospect.temperature
+  if (temperature && target.contact) {
+    await attempt('lead_ratings upsert', () => db.from('lead_ratings').upsert(
+      { contact_id: target.contact.id, business_id: 'mpg', temperature, rated_at: at, rated_by: userId },
+      { onConflict: 'contact_id' },
+    ))
+  }
+  if (errors.length) result.mirror_error = [result.mirror_error, ...errors].filter(Boolean).join('; ')
 }
 
 export async function run(req, { db, adapters, allowedUserId, userId, role = null, now = new Date() }) {
@@ -328,10 +440,18 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
     return reply(200, { status: 'ok', synced, skipped, errors })
   }
 
-  const resolved = await resolve(db, req)
+  const resolved = await resolve(db, req, userId)
   if (resolved.refuse) return reply(200, { status: 'refused', error: resolved.refuse })
   const target = resolved.target
   const { businessId } = target
+
+  // promote_prospect searches Zoho before the claim, so "pick one" leaves no
+  // row. Only once the same checks the claim path runs have passed: a refused
+  // request never reaches Zoho (it is claimed and refused below instead).
+  if (req.action === 'promote_prospect' && !(await refusalFor(db, req, target, isAssistant, adapters))) {
+    const early = await searchBeforePromote(adapters[businessId], req, target)
+    if (early) return early
+  }
 
   const claimed = await claim(db, {
     client_action_id: req.client_action_id,
@@ -351,17 +471,13 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
     await finish(db, req.client_action_id, { status: 'refused', results: [{ step: req.action, ok: false, error }] })
     return reply(200, { status: 'refused', error })
   }
-  if (isAssistant && !ASSISTANT_ACTIONS.has(req.action)) return refuse(ASSISTANT_REFUSED)
-  if (isAssistant && businessId !== 'bay') return refuse(ASSISTANT_BAYWAY_ONLY)
-  if (!(await settingOn(db, 'writeback_enabled', businessId))) return refuse(`Write-back is off for ${BOOK_LABEL[businessId]}`)
-  if (req.action === 'create_contact' && !(await settingOn(db, 'create_lead_enabled', businessId))) {
-    return refuse(`New lead is off for ${BOOK_LABEL[businessId]}`)
-  }
-  const pre = preflight(req, target)
-  if (pre) return refuse(pre)
+  const refusal = await refusalFor(db, req, target, isAssistant, adapters)
+  if (refusal) return refuse(refusal)
 
   const adapter = adapters[businessId]
-  if (!adapter) return refuse(`No ${CRM_LABEL[businessId] || businessId} adapter`)
+  if (req.action === 'promote_prospect') {
+    target.linkLeadId = req.payload?.link_lead_id || target.prospect.zoho_lead_id || target.linkLeadId || null
+  }
 
   const results = []
   for (const step of planSteps(req)) {
@@ -381,6 +497,11 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
         result.mirror_error = msg(e)
       }
       if (step.step === 'create_contact' && target.contact) result.contact_id = target.contact.id
+      if (step.step === 'promote') {
+        if (target.contact) result.contact_id = target.contact.id
+        result.lead_id = out.id
+        result.linked = !!out.linked
+      }
     } catch (e) {
       result.ok = false
       result.error = msg(e)
@@ -400,10 +521,12 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
     if (shouldStop(step.step, result.ok)) break
   }
 
+  if (req.action === 'promote_prospect') await bookkeepPromotion(db, req, target, results[0], userId, now)
+
   const status = overallStatus(results)
   const patch = { status, results }
-  // A new lead: point the audit row at the contact it made.
-  if (req.action === 'create_contact' && target.contact) patch.contact_id = target.contact.id
+  // A new (or promoted) lead: point the audit row at the contact.
+  if (CREATES_LEAD.has(req.action) && target.contact) patch.contact_id = target.contact.id
   await finish(db, req.client_action_id, patch)
   return reply(200, { status, results })
 }
