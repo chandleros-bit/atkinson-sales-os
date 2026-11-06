@@ -30,6 +30,13 @@ describe('cellText', () => {
     expect(cellText('-15% fee')).toBe(' -15% fee')
     expect(cellText('@owner')).toBe(' @owner')
   })
+  it('keeps a leading double quote from opening a quoted field', () => {
+    expect(cellText('"Best BBQ" says owner')).toBe(' "Best BBQ" says owner')
+  })
+  it('treats vertical tabs and other line separators as breaks', () => {
+    expect(cellText('a\u2028b\vc')).toBe('a · b · c')
+    expect(cellText('a\fb\u0085c\u2029d')).toBe('a · b · c · d')
+  })
   it('trims ordinary text', () => {
     expect(cellText('  Feges BBQ ')).toBe('Feges BBQ')
   })
@@ -139,6 +146,8 @@ describe('buildVisit', () => {
     expect(touch).not.toHaveProperty('contact_id')
     expect(touch).not.toHaveProperty('prospect_id')
     expect(touch).not.toHaveProperty('channel')
+    expect(touch.business_name).toBe('Feges BBQ')
+    expect(touch.occurred_at).toBe(NOW.toISOString())
   })
   it('allows no rating and no follow-up', () => {
     const { touch } = buildVisit({ ...baseForm, temperature: null, followUpOn: '' }, NOW)
@@ -150,6 +159,8 @@ describe('buildVisit', () => {
     expect(() => buildVisit({ ...baseForm, business: null }, NOW)).toThrow('Pick or type the business')
     expect(() => buildVisit({ ...baseForm, dayKey: '' }, NOW)).toThrow('Pick the visit date')
     expect(() => buildVisit({ ...baseForm, dayKey: '2026-11-06' }, NOW)).toThrow('The visit date is in the future')
+    expect(() => buildVisit({ ...baseForm, dayKey: '2026-02-31' }, NOW)).toThrow('Pick the visit date')
+    expect(() => buildVisit({ ...baseForm, followUpOn: '2026-13-05' }, NOW)).toThrow('Follow-up date is not a date')
     expect(() => buildVisit({ ...baseForm, followUpOn: '11/10' }, NOW)).toThrow('Follow-up date is not a date')
     expect(() => buildVisit({ ...baseForm, temperature: 'lukewarm' }, NOW)).toThrow('Pick Hot, Warm or Cold')
   })
@@ -206,6 +217,20 @@ describe('copy state', () => {
     const storage = { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') } }
     expect(readCopied('2026-11-05', 'visits', storage)).toBe(null)
     expect(() => writeCopied('2026-11-05', 'visits', 'x', storage)).not.toThrow()
+  })
+})
+
+describe('copy state with a throwing localStorage', () => {
+  it('does not throw when touching localStorage itself throws', () => {
+    const had = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw new Error('SecurityError') } })
+    try {
+      expect(readCopied('2026-11-05', 'visits')).toBe(null)
+      expect(() => writeCopied('2026-11-05', 'visits', 'x')).not.toThrow()
+    } finally {
+      if (had) Object.defineProperty(globalThis, 'localStorage', had)
+      else delete globalThis.localStorage
+    }
   })
 })
 

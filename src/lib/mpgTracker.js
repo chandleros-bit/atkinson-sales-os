@@ -13,11 +13,12 @@ export function phoneKey(raw) {
 }
 
 // One pasted cell. Tabs/line breaks would split the paste into extra cells, and
-// Excel evaluates text starting with = + - @ as a formula ("+1 832…" too).
+// Excel evaluates text starting with = + - @ as a formula ("+1 832…" too), and a
+// leading " opens a quoted field that can swallow the tabs and breaks after it.
 export function cellText(v) {
   if (v == null) return ''
-  let s = String(v).replace(/[\t\r\n]+/g, ' · ').trim()
-  if (/^[=+\-@]/.test(s)) s = ` ${s}`
+  let s = String(v).replace(/[\t\r\n\v\f\u0085\u2028\u2029]+/g, ' · ').trim()
+  if (/^[=+\-@"]/.test(s)) s = ` ${s}`
   return s
 }
 
@@ -62,6 +63,14 @@ export const TEMPERATURES = [
 const TEMP_LABEL = Object.fromEntries(TEMPERATURES.map((t) => [t.key, t.label]))
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/
 
+// True when a YYYY-MM-DD key is a real calendar day (rejects 2026-02-31).
+function isRealDay(key) {
+  if (!DAY_KEY.test(key || '')) return false
+  const { y, m, d } = parseDayKey(key)
+  const dt = new Date(y, m - 1, d)
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
+}
+
 function parseDayKey(key) {
   const [y, m, d] = key.split('-').map(Number)
   return { y, m, d }
@@ -89,10 +98,10 @@ export function buildVisit(form, now = new Date()) {
   const b = form?.business
   const name = trimmed(b?.name)
   if (!b || !name) throw new Error('Pick or type the business')
-  if (!DAY_KEY.test(form.dayKey || '')) throw new Error('Pick the visit date')
+  if (!isRealDay(form.dayKey)) throw new Error('Pick the visit date')
   if (form.dayKey > localDateKey(now)) throw new Error('The visit date is in the future')
   const follow = trimmed(form.followUpOn)
-  if (follow && !DAY_KEY.test(follow)) throw new Error('Follow-up date is not a date')
+  if (follow && !isRealDay(follow)) throw new Error('Follow-up date is not a date')
   const temperature = form.temperature || null
   if (temperature && !TEMP_LABEL[temperature]) throw new Error('Pick Hot, Warm or Cold')
 
@@ -167,16 +176,18 @@ export function newSinceCopy(rows, copiedAtIso) {
 // When a block was copied, per day, in this browser only (a convenience: losing
 // it just means no "copied" hint). storage defaults to localStorage.
 const copyKey = (dayKey, block) => `mpg-tracker-copied:${dayKey}:${block}`
-export function readCopied(dayKey, block, storage = globalThis.localStorage) {
+export function readCopied(dayKey, block, storage) {
   try {
-    return storage?.getItem(copyKey(dayKey, block)) ?? null
+    const s = storage ?? globalThis.localStorage
+    return s?.getItem(copyKey(dayKey, block)) ?? null
   } catch {
     return null
   }
 }
-export function writeCopied(dayKey, block, iso, storage = globalThis.localStorage) {
+export function writeCopied(dayKey, block, iso, storage) {
   try {
-    storage?.setItem(copyKey(dayKey, block), iso)
+    const s = storage ?? globalThis.localStorage
+    s?.setItem(copyKey(dayKey, block), iso)
   } catch {
     // private window or blocked storage: the hint is optional
   }
