@@ -4,3 +4,11 @@
 -- Retry" for these. crm-action promote_prospect clears it on success.
 alter table public.mpg_prospects
   add column if not exists zoho_wanted boolean not null default false;
+
+-- promoting_at: a short lease while crm-action promote_prospect runs for this
+-- prospect, so two promotions at once (the auto-promote after Log visit and a
+-- Retry, or two devices) can't both create a Zoho lead. Taken atomically
+-- when it is null or older than 2 minutes; given back (null) when the run
+-- ends, however it ends.
+alter table public.mpg_prospects
+  add column if not exists promoting_at timestamptz;

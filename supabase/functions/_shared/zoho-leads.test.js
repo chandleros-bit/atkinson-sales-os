@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coqlString, findLeadsQuery, matchLeads, buildPromotedLead, splitName, INITIAL_LEAD } from './zoho-leads.ts'
+import { coqlString, findLeadsQuery, matchLeads, buildPromotedLead, splitName } from './zoho-leads.ts'
 
 describe('coqlString', () => {
   it('quotes and doubles single quotes', () => {
@@ -103,8 +103,4 @@ describe('buildPromotedLead', () => {
   it('needs a business', () => {
     expect(() => buildPromotedLead({ business: ' ' })).toThrow('A Zoho lead needs a company')
   })
-})
-
-it('INITIAL_LEAD is the status the OS hides', () => {
-  expect(INITIAL_LEAD).toBe('initial lead')
 })

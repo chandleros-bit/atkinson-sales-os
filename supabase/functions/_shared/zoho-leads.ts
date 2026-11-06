@@ -3,7 +3,6 @@
 // COQL escapes a single quote by doubling it; `\'` is a syntax error (checked
 // live 2026-11-06). Company '=' is case-insensitive in Zoho.
 
-export const INITIAL_LEAD = 'initial lead' // lower-cased Lead_Status the OS hides (0044)
 const FIELDS = 'id, Company, First_Name, Last_Name, Phone, Mobile, Lead_Status'
 const trimmed = (v) => (typeof v === 'string' ? v.trim() : '')
 

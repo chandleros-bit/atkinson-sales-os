@@ -16,7 +16,7 @@
 import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS, ASSISTANT_ACTIONS, ASSISTANT_REFUSED, ASSISTANT_BAYWAY_ONLY } from './plan.ts'
 import { isStageTarget } from '../_shared/bay-stages.ts'
 import { mapRelationship } from '../_shared/fub-relationships.ts'
-import { INITIAL_LEAD } from '../_shared/zoho-leads.ts'
+import { isExcludedLead } from '../_shared/zoho.ts'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SOURCE_FOR = { bay: 'fub', mpg: 'zoho' }
@@ -29,6 +29,10 @@ const CREATES_LEAD = new Set(['create_contact', 'promote_prospect'])
 // A Zoho record id as the Leads API takes it in a path.
 const ZOHO_ID_RE = /^[A-Za-z0-9_-]{1,40}$/
 const PROSPECT_COLS = 'id, user_id, business_name, contact_name, contact_role, phone, phone_key, email, address, temperature, status, zoho_lead_id'
+// mpg_prospects.promoting_at (0061): one promotion of a prospect at a time.
+const LEASE_MS = 2 * 60_000
+const PROMOTION_BUSY = 'Already adding this business to Zoho'
+const BAD_LEAD_ID = 'Unknown Zoho lead id'
 
 const RELATIONSHIP_TTL_MS = 60 * 60_000
 const RELATIONSHIP_MAX = 25
@@ -199,8 +203,11 @@ function preflight(req, target) {
     }
   }
   if (req.action === 'promote_prospect') {
-    const link = req.payload?.link_lead_id
-    if (link != null && link !== '' && !ZOHO_ID_RE.test(String(link))) return 'Unknown Zoho lead id'
+    // The lead the run would link, where we know it already (a search match
+    // is checked in the promote step).
+    const p = req.payload || {}
+    const link = p.link_lead_id || (p.create_new ? null : target.prospect?.zoho_lead_id)
+    if (link && !ZOHO_ID_RE.test(String(link))) return BAD_LEAD_ID
   }
   if (TASK_ACTIONS.has(req.action) && task?.is_completed) return 'Task is already completed'
   if (req.action === 'log_call' && task?.is_completed) return 'That task is already completed'
@@ -233,8 +240,11 @@ async function send(adapter, step, target) {
       // Link an existing lead (an "Initial lead" is opened), or create one.
       if (target.linkLeadId) {
         const id = String(target.linkLeadId)
+        // Whatever the id came from (request, prospect, search), it goes in a
+        // Zoho URL path.
+        if (!ZOHO_ID_RE.test(id)) throw new Error(BAD_LEAD_ID)
         const rec = await adapter.read.lead(id)
-        if (String(rec?.Lead_Status || '').trim().toLowerCase() === INITIAL_LEAD) await adapter.send.setLeadOpen({ externalId: id })
+        if (isExcludedLead(rec)) await adapter.send.setLeadOpen({ externalId: id })
         return { id, linked: true }
       }
       const { prospect } = target
@@ -312,27 +322,36 @@ async function mirror(db, adapter, step, out, target, now) {
   }
 }
 
-// After a promote that worked: mark the prospect promoted, point the touch at
-// the contact and this crm_actions row, and record the visit's temperature.
-// Zoho has the lead either way, so a failed write goes on the promote result
-// as mirror_error and leaves the run's status alone.
-async function bookkeepPromotion(db, req, target, result, userId, now) {
-  if (result?.step !== 'promote' || !result.ok) return
-  const at = now.toISOString()
-  const errors = []
-  const attempt = async (label, fn) => {
+// Promotion bookkeeping. Zoho has the lead either way, so a failed write goes
+// on the promote result as mirror_error and leaves the run's status alone.
+function attemptInto(result) {
+  const note = (e) => { result.mirror_error = result.mirror_error ? `${result.mirror_error}; ${e}` : e }
+  return async (label, fn) => {
     try {
       const r = await fn()
-      if (r?.error) errors.push(`${label}: ${r.error.message}`)
+      if (r?.error) note(`${label}: ${r.error.message}`)
       return r
     } catch (e) {
-      errors.push(`${label}: ${msg(e)}`)
+      note(`${label}: ${msg(e)}`)
       return null
     }
   }
-  await attempt('mpg_prospects update', () => db.from('mpg_prospects')
-    .update({ zoho_lead_id: String(result.lead_id), status: 'promoted', promoted_at: at, zoho_wanted: false })
+}
+
+// Right after the promote step: the prospect is in Zoho now, whatever the
+// note and follow-up steps do.
+async function markPromoted(db, target, result, userId, now) {
+  await attemptInto(result)('mpg_prospects update', () => db.from('mpg_prospects')
+    .update({ zoho_lead_id: String(result.lead_id), status: 'promoted', promoted_at: now.toISOString(), zoho_wanted: false })
     .eq('id', target.prospect.id).eq('user_id', userId))
+}
+
+// At the end of a run whose promote worked: point the touch at the contact
+// and this crm_actions row, and record the visit's temperature.
+async function bookkeepPromotion(db, req, target, result, userId, now) {
+  if (result?.step !== 'promote' || !result.ok) return
+  const at = now.toISOString()
+  const attempt = attemptInto(result)
   const action = await attempt('crm_actions lookup', () => db.from('crm_actions').select('id').eq('client_action_id', req.client_action_id).maybeSingle())
   await attempt('mpg_touches update', () => db.from('mpg_touches')
     .update({ contact_id: target.contact?.id ?? null, crm_action_id: action?.data?.id ?? null })
@@ -344,8 +363,40 @@ async function bookkeepPromotion(db, req, target, result, userId, now) {
       { onConflict: 'contact_id' },
     ))
   }
-  if (errors.length) result.mirror_error = [result.mirror_error, ...errors].filter(Boolean).join('; ')
 }
+
+// Take the prospect's promotion lease: one atomic update that only matches
+// when no other promotion holds it (null, or older than LEASE_MS). Returns
+// { stamp } (null when someone else holds it) or { error }.
+async function takeLease(db, prospect, userId, now) {
+  const stamp = now.toISOString()
+  const stale = new Date(now.getTime() - LEASE_MS).toISOString()
+  const { data, error } = await db.from('mpg_prospects')
+    .update({ promoting_at: stamp })
+    .eq('id', prospect.id)
+    .eq('user_id', userId)
+    .neq('status', 'promoted')
+    .or(`promoting_at.is.null,promoting_at.lt.${stale}`)
+    .select('id')
+  if (error) return { error: `promotion lease: ${error.message}` }
+  return { stamp: Array.isArray(data) && data.length ? stamp : null }
+}
+
+// Give it back, only if it is still ours.
+async function releaseLease(db, prospect, userId, stamp) {
+  try {
+    const { error } = await db.from('mpg_prospects')
+      .update({ promoting_at: null })
+      .eq('id', prospect.id)
+      .eq('user_id', userId)
+      .eq('promoting_at', stamp)
+    if (error) console.error(`promotion lease release failed for ${prospect.id}: ${error.message}`)
+  } catch (e) {
+    console.error(`promotion lease release failed for ${prospect.id}: ${msg(e)}`)
+  }
+}
+
+const replayOf = (r) => reply(200, { status: r?.status || 'pending', results: r?.results || [], replay: true })
 
 export async function run(req, { db, adapters, allowedUserId, userId, role = null, now = new Date() }) {
   // Chandler is ALLOWED_USER_ID; the assistant login is a user_roles 'assistant'.
@@ -440,15 +491,45 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
     return reply(200, { status: 'ok', synced, skipped, errors })
   }
 
+  // The same promotion submitted again replays what it did, before the
+  // prospect's own state ("Already in Zoho") would refuse it.
+  if (req.action === 'promote_prospect') {
+    const { data: prior } = await db
+      .from('crm_actions')
+      .select('status, results, request, user_id')
+      .eq('client_action_id', req.client_action_id)
+      .maybeSingle()
+    if (prior && prior.user_id === userId) return replayOf(prior)
+  }
+
   const resolved = await resolve(db, req, userId)
   if (resolved.refuse) return reply(200, { status: 'refused', error: resolved.refuse })
   const target = resolved.target
+
+  // promote_prospect: once the checks the claim path runs have passed (a
+  // refused request is claimed and refused below instead, and never reaches
+  // Zoho), take the prospect's lease so a second promotion can't make a
+  // second lead, then search Zoho before the claim. The lease is given back
+  // however the run ends.
+  let lease = null
+  if (req.action === 'promote_prospect' && !(await refusalFor(db, req, target, isAssistant, adapters))) {
+    lease = await takeLease(db, target.prospect, userId, now)
+    if (lease.error) return reply(200, { status: 'error', error: lease.error })
+    if (!lease.stamp) return reply(200, { status: 'busy', error: PROMOTION_BUSY })
+  }
+  try {
+    return await perform({ db, adapters, req, target, userId, isAssistant, now, leased: !!lease })
+  } finally {
+    if (lease?.stamp) await releaseLease(db, target.prospect, userId, lease.stamp)
+  }
+}
+
+// Claim -> refusals -> steps -> mirror -> record, for a resolved request.
+async function perform({ db, adapters, req, target, userId, isAssistant, now, leased }) {
   const { businessId } = target
 
-  // promote_prospect searches Zoho before the claim, so "pick one" leaves no
-  // row. Only once the same checks the claim path runs have passed: a refused
-  // request never reaches Zoho (it is claimed and refused below instead).
-  if (req.action === 'promote_prospect' && !(await refusalFor(db, req, target, isAssistant, adapters))) {
+  // "Pick one" and a failed search leave no crm_actions row.
+  if (leased) {
     const early = await searchBeforePromote(adapters[businessId], req, target)
     if (early) return early
   }
@@ -462,10 +543,7 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
     task_id: target.task?.id || null,
     request: req,
   })
-  if (claimed.replay) {
-    const r = claimed.replay || {}
-    return reply(200, { status: r.status || 'pending', results: r.results || [], replay: true })
-  }
+  if (claimed.replay) return replayOf(claimed.replay)
 
   const refuse = async (error) => {
     await finish(db, req.client_action_id, { status: 'refused', results: [{ step: req.action, ok: false, error }] })
@@ -476,7 +554,9 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
 
   const adapter = adapters[businessId]
   if (req.action === 'promote_prospect') {
-    target.linkLeadId = req.payload?.link_lead_id || target.prospect.zoho_lead_id || target.linkLeadId || null
+    // A chosen lead wins; create_new skips the stored lead and the search.
+    const p = req.payload || {}
+    target.linkLeadId = p.link_lead_id || (p.create_new ? null : target.prospect.zoho_lead_id || target.linkLeadId) || null
   }
 
   const results = []
@@ -501,6 +581,7 @@ export async function run(req, { db, adapters, allowedUserId, userId, role = nul
         if (target.contact) result.contact_id = target.contact.id
         result.lead_id = out.id
         result.linked = !!out.linked
+        await markPromoted(db, target, result, userId, now)
       }
     } catch (e) {
       result.ok = false
