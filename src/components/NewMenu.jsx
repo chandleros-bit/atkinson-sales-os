@@ -36,10 +36,9 @@ export default function NewMenu({ onBeforePick }) {
         onPick={(kind) => {
           if (kind === 'task') return setNewTaskOpen(true)
           if (kind === 'lead') return setNewLeadOpen(true)
-          if (kind === 'visit') {
-            onBeforePick?.()
-            return setVisitOpen(true)
-          }
+          // Like task and lead: no onBeforePick, or the phone drawer closes and
+          // unmounts this menu along with the dialog.
+          if (kind === 'visit') return setVisitOpen(true)
           onBeforePick?.()
           openSearch({ pick: kind })
         }}

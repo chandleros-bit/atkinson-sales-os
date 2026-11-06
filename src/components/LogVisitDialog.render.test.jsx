@@ -213,3 +213,16 @@ describe('LogVisitDialog', () => {
     expect(byLabel('Phone').value).toBe('')
   })
 })
+
+describe('LogVisitDialog: Escape', () => {
+  it('closes itself and stops the keydown reaching a parent window listener', async () => {
+    const onClose = vi.fn()
+    const parent = vi.fn()
+    window.addEventListener('keydown', parent)
+    await render(React.createElement(LogVisitDialog, { onClose }))
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    window.removeEventListener('keydown', parent)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(parent).not.toHaveBeenCalled()
+  })
+})

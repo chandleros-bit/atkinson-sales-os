@@ -35,11 +35,11 @@ vi.mock('./LogVisitDialog', () => ({ default: () => React.createElement('div', {
 
 const { default: NewMenu } = await import('./NewMenu')
 
-async function open() {
+async function open(props = {}) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   await act(async () => {
-    createRoot(host).render(React.createElement(NewMenu))
+    createRoot(host).render(React.createElement(NewMenu, props))
   })
   await act(async () => {})
   await act(async () => document.querySelector('button[aria-haspopup="menu"]').click())
@@ -77,5 +77,13 @@ describe('NewMenu: Log visit…', () => {
     await open()
     expect(labels()).not.toContain('Log visit…')
     expect(labels()).not.toContain('Log call…')
+  })
+
+  it('does not call onBeforePick (the phone drawer would unmount the dialog)', async () => {
+    const onBeforePick = vi.fn()
+    await open({ onBeforePick })
+    await act(async () => [...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Log visit…').click())
+    expect(onBeforePick).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-visit-dialog]')).not.toBe(null)
   })
 })
