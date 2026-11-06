@@ -102,30 +102,93 @@ describe('ZohoPromote', () => {
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 
-  it('error: toast with Retry that runs the promotion again', async () => {
+  it('error: stays in view with Try again; onDone only on Close', async () => {
     reply({ status: 'error', error: 'Zoho down' })
     const onDone = await mount()
     expect(document.body.textContent).toContain('Not in Zoho yet: Zoho down')
-    expect(onDone).toHaveBeenCalledWith({ ok: false })
-    await click(button('Retry'))
+    expect(onDone).not.toHaveBeenCalled()
+    await click(button('Try again'))
     await wait()
     expect(invoke).toHaveBeenCalledTimes(2)
+    expect(onDone).toHaveBeenCalledTimes(1)
+    expect(onDone).toHaveBeenCalledWith({ ok: true, contactId: 'c1' })
   })
 
-  it('refused: error toast with Retry', async () => {
+  it('error then Close calls onDone once, not ok', async () => {
     reply({ status: 'refused', error: 'Turned off' })
     const onDone = await mount()
     expect(document.body.textContent).toContain('Not in Zoho yet: Turned off')
-    expect(button('Retry')).toBeTruthy()
+    await click(button('Close'))
+    expect(onDone).toHaveBeenCalledTimes(1)
     expect(onDone).toHaveBeenCalledWith({ ok: false })
   })
 
-  it('busy: partial toast, no Retry, done not ok', async () => {
+  it('error after picking a candidate returns to the list with the error; resend keeps note and follow-up', async () => {
+    reply({ status: 'choose', candidates: CANDS })
+    reply({ status: 'error', error: 'link failed' })
+    const onDone = await mount()
+    await click(button('Feges Barbecue'))
+    await wait()
+    expect(document.body.textContent).toContain('link failed')
+    expect(button('Feges BBQ')).toBeTruthy()
+    expect(button('Create a new lead')).toBeTruthy()
+    expect(onDone).not.toHaveBeenCalled()
+    await click(button('Feges BBQ'))
+    await wait()
+    const first = invoke.mock.calls[0][1].body.payload
+    const resend = invoke.mock.calls[2][1].body.payload
+    expect(resend.link_lead_id).toBe('z1')
+    expect(resend.note).toBe(first.note)
+    expect(resend.follow_up).toEqual(first.follow_up)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('error after Create a new lead returns to the list', async () => {
+    reply({ status: 'choose', candidates: CANDS })
+    reply({ status: 'error', error: 'create failed' })
+    await mount()
+    await click(button('Create a new lead'))
+    await wait()
+    expect(document.body.textContent).toContain('create failed')
+    expect(button('Feges BBQ')).toBeTruthy()
+  })
+
+  it('choose shows phone and status on a second line and focuses the first candidate', async () => {
+    reply({ status: 'choose', candidates: CANDS })
+    await mount()
+    expect(document.querySelector('[role="group"][aria-label="Possible Zoho matches"]')).toBeTruthy()
+    expect(button('Feges BBQ').textContent).toContain('555-111-2222 · Contacted')
+    expect(document.activeElement).toBe(button('Feges BBQ'))
+  })
+
+  it('running line is a status', async () => {
+    invoke.mockReturnValueOnce(new Promise(() => {}))
+    await mount()
+    expect(document.querySelector('[role="status"]').textContent).toContain('Adding to Zoho')
+  })
+
+  it('busy: message with Close, no retry', async () => {
     reply({ status: 'busy', error: 'Already adding this business to Zoho' })
     const onDone = await mount()
     expect(document.body.textContent).toContain('Already being added to Zoho — check again in a minute')
-    expect(button('Retry')).toBeFalsy()
+    expect(button('Try again')).toBeFalsy()
+    expect(onDone).not.toHaveBeenCalled()
+    await click(button('Close'))
+    expect(onDone).toHaveBeenCalledTimes(1)
     expect(onDone).toHaveBeenCalledWith({ ok: false })
+  })
+
+  it('sends a single request under StrictMode', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const onDone = vi.fn()
+    await act(async () => {
+      createRoot(host).render(React.createElement(React.StrictMode, null,
+        React.createElement(ZohoPromote, { prospectId: 'p1', touch: TOUCH, onDone })))
+    })
+    await wait(20)
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(onDone).toHaveBeenCalledTimes(1)
   })
 
   it('refused "Already in Zoho" counts as success', async () => {
@@ -133,6 +196,7 @@ describe('ZohoPromote', () => {
     const onDone = await mount()
     expect(document.body.textContent).toContain('Already in Zoho')
     expect(button('Retry')).toBeFalsy()
+    expect(onDone).toHaveBeenCalledTimes(1)
     expect(onDone).toHaveBeenCalledWith({ ok: true })
   })
 })

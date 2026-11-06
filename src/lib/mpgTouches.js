@@ -47,15 +47,15 @@ export async function saveVisit({ prospect, touch, zohoWanted = false }) {
     row = { ...touch, prospect_id: data.id }
   }
   if (!row.prospect_id && !row.contact_id) return { data: null, error: { message: 'A visit needs a business' } }
-  // An existing prospect: remember the wish to promote. The visit is saved
-  // either way, so an error here is ignored.
-  if (!prospect && zohoWanted && row.prospect_id) {
-    await supabase.from('mpg_prospects').update({ zoho_wanted: true }).eq('id', row.prospect_id)
-  }
   const res = await supabase.from('mpg_touches').insert(row).select('*').single()
   // A new prospect was inserted but the touch failed: hand back its id so a
   // retried Save reuses it instead of inserting a duplicate.
   if (res.error && prospect) return { data: null, error: res.error, prospectId: row.prospect_id }
+  // An existing prospect: remember the wish to promote, only once the visit is
+  // saved and never on an already promoted prospect. An error here is ignored.
+  if (!res.error && !prospect && zohoWanted && row.prospect_id) {
+    await supabase.from('mpg_prospects').update({ zoho_wanted: true }).eq('id', row.prospect_id).neq('status', 'promoted')
+  }
   return res
 }
 
