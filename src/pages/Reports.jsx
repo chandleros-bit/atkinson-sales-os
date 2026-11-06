@@ -14,6 +14,7 @@ import { fetchLoanBundle } from '../lib/loansData'
 import { loanStats, DEFAULT_RATES } from '../lib/loans'
 import { prevMonthWindow } from '../lib/overviewDash'
 import PageHeader from '../components/PageHeader'
+import DailyTracker from '../components/DailyTracker'
 
 const TABS = [
   { key: 'daily', label: 'Daily' },
@@ -21,6 +22,7 @@ const TABS = [
   { key: 'monthly', label: 'Monthly' },
   { key: 'revenue', label: 'Revenue' },
   { key: 'sprint', label: 'Sprint' },
+  { key: 'tracker', label: 'Daily tracker', biz: 'mpg' },
 ]
 
 const PACE_STYLE = {
@@ -202,6 +204,9 @@ export default function Reports() {
 
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
+  const tabs = TABS.filter((t) => !t.biz || t.biz === biz)
+  // Leaving the MPG view while on its tracker falls back to Daily.
+  const activeTab = tabs.some((t) => t.key === tab) ? tab : 'daily'
 
   const load = useCallback(async () => {
     if (isDemoMode) {
@@ -276,7 +281,7 @@ export default function Reports() {
     const entries = Object.entries(draft).filter(([, v]) => v !== '' && v != null)
     if (entries.length === 0 || biz === 'all' || isDemoMode) return
     setSaving(true)
-    const date = periodDateFor(tab)
+    const date = periodDateFor(activeTab)
     const rows = entries.map(([metric_key, v]) => ({
       business_id: biz, date, metric_key, value: Number(v),
     }))
@@ -305,10 +310,10 @@ export default function Reports() {
   }
 
   const cards = useMemo(() => {
-    if (!data) return []
-    const values = computeValues(tab, biz, data)
-    return buildTabModel(metricsForTab(tab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
-  }, [tab, biz, data])
+    if (!data || activeTab === 'tracker') return []
+    const values = computeValues(activeTab, biz, data)
+    return buildTabModel(metricsForTab(activeTab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
+  }, [activeTab, biz, data])
 
   return (
     <div>
@@ -319,21 +324,21 @@ export default function Reports() {
 
       <div className="mt-5 flex items-end justify-between border-b border-line">
         <div role="tablist" className="flex gap-1">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.key}
               role="tab"
-              aria-selected={tab === t.key}
+              aria-selected={activeTab === t.key}
               onClick={() => setTab(t.key)}
               className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${
-                tab === t.key ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
+                activeTab === t.key ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
               }`}
             >
               {t.label}
             </button>
           ))}
         </div>
-        {!isDemoMode && (
+        {!isDemoMode && activeTab !== 'tracker' && (
           <button
             onClick={() => setEditing(true)}
             className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-[11.5px] text-muted hover:text-[color:var(--text)]"
@@ -343,6 +348,10 @@ export default function Reports() {
         )}
       </div>
 
+      {activeTab === 'tracker' ? (
+        <DailyTracker />
+      ) : (
+      <>
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
@@ -355,7 +364,7 @@ export default function Reports() {
       )}
       {loading && <div className="mt-6 text-sm text-muted">Loading scoreboard…</div>}
       {!loading && !error && <CardGrid cards={cards} />}
-      {!loading && !error && data && tab === 'daily' && (() => {
+      {!loading && !error && data && activeTab === 'daily' && (() => {
         const manualSeries = dailySeries(
           biz === 'all' ? data.series : data.series.filter((r) => r.business_id === biz),
           'calls', todayKey(), 7,
@@ -373,10 +382,10 @@ export default function Reports() {
       })()}
       {!loading && !error && data && (
         <LogMetrics
-          key={`${tab}-${biz}`}
-          tab={tab}
+          key={`${activeTab}-${biz}`}
+          tab={activeTab}
           biz={biz}
-          values={computeValues(tab, biz, data)}
+          values={computeValues(activeTab, biz, data)}
           syncedCalls={(() => {
             const rows = biz === 'all' ? data.callRows : data.callRows.filter((r) => r.business_id === biz)
             return callsByDay(rows)[todayKey()] || 0
@@ -385,9 +394,11 @@ export default function Reports() {
           saving={saving}
         />
       )}
+      </>
+      )}
       {editing && data && (
         <EditTargets
-          tab={tab}
+          tab={activeTab}
           biz={biz}
           targets={data.targets}
           onClose={() => setEditing(false)}
