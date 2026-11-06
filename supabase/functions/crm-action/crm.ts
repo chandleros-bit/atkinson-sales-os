@@ -17,6 +17,7 @@ import { getAccessToken, zohoGet, zohoSend, mapContact as zohoMapContact } from 
 import {
   buildZohoCall, buildZohoNote, buildZohoTask, buildZohoTaskUpdate, buildZohoLead, zohoCreatedId,
 } from '../_shared/zoho-write.ts'
+import { findLeadsQuery, matchLeads, buildPromotedLead } from '../_shared/zoho-leads.ts'
 import { mapActivity as zohoMapActivity } from '../_shared/zoho-activity.ts'
 import { mapTask as zohoMapTask } from '../_shared/zoho-tasks.ts'
 
@@ -210,6 +211,20 @@ export function zohoAdapter(env, { db = null } = {}) {
       createContact: async ({ firstName, lastName, company, phone, email }) => ({
         id: zohoCreatedId(await send('POST', 'Leads', buildZohoLead({ firstName, lastName, company, phone, email }))),
       }),
+      // Read-only duplicate check before a promotion (COQL). 204 = no rows
+      // (zohoSend turns an empty body into {}).
+      findLeads: async ({ phoneKey, company }) => {
+        const q = findLeadsQuery({ phoneKey, company })
+        if (!q) return []
+        const json = await send('POST', 'coql', { select_query: q })
+        return matchLeads(json?.data || [], { phoneKey, company })
+      },
+      createLead: async (p) => ({ id: zohoCreatedId(await send('POST', 'Leads', buildPromotedLead(p))) }),
+      // Only ever sets Open, on an "Initial lead" being linked.
+      setLeadOpen: async ({ externalId }) => {
+        await send('PUT', `Leads/${externalId}`, { data: [{ Lead_Status: 'Open' }] })
+        return { id: String(externalId) }
+      },
     },
     read: {
       lead: (id) => readOne(`Leads/${id}`),
