@@ -11,6 +11,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const invoke = vi.fn()
 const inserted = []
+const updated = []
+const state = { failTouches: 0 }
 const DATA = { contacts: [], prospects: [], writeback: { bay: true, mpg: true } }
 
 function query(table) {
@@ -18,9 +20,18 @@ function query(table) {
   for (const m of ['select', 'eq', 'neq', 'or', 'ilike', 'gte', 'lt', 'order', 'limit']) q[m] = () => q
   q.insert = (row) => {
     inserted.push({ table, row })
+    if (table === 'mpg_touches' && state.failTouches > 0) {
+      state.failTouches -= 1
+      return { select: () => ({ single: async () => ({ data: null, error: { message: 'touch insert failed' } }) }) }
+    }
     const id = table === 'mpg_prospects' ? 'p-new' : 't-new'
     return { select: () => ({ single: async () => ({ data: { id, ...row }, error: null }) }) }
   }
+  q.update = (patch) => {
+    updated.push(patch)
+    return q
+  }
+  q.single = async () => ({ data: { id: 't1' }, error: null })
   q.maybeSingle = async () => (table === 'settings' ? { data: { value: DATA.writeback }, error: null } : { data: null, error: null })
   q.then = (resolve) => resolve({
     data: table === 'contacts' ? DATA.contacts : table === 'mpg_prospects' ? DATA.prospects : [],
@@ -41,6 +52,8 @@ const { resetWritebackFlags } = await import('../lib/writeback')
 beforeEach(() => {
   document.body.innerHTML = ''
   inserted.length = 0
+  updated.length = 0
+  state.failTouches = 0
   DATA.contacts = []
   DATA.prospects = []
   DATA.writeback = { bay: true, mpg: true }
@@ -133,5 +146,70 @@ describe('LogVisitDialog', () => {
     await wait(50)
     expect(inserted).toHaveLength(0)
     expect(document.body.textContent).toContain('Pick or type the business')
+  })
+
+  it('Retry resends only the failed Zoho task, not the note', async () => {
+    invoke.mockReset()
+    invoke.mockResolvedValueOnce({ data: { status: 'ok' }, error: null })
+      .mockResolvedValueOnce({ data: { status: 'error', error: 'boom' }, error: null })
+    invoke.mockResolvedValue({ data: { status: 'ok' }, error: null })
+    await render(React.createElement(LogVisitDialog, {
+      onClose: () => {},
+      preset: { type: 'contact', id: 'c1', name: 'NJR Salons' },
+    }))
+    await type(byLabel('Follow-up date'), '2026-12-01')
+    await click(button('Save visit'))
+    await wait(50)
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent).toContain('boom')
+    await click(button('Retry'))
+    await wait(50)
+    expect(invoke).toHaveBeenCalledTimes(3)
+    expect(invoke.mock.calls[2][1].body.action).toBe('create_task')
+  })
+
+  it('a retried Save after a failed touch insert reuses the inserted prospect', async () => {
+    state.failTouches = 1
+    await render(React.createElement(LogVisitDialog, { onClose: () => {} }))
+    await type(byLabel('Business'), 'Feges BBQ')
+    await wait()
+    await click(button('Add new business'))
+    await click(button('Save visit'))
+    await wait(50)
+    await click(button('Save visit'))
+    await wait(50)
+    expect(inserted.map((i) => i.table)).toEqual(['mpg_prospects', 'mpg_touches', 'mpg_touches'])
+    expect(inserted[2].row.prospect_id).toBe('p-new')
+  })
+
+  const TOUCH = {
+    id: 't9', business_name: 'NJR Salons', contact_id: 'c1', occurred_at: new Date(2026, 10, 3, 9, 30).toISOString(),
+    contact_label: 'Jimmy / Owner', reach_label: '832-474-7707 / a@b.com', notes: 'old', next_step: null,
+    follow_up_on: null, temperature: null,
+  }
+
+  it('edit mode keeps the original time, splits phone and email, and writes no Zoho', async () => {
+    await render(React.createElement(LogVisitDialog, { onClose: () => {}, touch: TOUCH }))
+    expect(byLabel('Phone').value).toBe('832-474-7707')
+    expect(byLabel('Email').value).toBe('a@b.com')
+    await type(byLabel('Notes'), 'new')
+    await click(button('Save visit'))
+    await wait(50)
+    expect(updated).toHaveLength(1)
+    expect('occurred_at' in updated[0]).toBe(false)
+    expect(updated[0].notes).toBe('new')
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('Change clears the contact fields', async () => {
+    await render(React.createElement(LogVisitDialog, { onClose: () => {} }))
+    await type(byLabel('Business'), 'Feges BBQ')
+    await wait()
+    await click(button('Add new business'))
+    await type(byLabel('Contact name'), 'Patrick')
+    await type(byLabel('Phone'), '555')
+    await click(button('Change'))
+    expect(byLabel('Contact name').value).toBe('')
+    expect(byLabel('Phone').value).toBe('')
   })
 })

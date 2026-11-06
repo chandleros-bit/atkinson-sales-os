@@ -2,14 +2,14 @@
 // business that is already a Zoho lead also drops a Zoho note (and a follow-up
 // task). Promotion of new businesses to Zoho comes in slice 2.
 // Spec: docs/superpowers/specs/2026-11-05-mpg-tracker-touch-log-design.md
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { buildVisit, zohoVisitNote, OUTCOMES, TEMPERATURES } from '../lib/mpgTracker'
 import { searchMpgBusinesses, saveVisit, updateTouch, deleteTouch, notifyTouchesChanged } from '../lib/mpgTouches'
 import { localDateKey, buildActionRequest } from '../lib/crmActions'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { showToast } from './Toaster'
 
-const INPUT = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px] text-[color:var(--text)]'
+const INPUT = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[16px] sm:text-[13px] text-[color:var(--text)]'
 const LABEL = 'mb-1 block text-[12px] font-semibold text-muted'
 
 function splitLabel(label) {
@@ -26,25 +26,28 @@ function emptyForm(now) {
 
 function formFromTouch(t) {
   const { name, role } = splitLabel(t.contact_label)
+  const parts = String(t.reach_label || '').split(' / ').map((x) => x.trim()).filter(Boolean)
+  const email = parts.find((x) => x.includes('@')) || ''
+  const phone = parts.find((x) => !x.includes('@')) || ''
   return {
-    dayKey: localDateKey(new Date(t.occurred_at)), contactName: name, role, phone: t.reach_label || '', email: '',
+    dayKey: localDateKey(new Date(t.occurred_at)), contactName: name, role, phone, email,
     notes: t.notes || '', nextStep: t.next_step || '', followUpOn: t.follow_up_on || '',
     temperature: t.temperature, outcomes: Object.fromEntries(OUTCOMES.map((o) => [o.key, !!t[o.key]])),
   }
 }
 
-async function writeZoho(contactId, touch, followUpOn, nextStep) {
-  const requests = [buildActionRequest({ action: 'add_note', contactId, subject: 'Walk-in', body: zohoVisitNote(touch) })]
-  if (followUpOn) {
-    requests.push(buildActionRequest({ action: 'create_task', contactId, dueDate: followUpOn, title: nextStep || 'Follow up', type: 'Follow Up' }))
-  }
-  for (const req of requests) {
+// forms: the objects passed to buildActionRequest. Sent in order; on failure
+// Retry resends only the failed form and those after it (each rebuilt, so it
+// gets a fresh client_action_id).
+async function writeZoho(forms) {
+  for (let i = 0; i < forms.length; i++) {
+    const req = buildActionRequest(forms[i])
     const res = await invokeCrmAction(req)
     if (res?.status !== 'ok') {
       showToast({
         tone: 'error',
-        text: `Visit saved, but the Zoho ${req.action === 'add_note' ? 'note' : 'task'} failed: ${res?.error || 'unknown error'}`,
-        retry: () => writeZoho(contactId, touch, followUpOn, nextStep),
+        text: `Visit saved, but the Zoho ${forms[i].action === 'add_note' ? 'note' : 'task'} failed: ${res?.error || 'unknown error'}`,
+        retry: () => writeZoho(forms.slice(i)),
       })
       return
     }
@@ -63,6 +66,7 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
   const [results, setResults] = useState([])
   const [problem, setProblem] = useState(null)
   const [saving, setSaving] = useState(false)
+  const downOnBackdrop = useRef(false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   useEffect(() => {
@@ -86,7 +90,7 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
 
   function pick(b) {
     setBusiness(b)
-    setForm((f) => ({ ...f, contactName: b.contactName || f.contactName, role: b.role || f.role, phone: b.phone || f.phone, email: b.email || f.email }))
+    setForm((f) => ({ ...f, contactName: b.contactName || '', role: b.role || '', phone: b.phone || '', email: b.email || '' }))
   }
 
   async function save() {
@@ -99,8 +103,10 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
       return
     }
     setSaving(true)
-    const { error } = touch ? await updateTouch(touch.id, built.touch) : await saveVisit(built)
+    if (touch && form.dayKey === localDateKey(new Date(touch.occurred_at))) delete built.touch.occurred_at
+    const { error, prospectId } = touch ? await updateTouch(touch.id, built.touch) : await saveVisit(built)
     setSaving(false)
+    if (prospectId) setBusiness({ type: 'prospect', id: prospectId, name: business.name })
     if (error) {
       setProblem(error.message)
       return
@@ -109,7 +115,14 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
     showToast({ tone: 'ok', text: touch ? 'Visit updated' : 'Visit logged' })
     onClose()
     if (!touch && business.type === 'contact' && writeback.mpg === true) {
-      await writeZoho(business.id, built.touch, built.touch.follow_up_on, built.touch.next_step)
+      const forms = [{ action: 'add_note', contactId: business.id, subject: 'Walk-in', body: zohoVisitNote(built.touch) }]
+      if (built.touch.follow_up_on) {
+        forms.push({
+          action: 'create_task', contactId: business.id, dueDate: built.touch.follow_up_on,
+          title: built.touch.next_step || 'Follow up', type: 'Follow Up',
+        })
+      }
+      await writeZoho(forms)
     }
   }
 
@@ -123,9 +136,13 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" 
+      onMouseDown={(e) => { downOnBackdrop.current = e.target === e.currentTarget }}
+      onClick={(e) => { if (downOnBackdrop.current && e.target === e.currentTarget) onClose() }}
+    >
       <div
         role="dialog"
+        aria-modal="true"
         aria-label={touch ? 'Edit visit' : 'Log visit'}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card"
@@ -159,25 +176,28 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
           <div className="mb-3 flex items-center justify-between rounded-[10px] border border-line2 px-3 py-2 text-[13px]">
             <span className="truncate font-semibold">{business.name}</span>
             {!touch && !preset && (
-              <button type="button" onClick={() => setBusiness(null)} className="text-[12px] text-muted hover:text-[color:var(--text)]">Change</button>
+              <button type="button" onClick={() => {
+                  setBusiness(null)
+                  setForm((f) => ({ ...f, contactName: '', role: '', phone: '', email: '' }))
+                }} className="text-[12px] text-muted hover:text-[color:var(--text)]">Change</button>
             )}
           </div>
         )}
 
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <label className={LABEL}>Visit date<input type="date" className={INPUT} value={form.dayKey} onChange={set('dayKey')} /></label>
-          <label className={LABEL}>Follow-up date<input type="date" className={INPUT} value={form.followUpOn} onChange={set('followUpOn')} /></label>
-          <label className={LABEL}>Contact name<input className={INPUT} value={form.contactName} onChange={set('contactName')} /></label>
-          <label className={LABEL}>Role<input className={INPUT} value={form.role} onChange={set('role')} /></label>
-          <label className={LABEL}>Phone<input type="tel" className={INPUT} value={form.phone} onChange={set('phone')} /></label>
-          <label className={LABEL}>Email<input type="email" className={INPUT} value={form.email} onChange={set('email')} /></label>
+          <label className={`${LABEL} min-w-0`}>Visit date<input type="date" className={INPUT} value={form.dayKey} onChange={set('dayKey')} /></label>
+          <label className={`${LABEL} min-w-0`}>Follow-up date<input type="date" className={INPUT} value={form.followUpOn} onChange={set('followUpOn')} /></label>
+          <label className={`${LABEL} min-w-0`}>Contact name<input className={INPUT} value={form.contactName} onChange={set('contactName')} /></label>
+          <label className={`${LABEL} min-w-0`}>Role<input className={INPUT} value={form.role} onChange={set('role')} /></label>
+          <label className={`${LABEL} min-w-0`}>Phone<input type="tel" className={INPUT} value={form.phone} onChange={set('phone')} /></label>
+          <label className={`${LABEL} min-w-0`}>Email<input type="email" className={INPUT} value={form.email} onChange={set('email')} /></label>
         </div>
         <label className={`${LABEL} mt-3`}>Notes<textarea rows={3} className={INPUT} value={form.notes} onChange={set('notes')} /></label>
         <label className={`${LABEL} mt-3`}>Next step<input className={INPUT} value={form.nextStep} onChange={set('nextStep')} /></label>
 
         <div className="mt-3">
           <div className={LABEL}>Prospect quality</div>
-          <div className="flex gap-2">
+          <div role="group" aria-label="Prospect quality" className="flex gap-2">
             {TEMPERATURES.map((t) => (
               <button
                 key={t.key}
@@ -205,11 +225,11 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
           ))}
         </div>
 
-        {problem && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{problem}</div>}
+        {problem && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{problem}</div>}
 
         <div className="mt-4 flex gap-2">
           {touch && (
-            <button type="button" onClick={remove} className="min-h-[44px] rounded-[10px] border border-line2 px-4 text-[13px] text-muted">Delete</button>
+            <button type="button" disabled={saving} onClick={remove} className="min-h-[44px] rounded-[10px] border border-line2 px-4 text-[13px] text-muted">Delete</button>
           )}
           <button type="button" disabled={saving} onClick={save} className="btn-primary min-h-[44px] flex-1 rounded-[10px] text-[14px] font-semibold">
             {saving ? 'Saving…' : 'Save visit'}

@@ -47,7 +47,11 @@ export async function saveVisit({ prospect, touch }) {
     row = { ...touch, prospect_id: data.id }
   }
   if (!row.prospect_id && !row.contact_id) return { data: null, error: { message: 'A visit needs a business' } }
-  return supabase.from('mpg_touches').insert(row).select('*').single()
+  const res = await supabase.from('mpg_touches').insert(row).select('*').single()
+  // A new prospect was inserted but the touch failed: hand back its id so a
+  // retried Save reuses it instead of inserting a duplicate.
+  if (res.error && prospect) return { data: null, error: res.error, prospectId: row.prospect_id }
+  return res
 }
 
 export async function updateTouch(id, patch) {
