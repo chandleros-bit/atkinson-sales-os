@@ -6,9 +6,14 @@ import { visitRow, toTsv, newSinceCopy, readCopied, writeCopied, OUTCOMES } from
 import { fetchTouchesForDay, onTouchesChanged } from '../lib/mpgTouches'
 import { localDateKey } from '../lib/crmActions'
 import LogVisitDialog from './LogVisitDialog'
+import ZohoPromote from './ZohoPromote'
 import { showToast } from './Toaster'
 
 const clock = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+const zohoState = (r) => {
+  if (r.contact_id || r.mpg_prospects?.status === 'promoted') return 'in'
+  return r.mpg_prospects?.zoho_wanted ? 'retry' : null
+}
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export default function DailyTracker({ initialDay }) {
@@ -18,6 +23,20 @@ export default function DailyTracker({ initialDay }) {
   const [copiedAt, setCopiedAt] = useState(null)
   const [fallback, setFallback] = useState(null)
   const [editing, setEditing] = useState(null)
+  const [retrying, setRetrying] = useState(null) // the touch whose Zoho promotion is being retried
+  const closeRetry = useCallback(() => setRetrying(null), [])
+
+  useEffect(() => {
+    if (!retrying) return undefined
+    // Capture phase + stopPropagation, like LogVisitDialog: Esc closes only this modal.
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      closeRetry()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [retrying, closeRetry])
 
   const requestId = useRef(0)
   const load = useCallback(async () => {
@@ -103,13 +122,20 @@ export default function DailyTracker({ initialDay }) {
             <div className="mt-1 text-[12px] text-dim">Click the first empty yellow cell in column A of Chandler Visits, then paste.</div>
             <ul className="mt-3 divide-y divide-line">
               {rows.map((r) => (
-                <li key={r.id}>
-                  <button type="button" onClick={() => setEditing(r)} className="flex min-h-[44px] w-full items-center gap-2 px-1 text-left text-[13px] hover:bg-hoverbg">
+                <li key={r.id} className="flex flex-wrap items-center gap-x-2">
+                  <button type="button" onClick={() => setEditing(r)} className="flex min-h-[44px] min-w-0 flex-1 basis-48 items-center gap-2 px-1 text-left text-[13px] hover:bg-hoverbg">
                     <span className="min-w-0 truncate font-semibold">{r.business_name}</span>
                     {r.contact_label && <span className="min-w-0 truncate text-muted">· {r.contact_label}</span>}
                     {r.temperature && <span className="text-muted">· {r.temperature[0].toUpperCase() + r.temperature.slice(1)}</span>}
                     <span className="ml-auto min-w-0 truncate text-[12px] text-dim">{OUTCOMES.filter((o) => r[o.key]).map((o) => o.label).join(', ')}</span>
                   </button>
+                  {zohoState(r) === 'in' && <span className="px-1 text-[12px] font-semibold text-green-700">In Zoho</span>}
+                  {zohoState(r) === 'retry' && (
+                    <span className="flex items-center gap-1 px-1 text-[12px] text-muted">
+                      Not in Zoho yet ·
+                      <button type="button" onClick={() => setRetrying(r)} className="min-h-[40px] rounded-[10px] px-2 text-[12px] font-semibold text-ink underline">Retry</button>
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -117,6 +143,17 @@ export default function DailyTracker({ initialDay }) {
         )}
         {fallback && <textarea readOnly rows={4} value={fallback} className="mt-3 w-full rounded-[10px] border border-line2 bg-panel p-2 font-mono text-[11px]" onFocus={(e) => e.target.select()} />}
       </div>
+      {retrying && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={(e) => { if (e.target === e.currentTarget) closeRetry() }}>
+          <div role="dialog" aria-modal="true" aria-label="Add to Zoho" className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="text-[15px] font-bold">Add to Zoho</div>
+              <button type="button" onClick={closeRetry} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">✕</button>
+            </div>
+            <ZohoPromote prospectId={retrying.prospect_id} touch={retrying} onDone={closeRetry} />
+          </div>
+        </div>
+      )}
       {editing && <LogVisitDialog touch={editing} onClose={() => setEditing(null)} />}
     </section>
   )
