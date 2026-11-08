@@ -104,10 +104,20 @@ The current refresh token is read-only. Repeat steps 1–3 of
 `docs/phase5-zoho-setup.md` with this scope (least privilege, not `modules.ALL`):
 
 ```
-ZohoCRM.modules.READ,ZohoCRM.settings.READ,ZohoCRM.modules.Calls.CREATE,ZohoCRM.modules.Notes.CREATE,ZohoCRM.modules.Tasks.CREATE,ZohoCRM.modules.Tasks.UPDATE
+ZohoCRM.modules.READ,ZohoCRM.settings.READ,ZohoCRM.coql.READ,ZohoCRM.modules.Calls.CREATE,ZohoCRM.modules.Notes.CREATE,ZohoCRM.modules.Tasks.CREATE,ZohoCRM.modules.Tasks.UPDATE,ZohoCRM.modules.Leads.CREATE,ZohoCRM.modules.Leads.UPDATE
 ```
 
-and set the new `ZOHO_REFRESH_TOKEN`. The syncs keep working, since the new
+and set the new `ZOHO_REFRESH_TOKEN`.
+
+What each added scope is for:
+
+- `ZohoCRM.coql.READ`: the duplicate search before an MPG prospect is
+  promoted (Log visit "Add to Zoho as Open", Daily tracker Retry). Without it
+  the promotion stops with `401 OAUTH_SCOPE_MISMATCH` before anything is
+  written.
+- `ZohoCRM.modules.Leads.CREATE`: + New lead (MPG) and creating the promoted
+  lead.
+- `ZohoCRM.modules.Leads.UPDATE`: setting a linked "Initial lead" to Open. The syncs keep working, since the new
 token still includes READ.
 
 Also confirm the sync user's Zoho **profile** can create Calls (Setup → Users
