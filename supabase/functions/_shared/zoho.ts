@@ -116,7 +116,18 @@ export async function zohoSend(apiHost, accessToken, method, path, body, { sleep
     { sleep },
   )
   const text = await res.text()
-  if (!res.ok) throw new Error(`Zoho ${method} ${path} -> ${res.status}: ${text.slice(0, 300)}`)
+  if (!res.ok) {
+    // The refresh token was authorized without the scope this call needs (e.g.
+    // ZohoCRM.coql.READ for the promotion search). Only a re-authorization
+    // fixes it, so say so instead of passing on Zoho's raw JSON.
+    if (res.status === 401 && text.includes('OAUTH_SCOPE_MISMATCH')) {
+      throw new Error(
+        `Zoho ${method} ${path} -> 401: OAUTH_SCOPE_MISMATCH. The Zoho login is missing the permission this needs. ` +
+          'Re-authorize Zoho with the scopes in docs/phase-writeback-setup.md, step 7.',
+      )
+    }
+    throw new Error(`Zoho ${method} ${path} -> ${res.status}: ${text.slice(0, 300)}`)
+  }
   let json = {}
   try {
     json = text ? JSON.parse(text) : {}

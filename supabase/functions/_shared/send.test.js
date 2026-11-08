@@ -115,4 +115,10 @@ describe('zohoSend', () => {
     await expect(zohoSend('https://api.example', 'tok', 'POST', 'Calls', {}))
       .rejects.toThrow('Zoho POST Calls -> 401: OAUTH_SCOPE_MISMATCH')
   })
+
+  it('names the fix when the token lacks a scope', async () => {
+    globalThis.fetch = vi.fn(async () => response(401, { code: 'OAUTH_SCOPE_MISMATCH', details: {}, message: 'invalid oauth scope to access this URL', status: 'error' }))
+    await expect(zohoSend('https://api.example', 'tok', 'POST', 'coql', {}))
+      .rejects.toThrow(/Zoho POST coql -> 401: OAUTH_SCOPE_MISMATCH.*Re-authorize Zoho.*phase-writeback-setup\.md/)
+  })
 })
