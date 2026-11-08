@@ -248,8 +248,9 @@ var endOfDay = (now) => {
   d.setHours(23, 59, 59, 999);
   return d.getTime();
 };
-function buildDialList(rows, { now = Date.now(), skips = /* @__PURE__ */ new Set(), inBook = () => true } = {}) {
-  const items = (rows || []).map((r) => dialItem(r, now)).filter((i) => i && inBook(i.book) && !skips.has(i.id) && i.dueAt <= endOfDay(now));
+var PAUSED_KINDS = /* @__PURE__ */ new Set(["nurture", "cold"]);
+function buildDialList(rows, { now = Date.now(), skips = /* @__PURE__ */ new Set(), inBook = () => true, paused = PAUSED_KINDS } = {}) {
+  const items = (rows || []).map((r) => dialItem(r, now)).filter((i) => i && !paused.has(i.kind) && inBook(i.book) && !skips.has(i.id) && i.dueAt <= endOfDay(now));
   const dueNow = items.filter((i) => i.dueAt <= now).sort(
     (a, b) => (a.hint === "speed to lead" ? 0 : 1) - (b.hint === "speed to lead" ? 0 : 1) || temperatureRank(a.row) - temperatureRank(b.row) || b.dueAt - a.dueAt
   );
