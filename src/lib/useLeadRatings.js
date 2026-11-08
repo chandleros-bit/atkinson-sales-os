@@ -7,6 +7,7 @@ import { supabase, isDemoMode } from './supabase'
 import { fetchAllSettled } from './fetchAll'
 import { invokeCrmAction } from './writeback'
 import { buildActionRequest } from './crmActions'
+import { friendlyError } from './friendlyError'
 
 const STALE_MS = 60_000
 let store = { ratings: new Map(), at: 0, error: null }
@@ -58,7 +59,7 @@ export function refreshRatings() {
       }
       store = res.error ? { ...store, error: res.error.message, at: Date.now() } : { ratings: toRatingMap(res.data), error: null, at: Date.now() }
     } catch (e) {
-      store = { ...store, error: String(e?.message || e), at: Date.now() }
+      store = { ...store, error: friendlyError(e), at: Date.now() }
     } finally {
       inflight = null
       emit()

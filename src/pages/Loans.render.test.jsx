@@ -153,7 +153,8 @@ describe('Loans page', () => {
     expect(pill('This month').getAttribute('aria-pressed')).toBe('true')
     expect(panel.textContent).toContain('UWM')
     expect(panel.textContent).not.toContain('Newfi')
-    expect(panel.querySelector('[role="img"]').getAttribute('aria-label')).toContain('UWM 1')
+    // One lender is the whole ring, so no chart: the count says it.
+    expect(panel.querySelector('[role="img"]')).toBeNull()
   })
 
   it('draws the lender ring only when loans funded in the period', async () => {

@@ -2,6 +2,7 @@
 // (docs/superpowers/specs/2026-10-30-arive-loans-import-design.md).
 // Panels mirror Arive's dashboard; maths in lib/loans.js.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Segmented from '../components/Segmented'
 import { isDemoMode } from '../lib/supabase'
 import { timeAgo } from '../lib/syncHealth'
 import { showToast } from '../components/Toaster'
@@ -70,8 +71,8 @@ function Panel({ title, note, right, panel, children }) {
     <section data-panel={panel} className="rounded-card border border-line bg-panel p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h3 className="text-[14px] font-semibold">{title}</h3>
-          {note && <span className="truncate text-[12px] text-muted">{note}</span>}
+          <h3 className="text-ui font-semibold">{title}</h3>
+          {note && <span className="truncate text-caption text-muted">{note}</span>}
         </div>
         {right}
       </div>
@@ -80,17 +81,8 @@ function Panel({ title, note, right, panel, children }) {
   )
 }
 
-function PeriodPills({ label, options, value, onChange }) {
-  return (
-    <div role="group" aria-label={label} className="flex gap-1">
-      {options.map(([k, text]) => (
-        <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}
-          className={`min-h-[26px] whitespace-nowrap rounded-full border px-3 text-[12px] ${value === k ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted'}`}>
-          {text}
-        </button>
-      ))}
-    </div>
-  )
+function PeriodPills(props) {
+  return <Segmented size="sm" {...props} />
 }
 
 // Until any loan has application_on there is only "Now"; then YTD and This
@@ -98,8 +90,13 @@ function PeriodPills({ label, options, value, onChange }) {
 function PipelineStatus({ loans, hasDates }) {
   const [period, setPeriod] = useState('now')
   const active = hasDates ? period : 'now'
-  const groups = pipelineStatus(inPeriod(loans, 'application_on', periodWindow(active)))
-  const max = Math.max(1, ...groups.flatMap((g) => g.rows.map((r) => r.count)))
+  const [showEmpty, setShowEmpty] = useState(false)
+  const all = pipelineStatus(inPeriod(loans, 'application_on', periodWindow(active)))
+  const max = Math.max(1, ...all.flatMap((g) => g.rows.map((r) => r.count)))
+  // Most of the 17 stages are empty on any day: show the ones holding loans,
+  // with the rest one click away.
+  const empty = all.reduce((n, g) => n + g.rows.filter((r) => !r.count).length, 0)
+  const groups = showEmpty ? all : all.map((g) => ({ ...g, rows: g.rows.filter((r) => r.count) })).filter((g) => g.rows.length)
   return (
     <Panel
       title="Pipeline Status"
@@ -107,13 +104,13 @@ function PipelineStatus({ loans, hasDates }) {
       note={hasDates ? (active === 'now' ? 'Now' : `Applications · ${periodLabel(active)}`) : null}
       right={hasDates
         ? <PeriodPills label="Pipeline Status period" options={PIPELINE_PERIODS} value={active} onChange={setPeriod} />
-        : <span className="text-[12px] text-muted">Now · add Application Date for YTD</span>}
+        : <span className="text-caption text-muted">Now · add Application Date for YTD</span>}
     >
       {groups.map((g) => (
         <div key={g.key} className="mb-3">
-          <div className="mb-1 text-[12.5px] font-semibold">{g.label}</div>
+          <div className="mb-1 text-body font-semibold">{g.label}</div>
           {g.rows.map((r) => (
-            <div key={r.stage} data-stage={r.stage} className="grid grid-cols-[minmax(0,1.6fr)_28px_56px_minmax(24px,0.8fr)] items-center gap-2 text-[12.5px]">
+            <div key={r.stage} data-stage={r.stage} className="grid grid-cols-[minmax(0,1.6fr)_28px_56px_minmax(24px,0.8fr)] items-center gap-2 text-body">
               <span className="whitespace-normal leading-tight text-muted">{r.stage}</span>
               <span className="num text-right">{r.count}</span>
               <span className="num text-right text-muted">{fmtMoney(r.amount)}</span>
@@ -122,6 +119,12 @@ function PipelineStatus({ loans, hasDates }) {
           ))}
         </div>
       ))}
+      {groups.length === 0 && <p className="mb-3 text-body text-muted">No loans in any stage.</p>}
+      {empty > 0 && (
+        <button type="button" onClick={() => setShowEmpty((v) => !v)} className="text-caption font-semibold text-link">
+          {showEmpty ? 'Hide empty stages' : `Show ${empty} empty ${empty === 1 ? 'stage' : 'stages'}`}
+        </button>
+      )}
     </Panel>
   )
 }
@@ -159,18 +162,19 @@ function LenderSpread({ loans }) {
       right={<PeriodPills label="Lender Spread period" options={LENDER_PERIODS} value={period} onChange={setPeriod} />}
     >
       {s.total === 0 ? (
-        <p className="text-[12.5px] text-muted">No funded loans in this period.</p>
+        <p className="text-body text-muted">No funded loans in this period.</p>
       ) : (
         <div className="flex items-center gap-4">
-          <LenderRing rows={s.rows} total={s.total} />
+          {/* One lender is the whole ring: skip the chart, the count says it. */}
+          {s.rows.length > 1 && <LenderRing rows={s.rows} total={s.total} />}
           <div className="flex min-w-0 flex-wrap gap-x-6 gap-y-2">
             {s.rows.map((r, i) => (
               <div key={r.lender} className="min-w-0">
-                <div className="flex items-center gap-1.5 text-[11.5px] uppercase tracking-wide text-muted">
+                <div className="flex items-center gap-1.5 text-caption uppercase tracking-wide text-muted">
                   <span aria-hidden="true" className="inline-block h-2 w-2 shrink-0 rounded-sm" style={{ background: RING_COLORS[i % RING_COLORS.length] }} />
                   <span className="truncate">{r.lender}</span>
                 </div>
-                <div className="num text-[24px] font-light">{r.count}</div>
+                <div className="num text-title font-light">{r.count}</div>
               </div>
             ))}
           </div>
@@ -192,8 +196,8 @@ function LoansFunded({ loans }) {
       panel="loans-funded"
       right={<PeriodPills label="Loans Funded year" options={years} value={String(year)} onChange={(k) => setYear(Number(k))} />}
     >
-      <div className="num text-[30px] font-light">{fmtMoney(f.volume)}</div>
-      <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[12.5px]">
+      <div className="num text-display font-light">{fmtMoney(f.volume)}</div>
+      <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-body">
         <div><b className="num">{f.purchase.count}</b> Purchase <span className="text-muted">{money(f.purchase.volume)}</span></div>
         <div><b className="num">{f.refinance.count}</b> Refinance <span className="text-muted">{money(f.refinance.volume)}</span></div>
       </div>
@@ -201,7 +205,7 @@ function LoansFunded({ loans }) {
         {f.months.map((m) => (
           <div key={m.month} className="flex flex-1 flex-col items-center gap-1" title={`${MONTHS[m.month]}: ${m.count} · ${money(m.volume)}`}>
             <div className="w-full rounded-t-sm" style={{ height: `${(m.volume / max) * 90}px`, background: m.volume ? 'var(--bay)' : 'transparent' }} />
-            <span className="text-[10px] text-muted">{MONTHS[m.month]}</span>
+            <span className="text-micro text-muted">{MONTHS[m.month]}</span>
           </div>
         ))}
       </div>
@@ -272,22 +276,22 @@ function RatesEditor({ rates, onSave, onClose }) {
   }
 
   const field = (k, label, autoFocus) => (
-    <label className="block text-[12px] text-muted">
+    <label className="block text-caption text-muted">
       {label}
-      <input autoFocus={autoFocus} disabled={busy} className="mt-1 block w-full rounded border border-line2 px-2 py-1 text-[13px] text-[color:var(--text)]" value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} />
+      <input autoFocus={autoFocus} disabled={busy} className="mt-1 block w-full rounded border border-line2 px-2 py-1 text-body text-[color:var(--text)]" value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} />
     </label>
   )
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose() }}>
       <div role="dialog" aria-modal="true" aria-label="Commission rates" className="w-full max-w-[360px] space-y-3 rounded-card border border-line bg-panel p-5">
-        <div className="text-[15px] font-semibold">Commission rates</div>
+        <div className="text-ui font-semibold">Commission rates</div>
         {field('lo_name', 'Your name as loan officer in Arive', true)}
         {field('primary_pct', 'Your loans: % of loan amount')}
         {field('assisted_pct', 'Assisted loans: % of loan amount')}
-        {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+        {error && <div role="alert" className="rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{error}</div>}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className="min-h-[32px] rounded-[9px] border border-line2 px-3 text-[13px] font-semibold disabled:opacity-40">Cancel</button>
-          <button type="button" onClick={save} disabled={busy} className="min-h-[32px] rounded-[9px] bg-[color:var(--text)] px-3 text-[13px] font-semibold text-white disabled:opacity-40">{busy ? 'Saving…' : 'Save'}</button>
+          <button type="button" onClick={onClose} disabled={busy} className="min-h-[32px] rounded-lg border border-line2 px-3 text-body font-semibold disabled:opacity-40">Cancel</button>
+          <button type="button" onClick={save} disabled={busy} className="min-h-[32px] rounded-lg bg-[color:var(--text)] px-3 text-body font-semibold text-white disabled:opacity-40">{busy ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
     </div>
@@ -350,7 +354,7 @@ export default function Loans() {
   }
 
   const lastImportAt = bundle?.lastImport?.ran_at || null
-  const btn = 'min-h-[32px] rounded-[9px] border border-line2 bg-panel px-3 text-[13px] font-semibold'
+  const btn = 'min-h-[32px] rounded-lg border border-line2 bg-panel px-3 text-body font-semibold'
 
   return (
     <div>
@@ -359,7 +363,7 @@ export default function Loans() {
         eyebrowColor="var(--bay-ink)"
         title="Loans"
         note={bundle && (
-          <span className="num text-[12px] text-muted">
+          <span className="num text-caption text-muted">
             {lastImportAt
               ? <><span title={new Date(lastImportAt).toLocaleString()}>Last import {timeAgo(lastImportAt)}</span> · {bundle.loans.length} loans</>
               : 'No Arive import yet'}
@@ -374,38 +378,23 @@ export default function Loans() {
         }
       />
 
-      {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
-      {isDemoMode && <div className="mt-4 rounded-lg border border-line bg-panel px-3 py-2 text-xs text-muted">Demo mode — sample loans. Connect Supabase to import.</div>}
+      {error && <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{error}</div>}
       {!bundle && !error && <div className="mt-6 text-sm text-muted">Loading loans…</div>}
 
       {bundle && (
         <>
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px]">
-            <div className="flex gap-1">
-              {ROLES.map(([k, label]) => (
-                <button key={k} type="button" aria-pressed={role === k} onClick={() => { setRole(k); setPage(1) }}
-                  className={`min-h-[30px] rounded-full border px-3 ${role === k ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted'}`}>
-                  {label}
-                </button>
-              ))}
-            </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-body">
+            <Segmented label="Whose loans" options={ROLES} value={role} onChange={(k) => { setRole(k); setPage(1) }} />
             <label className="flex items-center gap-1.5 text-muted">
               <input type="checkbox" name="scenarios" checked={scenarios} onChange={(e) => { setScenarios(e.target.checked); setPage(1) }} />
               Include scenario files
             </label>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3.5 lg:grid-cols-2">
-            <PipelineStatus loans={filtered} hasDates={hasApplicationDates(bundle.loans)} />
-            <div className="grid gap-3.5">
-              <LenderSpread loans={filtered} />
-              <LoansFunded loans={filtered} />
-            </div>
-          </div>
-
+          {/* The loan list first: it's what this page is for. Charts sum it up below. */}
           <section className="mt-4 overflow-x-auto rounded-card border border-line bg-panel">
-            <table className="w-full min-w-[760px] text-left text-[13px]">
-              <thead className="text-[11.5px] uppercase tracking-wide text-muted">
+            <table className="w-full min-w-[760px] text-left text-body">
+              <thead className="text-caption uppercase tracking-wide text-muted">
                 <tr>
                   {['Borrower', 'Stage', 'Amount', 'Lender', 'Role', 'Closing / funded', 'Est. comp', 'Scenario'].map((h) => (
                     <th key={h} className="px-3 py-2 font-semibold">{h}</th>
@@ -417,7 +406,7 @@ export default function Loans() {
                   <tr key={l.id} data-loan={l.arive_loan_id} className="border-t border-line">
                     <td className="px-3 py-2">
                       {l.contact_id ? <PersonLink id={l.contact_id}>{l.borrower_name}</PersonLink> : l.borrower_name}
-                      {notInLatest(l, lastImportAt) && <span className="ml-2 whitespace-nowrap rounded px-1 text-[10px] font-semibold text-dim" style={{ background: 'var(--hover)' }}>NOT IN LATEST EXPORT</span>}
+                      {notInLatest(l, lastImportAt) && <span className="ml-2 whitespace-nowrap rounded px-1 text-micro font-semibold text-dim" style={{ background: 'var(--hover)' }}>NOT IN LATEST EXPORT</span>}
                     </td>
                     <td className="px-3 py-2">{l.stage}</td>
                     <td className="num px-3 py-2">{money(l.amount)}</td>
@@ -437,6 +426,14 @@ export default function Loans() {
             </table>
           </section>
           <Pager slice={slice} total={shown.length} onPage={setPage} label="Loan pages" className="mt-3" />
+          <div className="mt-6 grid grid-cols-1 items-start gap-3.5 lg:grid-cols-2">
+            <PipelineStatus loans={filtered} hasDates={hasApplicationDates(bundle.loans)} />
+            <div className="grid gap-3.5">
+              <LenderSpread loans={filtered} />
+              <LoansFunded loans={filtered} />
+            </div>
+          </div>
+
         </>
       )}
 

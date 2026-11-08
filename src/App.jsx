@@ -47,9 +47,9 @@ function Protected({ children }) {
   if (!role) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted">
-        <p className="text-[15px] font-semibold text-[color:var(--text)]">This login has no access to the OS yet.</p>
+        <p className="text-ui font-semibold text-[color:var(--text)]">This login has no access to the OS yet.</p>
         {roleError && <p>Couldn't check access: {roleError}</p>}
-        <button type="button" onClick={signOut} className="rounded-[10px] border border-line2 px-3 py-1.5 font-semibold">
+        <button type="button" onClick={signOut} className="rounded-lg border border-line2 px-3 py-1.5 font-semibold">
           Sign out
         </button>
       </div>

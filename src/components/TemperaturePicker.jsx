@@ -76,7 +76,7 @@ export default function TemperaturePicker({ contactId, businessId, rating, onSav
             disabled={busy}
             aria-pressed={rating?.temperature === k}
             onClick={() => tap(k)}
-            className={`min-h-[36px] rounded-[10px] border px-3 text-[12.5px] font-semibold ${
+            className={`min-h-[36px] rounded-lg border px-3 text-body font-semibold ${
               rating?.temperature === k ? 'border-[color:var(--text)] text-[color:var(--text)]' : 'border-line2 text-muted'
             }`}
           >
@@ -85,7 +85,7 @@ export default function TemperaturePicker({ contactId, businessId, rating, onSav
         ))}
       </div>
       {rating && (
-        <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+        <div className="flex flex-wrap items-center gap-2 text-body">
           {businessId === 'bay' && rating.temperature !== 'cold' && (
             <input
               aria-label="Estimated loan amount"
@@ -94,10 +94,10 @@ export default function TemperaturePicker({ contactId, businessId, rating, onSav
               value={amount}
               maxLength={12}
               onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ''))}
-              className="w-36 rounded-[10px] border border-line2 bg-panel px-2 py-1.5"
+              className="w-36 rounded-lg border border-line2 bg-panel px-2 py-1.5"
             />
           )}
-          <select aria-label="Expected close month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-[10px] border border-line2 bg-panel px-2 py-1.5">
+          <select aria-label="Expected close month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border border-line2 bg-panel px-2 py-1.5">
             <option value="">Default ({labelOf(defaultCloseMonth(rating.temperature, Date.now(), settings?.close_offset_months))})</option>
             {monthOptions(month).map((o) => (
               <option key={o.key} value={o.key}>
@@ -105,7 +105,7 @@ export default function TemperaturePicker({ contactId, businessId, rating, onSav
               </option>
             ))}
           </select>
-          <button type="button" disabled={busy} onClick={saveFields} className="rounded-[10px] border border-line2 px-3 py-1.5 font-semibold">
+          <button type="button" disabled={busy} onClick={saveFields} className="rounded-lg border border-line2 px-3 py-1.5 font-semibold">
             Save
           </button>
         </div>

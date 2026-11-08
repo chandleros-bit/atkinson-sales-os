@@ -47,9 +47,9 @@ export default function Priority({ embedded = false, hideIds = null, buckets = n
       {!embedded && (
       <>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[26px] font-bold tracking-tight">Up Next</h2>
+        <h2 className="text-title font-bold tracking-tight">Up Next</h2>
         {!loading && !error && (
-          <div className="num text-[13px] font-semibold text-muted">
+          <div className="num text-body font-semibold text-muted">
             {touchedToday} touched today · {toGo} to go
           </div>
         )}
@@ -67,13 +67,13 @@ export default function Priority({ embedded = false, hideIds = null, buckets = n
         </div>
       )}
       {error && (
-        <div className={`${pad} mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700`}>{error}</div>
+        <div className={`${pad} mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink`}>{error}</div>
       )}
       {loading && !isDemoMode && <div className={`${pad} mt-6 text-sm text-muted`}>Loading…</div>}
 
       {!loading && !error && !isDemoMode && queue.length === 0 && (
         <div className={`${pad} mt-6 rounded-card border border-line bg-panel px-6 py-10 text-center`}>
-          <div className="text-[16px] font-bold">Nobody slipping. Nice work.</div>
+          <div className="text-lead font-bold">Nobody slipping. Nice work.</div>
           <div className="mt-1 text-sm text-muted">{touchedToday} touched today</div>
         </div>
       )}
@@ -87,7 +87,7 @@ export default function Priority({ embedded = false, hideIds = null, buckets = n
                   <SectionTitle icon="clock" iconColor="var(--neg-ink)" count={counts[g.id]}>{g.label}</SectionTitle>
                 </div>
               ) : (
-                <div className={`flex items-center gap-2 text-[12px] font-bold uppercase tracking-wide text-muted ${embedded ? 'border-b border-line px-4 pb-1.5 pt-3' : 'mb-1.5 px-1'}`}>
+                <div className={`flex items-center gap-2 text-caption font-bold uppercase tracking-wide text-muted ${embedded ? 'border-b border-line px-4 pb-1.5 pt-3' : 'mb-1.5 px-1'}`}>
                   {g.label}
                   <span className="num font-semibold text-dim">{counts[g.id]}</span>
                 </div>
@@ -107,7 +107,7 @@ export default function Priority({ embedded = false, hideIds = null, buckets = n
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="min-h-[40px] rounded-lg border border-line2 px-4 text-[13px] font-semibold text-muted hover:text-[color:var(--text)]"
+            className="min-h-[40px] rounded-lg border border-line2 px-4 text-body font-semibold text-muted hover:text-[color:var(--text)]"
           >
             Show all {queue.length}
           </button>
@@ -115,13 +115,13 @@ export default function Priority({ embedded = false, hideIds = null, buckets = n
       )}
       {!loading && !error && showAll && queue.length > cap && (
         <div className={`${embedded ? 'mb-4 ' : ''}mt-4 flex justify-center`}>
-          <button type="button" onClick={() => setShowAll(false)} className="min-h-[40px] text-[12.5px] text-muted">
+          <button type="button" onClick={() => setShowAll(false)} className="min-h-[40px] text-body text-muted">
             Show top {cap} only
           </button>
         </div>
       )}
 
-      {!loading && !error && note && <p className={`${embedded ? 'mb-4 px-4' : 'px-1'} mt-5 text-[11.5px] text-dim`}>{note}</p>}
+      {!loading && !error && note && <p className={`${embedded ? 'mb-4 px-4' : 'px-1'} mt-5 text-caption text-dim`}>{note}</p>}
     </div>
   )
 }

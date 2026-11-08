@@ -10,9 +10,10 @@ import { buildActionRequest, summarizeResult, newLeadProblem, CRM_LABEL } from '
 import { digitsOf } from '../lib/search'
 import { Sheet, quickActionTone } from './QuickActions'
 import { showToast } from './Toaster'
+import { friendlyError } from '../lib/friendlyError'
 
 const BOOK = { bay: 'Bayway', mpg: 'MPG' }
-const inputCls = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px] text-[color:var(--text)]'
+const inputCls = 'w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body text-[color:var(--text)]'
 const DUP_DEBOUNCE_MS = 250
 
 // The same lead in this book: identical phone digits or email.
@@ -65,7 +66,7 @@ export default function NewLeadDialog({ books, defaultBook, onClose, onCreated, 
     try {
       res = await invokeCrmAction(buildActionRequest({ action: 'create_contact', businessId: book, ...form }))
     } catch (e) {
-      res = { status: 'error', error: String(e?.message || e) }
+      res = { status: 'error', error: friendlyError(e) }
     }
     setBusy(false)
     const summary = summarizeResult(res, book)
@@ -88,7 +89,7 @@ export default function NewLeadDialog({ books, defaultBook, onClose, onCreated, 
               type="button"
               aria-pressed={book === b}
               onClick={() => setBook(b)}
-              className="min-h-[40px] flex-1 rounded-[10px] border px-3 text-[13px] font-semibold"
+              className="min-h-[40px] flex-1 rounded-lg border px-3 text-body font-semibold"
               style={book === b ? { borderColor: t.accent, background: t.soft, color: t.ink } : { borderColor: 'var(--line2)', color: 'var(--muted)' }}
             >
               {BOOK[b]}
@@ -108,7 +109,7 @@ export default function NewLeadDialog({ books, defaultBook, onClose, onCreated, 
       <textarea aria-label="Note" placeholder="Note (optional)" rows={2} value={form.note} onChange={set('note')} className={`${inputCls} mt-2`} />
 
       {dup && (
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-[10px] border px-3 py-2 text-[12.5px]" style={{ borderColor: 'var(--bay-gold)' }}>
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-body" style={{ borderColor: 'var(--bay-gold)' }}>
           <span>
             Already in {crm}: <span className="font-semibold">{dup.name || 'this lead'}</span>
           </span>
@@ -117,9 +118,9 @@ export default function NewLeadDialog({ books, defaultBook, onClose, onCreated, 
           </button>
         </div>
       )}
-      {problem && <div className="mt-2 text-[12px] text-muted">{problem}</div>}
+      {problem && <div className="mt-2 text-caption text-muted">{problem}</div>}
       {error && (
-        <div role="alert" className="mt-3 rounded-[10px] px-3 py-2 text-[12.5px] font-semibold" style={{ background: 'var(--neg-bg)', color: 'var(--neg-ink)' }}>
+        <div role="alert" className="mt-3 rounded-lg px-3 py-2 text-body font-semibold" style={{ background: 'var(--neg-bg)', color: 'var(--neg-ink)' }}>
           {error}
         </div>
       )}
@@ -127,7 +128,7 @@ export default function NewLeadDialog({ books, defaultBook, onClose, onCreated, 
         type="button"
         disabled={busy || !!problem}
         onClick={create}
-        className="mt-4 flex min-h-[42px] w-full items-center justify-center rounded-[10px] text-[13.5px] font-bold text-white disabled:opacity-50"
+        className="mt-4 flex min-h-[42px] w-full items-center justify-center rounded-lg text-body font-bold text-white disabled:opacity-50"
         style={{ background: t.accent }}
       >
         {busy ? 'Creating…' : dup ? 'Create anyway' : 'Create lead'}

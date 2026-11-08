@@ -125,11 +125,11 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
     setBook(p.business_id)
   }
 
-  const field = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px]'
+  const field = 'w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body'
   return (
     <Sheet title={initial ? 'New task from voice' : 'New work item'} subtitle={toCrm ? `Saved as a ${CRM[book]} task` : 'Saved in the dashboard only'} t={quickActionTone(book)} onClose={onClose}>
       <div className="flex flex-col gap-3">
-        {initial?.heard && <div className="rounded-[10px] bg-panel2 px-3 py-2 text-[12.5px] italic text-muted">Heard: “{initial.heard}”</div>}
+        {initial?.heard && <div className="rounded-lg bg-panel2 px-3 py-2 text-body italic text-muted">Heard: “{initial.heard}”</div>}
         <input aria-label="Work item title" placeholder="What needs doing, e.g. Order appraisal" value={title} onChange={(e) => setTitle(e.target.value)} className={field} />
         <div className="grid grid-cols-2 gap-2">
           {BOOKS.map(([k, label]) => (
@@ -141,7 +141,7 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
                 setBook(k)
                 setLead(null)
               }}
-              className="min-h-[40px] rounded-[10px] border text-[12.5px] font-semibold"
+              className="min-h-[40px] rounded-lg border text-body font-semibold"
               style={chip(book === k)}
             >
               {label}
@@ -149,10 +149,10 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
           ))}
         </div>
         <div>
-          <div className="mb-1.5 text-[12px] font-semibold text-muted">Due</div>
+          <div className="mb-1.5 text-caption font-semibold text-muted">Due</div>
           <div className="grid grid-cols-4 gap-2">
             {DUE.map(([k, label]) => (
-              <button key={k} type="button" aria-pressed={due === k} onClick={() => setDue(k)} className="min-h-[36px] rounded-[10px] border text-[12.5px] font-semibold" style={chip(due === k)}>
+              <button key={k} type="button" aria-pressed={due === k} onClick={() => setDue(k)} className="min-h-[36px] rounded-lg border text-body font-semibold" style={chip(due === k)}>
                 {label}
               </button>
             ))}
@@ -160,7 +160,7 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
           {due === 'pick' && <input type="date" aria-label="Due on" value={picked} onChange={(e) => setPicked(e.target.value)} className={`${field} mt-2`} />}
         </div>
         {lead ? (
-          <div className="flex items-center justify-between gap-2 rounded-[10px] border border-line2 px-3 py-2 text-[13px]">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-line2 px-3 py-2 text-body">
             <span className="flex min-w-0 items-center gap-2">
               <BizBadge biz={lead.business_id} />
               <span className="truncate font-semibold">{personLabel(lead)}</span>
@@ -171,7 +171,7 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
                 setLead(null)
                 setSaveTo('workbench')
               }}
-              className="text-[12.5px] font-semibold text-muted"
+              className="text-body font-semibold text-muted"
             >
               Change
             </button>
@@ -181,7 +181,7 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
             {suggested.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {suggested.map((p) => (
-                  <button key={p.id} type="button" onClick={() => pickLead(p)} className="min-h-[36px] rounded-[10px] border border-line2 px-3 text-[12.5px] font-semibold">
+                  <button key={p.id} type="button" onClick={() => pickLead(p)} className="min-h-[36px] rounded-lg border border-line2 px-3 text-body font-semibold">
                     Link to {personLabel(p)}?
                   </button>
                 ))}
@@ -189,13 +189,13 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
             )}
             <input aria-label="Lead (optional)" placeholder="Lead (optional): search by name or phone" value={query} onChange={(e) => setQuery(e.target.value)} className={field} />
             {people.length > 0 && (
-              <div className="mt-1 overflow-hidden rounded-[10px] border border-line">
+              <div className="mt-1 overflow-hidden rounded-lg border border-line">
                 {people.slice(0, 5).map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => pickLead(p)}
-                    className="flex w-full items-center gap-2 border-b border-line px-3 py-2 text-left text-[13px] last:border-b-0 hover:bg-hoverbg"
+                    className="flex w-full items-center gap-2 border-b border-line px-3 py-2 text-left text-body last:border-b-0 hover:bg-hoverbg"
                   >
                     <BizBadge biz={p.business_id} />
                     <span className="truncate">{personLabel(p)}</span>
@@ -207,7 +207,7 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
         )}
         {lead && (
           <div>
-            <div className="mb-1.5 text-[12px] font-semibold text-muted">Save to</div>
+            <div className="mb-1.5 text-caption font-semibold text-muted">Save to</div>
             <div className="grid grid-cols-2 gap-2">
               {[
                 ['workbench', 'Workbench'],
@@ -219,19 +219,19 @@ export default function AddWorkItem({ defaultBook = 'bay', initial = null, onClo
                   aria-pressed={saveTo === k}
                   disabled={k === 'crm' && !canCrm}
                   onClick={() => setSaveTo(k)}
-                  className="min-h-[40px] rounded-[10px] border text-[12.5px] font-semibold disabled:opacity-50"
+                  className="min-h-[40px] rounded-lg border text-body font-semibold disabled:opacity-50"
                   style={chip(saveTo === k)}
                 >
                   {label}
                 </button>
               ))}
             </div>
-            {!canCrm && <div className="mt-1 text-[12px] text-muted">Write-back to {CRM[book]} is off.</div>}
+            {!canCrm && <div className="mt-1 text-caption text-muted">Write-back to {CRM[book]} is off.</div>}
           </div>
         )}
         {!toCrm && <textarea aria-label="Work item notes" placeholder="Notes (optional)" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className={field} />}
-        {error && <div className="text-[12px] text-[color:var(--neg-ink)]">{error}</div>}
-        <button type="button" disabled={busy} onClick={add} className="min-h-[44px] rounded-[10px] text-[13.5px] font-semibold text-white disabled:opacity-50" style={{ background: 'var(--text)' }}>
+        {error && <div className="text-caption text-[color:var(--neg-ink)]">{error}</div>}
+        <button type="button" disabled={busy} onClick={add} className="min-h-[44px] rounded-lg text-body font-semibold text-white disabled:opacity-50" style={{ background: 'var(--text)' }}>
           Add
         </button>
       </div>

@@ -8,7 +8,7 @@ import { zohoVisitNote } from '../lib/mpgTracker'
 import { notifyTouchesChanged } from '../lib/mpgTouches'
 import { showToast } from './Toaster'
 
-const BTN = 'min-h-[40px] w-full rounded-[10px] border border-line2 px-3 text-left text-[13px] hover:bg-hoverbg'
+const BTN = 'min-h-[40px] w-full rounded-lg border border-line2 px-3 text-left text-body hover:bg-hoverbg'
 
 export default function ZohoPromote({ prospectId, touch, onDone }) {
   // 'running' | 'choose' | 'failed' | 'done'
@@ -111,23 +111,23 @@ export default function ZohoPromote({ prospectId, touch, onDone }) {
   }, [phase])
 
   if (phase === 'running') {
-    return <div role="status" className="py-2 text-[13px] text-muted">Adding to Zoho…</div>
+    return <div role="status" className="py-2 text-body text-muted">Adding to Zoho…</div>
   }
   if (phase === 'failed' || phase === 'done') {
     return (
       <div className="flex flex-col gap-2 py-2">
-        <div role="alert" className="text-[13px] font-semibold">{message}</div>
+        <div role="alert" className="text-body font-semibold">{message}</div>
         {phase === 'failed' && (
           <button type="button" onClick={() => run(lastExtra.current)} className={`${BTN} font-semibold`}>Try again</button>
         )}
-        <button type="button" onClick={() => finish({ ok: false })} className="min-h-[40px] w-full rounded-[10px] px-3 text-left text-[13px] text-muted hover:bg-hoverbg">Close</button>
+        <button type="button" onClick={() => finish({ ok: false })} className="min-h-[40px] w-full rounded-lg px-3 text-left text-body text-muted hover:bg-hoverbg">Close</button>
       </div>
     )
   }
   return (
     <div className="flex flex-col gap-2 py-2">
-      <div className="text-[13px] font-semibold">This business may already be in Zoho</div>
-      {message && <div role="alert" className="text-[13px] text-[color:var(--neg-ink)]">{message}</div>}
+      <div className="text-body font-semibold">This business may already be in Zoho</div>
+      {message && <div role="alert" className="text-body text-[color:var(--neg-ink)]">{message}</div>}
       <div role="group" aria-label="Possible Zoho matches" className="flex flex-col gap-2">
         {candidates.map((c, i) => (
           <button
@@ -138,12 +138,12 @@ export default function ZohoPromote({ prospectId, touch, onDone }) {
             className={`${BTN} flex flex-col items-start justify-center py-1`}
           >
             <span className="block w-full truncate">{[c.company, c.name].filter(Boolean).join(' · ')}</span>
-            <span className="block w-full truncate text-[12px] text-muted">{[c.phone, c.status].filter(Boolean).join(' · ')}</span>
+            <span className="block w-full truncate text-caption text-muted">{[c.phone, c.status].filter(Boolean).join(' · ')}</span>
           </button>
         ))}
       </div>
       <button type="button" onClick={() => run({ createNew: true })} className={`${BTN} font-semibold`}>Create a new lead</button>
-      <button type="button" onClick={() => finish({ ok: false })} className="min-h-[40px] w-full rounded-[10px] px-3 text-left text-[13px] text-muted hover:bg-hoverbg">Not now</button>
+      <button type="button" onClick={() => finish({ ok: false })} className="min-h-[40px] w-full rounded-lg px-3 text-left text-body text-muted hover:bg-hoverbg">Not now</button>
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { buildMyTasks } from '../lib/overview'
 import { dueLabel } from '../lib/tasks'
 import PersonLink from './PersonLink'
 import QuickActions from './QuickActions'
+import { friendlyError } from '../lib/friendlyError'
 
 // Overdue reads red, due-today amber — the same urgency ladder as the Overview
 // alert banner, so the rail and the banner never disagree.
@@ -49,7 +50,7 @@ export default function MyTasks({ className = '' }) {
           setPending({})
         }
       } catch (e) {
-        if (alive) setError(String(e?.message || e))
+        if (alive) setError(friendlyError(e))
       } finally {
         if (alive) setLoading(false)
       }
@@ -79,8 +80,8 @@ export default function MyTasks({ className = '' }) {
     <section className={`cc-card flex flex-col p-[20px] ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-[18px] font-bold tracking-tight">My Tasks</h3>
-          <div className="mt-[3px] text-[12.5px] font-semibold text-dim">
+          <h3 className="text-lead font-bold tracking-tight">My Tasks</h3>
+          <div className="mt-[3px] text-body font-semibold text-dim">
             {loading ? 'Loading tasks…' : summary}
           </div>
         </div>
@@ -88,7 +89,7 @@ export default function MyTasks({ className = '' }) {
           to="/tasks"
           aria-label="Open all tasks"
           title="Open all tasks"
-          className="grid h-9 w-9 flex-none place-items-center rounded-[10px] bg-panel2 text-muted hover:bg-hoverbg"
+          className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-panel2 text-muted hover:bg-hoverbg"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
             <path d="M7 17L17 7M17 7H8M17 7v9" />
@@ -97,7 +98,7 @@ export default function MyTasks({ className = '' }) {
       </div>
 
       {error && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -122,14 +123,14 @@ export default function MyTasks({ className = '' }) {
               >
                 <div className="min-w-0 flex-1">
                   <div
-                    className="truncate text-[13.5px] font-semibold"
+                    className="truncate text-body font-semibold"
                     style={
                       isPending ? { color: 'var(--dim)', textDecoration: 'line-through' } : undefined
                     }
                   >
                     {t.title || '(untitled task)'}
                   </div>
-                  <div className="mt-[3px] flex items-center gap-[7px] text-[11.5px] text-dim">
+                  <div className="mt-[3px] flex items-center gap-[7px] text-caption text-dim">
                     <span
                       className="h-[7px] w-[7px] flex-none rounded-full"
                       style={{ background: isMpg ? 'var(--mpg)' : 'var(--bay)' }}
@@ -144,7 +145,7 @@ export default function MyTasks({ className = '' }) {
                 </div>
 
                 <span
-                  className="flex-none whitespace-nowrap rounded-full px-[9px] py-1 text-[11px] font-bold"
+                  className="flex-none whitespace-nowrap rounded-full px-[9px] py-1 text-micro font-bold"
                   style={chip}
                 >
                   {t.bucket === 'overdue' ? dueLabel(t.due_at) : 'Today'}

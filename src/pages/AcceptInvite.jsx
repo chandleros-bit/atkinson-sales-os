@@ -17,7 +17,7 @@ function Shell({ subtitle, children }) {
         <div className="mb-6 flex items-center gap-3">
           <LogoMark size={40} />
           <div>
-            <div className="text-[15px] font-semibold">Atkinson Sales OS</div>
+            <div className="text-ui font-semibold">Atkinson Sales OS</div>
             <div className="text-xs text-muted">{subtitle}</div>
           </div>
         </div>
@@ -28,10 +28,10 @@ function Shell({ subtitle, children }) {
 }
 
 function Problem({ children }) {
-  return <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{children}</div>
+  return <div className="mb-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{children}</div>
 }
 
-const INPUT = 'mb-4 w-full rounded-[10px] border border-line2 bg-panel2 px-3 py-2.5 text-sm outline-none'
+const INPUT = 'mb-4 w-full rounded-lg border border-line2 bg-panel2 px-3 py-2.5 text-sm outline-none'
 
 export default function AcceptInvite() {
   const { session, loading } = useAuth()
@@ -100,7 +100,7 @@ export default function AcceptInvite() {
           autoComplete="new-password"
         />
         {error && <Problem>{error}</Problem>}
-        <button onClick={save} disabled={busy} className="btn-primary w-full rounded-[10px] py-3 text-sm font-semibold disabled:opacity-50">
+        <button onClick={save} disabled={busy} className="btn-primary w-full rounded-lg py-3 text-sm font-semibold disabled:opacity-50">
           {busy ? 'Saving…' : 'Save password'}
         </button>
       </Shell>
@@ -114,7 +114,7 @@ export default function AcceptInvite() {
         <p className="mb-5 text-sm text-muted">
           {isReset ? 'Press the button to choose a new password.' : 'Press the button to accept and choose your password.'}
         </p>
-        <button onClick={accept} disabled={busy} className="btn-primary w-full rounded-[10px] py-3 text-sm font-semibold disabled:opacity-50">
+        <button onClick={accept} disabled={busy} className="btn-primary w-full rounded-lg py-3 text-sm font-semibold disabled:opacity-50">
           {busy ? 'Checking…' : isReset ? 'Continue to reset password' : 'Accept invite'}
         </button>
       </Shell>
@@ -130,7 +130,7 @@ export default function AcceptInvite() {
           ? 'Request a new reset link from the sign-in page.'
           : 'Ask Chandler to send a new invite, or use Forgot password on the sign-in page if you already accepted one.'}
       </p>
-      <Link to="/login" className="btn-primary block w-full rounded-[10px] py-3 text-center text-sm font-semibold">
+      <Link to="/login" className="btn-primary block w-full rounded-lg py-3 text-center text-sm font-semibold">
         Go to sign in
       </Link>
     </Shell>

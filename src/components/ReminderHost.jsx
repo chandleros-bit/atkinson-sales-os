@@ -160,19 +160,19 @@ export default function ReminderHost() {
             role="alertdialog"
             aria-label={`Reminder: ${kindLabel(e.kind)} with ${nameOf(e)}`}
             data-reminder={e.id}
-            className="rounded-[12px] border border-line bg-panel p-3.5 shadow-lg"
+            className="rounded-lg border border-line bg-panel p-3.5 shadow-lg"
             style={{ borderLeft: `4px solid ${color}` }}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-dim">
+                <div className="text-micro font-semibold uppercase tracking-wide text-dim">
                   {kindLabel(e.kind)} {startsIn(e.starts_at)}
                 </div>
-                <div className="truncate text-[14px] font-bold">{nameOf(e)}</div>
-                <div className="num text-[12.5px] text-muted">
+                <div className="truncate text-ui font-bold">{nameOf(e)}</div>
+                <div className="num text-body text-muted">
                   {timeLabel(e)} · {e.duration_min} min
                 </div>
-                {e.note && <div className="mt-0.5 line-clamp-2 text-[12.5px]">{e.note}</div>}
+                {e.note && <div className="mt-0.5 line-clamp-2 text-body">{e.note}</div>}
               </div>
               <button type="button" onClick={() => remove(e.id)} aria-label="Dismiss" className="grid h-8 w-8 flex-none place-items-center rounded-md text-muted hover:bg-hoverbg">
                 ✕
@@ -185,17 +185,17 @@ export default function ReminderHost() {
                   remove(e.id)
                   openPerson(e.contact_id)
                 }}
-                className="min-h-[34px] rounded-md px-3 text-[12.5px] font-bold text-white"
+                className="min-h-[34px] rounded-md px-3 text-body font-bold text-white"
                 style={{ background: color }}
               >
                 Open contact
               </button>
-              <button type="button" onClick={() => snooze(e)} className="min-h-[34px] rounded-md border border-line2 px-3 text-[12.5px] font-semibold text-muted hover:bg-hoverbg">
+              <button type="button" onClick={() => snooze(e)} className="min-h-[34px] rounded-md border border-line2 px-3 text-body font-semibold text-muted hover:bg-hoverbg">
                 Snooze 5 min
               </button>
             </div>
             {permission === 'default' && (
-              <button type="button" onClick={askPermission} className="mt-2 text-[11.5px] font-semibold text-muted underline">
+              <button type="button" onClick={askPermission} className="mt-2 text-caption font-semibold text-muted underline">
                 Turn on desktop alerts
               </button>
             )}

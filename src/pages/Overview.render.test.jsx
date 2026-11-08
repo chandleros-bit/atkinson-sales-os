@@ -115,7 +115,7 @@ describe('Overview dashboard', () => {
   it('renders every card in the combined view', async () => {
     const text = await render('all')
     for (const t of ['Gross commission (MTD)', 'Closed this month', 'Calls this month', 'Pipeline value (open)',
-      'Activity & Production', 'Monthly Goals', "Today's Events", 'Pipeline Mix', 'Lead Sources', 'Income Mix', 'Up Next', '90-Day Sprints']) {
+      'Activity & Production', 'Monthly Goals', "Today's Events", 'Pipeline Mix', 'Lead Sources', 'Income Mix', 'Up Next', '90-Day Sprint']) {
       expect(text).toContain(t)
     }
     // MPG residual entered in Reports reaches the income card.

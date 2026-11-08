@@ -389,7 +389,9 @@ export function sprintPace({ biz, metrics, targets, now = Date.now(), measured =
   const items = SPRINT_ITEMS.filter((s) => biz === 'all' || s.book === biz).map((s) => {
     const value = measured[s.key] ?? sumMetric(rows, s.book, s.key)
     const target = targets[s.key]
-    return { ...s, value, target, pct: pctOf(value, target), onPace: goalStatus(value, target, elapsed) !== 'behind' }
+    return { ...s, value, target, pct: pctOf(value, target), onPace: goalStatus(value, target, elapsed) !== 'behind', hit: value >= target }
   })
-  return { items, weeksLeft: weeksRemaining(win, now), label: win.label }
+  // Past the window the sprint is history: final results, not live pace.
+  const ended = keyOf(new Date(now)) >= win.to
+  return { items, weeksLeft: weeksRemaining(win, now), label: win.label, ended }
 }

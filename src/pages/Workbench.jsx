@@ -32,7 +32,7 @@ import { useAuth } from '../context/AuthContext'
 function Progress({ label, value, pct }) {
   return (
     <div className="flex w-[180px] flex-col gap-1.5">
-      <div className="flex justify-between text-[13px] font-semibold">
+      <div className="flex justify-between text-body font-semibold">
         <span>{label}</span>
         <span className="num">{value}</span>
       </div>
@@ -53,7 +53,7 @@ function Lane({ label, count, mobile, children }) {
     <section aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-card border border-line bg-panel shadow-[0_1px_2px_rgba(16,24,40,.05)]">
       {!mobile && (
         <div className="flex flex-none items-center border-b border-line bg-panel2 px-4 py-3">
-          <h2 className="text-[16px] font-semibold">
+          <h2 className="text-lead font-semibold">
             {label} <span className="num font-medium text-muted">· {count}</span>
           </h2>
         </div>
@@ -111,13 +111,13 @@ export default function Workbench() {
   const showWork = assistant || !mobile || lane === 'work'
 
   return (
-    // xl+: the page fits the window (top bar 100px + bottom padding 48px) and
+    // xl+: the page fits the window (top bar 88px + bottom padding 48px) and
     // each lane scrolls by itself. Narrower, the lanes stack and the page scrolls.
-    <div className="flex flex-col gap-4 xl:h-[calc(100dvh-148px)] xl:min-h-[600px]">
-      {/* One compact row: the top bar already names the page. */}
+    <div className="flex flex-col gap-4 xl:h-[calc(100dvh-136px)] xl:min-h-[600px]">
+      {/* One compact row: the page name, today's progress, the page's actions. */}
       <header className="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <h2 className="sr-only">Workbench</h2>
         <div className="flex flex-wrap items-center gap-x-7 gap-y-3">
+          <h1 className="sr-only text-title font-semibold tracking-[-0.6px] sm:not-sr-only">Workbench</h1>
           <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
           <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
           <SyncDot />
@@ -125,12 +125,12 @@ export default function Workbench() {
         <div className="flex gap-2">
           {/* Priority Leads (FUB score tiers) left the nav; it opens from here. */}
           {biz !== 'mpg' && (
-            <Link to="/bayway/priority-leads" className="flex min-h-[38px] items-center rounded-[10px] px-2.5 text-[13.5px] font-semibold text-muted hover:text-[color:var(--text)]">
+            <Link to="/bayway/priority-leads" className="flex min-h-[38px] items-center rounded-lg border border-line2 px-3.5 text-body font-semibold text-ink2 hover:bg-hoverbg">
               Priority Leads
             </Link>
           )}
           <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
-          <button type="button" onClick={() => setAdding(true)} className="min-h-[38px] rounded-[10px] border border-line2 px-3.5 text-[13.5px] font-semibold text-[#344054]">
+          <button type="button" onClick={() => setAdding(true)} className="min-h-[38px] rounded-lg border border-line2 px-3.5 text-body font-semibold text-ink2">
             + Work item
           </button>
         </div>
@@ -139,7 +139,7 @@ export default function Workbench() {
       <AlertsRail alerts={alerts} showBook={biz === 'all'} />
 
       {mobile && !assistant && (
-        <div role="tablist" aria-label="Lane" className="grid grid-cols-2 rounded-xl bg-panel2 p-1">
+        <div role="tablist" aria-label="Lane" className="grid grid-cols-2 rounded-lg bg-panel2 p-1">
           {[
             ['calls', `Calls · ${callsToGo}`],
             ['work', `Work · ${openWork}`],
@@ -150,7 +150,7 @@ export default function Workbench() {
               role="tab"
               aria-selected={lane === id}
               onClick={() => setLane(id)}
-              className={`min-h-[40px] rounded-lg text-[14px] font-semibold ${lane === id ? 'bg-panel text-[color:var(--text)]' : 'text-muted'}`}
+              className={`min-h-[40px] rounded-lg text-ui font-semibold ${lane === id ? 'bg-panel text-[color:var(--text)]' : 'text-muted'}`}
             >
               {label}
             </button>
@@ -161,7 +161,7 @@ export default function Workbench() {
       <div className="flex min-h-0 flex-1 flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {showCalls && (
           <Lane label="Calls" count={`${callsToGo} to go`} mobile={mobile}>
-            {dial.error && <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{dial.error}</div>}
+            {dial.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{dial.error}</div>}
             <div className="flex flex-col gap-3 p-3">
               <CallBox>
                 <ThemeList list={themeList} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeList.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
@@ -176,8 +176,8 @@ export default function Workbench() {
                 <details className="group">
                   <summary className={`${SECTION_HEAD} cursor-pointer list-none border-b-0 group-open:border-b [&::-webkit-details-marker]:hidden`}>
                     <SectionTitle icon="list" count={more.length}>More from Up Next</SectionTitle>
-                    {reachedOut > 0 && <span className="flex-none text-[12.5px] font-semibold text-[color:var(--neg-ink)]">incl. {reachedOut} reached out</span>}
-                    <span aria-hidden="true" className="ml-auto text-[12px] text-muted transition-transform group-open:rotate-180">▾</span>
+                    {reachedOut > 0 && <span className="flex-none text-body font-semibold text-[color:var(--neg-ink)]">incl. {reachedOut} reached out</span>}
+                    <span aria-hidden="true" className="ml-auto text-caption text-muted transition-transform group-open:rotate-180">▾</span>
                   </summary>
                   <Priority embedded hideIds={dialIds} buckets={MORE_BUCKETS} />
                 </details>
@@ -187,7 +187,7 @@ export default function Workbench() {
         )}
         {showWork && (
           <Lane label="Work" count={`${openWork} open`} mobile={mobile}>
-            {work.error && <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{work.error}</div>}
+            {work.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{work.error}</div>}
             <WorkLane groups={groups} onChanged={work.reload} />
           </Lane>
         )}

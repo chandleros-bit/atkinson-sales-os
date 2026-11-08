@@ -4,6 +4,7 @@ import { useBusiness } from '../context/BusinessContext'
 import { liveEvents, sourceToBiz, timeLabel, eventDayKey, dayLabel } from '../lib/calendar'
 import { isSyncStale, eventsForDay } from '../lib/calendarRail'
 import { monthCells, monthLabel, eventDots, todayKey, WEEKDAYS } from '../lib/overviewCards'
+import { friendlyError } from '../lib/friendlyError'
 
 const OUTLOOK_SOURCES = ['outlook-mpg', 'outlook-bayway']
 
@@ -35,7 +36,7 @@ function NavButton({ label, onClick, children }) {
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="grid h-8 w-8 place-items-center rounded-[9px] bg-panel2 text-muted hover:bg-hoverbg"
+      className="grid h-8 w-8 place-items-center rounded-lg bg-panel2 text-muted hover:bg-hoverbg"
     >
       {children}
     </button>
@@ -90,7 +91,7 @@ export default function CalendarCard() {
         setRows(liveEvents(evRes.data))
         setLastSync(syncRes.data?.ran_at ? new Date(syncRes.data.ran_at).getTime() : null)
       } catch (e) {
-        if (alive) setError(String(e?.message || e))
+        if (alive) setError(friendlyError(e))
       } finally {
         if (alive) setLoading(false)
       }
@@ -134,13 +135,13 @@ export default function CalendarCard() {
   return (
     <section className="cc-card p-[20px]">
       <div className="flex items-center justify-between">
-        <h3 className="text-[18px] font-bold tracking-tight">
+        <h3 className="text-lead font-bold tracking-tight">
           {monthLabel(view.year, view.month)}
         </h3>
         <div className="flex items-center gap-2">
           {stale && (
             <span
-              className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold"
+              className="rounded-full px-2 py-0.5 text-micro font-semibold"
               style={{ background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
               title="Outlook sync is behind — showing the last synced data."
             >
@@ -164,7 +165,7 @@ export default function CalendarCard() {
         {WEEKDAYS.map((w, i) => (
           <div
             key={w}
-            className={`pb-2 text-center text-[11px] font-bold ${i >= 5 ? 'text-line2' : 'text-dim'}`}
+            className={`pb-2 text-center text-micro font-bold ${i >= 5 ? 'text-line2' : 'text-dim'}`}
           >
             {w}
           </div>
@@ -180,7 +181,7 @@ export default function CalendarCard() {
               type="button"
               onClick={() => setSelected(c.key)}
               aria-pressed={c.key === selected}
-              className="relative grid h-[38px] place-items-center rounded-[11px] text-[13px]"
+              className="relative grid h-[38px] place-items-center rounded-lg text-body"
               style={{
                 background:
                   c.key === tKey ? 'var(--accent)'
@@ -212,7 +213,7 @@ export default function CalendarCard() {
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
-              className="-mb-px border-b-2 pb-2.5 text-[13.5px]"
+              className="-mb-px border-b-2 pb-2.5 text-body"
               style={{
                 borderColor: tab === t.key ? 'var(--accent)' : 'transparent',
                 color: tab === t.key ? 'var(--text)' : 'var(--dim)',
@@ -223,17 +224,17 @@ export default function CalendarCard() {
             </button>
           ))
         ) : (
-          <span className="-mb-px border-b-2 border-[color:var(--accent)] pb-2.5 text-[13.5px] font-extrabold">
+          <span className="-mb-px border-b-2 border-[color:var(--accent)] pb-2.5 text-body font-extrabold">
             {biz === 'mpg' ? 'MPG' : 'Bayway'}
           </span>
         )}
-        <span className="ml-auto pb-2.5 text-[12px] font-semibold text-dim">
+        <span className="ml-auto pb-2.5 text-caption font-semibold text-dim">
           {dayLabel(selected)}
         </span>
       </div>
 
       {error && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -254,17 +255,17 @@ export default function CalendarCard() {
             return (
               <div
                 key={e.id}
-                className="flex items-start gap-3 rounded-[14px] bg-panel2 p-3.5"
+                className="flex items-start gap-3 rounded-card bg-panel2 p-3.5"
                 style={{ borderLeft: `3px solid ${color}` }}
               >
                 <div className="min-w-[44px] flex-none text-center">
-                  <div className="num text-[14px] font-extrabold leading-none">{time}</div>
-                  {ampm && <div className="mt-0.5 text-[10px] font-bold text-dim">{ampm}</div>}
+                  <div className="num text-ui font-extrabold leading-none">{time}</div>
+                  {ampm && <div className="mt-0.5 text-micro font-bold text-dim">{ampm}</div>}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[13.5px] font-bold">{e.title || '(no title)'}</div>
+                  <div className="text-body font-bold">{e.title || '(no title)'}</div>
                   {e.location && (
-                    <div className="mt-0.5 truncate text-[12px] leading-snug text-dim">
+                    <div className="mt-0.5 truncate text-caption leading-snug text-dim">
                       {e.location}
                     </div>
                   )}

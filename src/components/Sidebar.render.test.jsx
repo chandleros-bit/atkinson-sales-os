@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // The left nav: ten links, each lit on its own pages and on the old per-book
 // routes it replaced; Settings carries the sync dot. BookPage: the merged
-// Pipeline / Contacts page follows the business switch, with a Bayway | MPG
-// toggle on All.
+// Pipeline / Contacts page shows the book the business switch picked, with no
+// toggle of its own.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
@@ -12,10 +12,11 @@ import React from 'react'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let filter = 'all'
+let book = 'bay'
 vi.mock('../lib/supabase', () => ({ isDemoMode: false, supabase: null }))
 let auth = { role: 'owner' }
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ signOut: () => {}, isDemoMode: false, ...auth }) }))
-vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: filter }) }))
+vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: filter, book }) }))
 vi.mock('../lib/usePriorityQueue', () => ({ usePriorityQueue: () => ({ queue: [] }) }))
 vi.mock('../lib/useSyncHealth', () => ({ useSyncHealth: () => ({ fub: { finished_at: new Date().toISOString(), status: 'ok' } }) }))
 vi.mock('../lib/syncHealth', () => ({ syncHealth: () => ({ state: 'ok', text: 'Synced 2m ago', detail: [] }) }))
@@ -37,6 +38,7 @@ const current = () => [...host.querySelectorAll('nav[aria-label="Main"] a[aria-c
 beforeEach(() => {
   document.body.innerHTML = ''
   filter = 'all'
+  book = 'bay'
   auth = { role: 'owner' }
   localStorage.clear()
 })
@@ -87,20 +89,10 @@ describe('Sidebar', () => {
 describe('BookPage', () => {
   const Page = ({ biz }) => <div data-page>{biz}</div>
 
-  it('follows the business switch with no toggle', async () => {
-    filter = 'mpg'
+  it('shows the picked book and has no toggle of its own', async () => {
+    book = 'mpg'
     await render(<BookPage page={Page} />, '/pipeline')
     expect(host.querySelector('[role="tablist"]')).toBeNull()
     expect(host.querySelector('[data-page]').textContent).toBe('mpg')
-  })
-
-  it('on All, a Bayway | MPG toggle picks the book and remembers it', async () => {
-    await render(<BookPage page={Page} />, '/pipeline')
-    expect(host.querySelector('[data-page]').textContent).toBe('bay')
-    const mpg = [...host.querySelectorAll('[role="tab"]')].find((t) => t.textContent === 'MPG')
-    await act(async () => mpg.click())
-    expect(host.querySelector('[data-page]').textContent).toBe('mpg')
-    expect(mpg.getAttribute('aria-selected')).toBe('true')
-    expect(localStorage.getItem('book-pick')).toBe('mpg')
   })
 })

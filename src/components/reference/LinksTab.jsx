@@ -8,7 +8,7 @@ import Field, { copyText } from './Field'
 // the link; copy for sites that need a login or have no search link) and
 // pinned tiles that Chandler and Shelby both edit.
 const TONE = { accent: 'var(--text)' }
-const TILE = 'inline-flex items-center rounded-[8px] border border-line2 px-3 py-1.5 text-[12.5px] hover:bg-hoverbg'
+const TILE = 'inline-flex items-center rounded-lg border border-line2 px-3 py-1.5 text-body hover:bg-hoverbg'
 
 function LinkForm({ initial, onSave, onClose, error }) {
   const [f, setF] = useState(initial ? { ...initial } : { title: '', url: 'https://', grp: GROUP_ORDER[0], copy_address: false })
@@ -26,13 +26,13 @@ function LinkForm({ initial, onSave, onClose, error }) {
         <Field label="Title" value={f.title} onChange={(v) => setF((s) => ({ ...s, title: v }))} />
         <Field label="URL" value={f.url} onChange={(v) => setF((s) => ({ ...s, url: v }))} />
         <Field label="Group" value={f.grp} onChange={(v) => setF((s) => ({ ...s, grp: v }))} />
-        <label className="flex items-center gap-2 text-[12.5px]">
+        <label className="flex items-center gap-2 text-body">
           <input type="checkbox" checked={!!f.copy_address} onChange={(e) => setF((s) => ({ ...s, copy_address: e.target.checked }))} />
           Show under &quot;Copy address&quot; in the lookup
         </label>
       </div>
-      {(problem || error) && <div className="mt-2 text-[12px] text-[#b42318]">{problem || error}</div>}
-      <button type="button" aria-label="Save link" onClick={save} className="btn-primary mt-3 rounded-[10px] px-4 py-2 text-[13px] font-semibold">
+      {(problem || error) && <div className="mt-2 text-caption text-neg-ink">{problem || error}</div>}
+      <button type="button" aria-label="Save link" onClick={save} className="btn-primary mt-3 rounded-lg px-4 py-2 text-body font-semibold">
         Save
       </button>
     </Sheet>
@@ -53,7 +53,7 @@ export default function LinksTab({ initialAddress = '' }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="cc-card flex flex-col gap-2 p-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-dim">Address lookup</div>
+        <div className="text-micro font-semibold uppercase tracking-wide text-dim">Address lookup</div>
         <input
           aria-label="Property address"
           placeholder="Street, city, state zip"
@@ -62,7 +62,7 @@ export default function LinksTab({ initialAddress = '' }) {
             setAddress(e.target.value)
             setCopied(false)
           }}
-          className="rounded-[8px] border border-line2 bg-panel2 px-2.5 py-1.5 text-[13px] outline-none"
+          className="rounded-lg border border-line2 bg-panel2 px-2.5 py-1.5 text-body outline-none"
         />
         {has && (
           <div className="flex flex-wrap items-center gap-2">
@@ -81,10 +81,10 @@ export default function LinksTab({ initialAddress = '' }) {
           </div>
         )}
         {has && copySites.length > 0 && (
-          <div data-copy-sites className="flex flex-wrap items-center gap-2 text-[12px] text-muted">
+          <div data-copy-sites className="flex flex-wrap items-center gap-2 text-caption text-muted">
             Then paste it into:
             {copySites.map((s) => (
-              <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="text-[#1d4ed8]">
+              <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="text-link">
                 {s.title} ↗
               </a>
             ))}
@@ -93,10 +93,10 @@ export default function LinksTab({ initialAddress = '' }) {
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-dim">Quick links</div>
-        <div className="flex gap-3 text-[12.5px]">
+        <div className="text-micro font-semibold uppercase tracking-wide text-dim">Quick links</div>
+        <div className="flex gap-3 text-body">
           {editMode && (
-            <button type="button" aria-label="Add link" onClick={() => setEditing(null)} className="font-semibold text-[#1d4ed8]">
+            <button type="button" aria-label="Add link" onClick={() => setEditing(null)} className="font-semibold text-link">
               + Add link
             </button>
           )}
@@ -105,11 +105,11 @@ export default function LinksTab({ initialAddress = '' }) {
           </button>
         </div>
       </div>
-      {error && <div className="text-[12px] text-[#b42318]">{error}</div>}
-      {loading && <div className="text-[13px] text-muted">Loading links…</div>}
+      {error && <div className="text-caption text-neg-ink">{error}</div>}
+      {loading && <div className="text-body text-muted">Loading links…</div>}
       {groups.map(({ grp, links }) => (
         <section key={grp} data-link-group={grp}>
-          <div className="mb-1.5 text-[12px] font-semibold text-muted">{grp}</div>
+          <div className="mb-1.5 text-caption font-semibold text-muted">{grp}</div>
           <div className="flex flex-wrap gap-2">
             {links.map((l) =>
               editMode ? (
@@ -123,7 +123,7 @@ export default function LinksTab({ initialAddress = '' }) {
                   <button type="button" aria-label={`Move ${l.title} down`} onClick={() => move(l, links, 1)} className="text-dim">
                     ↓
                   </button>
-                  <button type="button" aria-label={`Delete ${l.title}`} onClick={() => window.confirm(`Delete ${l.title}?`) && remove(l.id)} className="text-[#b42318]">
+                  <button type="button" aria-label={`Delete ${l.title}`} onClick={() => window.confirm(`Delete ${l.title}?`) && remove(l.id)} className="text-neg-ink">
                     ×
                   </button>
                 </span>

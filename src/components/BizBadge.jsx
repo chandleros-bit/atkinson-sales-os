@@ -1,9 +1,10 @@
 // Small outlined tag identifying which business a row belongs to.
-export default function BizBadge({ biz }) {
+// fixed: one width for both books, so the columns after it line up in lists.
+export default function BizBadge({ biz, fixed = false }) {
   const isMpg = biz === 'mpg'
   return (
     <span
-      className="rounded-md border px-[6px] py-[1px] text-[10.5px] font-bold tracking-wide"
+      className={`rounded-md border px-[6px] py-[1px] text-micro font-bold tracking-wide ${fixed ? 'inline-block w-[62px] flex-none text-center' : ''}`}
       style={{
         background: isMpg ? 'var(--mpg-soft)' : 'var(--bay-soft)',
         borderColor: isMpg ? 'var(--mpg-line)' : 'var(--bay-line)',

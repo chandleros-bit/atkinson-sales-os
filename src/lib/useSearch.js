@@ -2,8 +2,10 @@
 // open tasks from v_tasks. Debounced; nothing is sent under MIN_QUERY
 // characters; an answer to an older query is dropped.
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from './supabase'
+import { supabase, isDemoMode } from './supabase'
+import { demoPeople } from './demoData'
 import { cleanQuery, MIN_QUERY } from './search'
+import { friendlyError } from './friendlyError'
 
 const EMPTY = { people: [], tasks: [], loading: false, error: null }
 export const DEBOUNCE_MS = 150
@@ -18,6 +20,15 @@ export function useSearch(query, prefer = 'all') {
     const mine = ++seq.current
     if (q.length < MIN_QUERY) {
       setState(EMPTY)
+      return undefined
+    }
+    if (isDemoMode) {
+      // Demo mode searches the sample leads, so the palette works without a database.
+      const needle = q.toLowerCase()
+      const people = demoPeople()
+        .filter((p) => [p.name, p.company, p.phone].some((v) => v && v.toLowerCase().includes(needle)))
+        .sort((a, b) => (prefer !== 'all' && a.business_id === prefer ? -1 : 0) - (prefer !== 'all' && b.business_id === prefer ? -1 : 0))
+      setState({ people, tasks: [], loading: false, error: null })
       return undefined
     }
     setState((s) => ({ ...s, loading: true }))
@@ -39,7 +50,7 @@ export function useSearch(query, prefer = 'all') {
           error: people.error?.message || tasks.error?.message || null,
         })
       } catch (e) {
-        if (mine === seq.current) setState({ ...EMPTY, error: String(e?.message || e) })
+        if (mine === seq.current) setState({ ...EMPTY, error: friendlyError(e) })
       }
     }, DEBOUNCE_MS)
     return () => clearTimeout(id)

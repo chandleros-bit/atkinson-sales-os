@@ -8,11 +8,13 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // Per-type presentation. Colors come from the token system where possible;
 // text/email/appt use fixed hues (blue/gold/violet) that read on the dark chrome.
 export const TYPE_META = {
-  call: { label: 'Call', color: 'var(--bay)', border: 'rgba(124,173,68,.4)' },
-  text: { label: 'Text', color: '#5FA8D3', border: 'rgba(95,168,211,.4)' },
-  email: { label: 'Email', color: 'var(--bay-gold)', border: 'rgba(201,160,82,.4)' },
-  note: { label: 'Note', color: 'var(--muted)', border: 'var(--line)' },
-  appointment: { label: 'Appt', color: '#B08BD9', border: 'rgba(176,139,217,.4)' },
+  // Type hues stay clear of the book colors (blue MPG, green Bayway) and pass
+  // AA as small text on white; every tag gets a visible outline.
+  call: { label: 'Call', color: '#3538CD', border: '#C7D7FE' },
+  text: { label: 'Text', color: '#107569', border: '#99F6E0' },
+  email: { label: 'Email', color: '#B54708', border: '#FEDF89' },
+  note: { label: 'Note', color: '#475467', border: '#D0D5DD' },
+  appointment: { label: 'Appt', color: '#6941C6', border: '#D9D6FE' },
 }
 
 export const TYPE_CHIPS = [

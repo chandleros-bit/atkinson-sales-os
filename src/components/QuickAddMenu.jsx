@@ -42,7 +42,7 @@ export default function QuickAddMenu({ onPick, showLead = false, showVisit = fal
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] px-4 text-[14px] font-semibold ${className}`}
+        className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-lg px-4 text-ui font-semibold ${className}`}
         style={style}
       >
         <Icon name="plus" size={16} strokeWidth={2.2} />
@@ -52,7 +52,7 @@ export default function QuickAddMenu({ onPick, showLead = false, showVisit = fal
         <div
           role="menu"
           aria-label="New"
-          className="absolute right-0 top-[46px] z-30 w-[200px] rounded-xl border border-line bg-panel p-1 shadow-lg"
+          className="absolute right-0 top-[46px] z-30 w-[200px] rounded-lg border border-line bg-panel p-1 shadow-lg"
         >
           {items.map((it) => (
             <button
@@ -63,7 +63,7 @@ export default function QuickAddMenu({ onPick, showLead = false, showVisit = fal
                 setOpen(false)
                 onPick(it.kind)
               }}
-              className="flex min-h-[40px] w-full items-center rounded-lg px-2.5 text-left text-[13px] font-semibold hover:bg-hoverbg"
+              className="flex min-h-[40px] w-full items-center rounded-lg px-2.5 text-left text-body font-semibold hover:bg-hoverbg"
             >
               {it.label}
             </button>

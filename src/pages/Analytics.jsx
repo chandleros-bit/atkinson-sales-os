@@ -40,8 +40,8 @@ const dayTitle = (key, count) => {
 function Stat({ label, value }) {
   return (
     <div>
-      <div className="text-[12px] font-medium text-muted">{label}</div>
-      <div className="num mt-0.5 text-[22px] font-extrabold tracking-tight">{value}</div>
+      <div className="text-caption font-medium text-muted">{label}</div>
+      <div className="num mt-0.5 text-title font-extrabold tracking-tight">{value}</div>
     </div>
   )
 }
@@ -52,8 +52,8 @@ function Heatmap({ model, goal, ink }) {
   return (
     <section aria-label="Calling heatmap" className="rounded-card border border-line bg-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-[15px] font-bold">Outbound calls, last {WEEKS} weeks</h3>
-        <span className="text-[12px] text-muted">Darker is busier, against your best day</span>
+        <h3 className="text-ui font-bold">Outbound calls, last {WEEKS} weeks</h3>
+        <span className="text-caption text-muted">Darker is busier, against your best day</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Stat label="Calls" value={stats.total.toLocaleString()} />
@@ -66,7 +66,7 @@ function Heatmap({ model, goal, ink }) {
         <div className="inline-grid gap-[3px]" style={{ gridTemplateColumns: `28px repeat(${weeks.length}, 13px)` }}>
           <span />
           {weeks.map((_, w) => (
-            <span key={w} className="h-4 whitespace-nowrap text-[10px] text-dim">
+            <span key={w} className="h-4 whitespace-nowrap text-micro text-dim">
               {months.find((m) => m.col === w)?.label || ''}
             </span>
           ))}
@@ -75,10 +75,10 @@ function Heatmap({ model, goal, ink }) {
           ))}
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-dim">
+      <div className="mt-3 flex items-center gap-1.5 text-micro text-dim">
         Less
         {[0, 1, 2, 3, 4].map((l) => (
-          <span key={l} className="h-[11px] w-[11px] rounded-[3px]" style={{ background: heatColor(l, ink) }} />
+          <span key={l} className="h-[11px] w-[11px] rounded-sm" style={{ background: heatColor(l, ink) }} />
         ))}
         More
       </div>
@@ -90,13 +90,13 @@ function Heatmap({ model, goal, ink }) {
 function DayRow({ label, cells, ink }) {
   return (
     <>
-      <span className="pr-1 text-right text-[10px] leading-[13px] text-dim">{label}</span>
+      <span className="pr-1 text-right text-micro leading-[13px] text-dim">{label}</span>
       {cells.map((c) => (
         <span
           key={c.key}
           data-heat={c.level ?? 'future'}
           title={c.future ? undefined : dayTitle(c.key, c.count)}
-          className="h-[13px] w-[13px] rounded-[3px]"
+          className="h-[13px] w-[13px] rounded-sm"
           style={{ background: heatColor(c.level, ink) }}
         />
       ))}
@@ -117,22 +117,22 @@ function RoiTable({ title, book, rateLabel, roi, ink }) {
   ]
   return (
     <section aria-label={title} className="rounded-card border border-line bg-panel p-4 sm:p-5">
-      <h3 className="text-[15px] font-bold">{title}</h3>
+      <h3 className="text-ui font-bold">{title}</h3>
       <div className={`mt-3 grid grid-cols-2 gap-2 ${bay ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {tiles.map(([id, label, value]) => (
-          <div key={id} data-kpi={id} className="rounded-xl bg-panel2 px-3 py-2">
-            <div className="text-[11.5px] text-muted">{label}</div>
-            <div className="num text-[17px] font-bold">{value}</div>
+          <div key={id} data-kpi={id} className="rounded-lg bg-panel2 px-3 py-2">
+            <div className="text-caption text-muted">{label}</div>
+            <div className="num text-lead font-bold">{value}</div>
           </div>
         ))}
       </div>
       {roi.rows.length === 0 ? (
-        <div className="mt-3 text-[13px] text-muted">No leads, loans or spend in this window.</div>
+        <div className="mt-3 text-body text-muted">No leads, loans or spend in this window.</div>
       ) : (
         <div className="-mx-4 mt-3 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <table className={`w-full text-[13px] ${bay ? 'min-w-[860px]' : 'min-w-[640px]'}`}>
+          <table className={`w-full text-body ${bay ? 'min-w-[860px]' : 'min-w-[640px]'}`}>
             <thead>
-              <tr className="border-b border-line text-left text-[11.5px] text-muted">
+              <tr className="border-b border-line text-left text-caption text-muted">
                 <th className="py-2 pr-3 font-semibold">Source</th>
                 <th className="num py-2 pr-3 text-right font-semibold">Leads</th>
                 {roi.cols.map((c) => (
@@ -158,7 +158,7 @@ function RoiTable({ title, book, rateLabel, roi, ink }) {
                   <tr key={key} data-source={r.source} className={`border-b border-line last:border-b-0 ${total ? 'font-bold' : ''} ${dash ? 'text-muted' : ''}`}>
                     <td className="max-w-[240px] truncate py-2 pr-3">
                       {r.source}
-                      {r.raws.length > 1 && <span className="ml-1 text-[11.5px] font-normal text-dim">({r.raws.length} merged)</span>}
+                      {r.raws.length > 1 && <span className="ml-1 text-caption font-normal text-dim">({r.raws.length} merged)</span>}
                     </td>
                     <td className="num py-2 pr-3 text-right">{dash ? '—' : r.leads}</td>
                     {roi.cols.map((c) => (
@@ -311,7 +311,7 @@ export default function Analytics() {
         <div className="rounded-card border border-line bg-panel px-6 py-8 text-center text-sm text-muted">Demo mode — connect Supabase to see analytics.</div>
       )}
       {error && (
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div role="alert" className="rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -323,13 +323,13 @@ export default function Analytics() {
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-[17px] font-bold">Lead sources and ROI</h3>
-              <p className="mt-0.5 text-[12.5px] text-muted">
+              <h3 className="text-lead font-bold">Lead sources and ROI</h3>
+              <p className="mt-0.5 text-body text-muted">
                 Leads created and loans funded in the window. Spend prorated by day. A lead that applied and later went Lost counts as Lost.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <div role="tablist" aria-label="Window" className="flex gap-1 rounded-xl bg-panel2 p-1">
+              <div role="tablist" aria-label="Window" className="flex gap-1 rounded-lg bg-panel2 p-1">
                 {WINDOWS.map((w) => (
                   <button
                     key={w.days}
@@ -337,19 +337,19 @@ export default function Analytics() {
                     role="tab"
                     aria-selected={days === w.days}
                     onClick={() => setDays(w.days)}
-                    className={`min-h-[34px] rounded-lg px-3 text-[12.5px] font-semibold ${days === w.days ? 'bg-panel text-[color:var(--text)]' : 'text-muted'}`}
+                    className={`min-h-[34px] rounded-lg px-3 text-body font-semibold ${days === w.days ? 'bg-panel text-[color:var(--text)]' : 'text-muted'}`}
                   >
                     {w.label}
                   </button>
                 ))}
               </div>
-              <button type="button" aria-label="Spend" onClick={() => setSpendOpen(true)} className="min-h-[34px] rounded-lg border border-line2 px-3 text-[12.5px] font-semibold">
+              <button type="button" aria-label="Spend" onClick={() => setSpendOpen(true)} className="min-h-[34px] rounded-lg border border-line2 px-3 text-body font-semibold">
                 Spend
               </button>
             </div>
           </div>
           {data.roiError && (
-            <div role="alert" className="text-[12px] text-[#b42318]">
+            <div role="alert" className="text-caption text-neg-ink">
               Couldn&apos;t load spend or loans: {data.roiError}
             </div>
           )}

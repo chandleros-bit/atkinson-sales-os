@@ -13,7 +13,7 @@ export const PILL_TONE = {
 export function Pill({ tone = 'neutral', className = '', children, ...rest }) {
   return (
     <span
-      className={`inline-block max-w-full truncate rounded-md border px-2 py-[1px] text-[11.5px] font-semibold ${className}`}
+      className={`inline-block max-w-full truncate rounded-md border px-2 py-[1px] text-caption font-semibold ${className}`}
       style={PILL_TONE[tone]}
       {...rest}
     >
