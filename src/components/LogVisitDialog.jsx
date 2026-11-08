@@ -11,8 +11,8 @@ import { useWritebackFlags, useSettingFlags, invokeCrmAction } from '../lib/writ
 import { showToast } from './Toaster'
 import ZohoPromote from './ZohoPromote'
 
-const INPUT = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[16px] sm:text-[13px] text-[color:var(--text)]'
-const LABEL = 'mb-1 block text-[12px] font-semibold text-muted'
+const INPUT = 'w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-lead sm:text-body text-[color:var(--text)]'
+const LABEL = 'mb-1 block text-caption font-semibold text-muted'
 
 function splitLabel(label) {
   const [name, role] = String(label || '').split(' / ')
@@ -172,9 +172,10 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card"
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="text-[15px] font-bold">{touch ? 'Edit visit' : 'Log visit'}</div>
-          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">✕</button>
+        {/* Pinned: the title and close stay in view while a long form scrolls. */}
+        <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-3 flex items-start justify-between gap-3 bg-panel px-5 pb-2 pt-5">
+          <div className="text-ui font-bold">{touch ? 'Edit visit' : 'Log visit'}</div>
+          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-hoverbg">✕</button>
         </div>
 
         {promoting ? (
@@ -188,26 +189,26 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
             </label>
             <div className="mt-2 flex flex-col">
               {results.map((r) => (
-                <button key={`${r.type}:${r.id}`} type="button" onClick={() => pick(r)} className="flex min-h-[40px] items-center gap-2 rounded-[10px] px-2 text-left text-[13px] hover:bg-hoverbg">
+                <button key={`${r.type}:${r.id}`} type="button" onClick={() => pick(r)} className="flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-left text-body hover:bg-hoverbg">
                   <span className="truncate font-semibold">{r.name}</span>
                   <span className="truncate text-muted">· {r.sub}</span>
                 </button>
               ))}
               {query.trim().length >= 2 && (
-                <button type="button" onClick={() => pick({ type: 'new', name: query.trim() })} className="flex min-h-[40px] items-center rounded-[10px] px-2 text-left text-[13px] font-semibold hover:bg-hoverbg">
+                <button type="button" onClick={() => pick({ type: 'new', name: query.trim() })} className="flex min-h-[40px] items-center rounded-lg px-2 text-left text-body font-semibold hover:bg-hoverbg">
                   Add new business: {query.trim()}
                 </button>
               )}
             </div>
           </div>
         ) : (
-          <div className="mb-3 flex items-center justify-between rounded-[10px] border border-line2 px-3 py-2 text-[13px]">
+          <div className="mb-3 flex items-center justify-between rounded-lg border border-line2 px-3 py-2 text-body">
             <span className="truncate font-semibold">{business.name}</span>
             {!touch && !preset && (
               <button type="button" onClick={() => {
                   setBusiness(null)
                   setForm((f) => ({ ...f, contactName: '', role: '', phone: '', email: '' }))
-                }} className="text-[12px] text-muted hover:text-[color:var(--text)]">Change</button>
+                }} className="text-caption text-muted hover:text-[color:var(--text)]">Change</button>
             )}
           </div>
         )}
@@ -232,7 +233,7 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
                 type="button"
                 aria-pressed={form.temperature === t.key}
                 onClick={() => setForm((f) => ({ ...f, temperature: f.temperature === t.key ? null : t.key }))}
-                className={`min-h-[40px] flex-1 rounded-[10px] border text-[13px] font-semibold ${form.temperature === t.key ? 'border-[color:var(--text)]' : 'border-line2 text-muted'}`}
+                className={`min-h-[40px] flex-1 rounded-lg border text-body font-semibold ${form.temperature === t.key ? 'border-[color:var(--text)]' : 'border-line2 text-muted'}`}
               >
                 {t.label}
               </button>
@@ -242,7 +243,7 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
 
         <div className="mt-3 flex flex-col gap-1">
           {OUTCOMES.map((o) => (
-            <label key={o.key} className="flex min-h-[36px] items-center gap-2 text-[13px]">
+            <label key={o.key} className="flex min-h-[36px] items-center gap-2 text-body">
               <input
                 type="checkbox"
                 checked={!!form.outcomes[o.key]}
@@ -255,7 +256,7 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
 
         {canPromote && (
           <div className="mt-3">
-            <label className="flex min-h-[40px] items-center gap-2 text-[13px] font-semibold">
+            <label className="flex min-h-[40px] items-center gap-2 text-body font-semibold">
               <input
                 type="checkbox"
                 checked={zohoOn}
@@ -265,17 +266,18 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
               />
               Add to Zoho as Open
             </label>
-            {promo.forced && <div id="zoho-forced-hint" className="text-[12px] text-muted">Statement or later always goes to Zoho</div>}
+            {promo.forced && <div id="zoho-forced-hint" className="text-caption text-muted">Statement or later always goes to Zoho</div>}
           </div>
         )}
 
-        {problem && <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{problem}</div>}
+        {problem && <div role="alert" className="mt-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{problem}</div>}
 
-        <div className="mt-4 flex gap-2">
+        {/* Pinned: Save is always reachable without scrolling the whole form. */}
+        <div className="sticky bottom-0 -mx-5 -mb-5 mt-4 flex gap-2 border-t border-line bg-panel px-5 pb-5 pt-3">
           {touch && (
-            <button type="button" disabled={saving} onClick={remove} className="min-h-[44px] rounded-[10px] border border-line2 px-4 text-[13px] text-muted">Delete</button>
+            <button type="button" disabled={saving} onClick={remove} className="min-h-[44px] rounded-lg border border-line2 px-4 text-body text-muted">Delete</button>
           )}
-          <button type="button" disabled={saving} onClick={save} className="btn-primary min-h-[44px] flex-1 rounded-[10px] text-[14px] font-semibold">
+          <button type="button" disabled={saving} onClick={save} className="btn-primary min-h-[44px] flex-1 rounded-lg text-ui font-semibold">
             {saving ? 'Saving…' : 'Save visit'}
           </button>
         </div>

@@ -11,6 +11,7 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import TodayAgenda from '../components/TodayAgenda'
+import { demoBayPipeline, demoMpgLeads } from '../lib/demoData'
 import BizBadge from '../components/BizBadge'
 import PersonLink from '../components/PersonLink'
 import Icon from '../components/Icon'
@@ -37,7 +38,6 @@ import {
   activitySeries,
   activityChart,
   monthlyGoals,
-  gaugeSegments,
   pipelineMix,
   topSources,
   incomeMix,
@@ -45,6 +45,7 @@ import {
   fmtMoney,
   fundedLoanDeals,
 } from '../lib/overviewDash'
+import { friendlyError } from '../lib/friendlyError'
 
 const BAY_MIX_STAGES = BAY_STAGES.slice(0, 5)
 const BAY_MIX_COLORS = ['#C5DDA6', '#A4C97A', '#7CAD44', '#4F7A22', '#1F2A5C']
@@ -86,12 +87,12 @@ function Card({ title, sub, link, className = '', label, children }) {
     <section aria-label={label || title} className={`cc-card flex min-w-0 flex-col overflow-hidden ${className}`}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div className="min-w-0">
-          <h3 className="text-[17px] font-semibold tracking-[-0.2px]">{title}</h3>
-          {sub && <div className="mt-0.5 text-[13px] text-muted">{sub}</div>}
+          <h3 className="text-lead font-semibold tracking-[-0.2px]">{title}</h3>
+          {sub && <div className="mt-0.5 text-body text-muted">{sub}</div>}
         </div>
         {link && (
-          <Link to={link.to} className="flex-none text-[13px] font-semibold text-[color:var(--chrome)] hover:underline">
-            {link.label} ↗
+          <Link to={link.to} className="-my-2 -mr-2 inline-flex min-h-[36px] flex-none items-center rounded-lg px-2 text-body font-semibold text-[color:var(--chrome)] hover:bg-hoverbg">
+            {link.label} →
           </Link>
         )}
       </div>
@@ -110,7 +111,7 @@ function Bar({ pct, color, h = 6 }) {
 
 function ErrorNote({ error }) {
   if (!error) return null
-  return <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+  return <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{error}</div>
 }
 
 function AlertBanner({ alert }) {
@@ -118,7 +119,7 @@ function AlertBanner({ alert }) {
   const red = alert.level === 'red'
   return (
     <div
-      className="mt-4 rounded-xl border px-4 py-3 text-[13.5px] font-semibold"
+      className="mt-4 rounded-lg border px-4 py-3 text-body font-semibold"
       style={
         red
           ? { borderColor: 'var(--neg-line)', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }
@@ -136,14 +137,14 @@ function KpiCard({ card }) {
   const value = card.unit === 'currency' ? formatValue(card.value, 'currency') : Number(card.value || 0).toLocaleString()
   return (
     <section data-kpi={card.id} className="cc-card flex min-w-0 flex-col overflow-hidden">
-      <div className="px-[18px] pb-3.5 pt-4">
-        <div className="flex items-center justify-between">
-          <span className="grid h-10 w-10 place-items-center rounded-[10px] border border-line" style={{ color: KPI_INK[card.tone] }}>
+      <div className="px-3.5 pb-3 pt-3 sm:px-[18px] sm:pb-3.5 sm:pt-4">
+        <div className="hidden items-center justify-between sm:flex">
+          <span className="grid h-10 w-10 place-items-center rounded-lg border border-line" style={{ color: KPI_INK[card.tone] }}>
             <Icon name={card.icon} size={20} />
           </span>
           {card.tag && (
             <span
-              className="rounded-md border px-[7px] py-px text-[11px] font-semibold"
+              className="rounded-md border px-[7px] py-px text-micro font-semibold"
               title={card.tag === 'Entered' ? 'Typed into Reports' : card.tag === 'Est. from Arive' ? 'Estimated from the Arive loan import' : 'From synced CRM data'}
               style={card.tag === 'Entered' ? { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' } : { borderColor: 'var(--line2)', background: 'var(--panel2)', color: 'var(--muted)' }}
             >
@@ -151,17 +152,17 @@ function KpiCard({ card }) {
             </span>
           )}
         </div>
-        <div className="mt-3.5 text-[14px] text-muted">{card.label}</div>
-        <div className="num mt-1 text-[28px] font-semibold tracking-[-0.6px]">{value}</div>
+        <div className="line-clamp-2 text-body text-muted sm:mt-3.5 sm:text-ui">{card.label}</div>
+        <div className="num mt-1 text-lead font-semibold tracking-[-0.4px] sm:text-title sm:tracking-[-0.6px]">{value}</div>
         <div className="mt-2.5">
           <Bar pct={card.pct} color={KPI_BAR[card.tone]} />
         </div>
       </div>
-      <div className="mt-auto flex items-center justify-between gap-2 border-t border-line bg-panel2 px-[18px] py-2.5 text-[13px]">
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-line bg-panel2 px-3.5 py-2 text-caption sm:px-[18px] sm:py-2.5 sm:text-body">
         <span className="flex-none font-semibold" style={{ color: DELTA_INK[card.delta.tone] }}>
           {card.delta.text}
         </span>
-        <span className="truncate text-muted">{card.foot}</span>
+        <span className="hidden truncate text-muted sm:inline">{card.foot}</span>
       </div>
     </section>
   )
@@ -205,8 +206,8 @@ function ActivityCard({ series, showProduction }) {
       className="xl:col-span-2"
       sub={
         <span className="flex flex-wrap gap-x-4 gap-y-1">
-          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ background: 'var(--chrome)' }} />Activity · calls, texts, emails</span>
-          {showProduction && <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-[2px]" style={{ background: 'var(--bay)' }} />Production · apps, estimates, closings</span>}
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: 'var(--chrome)' }} />Activity · calls, texts, emails</span>
+          {showProduction && <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: 'var(--bay)' }} />Production · apps, estimates, closings</span>}
         </span>
       }
     >
@@ -237,7 +238,7 @@ function ActivityCard({ series, showProduction }) {
           ))}
         </svg>
         {p && (
-          <div data-chart-tip className="pointer-events-none absolute top-6 w-[210px] rounded-[10px] border border-line bg-panel px-3 py-2.5 text-[12.5px] shadow-[0_8px_20px_rgba(16,24,40,.1)]" style={tipPos}>
+          <div data-chart-tip className="pointer-events-none absolute top-6 w-[210px] rounded-lg border border-line bg-panel px-3 py-2.5 text-body shadow-[0_8px_20px_rgba(16,24,40,.1)]" style={tipPos}>
             <div className="font-semibold">{new Date(`${p.key}T12:00:00`).toLocaleDateString(undefined, DAY_FMT)}</div>
             <div className="mt-1.5 flex justify-between text-muted">Touchpoints<span className="num font-semibold text-[color:var(--chrome)]">{p.touch}</span></div>
             <div className="mt-0.5 flex justify-between text-muted">Calls<span className="num font-semibold text-[color:var(--text)]">{p.calls}</span></div>
@@ -252,10 +253,10 @@ function ActivityCard({ series, showProduction }) {
           const d = delta(s.now, s.before)
           return (
             <div key={s.label} className="border-r border-hoverbg px-5 py-3 last:border-r-0">
-              <div className="text-[12.5px] text-dim">{s.label}</div>
-              <div className="mt-0.5 text-[18px] font-semibold">
+              <div className="text-body text-dim">{s.label}</div>
+              <div className="mt-0.5 text-lead font-semibold">
                 <span className="num">{s.now.toLocaleString()}</span>{' '}
-                <span className="text-[12.5px] font-semibold" style={{ color: d.ink }} title={`vs the ${CHART_DAYS} days before`}>{d.text}</span>
+                <span className="text-body font-semibold" style={{ color: d.ink }} title={`vs the ${CHART_DAYS} days before`}>{d.text}</span>
               </div>
             </div>
           )
@@ -265,8 +266,24 @@ function ActivityCard({ series, showProduction }) {
   )
 }
 
+// The arc fills to the share of goals hit or on pace, so 0% reads empty and
+// 100% reads full. Behind goals stay grey track; the legend counts them.
+function goalArc(counts) {
+  const total = counts.hit + counts.pace + counts.behind
+  if (!total) return []
+  let at = 0
+  return ['hit', 'pace']
+    .filter((k) => counts[k] > 0)
+    .map((k) => {
+      const len = (counts[k] / total) * 100
+      const seg = { status: k, dash: `${len.toFixed(2)} ${(100 - len).toFixed(2)}`, offset: (-at).toFixed(2) }
+      at += len
+      return seg
+    })
+}
+
 function GoalsCard({ model }) {
-  const segs = gaugeSegments(model.counts)
+  const segs = goalArc(model.counts)
   return (
     <Card title="Monthly Goals" link={{ to: '/reports', label: 'Reports' }}>
       <div className="flex justify-center px-5 pt-4">
@@ -282,7 +299,7 @@ function GoalsCard({ model }) {
       <div className="flex flex-col gap-[11px] px-5 pb-4 pt-2.5">
         {model.goals.map((g) => (
           <div key={g.id} data-goal={g.id} data-status={g.status}>
-            <div className="flex items-center gap-2 text-[13.5px]">
+            <div className="flex items-center gap-2 text-body">
               <span className="h-[9px] w-[9px] flex-none rounded-full" style={{ background: STATUS_COLOR[g.status] }} title={STATUS_LABEL[g.status]} />
               <span className="flex-1 font-medium">{g.label}</span>
               <span className="num text-muted">
@@ -294,7 +311,7 @@ function GoalsCard({ model }) {
             </div>
           </div>
         ))}
-        <div className="mt-0.5 flex gap-3.5 text-[12px] text-dim">
+        <div className="mt-0.5 flex gap-3.5 text-caption text-dim">
           {['hit', 'pace', 'behind'].map((s) => (
             <span key={s} className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[s] }} />
@@ -352,16 +369,16 @@ function PipelineMixCard({ biz, rows, rules }) {
         <Donut slices={slices} size={128} center={mix.total} sub="active" label="Pipeline by stage" />
         <div className="flex min-w-0 flex-1 flex-col gap-[9px]">
           {mix.slices.map((s) => (
-            <div key={s.stage} data-mix={s.stage} className="flex items-center gap-2 text-[13px]">
-              <span className="h-[9px] w-[9px] flex-none rounded-[3px]" style={{ background: colors[stages.indexOf(s.stage)] }} />
+            <div key={s.stage} data-mix={s.stage} className="flex items-center gap-2 text-body">
+              <span className="h-[9px] w-[9px] flex-none rounded-sm" style={{ background: colors[stages.indexOf(s.stage)] }} />
               <span className="flex-1 truncate" title={s.stage}>{SHORT_STAGE[s.stage] || s.stage}</span>
               <span className="num font-semibold">{s.n}</span>
             </div>
           ))}
-          {mix.total === 0 && <div className="text-[13px] text-muted">No active leads.</div>}
+          {mix.total === 0 && <div className="text-body text-muted">No active leads.</div>}
         </div>
       </div>
-      <div className="mx-5 mb-4 mt-auto rounded-[10px] bg-panel2 px-3 py-2.5 text-[12.5px] text-muted">
+      <div className="mx-5 mb-4 mt-auto rounded-lg bg-panel2 px-3 py-2.5 text-body text-muted">
         <b className="text-[color:var(--text)]">{stuck.value}</b> stuck in stage · {stuck.foot}
       </div>
     </Card>
@@ -376,18 +393,18 @@ function SourcesCard({ biz, sources }) {
       <div className="flex flex-col gap-[13px] px-5 pb-[18px] pt-3.5">
         {sources.map((s) => (
           <div key={`${s.book}-${s.source}`} data-source={s.source}>
-            <div className="flex items-center gap-2 text-[13.5px]">
+            <div className="flex items-center gap-2 text-body">
               {biz === 'all' && <BizBadge biz={s.book} />}
               <span className="flex-1 truncate font-medium">{s.source}</span>
               <span className="num font-semibold">{s.leads}</span>
-              <span className="num w-11 text-right text-[12.5px] text-dim">{s.rate}%</span>
+              <span className="num w-11 text-right text-body text-dim">{s.rate}%</span>
             </div>
             <div className="mt-[5px]">
               <Bar pct={(s.leads / max) * 100} color={s.book === 'mpg' ? 'var(--mpg)' : 'var(--bay)'} h={8} />
             </div>
           </div>
         ))}
-        {sources.length === 0 && <div className="py-6 text-center text-[13px] text-muted">No new leads this month yet.</div>}
+        {sources.length === 0 && <div className="py-6 text-center text-body text-muted">No new leads this month yet.</div>}
       </div>
     </Card>
   )
@@ -408,21 +425,29 @@ function IncomeCard({ model, biz }) {
   return (
     <Card title="Income Mix" sub={`This month · ${model.pct}% of ${fmtMoney(model.goal)} goal`} link={{ to: '/reports', label: 'Reports' }}>
       <div className="flex items-center gap-5 px-5 py-[18px]">
-        <Donut slices={slices} size={130} center={fmtMoney(model.total)} label="Income by book" />
-        <div className="flex flex-1 flex-col gap-3 text-[13.5px]">
+        {slices.length > 1 ? (
+          <Donut slices={slices} size={130} center={fmtMoney(model.total)} label="Income by book" />
+        ) : (
+          <div className="flex w-[130px] flex-none flex-col gap-2">
+            <div className="num text-title font-semibold tracking-[-0.6px]">{fmtMoney(model.total)}</div>
+            <Bar pct={model.pct} color={biz === 'mpg' ? 'var(--mpg)' : biz === 'bay' ? 'var(--bay)' : 'var(--chrome)'} />
+            <div className="num text-body text-muted">{model.pct}% of goal</div>
+          </div>
+        )}
+        <div className="flex flex-1 flex-col gap-3 text-body">
           {rows.map((r) => (
             <div key={r.key}>
               <div className="flex items-center gap-2">
-                <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: r.color }} />
+                <span className="h-[9px] w-[9px] rounded-sm" style={{ background: r.color }} />
                 {r.label}
               </div>
-              <div className="num ml-[17px] mt-0.5 text-[17px] font-semibold">{formatValue(r.value, 'currency')}</div>
+              <div className="num ml-[17px] mt-0.5 text-lead font-semibold">{formatValue(r.value, 'currency')}</div>
             </div>
           ))}
-          <div className="text-[12.5px] text-muted">Annualized {fmtMoney(model.annualized)}</div>
+          <div className="text-body text-muted">Annualized {fmtMoney(model.annualized)}</div>
         </div>
       </div>
-      <div className="mx-5 mb-4 mt-auto text-[12px] text-dim">
+      <div className="mx-5 mb-4 mt-auto text-caption text-dim">
         {!model.fromArive ? 'Entered in Reports' : biz === 'all' ? 'Commission estimated from Arive · residual entered in Reports' : 'Estimated from Arive'}
       </div>
     </Card>
@@ -437,8 +462,8 @@ function UpNextCard({ queue, loading, error }) {
       sub={loading ? 'Loading…' : `${queue.length} to work · ${urgentCount(queue)} need action now`}
       link={{ to: '/workbench', label: 'Workbench' }}
     >
-      {error && <div className="px-5 py-6 text-center text-[13px] text-muted">{error}</div>}
-      {!loading && !error && top.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-muted">Nobody slipping. Nice work.</div>}
+      {error && <div className="px-5 py-6 text-center text-body text-muted">{error}</div>}
+      {!loading && !error && top.length === 0 && <div className="px-5 py-8 text-center text-body text-muted">Nobody slipping. Nice work.</div>}
       <div className="pb-2 pt-1">
         {top.map((r) => {
           const tel = telHref(r.phone)
@@ -448,16 +473,16 @@ function UpNextCard({ queue, loading, error }) {
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <BizBadge biz={r.business_id} />
-                  <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[14px] font-semibold">
+                  <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-ui font-semibold">
                     {r.name || '(no name)'}
                   </PersonLink>
                 </div>
-                <div className="mt-0.5 truncate text-[12.5px] font-semibold" style={{ color: urgent ? 'var(--neg-ink)' : 'var(--text)' }}>
+                <div className="mt-0.5 truncate text-body font-semibold" style={{ color: urgent ? 'var(--neg-ink)' : 'var(--text)' }}>
                   {reasonText(r)}
                 </div>
               </div>
               {tel && (
-                <a href={tel} aria-label={`Call ${r.name || 'lead'}`} title={`Call ${formatPhone(r.phone)}`} className="grid h-[34px] w-[34px] flex-none place-items-center rounded-[9px] bg-[color:var(--chrome)] text-white hover:opacity-90">
+                <a href={tel} aria-label={`Call ${r.name || 'lead'}`} title={`Call ${formatPhone(r.phone)}`} className="grid h-[34px] w-[34px] flex-none place-items-center rounded-lg bg-[color:var(--chrome)] text-white hover:opacity-90">
                   <Icon name="phone" size={15} strokeWidth={1.9} />
                 </a>
               )}
@@ -470,20 +495,26 @@ function UpNextCard({ queue, loading, error }) {
 }
 
 function SprintCard({ model }) {
+  const sub = model.ended
+    ? `${model.label} · ended · final results`
+    : `${model.label} · ${model.weeksLeft} ${model.weeksLeft === 1 ? 'week' : 'weeks'} left`
+  // A finished sprint is judged on the result (Hit / Missed), not live pace.
+  const good = (s) => (model.ended ? s.hit : s.onPace)
+  const word = (s) => (model.ended ? (s.hit ? 'Hit' : 'Missed') : s.onPace ? 'On pace' : 'Behind')
   return (
-    <Card title="90-Day Sprints" sub={`${model.label} · ${model.weeksLeft} ${model.weeksLeft === 1 ? 'week' : 'weeks'} left`} link={{ to: '/reports', label: 'Reports' }}>
+    <Card title={model.ended ? 'Last 90-Day Sprint' : '90-Day Sprints'} sub={sub} link={{ to: '/reports', label: 'Reports' }}>
       <div className="flex flex-col gap-[13px] px-5 pb-[18px] pt-3.5">
         {model.items.map((s) => (
           <div key={s.key} data-sprint={s.key}>
-            <div className="flex items-center gap-2 text-[13.5px]">
+            <div className="flex items-center gap-2 text-body">
               <span className="h-2 w-2 flex-none rounded-full" style={{ background: s.book === 'mpg' ? 'var(--mpg)' : 'var(--bay)' }} />
               <span className="flex-1 truncate font-medium">{s.label}</span>
               <span className="num text-muted">{s.value} / {s.target}</span>
               <span
-                className="flex-none rounded-md border px-[7px] py-px text-[11px] font-semibold"
-                style={s.onPace ? { borderColor: 'var(--pos-line)', background: 'var(--pos-bg)', color: 'var(--pos-ink)' } : { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
+                className="flex-none rounded-md border px-[7px] py-px text-micro font-semibold"
+                style={good(s) ? { borderColor: 'var(--pos-line)', background: 'var(--pos-bg)', color: 'var(--pos-ink)' } : { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}
               >
-                {s.onPace ? 'On pace' : 'Behind'}
+                {word(s)}
               </span>
             </div>
             <div className="ml-4 mt-[5px]">
@@ -491,6 +522,7 @@ function SprintCard({ model }) {
             </div>
           </div>
         ))}
+        {model.ended && <div className="text-body text-muted">The next sprint isn’t set yet.</div>}
       </div>
     </Card>
   )
@@ -595,7 +627,7 @@ function useOverviewData(biz) {
           mpgRows: (res.mpgRows?.data || []).map((r) => ({ ...r, business_id: 'mpg' })),
         })
       } catch (e) {
-        if (alive) setError(String(e?.message || e))
+        if (alive) setError(friendlyError(e))
       } finally {
         if (alive) setLoading(false)
       }
@@ -646,25 +678,20 @@ export default function Overview() {
         title={`${greeting()}, Chandler`}
         subtitle={subtitle}
         actions={
-          <span className="flex min-h-[36px] items-center gap-2 rounded-[9px] border border-line2 px-3 text-[13px] font-medium text-[#344054]">
+          <span className="flex min-h-[36px] items-center gap-2 rounded-lg border border-line2 px-3 text-body font-medium text-ink2">
             <Icon name="calendar" size={16} />
             {MONTH_NAMES[new Date().getMonth()]}
           </span>
         }
       />
       <ErrorNote error={error} />
-      {isDemoMode && (
-        <div className="mt-4 rounded-xl border border-line bg-panel px-3.5 py-2.5 text-xs text-muted">
-          Demo mode — connect Supabase to see live numbers.
-        </div>
-      )}
       {loading && <div className="mt-6 text-sm text-muted">Loading overview…</div>}
 
       {!loading && !error && view && (
         <>
           <AlertBanner alert={view.alert} />
 
-          <div className="mt-5 grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-[18px] xl:grid-cols-4">
             {view.kpis.map((c) => (
               <KpiCard key={c.id} card={c} />
             ))}
@@ -729,20 +756,11 @@ function demoData() {
       { business_id: 'bay', source: 'LendingFlow', created: ago(5), person_stage: 'Lead', tags: [] },
       { business_id: 'mpg', source: 'Website', created: ago(2), person_stage: 'Contacted', tags: null },
     ],
-    bayPipe: [
-      { id: 'b1', business_id: 'bay', name: 'Ramirez Purchase', stage: 'Application Received', stage_since: ago(4), last_touch_at: null },
-      { id: 'b2', business_id: 'bay', name: 'Nguyen Refi', stage: 'Application/Estimate Sent', stage_since: ago(9), last_touch_at: ago(1) },
-      { id: 'b3', business_id: 'bay', name: 'Okafor Purchase', stage: 'Contacted/Working', stage_since: ago(12), last_touch_at: ago(2) },
-      { id: 'b4', business_id: 'bay', name: 'Lee Purchase', stage: 'New Lead', stage_since: ago(1), last_touch_at: null },
-    ],
+    bayPipe: demoBayPipeline(),
     deals: [
       { status: 'won', value: 340000, expected_close: today, business_id: 'bay' },
       { status: 'open', value: 625000, expected_close: null, business_id: 'bay' },
     ],
-    mpgRows: [
-      { id: 'm1', business_id: 'mpg', name: 'Ana Torres', company: 'Riverside Deli', stage: 'Open', last_touch_at: null },
-      { id: 'm2', business_id: 'mpg', name: 'Chris Lee', company: 'Heights Auto', stage: 'Contacted', last_touch_at: ago(1) },
-      { id: 'm3', business_id: 'mpg', name: 'Priya Shah', company: 'Oak Spa', stage: 'Qualified', last_touch_at: ago(1) },
-    ],
+    mpgRows: demoMpgLeads(),
   }
 }

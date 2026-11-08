@@ -36,18 +36,18 @@ function WritebackRow({ wb }) {
           style={{ background: dotColor, boxShadow: `0 0 0 4px ${dotColor}22` }}
         />
         <div className="min-w-0 flex-1">
-          <div className="text-[13.5px] font-semibold">Write-back (Quick Actions)</div>
-          <div className="mt-0.5 text-[12px] text-muted">
+          <div className="text-body font-semibold">Write-back (Quick Actions)</div>
+          <div className="mt-0.5 text-caption text-muted">
             Last 24h: {wb.ok} ok · {wb.partial} partial · {wb.error} failed
             {wb.refused ? ` · ${wb.refused} refused` : ''}
           </div>
           {wb.latestError && (
-            <div className="mt-1 truncate text-[11.5px] text-red-700/80">
+            <div className="mt-1 truncate text-caption text-neg-ink/80">
               Latest problem ({timeAgo(wb.latestError.at)}): {wb.latestError.text}
             </div>
           )}
         </div>
-        <div className="num text-right text-[12.5px] text-muted">{wb.lastAt ? timeAgo(wb.lastAt) : 'none yet'}</div>
+        <div className="num text-right text-body text-muted">{wb.lastAt ? timeAgo(wb.lastAt) : 'none yet'}</div>
       </div>
     </div>
   )
@@ -151,7 +151,7 @@ export default function SyncStatus() {
       )}
 
       {!isDemoMode && error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -175,10 +175,10 @@ export default function SyncStatus() {
                   style={{ background: dotColor, boxShadow: `0 0 0 4px ${dotColor}22` }}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-[13.5px] font-semibold">
+                  <div className="flex items-center gap-2 text-body font-semibold">
                     {meta.label}
                     <span
-                      className="rounded px-1.5 py-px text-[9.5px] font-bold"
+                      className="rounded px-1.5 py-px text-micro font-bold"
                       style={{
                         color: meta.biz === 'mpg' ? 'var(--mpg)' : 'var(--bay)',
                         background: meta.biz === 'mpg' ? 'var(--mpg-soft)' : 'var(--bay-soft)',
@@ -188,18 +188,18 @@ export default function SyncStatus() {
                     </span>
                   </div>
                   {row?.message && !ok && (
-                    <div className="mt-1 truncate text-[11.5px] text-red-700/80">{row.message}</div>
+                    <div className="mt-1 truncate text-caption text-neg-ink/80">{row.message}</div>
                   )}
                   {!row && (
-                    <div className="mt-1 text-[11.5px] text-dim">
+                    <div className="mt-1 text-caption text-dim">
                       Not connected yet — see docs/phase2-fub-setup.md
                     </div>
                   )}
                 </div>
                 {row && (
                   <div className="text-right">
-                    <div className="num text-[12.5px] text-muted">{timeAgo(row.ran_at)}</div>
-                    <div className="num text-[11px] text-dim">{row.records_upserted} synced</div>
+                    <div className="num text-body text-muted">{timeAgo(row.ran_at)}</div>
+                    <div className="num text-micro text-dim">{row.records_upserted} synced</div>
                   </div>
                 )}
               </div>

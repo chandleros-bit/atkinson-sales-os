@@ -28,16 +28,16 @@ function Row({ item, index, now, onDial }) {
       <div role="button" tabIndex={0} onClick={() => onDial(index)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onDial(index)} className="min-w-0 flex-1 cursor-pointer text-left" aria-label={`Dial ${r.name || 'lead'}`}>
         <div className="flex min-w-0 items-center gap-2">
           <BizBadge biz={item.book} />
-          <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[14px] font-semibold">{r.name || '(no name)'}</PersonLink>
-          {r.lead_source && <span className="max-w-[120px] flex-none truncate rounded-full border border-line2 px-2 text-[11px] font-semibold text-muted">{r.lead_source}</span>}
+          <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-ui font-semibold">{r.name || '(no name)'}</PersonLink>
+          {r.lead_source && <span className="max-w-[120px] flex-none truncate rounded-full border border-line2 px-2 text-micro font-semibold text-muted">{r.lead_source}</span>}
         </div>
-        <div className="mt-1 flex items-center gap-2 text-[12.5px] text-muted">
+        <div className="mt-1 flex items-center gap-2 text-body text-muted">
           <Pips item={item} />
           <span>{[item.label, whenLabel(item, now), item.hint].filter(Boolean).join(' · ')}</span>
         </div>
       </div>
       {tel && (
-        <a href={tel} aria-label={`Call ${r.name || 'lead'}`} className="grid h-10 w-10 flex-none place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
+        <a href={tel} aria-label={`Call ${r.name || 'lead'}`} className="grid h-10 w-10 flex-none place-items-center rounded-lg text-muted hover:bg-hoverbg">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg>
         </a>
       )}
@@ -53,14 +53,14 @@ export default function DialList({ dueNow, laterToday, now = Date.now(), onDial 
     <section aria-label="Lead cadence">
       <div className={SECTION_HEAD}>
         <SectionTitle icon="phone" count={dueNow.length}>Lead cadence</SectionTitle>
-        {laterToday.length > 0 && <span className="flex-none text-[12.5px] font-semibold text-muted">{laterToday.length} later today</span>}
+        {laterToday.length > 0 && <span className="flex-none text-body font-semibold text-muted">{laterToday.length} later today</span>}
         {all.length > 0 && (
-          <button type="button" data-start-dialing onClick={() => onDial(0)} className="ml-auto min-h-[34px] flex-none rounded-[10px] px-3 text-[13px] font-bold text-white" style={{ background: 'var(--chrome)' }}>
+          <button type="button" data-start-dialing onClick={() => onDial(0)} className="ml-auto min-h-[34px] flex-none rounded-lg px-3 text-body font-bold text-white" style={{ background: 'var(--chrome)' }}>
             Start dialing
           </button>
         )}
       </div>
-      {all.length === 0 && <div className="border-b border-line px-4 py-3 text-[13px] text-muted">No lead calls due right now.</div>}
+      {all.length === 0 && <div className="border-b border-line px-4 py-3 text-body text-muted">No lead calls due right now.</div>}
       {all.map((it, i) => <Row key={`${it.id}:${it.kind}:${it.step}`} item={it} index={i} now={now} onDial={onDial} />)}
     </section>
   )

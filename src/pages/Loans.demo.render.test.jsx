@@ -32,7 +32,7 @@ async function render() {
 describe('Loans page in demo mode', () => {
   it('renders the panels and the table from the sample loans', async () => {
     const host = await render()
-    expect(host.textContent).toContain('Demo mode')
+    // The app-wide Layout banner says demo mode; the page no longer repeats it.
     expect(host.querySelector('[data-panel="pipeline-status"]')).not.toBeNull()
     expect(host.querySelector('[data-panel="lender-spread"]')).not.toBeNull()
     expect(host.querySelector('[data-panel="loans-funded"]').textContent).toContain('1 Loan Funded')

@@ -8,6 +8,8 @@ import { todayKey } from '../lib/overviewCards'
 import { fetchContactEvents, toCalendarEvent, onContactEventsChanged } from '../lib/contactEvents'
 import { openPerson } from './PersonSheet'
 import { OsTag } from './ScheduleEvent'
+import { demoCalendarEvents } from '../lib/demoData'
+import { friendlyError } from '../lib/friendlyError'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -36,6 +38,7 @@ export default function TodayAgenda({ className = '' }) {
 
   useEffect(() => {
     if (isDemoMode) {
+      setRows(demoCalendarEvents())
       setLoading(false)
       return
     }
@@ -59,7 +62,7 @@ export default function TodayAgenda({ className = '' }) {
         // Our own events never block the Outlook ones: a failed read shows none.
         else setRows([...liveEvents(data), ...(osRes.data || []).map(toCalendarEvent)])
       } catch (e) {
-        if (alive) setError(String(e?.message || e))
+        if (alive) setError(friendlyError(e))
       } finally {
         if (alive) setLoading(false)
       }
@@ -85,16 +88,16 @@ export default function TodayAgenda({ className = '' }) {
     <section className={`cc-card flex flex-col overflow-hidden ${className}`}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div className="min-w-0">
-          <h3 className="text-[17px] font-semibold tracking-[-0.2px]">Today&apos;s Events</h3>
-          <div className="mt-0.5 text-[13px] text-muted">{sub}</div>
+          <h3 className="text-lead font-semibold tracking-[-0.2px]">Today&apos;s Events</h3>
+          <div className="mt-0.5 text-body text-muted">{sub}</div>
         </div>
-        <Link to="/calendar" className="flex-none text-[13px] font-semibold text-[color:var(--chrome)] hover:underline">
-          Calendar ↗
+        <Link to="/calendar" className="-my-2 -mr-2 inline-flex min-h-[36px] flex-none items-center rounded-lg px-2 text-body font-semibold text-[color:var(--chrome)] hover:bg-hoverbg">
+          Calendar →
         </Link>
       </div>
 
       {error && (
-        <div className="m-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="m-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -118,21 +121,21 @@ export default function TodayAgenda({ className = '' }) {
                 {...(e.os ? { type: 'button', onClick: () => openPerson(e.contact_id), 'data-os-event': e.kind } : {})}
                 className={`flex items-center gap-3 border-b border-line py-2.5 text-left last:border-b-0 ${e.os ? 'hover:bg-hoverbg' : ''} ${e.status === 'done' ? 'opacity-60' : ''}`}
               >
-                <div className={`num w-[58px] flex-none text-[13px] font-semibold ${past ? 'text-dim' : ''}`}>
+                <div className={`num w-[58px] flex-none text-body font-semibold ${past ? 'text-dim' : ''}`}>
                   {e.is_all_day ? 'All day' : timeLabel(e)}
                 </div>
                 <span className="w-[3px] flex-none self-stretch rounded-full" style={{ background: color }} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-semibold">
+                  <div className="truncate text-ui font-semibold">
                     {e.title || '(no title)'}
                     {e.os && <OsTag done={e.status === 'done'} />}
                   </div>
-                  <div className="truncate text-[12.5px] text-muted">
+                  <div className="truncate text-body text-muted">
                     {[e.location, biz === 'mpg' ? 'MPG' : biz === 'bay' ? 'Bayway' : null].filter(Boolean).join(' · ')}
                   </div>
                 </div>
                 {e === next && (
-                  <span className="flex-none rounded-md border px-[7px] py-px text-[11.5px] font-semibold" style={{ borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}>
+                  <span className="flex-none rounded-md border px-[7px] py-px text-caption font-semibold" style={{ borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}>
                     Next
                   </span>
                 )}

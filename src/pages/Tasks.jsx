@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import Segmented from '../components/Segmented'
+import BizBadge from '../components/BizBadge'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import {
@@ -14,6 +16,7 @@ import {
 import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
 import QuickActions from '../components/QuickActions'
+import { friendlyError } from '../lib/friendlyError'
 
 // One generous window; both books together are far under this today. If a book
 // ever exceeds it the "Load more" button pages the rest in.
@@ -28,19 +31,7 @@ const DEMO_ROWS = [
 ]
 
 function BizTag({ business_id }) {
-  const mpg = business_id === 'mpg'
-  return (
-    <span
-      className="flex-none rounded px-1.5 py-0.5 text-center text-[9.5px] font-bold tracking-wide"
-      style={{
-        color: mpg ? 'var(--mpg)' : 'var(--bay)',
-        background: mpg ? 'var(--mpg-soft)' : 'var(--bay-soft)',
-        width: 46,
-      }}
-    >
-      {mpg ? 'MPG' : 'BAYWAY'}
-    </span>
-  )
+  return <BizBadge biz={business_id} fixed />
 }
 
 // Overdue and Upcoming span many days, so a bare time is ambiguous there — two
@@ -49,7 +40,7 @@ function BizTag({ business_id }) {
 function DueCell({ bucketKey, due_at, className = 'w-24' }) {
   const spansDays = bucketKey === 'overdue' || bucketKey === 'upcoming'
   return (
-    <div className={`num flex-none text-[12px] text-muted ${className}`}>
+    <div className={`num flex-none text-caption text-muted ${className}`}>
       {spansDays ? dueLabel(due_at) : dueTimeOfDay(due_at)}
     </div>
   )
@@ -57,11 +48,11 @@ function DueCell({ bucketKey, due_at, className = 'w-24' }) {
 
 function PriorityTag({ priority, compact = false }) {
   const key = normalizePriority(priority)
-  if (!key) return compact ? null : <span className="w-12 flex-none" />
+  if (!key) return compact ? null : <span className="w-[58px] flex-none" />
   const m = PRIORITY_META[key]
   return (
     <span
-      className="w-12 flex-none rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide"
+      className="w-[58px] flex-none rounded-md px-1.5 py-px text-center text-micro font-semibold uppercase tracking-wide"
       style={{ color: m.color, border: `1px solid ${m.border}` }}
     >
       {m.label}
@@ -99,7 +90,7 @@ export default function Tasks() {
       setRows(page)
       setHasMore(page.length === PER_PAGE)
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoading(false)
     }
@@ -118,7 +109,7 @@ export default function Tasks() {
       setRows(page)
       setPending({})
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     }
   }
 
@@ -130,7 +121,7 @@ export default function Tasks() {
       setRows((prev) => [...prev, ...page])
       setHasMore(page.length === PER_PAGE)
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoadingMore(false)
     }
@@ -148,26 +139,20 @@ export default function Tasks() {
     <div>
       <PageHeader
         title="Tasks"
-        note={!loading && !error && <span className="num text-[12px] text-muted">{total} open</span>}
+        note={!loading && !error && <span className="num text-caption text-muted">{total} open</span>}
         subtitle="Every open follow-up across both books — FollowUpBoss (Bayway) and Zoho (MPG). Complete or push a task here and it changes in the CRM too."
       />
 
-      <div className="-mx-4 mt-3 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:flex-wrap sm:px-0">
-        {PRIORITY_CHIPS.map((c) => (
-          <button
-            key={c.key}
-            onClick={() => setPriorityFilter(c.key)}
-            className={`min-h-[36px] flex-none rounded-lg px-3 py-1.5 text-xs font-semibold sm:min-h-0 sm:px-2.5 ${
-              priorityFilter === c.key ? 'bg-hoverbg text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
-            }`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label="Priority"
+        className="mt-3 sm:mt-4"
+        options={PRIORITY_CHIPS.map((c) => [c.key, c.label])}
+        value={priorityFilter}
+        onChange={setPriorityFilter}
+      />
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -195,7 +180,7 @@ export default function Tasks() {
           {groups.map((g) => (
             <div key={g.key}>
               <div
-                className="mb-2 text-[11px] font-semibold uppercase tracking-wide"
+                className="mb-2 text-micro font-semibold uppercase tracking-wide"
                 style={{ color: BUCKET_META[g.key].color }}
               >
                 {g.label}
@@ -218,14 +203,14 @@ export default function Tasks() {
                       <PriorityTag priority={r.priority} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="line-clamp-2 text-[13.5px] font-semibold sm:line-clamp-1 sm:text-[13px]">
+                      <div className="line-clamp-2 text-body font-semibold sm:line-clamp-1 sm:text-body">
                         {r.title || '(untitled task)'}
                         {r.task_type && (
-                          <span className="ml-2 text-[11px] font-normal text-dim">{r.task_type}</span>
+                          <span className="ml-2 text-micro font-normal text-dim">{r.task_type}</span>
                         )}
                       </div>
                       {r.contact_name && (
-                        <div className="mt-0.5 truncate text-[12.5px] text-muted sm:hidden">
+                        <div className="mt-0.5 truncate text-body text-muted sm:hidden">
                           <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name}</PersonLink>
                         </div>
                       )}
@@ -235,11 +220,11 @@ export default function Tasks() {
                         <PriorityTag priority={r.priority} compact />
                       </div>
                     </div>
-                    <div className="hidden w-40 flex-none truncate text-[12.5px] text-muted lg:block">
+                    <div className="hidden w-40 flex-none truncate text-body text-muted lg:block">
                       <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name || '—'}</PersonLink>
                     </div>
                     {r.owner && (
-                      <div className="hidden w-28 flex-none truncate text-right text-[11px] text-dim xl:block">
+                      <div className="hidden w-28 flex-none truncate text-right text-micro text-dim xl:block">
                         {r.owner}
                       </div>
                     )}

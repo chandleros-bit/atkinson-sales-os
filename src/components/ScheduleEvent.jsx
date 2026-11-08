@@ -46,7 +46,7 @@ function DesktopAlertsHint({ remindMin }) {
     }
   }
   return (
-    <button type="button" onClick={ask} className="mt-1 text-[11.5px] font-semibold text-muted underline">
+    <button type="button" onClick={ask} className="mt-1 text-caption font-semibold text-muted underline">
       Turn on desktop alerts too
     </button>
   )
@@ -128,7 +128,7 @@ export function ScheduleEventForm({ businessId, contactId, contactName, t, onSav
         <input type="time" aria-label="Time" value={time} step={300} onChange={(e) => setTime(e.target.value)} className={inputCls} />
       </div>
 
-      <div className="mt-3 text-[11.5px] font-semibold text-dim">Duration</div>
+      <div className="mt-3 text-caption font-semibold text-dim">Duration</div>
       <div className="mt-1 flex flex-wrap gap-2" role="group" aria-label="Duration">
         {DURATIONS.map((d) => (
           <Chip key={d} t={t} active={durationMin === d} onClick={() => setDurationMin(d)}>
@@ -137,7 +137,7 @@ export function ScheduleEventForm({ businessId, contactId, contactName, t, onSav
         ))}
       </div>
 
-      <label className="mt-3 block text-[11.5px] font-semibold text-dim">
+      <label className="mt-3 block text-caption font-semibold text-dim">
         Remind me
         <select
           aria-label="Remind me"
@@ -165,14 +165,14 @@ export function ScheduleEventForm({ businessId, contactId, contactName, t, onSav
       />
 
       {canNote && (
-        <label className="mt-3 flex items-center gap-2 text-[12.5px]">
+        <label className="mt-3 flex items-center gap-2 text-body">
           <input type="checkbox" checked={crmNote} onChange={(e) => setCrmNote(e.target.checked)} aria-label={`Add note in ${crm}`} />
           Add note in {crm}
         </label>
       )}
 
       {error && (
-        <div role="alert" className="mt-3 rounded-[10px] border px-3 py-2 text-[12.5px]" style={{ borderColor: '#f2b8b4', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }}>
+        <div role="alert" className="mt-3 rounded-lg border px-3 py-2 text-body" style={{ borderColor: '#f2b8b4', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }}>
           {error}
         </div>
       )}
@@ -186,7 +186,7 @@ export function ScheduleEventForm({ businessId, contactId, contactName, t, onSav
 // Marks a call or meeting scheduled in the app (contact_events), not Outlook.
 export function OsTag({ done }) {
   return (
-    <span className="ml-1.5 rounded border border-line2 px-1 py-px align-middle text-[9.5px] font-bold uppercase tracking-wide text-dim">
+    <span className="ml-1.5 rounded border border-line2 px-1 py-px align-middle text-micro font-bold uppercase tracking-wide text-dim">
       {done ? 'Done' : 'OS'}
     </span>
   )
@@ -214,7 +214,7 @@ export function ScheduleButton({ businessId, contactId, contactName, variant = '
             e.stopPropagation()
             setOpen(true)
           }}
-          className={`grid h-10 w-10 flex-none place-items-center rounded-[9px] text-muted hover:bg-hoverbg sm:h-8 sm:w-8 ${className}`}
+          className={`grid h-10 w-10 flex-none place-items-center rounded-lg text-muted hover:bg-hoverbg sm:h-8 sm:w-8 ${className}`}
         >
           <CalendarSvg size={15} />
         </button>
@@ -222,7 +222,7 @@ export function ScheduleButton({ businessId, contactId, contactName, variant = '
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-[10px] border px-3 text-[12.5px] font-semibold ${className}`}
+          className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-3 text-body font-semibold ${className}`}
           style={{ borderColor: t.line, color: t.ink, background: t.soft }}
         >
           <CalendarSvg size={14} />
@@ -262,21 +262,21 @@ export function UpcomingEvents({ contactId }) {
 
   if (!rows.length) return null
   return (
-    <div aria-label="Upcoming" className="rounded-[10px] bg-panel2 px-3 py-2">
-      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-dim">Upcoming</div>
+    <div aria-label="Upcoming" className="rounded-lg bg-panel2 px-3 py-2">
+      <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-dim">Upcoming</div>
       <ul className="flex flex-col gap-1.5">
         {rows.map((r) => (
-          <li key={r.id} data-upcoming className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
+          <li key={r.id} data-upcoming className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body">
             <span className="font-semibold">{kindLabel(r.kind)}</span>
             <span className="num text-muted">
               {eventWhenLabel(r.starts_at)} · {r.duration_min} min
             </span>
             {r.note && <span className="min-w-0 truncate text-dim">{r.note}</span>}
             <span className="ml-auto flex gap-1">
-              <button type="button" onClick={() => set(r.id, 'done')} className="min-h-[30px] rounded-md border border-line2 px-2 text-[11.5px] font-semibold text-muted hover:bg-hoverbg">
+              <button type="button" onClick={() => set(r.id, 'done')} className="min-h-[30px] rounded-md border border-line2 px-2 text-caption font-semibold text-muted hover:bg-hoverbg">
                 Done
               </button>
-              <button type="button" onClick={() => set(r.id, 'canceled')} className="min-h-[30px] rounded-md border border-line2 px-2 text-[11.5px] font-semibold text-muted hover:bg-hoverbg">
+              <button type="button" onClick={() => set(r.id, 'canceled')} className="min-h-[30px] rounded-md border border-line2 px-2 text-caption font-semibold text-muted hover:bg-hoverbg">
                 Cancel
               </button>
             </span>

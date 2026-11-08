@@ -13,7 +13,7 @@ export default function SectionTabs({ label, tabs }) {
             to={to}
             end
             className={({ isActive }) =>
-              `-mb-px flex min-h-[38px] items-center border-b-2 px-3 text-[13.5px] ${
+              `-mb-px flex min-h-[38px] items-center border-b-2 px-3 text-body ${
                 isActive ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
               }`
             }

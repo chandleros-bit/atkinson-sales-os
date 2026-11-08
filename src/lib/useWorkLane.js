@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 import { fetchAllSettled } from './fetchAll'
+import { friendlyError } from './friendlyError'
 
 const WORK_STAGES = ['Contacted/Working', 'Application Received', 'Disclosed']
 // Done rows older than this no longer change the lane (application review = 3 days).
@@ -59,7 +60,7 @@ export function useWorkLane() {
         error: p.error?.message || t.error?.message || w.error?.message || null,
       })
     } catch (e) {
-      setState((s) => ({ ...s, loading: false, error: String(e?.message || e) }))
+      setState((s) => ({ ...s, loading: false, error: friendlyError(e) }))
     }
   }, [])
 

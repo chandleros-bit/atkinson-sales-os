@@ -26,9 +26,9 @@ export const BUCKET_META = {
 }
 
 export const PRIORITY_META = {
-  high: { label: 'High', color: '#e8785f', border: 'rgba(232,120,95,.4)' },
-  normal: { label: 'Normal', color: 'var(--muted)', border: 'var(--line)' },
-  low: { label: 'Low', color: 'var(--dim)', border: 'var(--line)' },
+  high: { label: 'High', color: 'var(--neg-ink)', border: 'var(--neg-line)' },
+  normal: { label: 'Normal', color: 'var(--muted)', border: 'var(--line2)' },
+  low: { label: 'Low', color: 'var(--dim)', border: 'var(--line2)' },
 }
 
 export const PRIORITY_CHIPS = [

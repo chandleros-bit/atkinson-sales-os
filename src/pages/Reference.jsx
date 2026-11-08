@@ -40,7 +40,7 @@ export default function Reference() {
             type="button"
             aria-selected={tab === t.id}
             onClick={() => go({ tab: t.id, calc: t.id === 'calculators' ? calc : undefined })}
-            className={`-mb-px border-b-2 pb-2 text-[13.5px] ${tab === t.id ? 'border-[color:var(--text)] font-semibold' : 'border-transparent text-muted'}`}
+            className={`-mb-px border-b-2 pb-2 text-body ${tab === t.id ? 'border-[color:var(--text)] font-semibold' : 'border-transparent text-muted'}`}
           >
             {t.label}
           </button>
@@ -56,7 +56,7 @@ export default function Reference() {
                 type="button"
                 aria-pressed={calc === c.id}
                 onClick={() => go({ tab: 'calculators', calc: c.id })}
-                className={`rounded-[8px] border px-3 py-1 text-[12.5px] ${calc === c.id ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted'}`}
+                className={`rounded-lg border px-3 py-1 text-body ${calc === c.id ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted'}`}
               >
                 {c.label}
               </button>

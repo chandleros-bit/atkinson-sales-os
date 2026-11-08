@@ -20,7 +20,7 @@
 
   /* MPG (blue) — brand hue unchanged */
   --mpg: #26ABE0;
-  --mpg-ink: #0F7AA8; /* colored text on white */
+  --mpg-ink: #0E74A0; /* colored text on white and on --mpg-soft (4.7:1) */
   --mpg-soft: #E8F6FC;
   --mpg-line: #B9E3F5;
 
@@ -49,7 +49,7 @@
   /* Active accent - defaults to blue; BusinessContext swaps these */
   --accent: #26ABE0;
   --accent-soft: #E8F6FC;
-  --accent-ink: #0F7AA8;
+  --accent-ink: #0E74A0;
 }
 
 [data-biz='mpg'] {

@@ -6,6 +6,7 @@ import { TIERS, tierMeta, scoreBarPct, groupByTier } from '../lib/priorityLeads'
 import QuickActions from '../components/QuickActions'
 import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
+import { friendlyError } from '../lib/friendlyError'
 
 const COLUMNS =
   'id, name, owner, score, tier, last_activity_at, last_activity_type, ai_note, tags, fub_profile_url, phone'
@@ -26,7 +27,7 @@ function Tabs({ groups, active, onSelect }) {
           <button
             key={t.key}
             onClick={() => onSelect(t.key)}
-            className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+            className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-body font-semibold transition-colors ${
               on ? 'text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
             }`}
             style={{
@@ -36,7 +37,7 @@ function Tabs({ groups, active, onSelect }) {
           >
             <span className="h-2 w-2 flex-none rounded-full" style={{ background: t.color }} />
             {t.label}
-            <span className="num text-[11px] text-muted">{count}</span>
+            <span className="num text-micro text-muted">{count}</span>
           </button>
         )
       })}
@@ -51,7 +52,7 @@ function ScoreBar({ score, color }) {
       <div className="h-1.5 w-24 flex-none overflow-hidden rounded-full bg-panel2">
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <span className="num w-6 text-right text-[11px] text-muted">{pct}</span>
+      <span className="num w-6 text-right text-micro text-muted">{pct}</span>
     </div>
   )
 }
@@ -72,18 +73,18 @@ function Row({ r, onDone }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <PersonLink id={r.id} url={r.fub_profile_url} className="truncate text-[13.5px] font-semibold">
+            <PersonLink id={r.id} url={r.fub_profile_url} className="truncate text-body font-semibold">
               {r.name || '(no name)'}
             </PersonLink>
             <span
-              className="flex-none rounded px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide"
+              className="flex-none rounded px-1.5 py-0.5 text-micro font-bold tracking-wide"
               style={{ color: meta.color, background: meta.soft }}
             >
               {meta.label.toUpperCase()}
             </span>
             {hot && (
               <span
-                className="flex-none rounded px-1 py-0.5 text-[9px] font-bold tracking-wide"
+                className="flex-none rounded px-1 py-0.5 text-micro font-bold tracking-wide"
                 style={{ color: '#ff5c5c', background: 'rgba(255,92,92,0.14)' }}
                 title="Tagged HOT in FollowUpBoss"
               >
@@ -91,7 +92,7 @@ function Row({ r, onDone }) {
               </span>
             )}
           </div>
-          <div className="mt-1 flex items-center gap-3 text-[11.5px] text-muted">
+          <div className="mt-1 flex items-center gap-3 text-caption text-muted">
             <span>
               {lastLabel}
               {typeLabel}
@@ -113,7 +114,7 @@ function Row({ r, onDone }) {
       </div>
 
       {r.ai_note && (
-        <div className="mt-2 text-[11.5px] text-muted">
+        <div className="mt-2 text-caption text-muted">
           <button
             onClick={() => setOpen((v) => !v)}
             className="text-dim hover:text-[color:var(--text)]"
@@ -161,7 +162,7 @@ export default function PriorityLeads() {
       }
       setRows(data || [])
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoading(false)
     }
@@ -179,12 +180,12 @@ export default function PriorityLeads() {
       <Header
         note={
           !loading &&
-          !error && <span className="num text-[12px] text-muted">{rows.length} scored</span>
+          !error && <span className="num text-caption text-muted">{rows.length} scored</span>
         }
       />
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}

@@ -151,6 +151,15 @@ describe('pipeline mix, income, sprints', () => {
     expect(s.items.map((x) => x.key)).toEqual(['bay_funded_loans', 'bay_completed_applications'])
     expect(s.items[0]).toMatchObject({ value: 10, target: 10, onPace: true })
     expect(s.items[1].onPace).toBe(false)
+    expect(s.ended).toBe(false)
+  })
+
+  it('a sprint past its window is ended and judged hit or missed', () => {
+    const rows = [{ date: '2026-08-10', business_id: 'bay', metric_key: 'bay_funded_loans', value: 10 }]
+    const s = sprintPace({ biz: 'bay', metrics: rows, targets, now: new Date('2026-11-07T10:00:00').getTime() })
+    expect(s.ended).toBe(true)
+    expect(s.weeksLeft).toBe(0)
+    expect(s.items.map((x) => x.hit)).toEqual([true, false])
   })
 
   it('formats money compactly', () => {

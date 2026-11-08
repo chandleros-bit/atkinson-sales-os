@@ -75,7 +75,7 @@ function IconButton({ name, label, onClick, disabled, title, t, small }) {
       disabled={disabled}
       onClick={onClick}
       className={`grid flex-none place-items-center text-muted transition-colors hover:bg-hoverbg disabled:cursor-not-allowed disabled:opacity-40 ${
-        small ? 'h-[22px] w-[26px] rounded-md border border-line bg-panel' : 'h-10 w-10 rounded-[10px]'
+        small ? 'h-[22px] w-[26px] rounded-md border border-line bg-panel' : 'h-10 w-10 rounded-lg'
       }`}
       onMouseEnter={(e) => !disabled && (e.currentTarget.style.color = t.ink)}
       onMouseLeave={(e) => (e.currentTarget.style.color = '')}
@@ -99,17 +99,19 @@ export function Sheet({ title, subtitle, t, onClose, children }) {
     >
       <div
         role="dialog"
+        aria-modal="true"
         aria-label={title}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card"
         style={{ borderTop: `3px solid ${t.accent}` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
+        {/* Pinned: the title and close stay in view while a long form scrolls. */}
+        <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-3 flex items-start justify-between gap-3 bg-panel px-5 pb-2 pt-5">
           <div className="min-w-0">
-            <div className="text-[15px] font-bold">{title}</div>
-            {subtitle && <div className="truncate text-[12px] text-muted">{subtitle}</div>}
+            <div className="text-ui font-bold">{title}</div>
+            {subtitle && <div className="truncate text-caption text-muted">{subtitle}</div>}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
+          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-hoverbg">
             ✕
           </button>
         </div>
@@ -125,7 +127,7 @@ export function Chip({ active, onClick, children, t }) {
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className="min-h-[40px] rounded-[10px] border px-3 text-[12.5px] font-semibold"
+      className="min-h-[40px] rounded-lg border px-3 text-body font-semibold"
       style={
         active
           ? { borderColor: t.accent, background: t.soft, color: t.ink }
@@ -137,7 +139,7 @@ export function Chip({ active, onClick, children, t }) {
   )
 }
 
-export const inputCls = 'w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px] text-[color:var(--text)]'
+export const inputCls = 'w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body text-[color:var(--text)]'
 
 // Inline outcome of a submit: partial / error text with per-step Retry.
 function ResultBox({ result, onRetry, busy }) {
@@ -146,7 +148,7 @@ function ResultBox({ result, onRetry, busy }) {
   return (
     <div
       role="alert"
-      className="mt-3 rounded-[10px] border px-3 py-2 text-[12.5px]"
+      className="mt-3 rounded-lg border px-3 py-2 text-body"
       style={{
         borderColor: isPartial ? '#e7c27a' : '#f2b8b4',
         background: isPartial ? '#fdf6e7' : 'var(--neg-bg)',
@@ -179,7 +181,7 @@ export function SubmitButton({ busy, disabled, children, t, onClick }) {
       type="button"
       disabled={busy || disabled}
       onClick={onClick}
-      className="mt-4 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-[10px] text-[13.5px] font-bold text-white disabled:opacity-50"
+      className="mt-4 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg text-body font-bold text-white disabled:opacity-50"
       style={{ background: t.accent }}
     >
       {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />}
@@ -210,7 +212,7 @@ function DatePresets({ preset, setPreset, picked, setPicked, time, setTime, t })
         />
       )}
       {setTime && (
-        <label className="mt-2 flex items-center justify-between gap-3 text-[12px] font-semibold text-muted">
+        <label className="mt-2 flex items-center justify-between gap-3 text-caption font-semibold text-muted">
           <span>
             Time · optional<span className="block font-normal text-dim">Adds it to the Calendar</span>
           </span>
@@ -219,7 +221,7 @@ function DatePresets({ preset, setPreset, picked, setPicked, time, setTime, t })
             aria-label="Follow-up time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            className="w-32 rounded-[10px] border border-line2 bg-panel px-2 py-2 text-[13px] text-[color:var(--text)]"
+            className="w-32 rounded-lg border border-line2 bg-panel px-2 py-2 text-body text-[color:var(--text)]"
           />
         </label>
       )}
@@ -409,7 +411,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
 
   return (
     <>
-      <div className="mb-1.5 text-[12px] font-semibold text-muted">Outcome</div>
+      <div className="mb-1.5 text-caption font-semibold text-muted">Outcome</div>
       <div className="flex flex-wrap gap-2">
         {OUTCOMES.map((o) => (
           <Chip key={o} t={t} active={outcome === o} onClick={() => pickOutcome(o)}>
@@ -420,7 +422,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
 
       {isConversation(outcome) && (
         <>
-          <div className="mb-1.5 mt-3 text-[12px] font-semibold text-muted">Temperature (optional)</div>
+          <div className="mb-1.5 mt-3 text-caption font-semibold text-muted">Temperature (optional)</div>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Temperature">
             {TEMPERATURES.map((k) => (
               <Chip key={k} t={t} active={temperature === k} onClick={() => setTemperature(temperature === k ? null : k)}>
@@ -442,12 +444,12 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
         </>
       )}
 
-      <label className="mt-3 block text-[12px] font-semibold text-muted">
+      <label className="mt-3 block text-caption font-semibold text-muted">
         Note
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={`${inputCls} mt-1`} placeholder="Optional" />
       </label>
 
-      <label className="mt-3 flex items-center justify-between gap-3 text-[12px] font-semibold text-muted">
+      <label className="mt-3 flex items-center justify-between gap-3 text-caption font-semibold text-muted">
         Duration (minutes){businessId === 'mpg' ? '' : ' · optional'}
         <input
           type="number"
@@ -457,11 +459,11 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
             setDuration(e.target.value)
             setDurationTouched(true)
           }}
-          className="w-20 rounded-[10px] border border-line2 bg-panel px-2 py-2 text-[13px] text-[color:var(--text)]"
+          className="w-20 rounded-lg border border-line2 bg-panel px-2 py-2 text-body text-[color:var(--text)]"
         />
       </label>
 
-      <div className="mb-1.5 mt-3 text-[12px] font-semibold text-muted">Next step</div>
+      <div className="mb-1.5 mt-3 text-caption font-semibold text-muted">Next step</div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Next step">
         {onCadence && (
           <Chip t={t} active={nextStep === 'cadence'} onClick={() => chooseNext('cadence')}>
@@ -487,7 +489,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
         </div>
       )}
       {nextStep === 'scheduled' && futureTask && (
-        <div className="mt-2 truncate text-[12.5px] text-muted">
+        <div className="mt-2 truncate text-body text-muted">
           <span className="font-semibold text-[color:var(--text)]">{futureTask.title || 'Task'}</span> · {dueLabel(futureTask.due_at)}
         </div>
       )}
@@ -500,10 +502,10 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
           ))}
         </div>
       )}
-      {outcome && !nextReady && <div className="mt-2 text-[12px] text-muted">Pick a next step to save.</div>}
+      {outcome && !nextReady && <div className="mt-2 text-caption text-muted">Pick a next step to save.</div>}
 
       {openTask && (
-        <label className="mt-2 flex min-h-[40px] items-center gap-2 text-[13px]">
+        <label className="mt-2 flex min-h-[40px] items-center gap-2 text-body">
           <input type="checkbox" checked={completeOpen} onChange={(e) => setCompleteOpen(e.target.checked)} className="h-4 w-4" />
           <span className="truncate">
             Complete open task: <span className="font-semibold">{openTask.title || 'Task'}</span>
@@ -512,7 +514,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
       )}
 
       {advance && !parking && (
-        <div data-stage-advance className="mt-2 text-[12.5px] text-muted">
+        <div data-stage-advance className="mt-2 text-body text-muted">
           Moves {contactName || 'the lead'} from New Lead to <span className="font-semibold text-[color:var(--text)]">Attempted</span> in FollowUpBoss.
         </div>
       )}
@@ -640,8 +642,8 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
   if (askLost) {
     return (
       <>
-        <div className="text-[13px] font-semibold">Why is this lead lost?</div>
-        <div className="mb-2 mt-1 text-[12px] text-muted">{LOST_WARNING}</div>
+        <div className="text-body font-semibold">Why is this lead lost?</div>
+        <div className="mb-2 mt-1 text-caption text-muted">{LOST_WARNING}</div>
         <div className="flex flex-col gap-2">
           {LOST_REASONS.map((r) => (
             <button
@@ -649,17 +651,17 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
               type="button"
               disabled={busy}
               onClick={() => move('lost', r)}
-              className="flex min-h-[44px] items-center rounded-[10px] border px-3 text-left text-[13.5px] font-semibold disabled:opacity-50"
+              className="flex min-h-[44px] items-center rounded-lg border px-3 text-left text-body font-semibold disabled:opacity-50"
               style={{ borderColor: 'var(--line2)' }}
             >
               {r}
             </button>
           ))}
-          <button type="button" disabled={busy} onClick={() => setAskLost(false)} className="min-h-[40px] text-[12.5px] text-muted">
+          <button type="button" disabled={busy} onClick={() => setAskLost(false)} className="min-h-[40px] text-body text-muted">
             Back
           </button>
         </div>
-        {busy && <div className="mt-3 text-[12.5px] text-muted">Updating tags in FollowUpBoss…</div>}
+        {busy && <div className="mt-3 text-body text-muted">Updating tags in FollowUpBoss…</div>}
         <ResultBox result={result} onRetry={retry} busy={busy} />
       </>
     )
@@ -676,16 +678,16 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
               disabled={busy}
               aria-pressed={current}
               onClick={() => (target.key === 'lost' ? setAskLost(true) : move(target.key))}
-              className="flex min-h-[44px] items-center justify-between rounded-[10px] border px-3 text-left text-[13.5px] font-semibold disabled:opacity-50"
+              className="flex min-h-[44px] items-center justify-between rounded-lg border px-3 text-left text-body font-semibold disabled:opacity-50"
               style={current ? { borderColor: t.accent, background: t.soft, color: t.ink } : { borderColor: 'var(--line2)' }}
             >
               <span>{target.label}</span>
-              {current && <span className="text-[11px] font-bold uppercase tracking-wide">Now</span>}
+              {current && <span className="text-micro font-bold uppercase tracking-wide">Now</span>}
             </button>
           )
         })}
       </div>
-      {busy && <div className="mt-3 text-[12.5px] text-muted">Updating tags in FollowUpBoss…</div>}
+      {busy && <div className="mt-3 text-body text-muted">Updating tags in FollowUpBoss…</div>}
       <ResultBox result={result} onRetry={retry} busy={busy} />
     </>
   )
@@ -709,7 +711,7 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
       <button
         type="button"
         onClick={onClose}
-        className="mt-2 flex min-h-[42px] w-full items-center justify-center rounded-[10px] border border-line2 text-[13.5px] font-semibold text-muted"
+        className="mt-2 flex min-h-[42px] w-full items-center justify-center rounded-lg border border-line2 text-body font-semibold text-muted"
       >
         Skip
       </button>

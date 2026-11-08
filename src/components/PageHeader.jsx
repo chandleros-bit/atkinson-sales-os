@@ -28,7 +28,7 @@ export function SyncDot() {
       data-sync-state={h.state}
       title={title}
       aria-label={`${h.text}. Open Sync Status`}
-      className="flex min-h-[36px] flex-none items-center gap-2 rounded-[10px] px-1 text-[14px] text-[#344054] hover:text-[color:var(--text)]"
+      className="flex min-h-[36px] flex-none items-center gap-2 rounded-lg px-1 text-ui text-ink2 hover:text-[color:var(--text)]"
     >
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="flex-none text-dim">
         <path d="M4 6h16v15H4z M4 10h16 M8 3v4 M16 3v4" />
@@ -47,15 +47,15 @@ export default function PageHeader({ eyebrow, eyebrowColor, title, note, subtitl
     <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
       <div className="min-w-0">
         {eyebrow && (
-          <div className="mb-1 text-[14.5px] font-semibold" style={{ color: eyebrowColor || 'var(--dim)' }}>
+          <div className="mb-1 text-ui font-semibold" style={{ color: eyebrowColor || 'var(--dim)' }}>
             {eyebrow}
           </div>
         )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="text-[24px] font-semibold tracking-[-0.6px] sm:text-[32px]">{title}</h2>
+          <h1 className="text-title font-semibold tracking-[-0.6px] sm:text-display">{title}</h1>
           {note}
         </div>
-        {subtitle && <p className="mt-1 hidden text-[15px] text-muted sm:block">{subtitle}</p>}
+        {subtitle && <p className="mt-1 hidden text-ui text-muted sm:block">{subtitle}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <SyncDot />

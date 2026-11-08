@@ -57,6 +57,7 @@ export default function NewTaskDialog({ onClose }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div
         role="dialog"
+        aria-modal="true"
         aria-label="New task"
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card"
         style={t ? { borderTop: `3px solid ${t.accent}` } : undefined}
@@ -64,20 +65,20 @@ export default function NewTaskDialog({ onClose }) {
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[15px] font-bold">New task</div>
+            <div className="text-ui font-bold">New task</div>
             {contact && (
-              <div className="truncate text-[12px] text-muted">
+              <div className="truncate text-caption text-muted">
                 {contact.name} · {contact.business_id === 'mpg' ? 'Zoho' : 'FollowUpBoss'}
               </div>
             )}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
+          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-hoverbg">
             ✕
           </button>
         </div>
 
         {!contact && books.length === 0 && (
-          <div className="text-[13px] text-muted">Write-back is off for both books.</div>
+          <div className="text-body text-muted">Write-back is off for both books.</div>
         )}
 
         {!contact && books.length > 0 && (
@@ -88,19 +89,19 @@ export default function NewTaskDialog({ onClose }) {
               placeholder="Search contacts by name…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px] text-[color:var(--text)]"
+              className="w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body text-[color:var(--text)]"
             />
             <div className="mt-2 flex flex-col">
-              {searching && <div className="px-1 py-2 text-[12px] text-dim">Searching…</div>}
+              {searching && <div className="px-1 py-2 text-caption text-dim">Searching…</div>}
               {!searching && cleanQuery(query).length >= 2 && results.length === 0 && (
-                <div className="px-1 py-2 text-[12px] text-dim">No matches.</div>
+                <div className="px-1 py-2 text-caption text-dim">No matches.</div>
               )}
               {results.map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setContact(c)}
-                  className="flex min-h-[40px] items-center gap-2 rounded-[10px] px-2 text-left text-[13px] hover:bg-hoverbg"
+                  className="flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-left text-body hover:bg-hoverbg"
                 >
                   <span
                     className="h-[7px] w-[7px] flex-none rounded-full"
@@ -127,7 +128,7 @@ export default function NewTaskDialog({ onClose }) {
                 onClose()
               }}
             />
-            <button type="button" onClick={() => setContact(null)} className="mt-2 min-h-[40px] w-full text-[12.5px] text-muted hover:text-[color:var(--text)]">
+            <button type="button" onClick={() => setContact(null)} className="mt-2 min-h-[40px] w-full text-body text-muted hover:text-[color:var(--text)]">
               ← Pick a different contact
             </button>
           </>

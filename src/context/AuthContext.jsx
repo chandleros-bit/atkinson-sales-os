@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { friendlyError } from '../lib/friendlyError'
 
 const AuthContext = createContext(null)
 const NO_ROLE = { role: null, books: [], name: null, error: null }
@@ -41,7 +42,7 @@ export function AuthProvider({ children }) {
       },
       (e) => {
         if (!live) return
-        setAccess({ ...NO_ROLE, error: String(e?.message || e) })
+        setAccess({ ...NO_ROLE, error: friendlyError(e) })
         setRoleLoading(false)
       },
     )

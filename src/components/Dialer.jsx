@@ -15,7 +15,7 @@ import { textFor, smsHref } from '../lib/dialTexts'
 
 // Lead cadence kinds (dialList.js); theme calls (dialThemes.js) never park or lose anyone.
 const LEAD_KINDS = new Set(['attempt', 'move_nurture', 'nurture', 'cold', 'credit_repair'])
-const quiet = 'min-h-[40px] rounded-[10px] border border-line2 px-3 text-[13px] font-semibold text-[#344054]'
+const quiet = 'min-h-[40px] rounded-lg border border-line2 px-3 text-body font-semibold text-ink2'
 
 export default function Dialer({ items, start = 0, onClose, skipToday, agents = null, agentsChecked = false }) {
   const [queue, setQueue] = useState(() => items.slice(start).concat(items.slice(0, start)))
@@ -60,7 +60,7 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
   if (!it) {
     return (
       <Sheet title="Done for now" subtitle="Dial list" t={t} onClose={onClose}>
-        <div className="text-[14px]">{stats.calls} calls · {stats.connected} connected · {stats.texts} texts</div>
+        <div className="text-ui">{stats.calls} calls · {stats.connected} connected · {stats.texts} texts</div>
         <button type="button" onClick={onClose} className={`${quiet} mt-4 w-full`}>Close</button>
       </Sheet>
     )
@@ -73,20 +73,20 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
 
   return (
     <Sheet title={r.name || '(no name)'} subtitle={`${pos + 1} of ${queue.length} · ${it.label}`} t={t} onClose={onClose}>
-      <div className="flex items-center gap-2 text-[13px] text-muted">
+      <div className="flex items-center gap-2 text-body text-muted">
         <BizBadge biz={it.book} /> <span>{r.stage}</span> {r.lead_source && <span>· {r.lead_source}</span>}
       </div>
-      <div className="mt-2 flex items-center gap-2 text-[12.5px] text-muted">
+      <div className="mt-2 flex items-center gap-2 text-body text-muted">
         <Pips item={it} /> <span>{[it.label, it.hint].filter(Boolean).join(' · ')}</span>
       </div>
-      <div className="num mt-3 text-[24px] font-bold">{formatPhone(r.phone) || 'No phone'}</div>
+      <div className="num mt-3 text-title font-bold">{formatPhone(r.phone) || 'No phone'}</div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {telHref(r.phone) && <a href={telHref(r.phone)} className={`${quiet} grid place-items-center`}>Call on phone</a>}
         {r.crm_profile_url && <a href={r.crm_profile_url} target="_blank" rel="noreferrer" className={`${quiet} grid place-items-center`}>Open {CRM_LABEL[it.book]}</a>}
       </div>
 
       {error && (
-        <div role="alert" className="mt-3 rounded-[10px] border px-3 py-2 text-[12.5px]" style={{ borderColor: '#f2b8b4', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }}>
+        <div role="alert" className="mt-3 rounded-lg border px-3 py-2 text-body" style={{ borderColor: '#f2b8b4', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }}>
           {error.text}
           <button type="button" onClick={error.retry} className="ml-2 font-semibold underline">Retry</button>
         </div>
@@ -95,9 +95,9 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
       {phase === 'call' && (
         <>
           {it.kind === 'move_nurture' && (
-            <button type="button" disabled={busy} onClick={() => move('nurture')} className="mt-4 min-h-[42px] w-full rounded-[10px] text-[13.5px] font-bold text-white" style={{ background: t.accent }}>Move to Nurture</button>
+            <button type="button" disabled={busy} onClick={() => move('nurture')} className="mt-4 min-h-[42px] w-full rounded-lg text-body font-bold text-white" style={{ background: t.accent }}>Move to Nurture</button>
           )}
-          <div className="mt-4 text-[12px] font-semibold text-dim">How did it go?</div>
+          <div className="mt-4 text-caption font-semibold text-dim">How did it go?</div>
           <div className="mt-1.5 grid grid-cols-2 gap-2">
             <button type="button" disabled={busy} className={quiet} onClick={() => logOutcome('No Answer')}>No answer</button>
             <button type="button" disabled={busy} className={quiet} onClick={() => logOutcome('Left Message')}>Left voicemail</button>
@@ -124,10 +124,10 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
 
       {phase === 'after' && (
         <div className="mt-4 flex flex-col gap-2">
-          {parkPrompt && <button type="button" disabled={busy} onClick={() => move('nurture')} className="min-h-[42px] rounded-[10px] text-[13.5px] font-bold text-white" style={{ background: t.accent }}>Move to Nurture</button>}
+          {parkPrompt && <button type="button" disabled={busy} onClick={() => move('nurture')} className="min-h-[42px] rounded-lg text-body font-bold text-white" style={{ background: t.accent }}>Move to Nurture</button>}
           {text && smsHref(r.phone, text) && (
             <>
-              <div className="rounded-[10px] bg-panel2 px-3 py-2 text-[12.5px]">{text}</div>
+              <div className="rounded-lg bg-panel2 px-3 py-2 text-body">{text}</div>
               <div className="grid grid-cols-2 gap-2">
                 <a href={smsHref(r.phone, text)} className={`${quiet} grid place-items-center`}>Text</a>
                 <button type="button" disabled={busy} className={quiet} onClick={() => send(buildActionRequest({ action: 'add_note', contactId: it.id, body: `Texted: ${text}` }), () => setStats((s) => ({ ...s, texts: s.texts + 1 })))}>Log text</button>

@@ -15,6 +15,7 @@ import { loanStats, DEFAULT_RATES } from '../lib/loans'
 import { prevMonthWindow } from '../lib/overviewDash'
 import PageHeader from '../components/PageHeader'
 import DailyTracker from '../components/DailyTracker'
+import { friendlyError } from '../lib/friendlyError'
 
 const TABS = [
   { key: 'daily', label: 'Daily' },
@@ -25,10 +26,12 @@ const TABS = [
   { key: 'tracker', label: 'Daily tracker', biz: 'mpg' },
 ]
 
+// Status lives in the bar and a word, not the number: a big orange figure
+// read as an alarm, and green is Bayway's brand color, not "good".
 const PACE_STYLE = {
-  on: { color: 'var(--bay-ink)', bar: 'var(--bay)' },
-  behind: { color: 'var(--bay-gold)', bar: 'var(--bay-gold)' },
-  none: { color: 'var(--muted)', bar: 'var(--line2)' },
+  on: { word: 'On pace', ink: 'var(--pos-ink)', bar: 'var(--pos-ink)' },
+  behind: { word: 'Behind', ink: 'var(--warn-ink)', bar: 'var(--warn-ink)' },
+  none: { word: null, ink: 'var(--muted)', bar: 'var(--line2)' },
 }
 
 function todayKey() {
@@ -42,23 +45,28 @@ function MetricCard({ card }) {
   return (
     <div className="rounded-card border border-line bg-panel p-4">
       <div className="flex items-baseline justify-between">
-        <div className="num text-[26px] font-bold leading-none tracking-tight" style={{ color: s.color }}>
+        <div className="num text-title font-bold leading-none tracking-tight" style={{ color: card.valueText === '—' ? 'var(--muted)' : 'var(--text)' }}>
           {card.valueText}
         </div>
-        <div className="num text-[12px] text-dim">/ {card.targetText}</div>
+        <div className="num text-caption text-dim">/ {card.targetText}</div>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
-        {card.label}
+        <span className="min-w-0 truncate">{card.label}</span>
         {card.source !== 'live' && (
           <span
-            className="rounded px-1 py-px text-[9px] font-semibold tracking-wide"
+            className="rounded px-1 py-px text-micro font-semibold tracking-wide"
             style={{ background: 'var(--hover)', color: 'var(--dim)' }}
           >
             {card.source === 'manual' ? 'MANUAL' : 'SNAPSHOT'}
           </span>
         )}
+        {s.word && (
+          <span className="ml-auto flex-none text-caption font-semibold" style={{ color: s.ink }}>
+            {s.word}
+          </span>
+        )}
       </div>
-      {card.note && <div className="mt-1 text-[11px] text-dim">{card.note}</div>}
+      {card.note && <div className="mt-1 text-micro text-dim">{card.note}</div>}
       <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--line)' }}>
         <div className="h-full rounded-full" style={{ width: `${card.pct}%`, background: s.bar }} />
       </div>
@@ -92,7 +100,7 @@ function LogMetrics({ tab, biz, values, syncedCalls, onSave, saving }) {
   if (biz === 'all') {
     return (
       <div className="mt-6 rounded-card border border-line bg-panel p-4 text-sm text-muted">
-        Pick <b className="text-[color:var(--text)]">MPG</b> or <b className="text-[color:var(--text)]">Bayway</b> in the sidebar to log {PERIOD_LABEL[tab]}’s numbers.
+        Pick <b className="text-[color:var(--text)]">MPG</b> or <b className="text-[color:var(--text)]">Bayway</b> in the switch at the top to log {PERIOD_LABEL[tab]}’s numbers.
       </div>
     )
   }
@@ -100,7 +108,7 @@ function LogMetrics({ tab, biz, values, syncedCalls, onSave, saving }) {
     <div className="mt-6 rounded-card border border-line bg-panel p-4">
       <div className="mb-3 text-sm font-semibold">Log {PERIOD_LABEL[tab]}</div>
       {tab === 'sprint' && (
-        <div className="mb-3 rounded-md border border-line bg-panel2 px-3 py-2 text-[11.5px] text-muted">
+        <div className="mb-3 rounded-md border border-line bg-panel2 px-3 py-2 text-caption text-muted">
           Enter the increments completed today. The Sprint tab sums MPG progress across {MPG_SPRINT.label}.
         </div>
       )}
@@ -116,7 +124,7 @@ function LogMetrics({ tab, biz, values, syncedCalls, onSave, saving }) {
               className="mt-1 w-full rounded-md border border-line2 bg-panel2 px-2 py-1.5 text-sm text-[color:var(--text)]"
             />
             {m.key === 'calls' && (
-              <span className="mt-1 block text-[10.5px] text-dim">
+              <span className="mt-1 block text-micro text-dim">
                 Auto: {syncedCalls} outbound calls synced today — add any made outside the CRM
               </span>
             )}
@@ -126,7 +134,7 @@ function LogMetrics({ tab, biz, values, syncedCalls, onSave, saving }) {
       <button
         disabled={saving}
         onClick={() => onSave(draft)}
-        className="mt-3 rounded-md bg-[color:var(--text)] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
+        className="mt-3 rounded-md bg-[color:var(--text)] px-3 py-1.5 text-body font-semibold text-white disabled:opacity-50"
       >
         {saving ? 'Saving…' : 'Save'}
       </button>
@@ -149,7 +157,7 @@ function TrendStrip({ series }) {
               <div className="flex w-full flex-1 items-end">
                 <div className="w-full rounded-sm" style={{ height: `${(v / max) * 100}%`, minHeight: 2, background: 'var(--bay)' }} />
               </div>
-              <span className="num text-[10px] text-dim">{DOW[d.getDay()]}</span>
+              <span className="num text-micro text-dim">{DOW[d.getDay()]}</span>
             </div>
           )
         })}
@@ -181,11 +189,11 @@ function EditTargets({ tab, biz, targets, onClose, onSave, saving }) {
           ))}
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md border border-line2 px-3 py-1.5 text-[13px] text-muted">Cancel</button>
+          <button onClick={onClose} className="rounded-md border border-line2 px-3 py-1.5 text-body text-muted">Cancel</button>
           <button
             disabled={saving}
             onClick={() => onSave(draft)}
-            className="rounded-md bg-[color:var(--text)] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-50"
+            className="rounded-md bg-[color:var(--text)] px-3 py-1.5 text-body font-semibold text-white disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save targets'}
           </button>
@@ -269,7 +277,7 @@ export default function Reports() {
         lastLoanImport: loanBundle.data?.lastImport || null,
       })
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoading(false)
     }
@@ -330,7 +338,7 @@ export default function Reports() {
               role="tab"
               aria-selected={activeTab === t.key}
               onClick={() => setTab(t.key)}
-              className={`-mb-px border-b-2 px-3 py-2 text-[13px] ${
+              className={`-mb-px border-b-2 px-3 py-2 text-body ${
                 activeTab === t.key ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
               }`}
             >
@@ -341,7 +349,7 @@ export default function Reports() {
         {!isDemoMode && activeTab !== 'tracker' && (
           <button
             onClick={() => setEditing(true)}
-            className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-[11.5px] text-muted hover:text-[color:var(--text)]"
+            className="mb-1.5 rounded-md border border-line2 px-2.5 py-1 text-caption text-muted hover:text-[color:var(--text)]"
           >
             Edit targets
           </button>
@@ -353,13 +361,8 @@ export default function Reports() {
       ) : (
       <>
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
-        </div>
-      )}
-      {isDemoMode && (
-        <div className="mt-4 rounded-lg border border-line bg-panel px-3 py-2 text-xs text-muted">
-          Demo mode — showing sample scoreboard data. Connect Supabase to save entries.
         </div>
       )}
       {loading && <div className="mt-6 text-sm text-muted">Loading scoreboard…</div>}

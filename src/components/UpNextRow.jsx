@@ -108,7 +108,7 @@ function SnoozeForm({ row, onDone }) {
             type="button"
             aria-pressed={preset === k}
             onClick={() => setPreset(k)}
-            className="min-h-[40px] rounded-[10px] border px-3 text-[12.5px] font-semibold"
+            className="min-h-[40px] rounded-lg border px-3 text-body font-semibold"
             style={preset === k ? { borderColor: 'var(--text)', color: 'var(--text)' } : { borderColor: 'var(--line2)', color: 'var(--muted)' }}
           >
             {label}
@@ -121,7 +121,7 @@ function SnoozeForm({ row, onDone }) {
           aria-label="Snooze until"
           value={picked}
           onChange={(e) => setPicked(e.target.value)}
-          className="mt-2 w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px]"
+          className="mt-2 w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body"
         />
       )}
       <input
@@ -129,14 +129,14 @@ function SnoozeForm({ row, onDone }) {
         placeholder="Reason (optional), e.g. traveling until the 1st"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        className="mt-2 w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px]"
+        className="mt-2 w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body"
       />
-      {error && <div className="mt-2 text-[12px] text-[color:var(--neg-ink)]">{error}</div>}
+      {error && <div className="mt-2 text-caption text-[color:var(--neg-ink)]">{error}</div>}
       <button
         type="button"
         disabled={!until || busy}
         onClick={save}
-        className="mt-3 min-h-[42px] w-full rounded-[10px] bg-[color:var(--text)] text-[13.5px] font-bold text-white disabled:opacity-50"
+        className="mt-3 min-h-[42px] w-full rounded-lg bg-[color:var(--text)] text-body font-bold text-white disabled:opacity-50"
       >
         {busy ? 'Saving…' : until ? `Snooze until ${fmtDay(until)}` : 'Snooze'}
       </button>
@@ -156,6 +156,7 @@ function ActionsSheet({ row, onClose }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onClick={onClose}>
       <div
         role="dialog"
+        aria-modal="true"
         aria-label={`Actions for ${row.name || 'lead'}`}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card"
         style={{ borderTop: `3px solid ${row.business_id === 'mpg' ? 'var(--mpg)' : 'var(--bay)'}` }}
@@ -163,23 +164,23 @@ function ActionsSheet({ row, onClose }) {
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <PersonLink id={row.id} url={row.crm_profile_url} className="break-words text-[15px] font-bold">
+            <PersonLink id={row.id} url={row.crm_profile_url} className="break-words text-ui font-bold">
               {row.name || '(no name)'}
             </PersonLink>
-            <div className="truncate text-[12px] text-muted">{reasonText(row)}</div>
+            <div className="truncate text-caption text-muted">{reasonText(row)}</div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
+          <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-hoverbg">
             ✕
           </button>
         </div>
         {!snoozing ? (
           <div className="flex flex-col gap-2">
             {tel && (
-              <a href={tel} className="flex min-h-[44px] items-center justify-center rounded-[10px] bg-[color:var(--text)] text-[14px] font-bold text-white">
+              <a href={tel} className="flex min-h-[44px] items-center justify-center rounded-lg bg-[color:var(--text)] text-ui font-bold text-white">
                 Call {formatPhone(row.phone)}
               </a>
             )}
-            <div className="flex items-center justify-between rounded-[10px] border border-line px-2">
+            <div className="flex items-center justify-between rounded-lg border border-line px-2">
               <QuickActions
                 businessId={row.business_id}
                 contactId={row.id}
@@ -192,11 +193,11 @@ function ActionsSheet({ row, onClose }) {
                   onClose()
                 }}
               />
-              <CrmLink url={row.crm_profile_url} className="px-2 text-[12.5px] font-semibold text-muted">
+              <CrmLink url={row.crm_profile_url} className="px-2 text-body font-semibold text-muted">
                 Open in CRM ↗
               </CrmLink>
             </div>
-            <button type="button" onClick={() => setSnoozing(true)} className="min-h-[44px] rounded-[10px] border border-line2 text-[13.5px] font-semibold text-muted">
+            <button type="button" onClick={() => setSnoozing(true)} className="min-h-[44px] rounded-lg border border-line2 text-body font-semibold text-muted">
               Snooze…
             </button>
           </div>
@@ -225,7 +226,7 @@ function peekStyle(rect) {
 }
 
 function PeekHeading({ children }) {
-  return <div className="mt-4 text-[11.5px] font-semibold uppercase tracking-[.4px] text-dim">{children}</div>
+  return <div className="mt-4 text-caption font-semibold uppercase tracking-[.4px] text-dim">{children}</div>
 }
 
 function LeadPeek({ row, rect, anchor, onClose }) {
@@ -260,22 +261,23 @@ function LeadPeek({ row, rect, anchor, onClose }) {
     <div
       ref={ref}
       role="dialog"
+        aria-modal="true"
       aria-label={`${row.name || 'Lead'} details`}
       data-lead-peek
       onClick={stop}
-      className="fixed z-40 w-[460px] max-w-[calc(100vw-24px)] cursor-default overflow-y-auto rounded-[14px] border border-line2 bg-panel p-4 shadow-[0_12px_32px_rgba(16,24,40,.16),0_2px_6px_rgba(16,24,40,.08)]"
+      className="fixed z-40 w-[460px] max-w-[calc(100vw-24px)] cursor-default overflow-y-auto rounded-card border border-line2 bg-panel p-4 shadow-[0_12px_32px_rgba(16,24,40,.16),0_2px_6px_rgba(16,24,40,.08)]"
       style={peekStyle(rect)}
     >
       <div className="flex items-center gap-2">
         <BizBadge biz={row.business_id} />
-        <PersonLink id={row.id} url={row.crm_profile_url} className="min-w-0 truncate text-[16px] font-semibold">
+        <PersonLink id={row.id} url={row.crm_profile_url} className="min-w-0 truncate text-lead font-semibold">
           {row.name || '(no name)'}
         </PersonLink>
-        <button type="button" onClick={onClose} aria-label="Close" className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-[8px] text-muted hover:bg-hoverbg">
+        <button type="button" onClick={onClose} aria-label="Close" className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-lg text-muted hover:bg-hoverbg">
           ✕
         </button>
       </div>
-      <div className="mt-1 text-[13px] text-muted">
+      <div className="mt-1 text-body text-muted">
         {[phone, row.business_id === 'mpg' && row.company, sourceOf(row), row.stage].filter(Boolean).join(' · ')}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -286,7 +288,7 @@ function LeadPeek({ row, rect, anchor, onClose }) {
           </Pill>
         ))}
         {row.decide && <Pill tone="warn" className="font-bold">Decide</Pill>}
-        <span className="text-[12px] text-dim">{lastCallLabel(row)}</span>
+        <span className="text-caption text-dim">{lastCallLabel(row)}</span>
       </div>
 
       <PopupTabs
@@ -303,7 +305,7 @@ function LeadPeek({ row, rect, anchor, onClose }) {
 
       {tab === 'details' && (facts.length > 0 || row.first_note) && <PeekHeading>Lead form</PeekHeading>}
       {tab !== 'details' ? null : facts.length > 0 ? (
-        <dl aria-label={`Lead form for ${row.name || 'lead'}`} className="mt-1.5 grid grid-cols-[120px_minmax(0,1fr)] gap-y-1 text-[13.5px]">
+        <dl aria-label={`Lead form for ${row.name || 'lead'}`} className="mt-1.5 grid grid-cols-[120px_minmax(0,1fr)] gap-y-1 text-body">
           {facts.map((f) => (
             <Fragment key={f.k}>
               <dt className="text-dim">{f.k}</dt>
@@ -312,18 +314,18 @@ function LeadPeek({ row, rect, anchor, onClose }) {
           ))}
         </dl>
       ) : (
-        row.first_note && <p className="mt-1.5 whitespace-pre-line break-words text-[13.5px]">{row.first_note}</p>
+        row.first_note && <p className="mt-1.5 whitespace-pre-line break-words text-body">{row.first_note}</p>
       )}
 
       {tab === 'details' && (
       <>
       <PeekHeading>Notes</PeekHeading>
       <div className="mt-1.5 flex flex-col gap-2">
-        {loading && <div className="text-[13px] text-muted">Loading…</div>}
-        {!loading && notes.length === 0 && <div className="text-[13px] text-muted">No notes yet.</div>}
+        {loading && <div className="text-body text-muted">Loading…</div>}
+        {!loading && notes.length === 0 && <div className="text-body text-muted">No notes yet.</div>}
         {notes.map((n) => (
-          <div key={n.id} className="rounded-[9px] bg-panel2 px-2.5 py-2 text-[13px] leading-[1.45]">
-            <div className="text-[11.5px] text-dim">
+          <div key={n.id} className="rounded-lg bg-panel2 px-2.5 py-2 text-body leading-[1.45]">
+            <div className="text-caption text-dim">
               {[new Date(n.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), n.author].filter(Boolean).join(' · ')}
             </div>
             <div className="whitespace-pre-line break-words">{n.text}</div>
@@ -340,7 +342,7 @@ function LeadPeek({ row, rect, anchor, onClose }) {
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {tel && (
-            <a href={tel} className="flex min-h-[36px] items-center rounded-[9px] bg-[color:var(--chrome)] px-3.5 text-[13.5px] font-semibold text-white hover:opacity-90">
+            <a href={tel} className="flex min-h-[36px] items-center rounded-lg bg-[color:var(--chrome)] px-3.5 text-body font-semibold text-white hover:opacity-90">
               Call
             </a>
           )}
@@ -350,14 +352,14 @@ function LeadPeek({ row, rect, anchor, onClose }) {
               openPerson(row.id)
               onClose()
             }}
-            className="min-h-[36px] rounded-[9px] border border-line2 px-3.5 text-[13.5px] font-semibold"
+            className="min-h-[36px] rounded-lg border border-line2 px-3.5 text-body font-semibold"
           >
             Open contact card
           </button>
-          <button type="button" onClick={() => setSnoozing(true)} className="min-h-[36px] rounded-[9px] border border-line2 px-3.5 text-[13.5px] font-semibold text-muted">
+          <button type="button" onClick={() => setSnoozing(true)} className="min-h-[36px] rounded-lg border border-line2 px-3.5 text-body font-semibold text-muted">
             Snooze…
           </button>
-          <CrmLink url={row.crm_profile_url} className="ml-auto px-1 text-[12.5px] font-semibold text-muted">
+          <CrmLink url={row.crm_profile_url} className="ml-auto px-1 text-body font-semibold text-muted">
             CRM ↗
           </CrmLink>
         </div>
@@ -388,12 +390,12 @@ function DenseRow({ row }) {
         <div className="flex min-w-0 items-center gap-2 leading-5">
           <BizBadge biz={row.business_id} />
           {/* The name keeps its room; company and source give way first. */}
-          <PersonLink data-lead-name id={row.id} url={row.crm_profile_url} className="max-w-[55%] flex-none truncate text-[14.5px] font-semibold">
+          <PersonLink data-lead-name id={row.id} url={row.crm_profile_url} className="max-w-[55%] flex-none truncate text-ui font-semibold">
             {row.name || '(no name)'}
           </PersonLink>
-          {row.business_id === 'mpg' && row.company && <span className="min-w-0 truncate text-[12px] text-muted">· {row.company}</span>}
+          {row.business_id === 'mpg' && row.company && <span className="min-w-0 truncate text-caption text-muted">· {row.company}</span>}
           {source && (
-            <span title="Lead source" className="min-w-[48px] max-w-[150px] truncate rounded-full border border-line2 px-2 text-[11px] font-semibold leading-[18px] text-muted">
+            <span title="Lead source" className="min-w-[48px] max-w-[150px] truncate rounded-full border border-line2 px-2 text-micro font-semibold leading-[18px] text-muted">
               {source}
             </span>
           )}
@@ -405,13 +407,13 @@ function DenseRow({ row }) {
               e.stopPropagation()
               toggle()
             }}
-            className="ml-auto flex-none whitespace-nowrap pl-2 text-[13px] font-semibold hover:underline"
+            className="ml-auto flex-none whitespace-nowrap pl-2 text-body font-semibold hover:underline"
             style={{ color: urgentColor(row) }}
           >
             {reasonText(row)}
           </button>
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap text-[12.5px] leading-[18px] text-muted">
+        <div className="mt-1 flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap text-body leading-[18px] text-muted">
           {phone && (
             <a href={tel} onClick={stop} aria-label={`Call ${row.name || 'lead'} at ${phone}`} className="num flex-none font-semibold text-[color:var(--text)] hover:underline">
               {phone}
@@ -443,7 +445,7 @@ function DenseRow({ row }) {
       {/* Actions stacked: a tall Call (dial) beside Log call, note, follow-up and stage, two to a row. */}
       <div className="flex flex-none items-stretch gap-[3px]" onClick={stop}>
         {tel ? (
-          <a href={tel} title={`Call ${phone}`} aria-label={`Call ${row.name || 'lead'}`} className="grid min-h-[47px] w-10 place-items-center rounded-[9px] bg-[color:var(--chrome)] text-white hover:opacity-90">
+          <a href={tel} title={`Call ${phone}`} aria-label={`Call ${row.name || 'lead'}`} className="grid min-h-[47px] w-10 place-items-center rounded-lg bg-[color:var(--chrome)] text-white hover:opacity-90">
             <Icon name="phone" size={17} strokeWidth={1.9} />
           </a>
         ) : (
@@ -482,46 +484,46 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
       {/* The whole name, always: it wraps in a narrow lane (Workbench) rather than cutting off. */}
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
         <BizBadge biz={row.business_id} />
-        <PersonLink data-lead-name id={row.id} url={row.crm_profile_url} className="min-w-0 break-words text-[14px] font-semibold">
+        <PersonLink data-lead-name id={row.id} url={row.crm_profile_url} className="min-w-0 break-words text-ui font-semibold">
           {row.name || '(no name)'}
         </PersonLink>
-        {row.business_id === 'mpg' && row.company && <span className="min-w-0 break-words text-[12px] text-muted">· {row.company}</span>}
+        {row.business_id === 'mpg' && row.company && <span className="min-w-0 break-words text-caption text-muted">· {row.company}</span>}
         {source && (
-          <span title="Lead source" className="flex-none rounded-full border border-line2 px-2 py-px text-[11px] font-semibold text-muted">
+          <span title="Lead source" className="flex-none rounded-full border border-line2 px-2 py-px text-micro font-semibold text-muted">
             {source}
           </span>
         )}
       </div>
-      <div className="mt-1 text-[13px] font-semibold" style={{ color: row.bucket === 'reached_out' || row.bucket === 'new_lead' ? 'var(--neg-ink)' : 'var(--text)' }}>
+      <div className="mt-1 text-body font-semibold" style={{ color: row.bucket === 'reached_out' || row.bucket === 'new_lead' ? 'var(--neg-ink)' : 'var(--text)' }}>
         {reasonText(row)}
       </div>
       {(facts.length > 0 || snippet) && (
         <div aria-label={`First note for ${row.name || 'lead'}`} className="mt-1 flex flex-wrap gap-1">
           {facts.length > 0
             ? facts.map((f) => (
-                <span key={f.k} data-fact className="rounded-md bg-panel2 px-1.5 py-0.5 text-[11.5px]">
+                <span key={f.k} data-fact className="rounded-md bg-panel2 px-1.5 py-0.5 text-caption">
                   <span className="text-muted">{f.k}</span> {f.v}
                 </span>
               ))
-            : <span className="truncate text-[12px] text-muted">“{snippet}”</span>}
+            : <span className="truncate text-caption text-muted">“{snippet}”</span>}
         </div>
       )}
       {/* The number to call through. On a phone the whole row already dials,
           so it's plain text there (no link inside a link). */}
       {phone &&
         (mobile ? (
-          <div className="num mt-0.5 text-[13px] font-semibold text-muted">{phone}</div>
+          <div className="num mt-0.5 text-body font-semibold text-muted">{phone}</div>
         ) : (
           <a
             href={tel}
             aria-label={`Call ${row.name || 'lead'} at ${phone}`}
-            className="num mt-0.5 inline-block text-[13px] font-semibold text-muted hover:text-[color:var(--text)] hover:underline"
+            className="num mt-0.5 inline-block text-body font-semibold text-muted hover:text-[color:var(--text)] hover:underline"
           >
             {phone}
           </a>
         ))}
       {!compact && (
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-micro">
           {row.stage &&
             (row.business_id === 'bay' && stageProgress(row.stage) ? (
               <StageProgress stage={row.stage} label className="rounded-full border border-line px-2 py-0.5" />
@@ -557,7 +559,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
       {!mobile && !compact && (
         <div className="hidden flex-none items-center gap-1 lg:flex">
           {tel && (
-            <a href={tel} className="grid h-10 place-items-center rounded-[10px] px-2.5 text-[12.5px] font-semibold text-muted hover:bg-hoverbg" title={`Call ${phone}`}>
+            <a href={tel} className="grid h-10 place-items-center rounded-lg px-2.5 text-body font-semibold text-muted hover:bg-hoverbg" title={`Call ${phone}`}>
               Call
             </a>
           )}
@@ -571,7 +573,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
             only={['call', 'note', 'followup', 'stage']}
             onDone={() => refreshPriorityQueue()}
           />
-          <CrmLink url={row.crm_profile_url} className="grid h-10 place-items-center px-2 text-[12.5px] font-semibold text-muted">
+          <CrmLink url={row.crm_profile_url} className="grid h-10 place-items-center px-2 text-body font-semibold text-muted">
             CRM ↗
           </CrmLink>
         </div>
@@ -580,7 +582,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
         type="button"
         aria-label={`More actions for ${row.name}`}
         onClick={() => setSheet(true)}
-        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] text-[18px] text-muted hover:bg-hoverbg"
+        className="grid h-10 w-10 flex-none place-items-center rounded-lg text-lead text-muted hover:bg-hoverbg"
       >
         ⋯
       </button>

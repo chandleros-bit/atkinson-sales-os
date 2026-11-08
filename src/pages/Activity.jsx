@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import Segmented from '../components/Segmented'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { TYPE_META, TYPE_CHIPS, filterByType, groupByDay, timeOfDay, mergeFeeds } from '../lib/activity'
 import { useBusiness } from '../context/BusinessContext'
 import BizBadge from '../components/BizBadge'
 import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
+import { friendlyError } from '../lib/friendlyError'
 
 const PER_PAGE = 150
 
@@ -39,18 +41,14 @@ const ACTIVITY = {
   },
 }
 
-// The 'call' tag takes the row's business accent (green Bayway / blue MPG),
-// so in the merged feed a call's color says which book it belongs to; other
-// types keep their shared semantic hue from TYPE_META.
-function TypeTag({ type, accent }) {
-  const m =
-    type === 'call'
-      ? { label: 'Call', color: `var(--${accent})`, border: `var(--${accent}-line)` }
-      : TYPE_META[type] || { label: type, color: 'var(--muted)', border: 'var(--line)' }
+// One look per type in both books (TYPE_META): the book badge says which book
+// a row is from, so the type tag never doubles as a book color.
+function TypeTag({ type }) {
+  const m = TYPE_META[type] || { label: type, color: 'var(--muted)', border: 'var(--line2)' }
   return (
     <span
-      className="flex-none rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide"
-      style={{ color: m.color, border: `1px solid ${m.border}`, width: 46 }}
+      className="flex-none rounded-md px-1.5 py-px text-center text-micro font-semibold uppercase tracking-wide"
+      style={{ color: m.color, border: `1px solid ${m.border}`, width: 50 }}
     >
       {m.label}
     </span>
@@ -97,7 +95,7 @@ export default function Activity({ biz }) {
       const pages = await Promise.all(books.map((b) => fetchPage(b, 0)))
       setFeeds(Object.fromEntries(books.map((b, i) => [b, { rows: pages[i], hasMore: pages[i].length === PER_PAGE }])))
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoading(false)
     }
@@ -121,7 +119,7 @@ export default function Activity({ biz }) {
         return next
       })
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoadingMore(false)
     }
@@ -145,26 +143,20 @@ export default function Activity({ biz }) {
         eyebrow={books.length > 1 ? 'Both books' : config.label}
         eyebrowColor={books.length > 1 ? undefined : `var(--${config.accent}-ink)`}
         title="Activity"
-        note={!loading && !error && <span className="num text-[12px] text-muted">{total} shown</span>}
+        note={!loading && !error && <span className="num text-caption text-muted">{total} shown</span>}
         subtitle={config.copy}
       />
 
-      <div className="-mx-4 mt-3 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:mt-4 sm:flex-wrap sm:px-0">
-        {TYPE_CHIPS.map((c) => (
-          <button
-            key={c.key}
-            onClick={() => setTypeFilter(c.key)}
-            className={`min-h-[36px] flex-none rounded-lg px-3 py-1.5 text-xs font-semibold sm:min-h-0 sm:px-2.5 ${
-              typeFilter === c.key ? 'bg-hoverbg text-[color:var(--text)]' : 'text-muted hover:text-[color:var(--text)]'
-            }`}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label="Activity type"
+        className="mt-3 sm:mt-4"
+        options={TYPE_CHIPS.map((c) => [c.key, c.label])}
+        value={typeFilter}
+        onChange={setTypeFilter}
+      />
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -189,7 +181,7 @@ export default function Activity({ biz }) {
         <div className="mt-5 space-y-5">
           {groups.map((g) => (
             <div key={g.dayKey}>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-dim">{g.label}</div>
+              <div className="mb-2 text-micro font-semibold uppercase tracking-wide text-dim">{g.label}</div>
               <div className="overflow-hidden rounded-card border border-line bg-panel">
                 {g.rows.map((r) => (
                   <div
@@ -197,16 +189,16 @@ export default function Activity({ biz }) {
                     data-activity={r.business_id}
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-3 last:border-b-0 hover:bg-hoverbg sm:flex-nowrap"
                   >
-                    {books.length > 1 && <BizBadge biz={r.business_id} />}
-                    <TypeTag type={r.type} accent={r.business_id} />
-                    <div className="num w-14 flex-none text-[12px] text-muted">{timeOfDay(r.occurred_at)}</div>
-                    <div className="min-w-0 flex-1 truncate text-[13px] font-semibold sm:w-40 sm:flex-none">
+                    {books.length > 1 && <BizBadge biz={r.business_id} fixed />}
+                    <TypeTag type={r.type} />
+                    <div className="num w-14 flex-none text-caption text-muted">{timeOfDay(r.occurred_at)}</div>
+                    <div className="min-w-0 flex-1 truncate text-body font-semibold sm:w-40 sm:flex-none">
                       <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name || '(unknown)'}</PersonLink>
                     </div>
                     {/* Phones: the detail wraps onto its own line instead of being cut off. */}
-                    <div className="line-clamp-2 basis-full text-[12.5px] text-muted sm:line-clamp-1 sm:min-w-0 sm:flex-1 sm:basis-auto">{r.snippet || '—'}</div>
+                    <div className="line-clamp-2 basis-full text-body text-muted sm:line-clamp-1 sm:min-w-0 sm:flex-1 sm:basis-auto">{r.snippet || '—'}</div>
                     {r.owner && (
-                      <div className="hidden w-28 flex-none truncate text-right text-[11px] text-dim sm:block">{r.owner}</div>
+                      <div className="hidden w-28 flex-none truncate text-right text-micro text-dim sm:block">{r.owner}</div>
                     )}
                   </div>
                 ))}

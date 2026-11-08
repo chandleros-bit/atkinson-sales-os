@@ -9,6 +9,7 @@ import { fetchAllSettled } from './fetchAll'
 import { buildQueue, resolveRules } from './priorityQueue'
 import { useLeadRatings } from './useLeadRatings'
 import { withRatings } from './leadRatings'
+import { friendlyError } from './friendlyError'
 
 const STALE_MS = 60_000
 let store = { rows: [], rules: resolveRules(null), touched: [], loading: !isDemoMode, error: null, at: 0 }
@@ -48,7 +49,7 @@ export function refreshPriorityQueue() {
             at: Date.now(),
           }
     } catch (e) {
-      store = { ...store, loading: false, error: String(e?.message || e), at: Date.now() }
+      store = { ...store, loading: false, error: friendlyError(e), at: Date.now() }
     } finally {
       inflight = null
       emit()
