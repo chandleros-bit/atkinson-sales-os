@@ -4,16 +4,26 @@ import { mapActivity as fubMapActivity } from '../_shared/fub-activity.ts'
 import { mapTask as fubMapTask } from '../_shared/fub-tasks.ts'
 import { mapActivity as zohoMapActivity } from '../_shared/zoho-activity.ts'
 import { mapTask as zohoMapTask } from '../_shared/zoho-tasks.ts'
+import { mapContact as zohoMapContact } from '../_shared/zoho.ts'
 
 // --- In-memory stand-in for the slice of supabase-js that run.ts uses -------
 function fakeDb(seed) {
   const tables = Object.fromEntries(Object.entries(seed).map(([k, v]) => [k, v.map((r) => ({ ...r }))]))
   const failUpsert = new Set()
+  const failUpdate = new Map()
   const calls = []
+  // Postgres fills these ids by default; the fake does it for the tables a
+  // test reads an id back from.
+  const AUTO_ID = new Set(['contacts', 'crm_actions'])
+  let nextId = 0
+  const withId = (table, r) => (AUTO_ID.has(table) && r.id == null ? { ...r, id: `${table}-${++nextId}` } : r)
   const db = {
     tables,
     calls,
+    orExprs: [],
     failUpsertOn: (t) => failUpsert.add(t),
+    // when(patch): which updates on the table fail (default: all of them).
+    failUpdateOn: (t, when = () => true) => failUpdate.set(t, when),
     rpc: async (fn, args) => {
       calls.push(['rpc', fn, args])
       return { data: 1, error: null }
@@ -24,14 +34,14 @@ function fakeDb(seed) {
       let op = 'select'
       let payload = null
       let opts = null
-      const match = (r) => filters.every(([c, v]) => r[c] === v)
+      const match = (r) => filters.every((f) => f(r))
       const exec = () => {
         const rows = tables[table]
         if (op === 'insert') {
           if (table === 'crm_actions' && rows.some((r) => r.client_action_id === payload.client_action_id)) {
             return { error: { code: '23505', message: 'duplicate key' } }
           }
-          for (const p of [].concat(payload)) rows.push({ ...p })
+          for (const p of [].concat(payload)) rows.push(withId(table, { ...p }))
           return { error: null }
         }
         if (op === 'delete') {
@@ -39,8 +49,11 @@ function fakeDb(seed) {
           return { error: null }
         }
         if (op === 'update') {
-          rows.filter(match).forEach((r) => Object.assign(r, payload))
-          return { error: null }
+          if (failUpdate.get(table)?.(payload)) return { error: { message: 'update down' } }
+          const hit = rows.filter(match)
+          hit.forEach((r) => Object.assign(r, payload))
+          // The updated rows, as .update().select() returns them.
+          return { data: hit.map((r) => ({ ...r })), error: null }
         }
         if (op === 'upsert') {
           if (failUpsert.has(table)) return { error: { message: 'mirror down' } }
@@ -48,7 +61,7 @@ function fakeDb(seed) {
           for (const p of [].concat(payload)) {
             const i = rows.findIndex((r) => keys.every((k) => r[k] === p[k]))
             if (i >= 0) rows[i] = { ...rows[i], ...p }
-            else rows.push({ ...p })
+            else rows.push(withId(table, { ...p }))
           }
           return { error: null }
         }
@@ -60,7 +73,18 @@ function fakeDb(seed) {
         update: (patch) => { op = 'update'; payload = patch; calls.push(['update', table, patch]); return q },
         delete: () => { op = 'delete'; calls.push(['delete', table]); return q },
         upsert: (row, o) => { op = 'upsert'; payload = row; opts = o; calls.push(['upsert', table, row, o]); return q },
-        eq: (c, v) => { filters.push([c, v]); return q },
+        eq: (c, v) => { filters.push((r) => r[c] === v); return q },
+        neq: (c, v) => { filters.push((r) => r[c] !== v); return q },
+        // PostgREST or(): only "col.is.null" and "col.lt.<value>" are needed here.
+        or: (expr) => {
+          db.orExprs.push(expr)
+          const parts = expr.split(',').map((s) => {
+            const [c, o, ...v] = s.split('.')
+            return [c, o, v.join('.').replace(/^"(.*)"$/, '$1')]
+          })
+          filters.push((r) => parts.some(([c, o, v]) => (o === 'is' && v === 'null' ? r[c] == null : o === 'lt' && r[c] != null && r[c] < v)))
+          return q
+        },
         maybeSingle: async () => {
           const r = exec()
           return { data: r.data?.[0] ?? null, error: r.error }
@@ -706,5 +730,486 @@ describe('crm-action run: assistant role', () => {
     const res = await go(noteReq(), { userId: ASSISTANT, role: null })
     expect(res.http).toBe(403)
     expect(db.calls).toEqual([])
+  })
+})
+
+describe('crm-action run: promote_prospect (MPG walk-in to a Zoho Open lead)', () => {
+  const ASSISTANT = '00000000-0000-4000-8000-0000000000a1'
+  const OTHER = '00000000-0000-4000-8000-0000000000b2'
+  const promoteReq = (payload = {}, n = 100, ids = {}) => ({
+    client_action_id: uuid(n), action: 'promote_prospect', business_id: 'mpg',
+    prospect_id: 'p-1', touch_id: 'touch-1', ...ids,
+    payload: { note: 'Walk-in · Warm — owner Ana', ...payload },
+  })
+  const prospect = (over) => ({
+    id: 'p-1', user_id: USER, business_name: 'Ruiz Deli', contact_name: 'Ana Ruiz', contact_role: 'Owner',
+    phone: '(713) 555-0199', phone_key: '7135550199', email: 'ana@ruizdeli.com', address: '1 Main St, Houston',
+    temperature: 'hot', status: 'working', zoho_lead_id: null, zoho_wanted: true, promoting_at: null, ...over,
+  })
+  const touch = (over) => ({ id: 'touch-1', user_id: USER, prospect_id: 'p-1', temperature: 'warm', contact_id: null, crm_action_id: null, ...over })
+  const candidate = (id, status) => ({ id, company: 'Ruiz Deli', name: 'Ana Ruiz', phone: '7135550199', status })
+
+  // A tiny Zoho Leads module: what was created or exists, by id.
+  let leads
+  const zohoLeadRec = (id, Lead_Status) => ({ id, First_Name: 'Ana', Last_Name: 'Ruiz', Company: 'Ruiz Deli', Phone: '(713) 555-0199', Lead_Status })
+  const prospectRow = (id = 'p-1') => db.tables.mpg_prospects.find((p) => p.id === id)
+  const touchRow = (id = 'touch-1') => db.tables.mpg_touches.find((t) => t.id === id)
+  const zohoWrites = () => ['createLead', 'setLeadOpen', 'addNote', 'createTask'].flatMap((k) => mpg.send[k].mock.calls)
+  // Every db write except taking and releasing the promotion lease.
+  const isLease = (c) => c[0] === 'update' && c[1] === 'mpg_prospects' && Object.keys(c[2]).join() === 'promoting_at'
+  const writesBesidesLease = () => db.calls.filter((c) => !isLease(c))
+  const leaseCalls = () => db.calls.filter(isLease).map((c) => c[2].promoting_at)
+
+  beforeEach(() => {
+    db.tables.settings.push({ key: 'create_lead_enabled', value: { bay: false, mpg: true } })
+    db.tables.mpg_prospects = [
+      prospect(),
+      prospect({ id: 'p-other', user_id: OTHER }),
+      prospect({ id: 'p-done', status: 'promoted', zoho_lead_id: 'Z-OLD' }),
+      prospect({ id: 'p-asst', user_id: ASSISTANT }),
+      prospect({ id: 'p-2' }),
+    ]
+    db.tables.mpg_touches = [
+      touch(),
+      touch({ id: 'touch-other', user_id: OTHER, prospect_id: 'p-other' }),
+      touch({ id: 'touch-done', prospect_id: 'p-done' }),
+      touch({ id: 'touch-asst', user_id: ASSISTANT, prospect_id: 'p-asst' }),
+      touch({ id: 'touch-2', prospect_id: 'p-2' }),
+    ]
+    db.tables.lead_ratings = []
+    leads = new Map()
+    mpg.send.findLeads = vi.fn(async () => [])
+    mpg.send.createLead = vi.fn(async () => {
+      leads.set('Z-NEW-1', zohoLeadRec('Z-NEW-1', 'Open'))
+      return { id: 'Z-NEW-1' }
+    })
+    mpg.send.setLeadOpen = vi.fn(async ({ externalId }) => {
+      leads.get(String(externalId)).Lead_Status = 'Open'
+      return { id: String(externalId) }
+    })
+    mpg.read.lead = vi.fn(async (id) => {
+      const rec = leads.get(String(id))
+      if (!rec) throw new Error(`Zoho GET Leads/${id} returned no record`)
+      return { ...rec }
+    })
+    mpg.read.note = async (id, ctx) => ({ id, Note_Content: ctx.body, Parent_Id: { id: ctx.externalId }, $se_module: 'Leads', Created_Time: '2026-11-06T15:00:00+00:00' })
+    mpg.read.task = async (id) => ({
+      id, Subject: 'Bring statement', Due_Date: '2026-11-10', Status: 'Not Started',
+      What_Id: { id: mpg.send.createTask.mock.calls.at(-1)[0].externalId }, $se_module: 'Leads',
+    })
+    mpg.map.contact = (rec) => zohoMapContact(rec, 'Leads')
+  })
+
+  it('creates an Open lead when Zoho has no match, then the note, the task and the bookkeeping', async () => {
+    const res = await go(promoteReq({ follow_up: { due_date: '2026-11-10', title: 'Bring statement' } }))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.findLeads).toHaveBeenCalledWith({ phoneKey: '7135550199', company: 'Ruiz Deli' })
+    expect(mpg.send.createLead).toHaveBeenCalledWith({
+      business: 'Ruiz Deli', contactName: 'Ana Ruiz', role: 'Owner', phone: '(713) 555-0199',
+      email: 'ana@ruizdeli.com', address: '1 Main St, Houston',
+    })
+    expect(mpg.send.setLeadOpen).not.toHaveBeenCalled()
+
+    // Mirrored through the zoho-sync mapper.
+    const contact = db.tables.contacts.find((c) => c.external_id === 'Z-NEW-1')
+    expect(contact).toMatchObject({ business_id: 'mpg', source_crm: 'zoho', name: 'Ana Ruiz', company: 'Ruiz Deli', person_stage: 'Open' })
+    expect(res.body.results.map((r) => [r.step, r.ok])).toEqual([['promote', true], ['add_note', true], ['create_task', true]])
+    expect(res.body.results[0]).toMatchObject({ crm_id: 'Z-NEW-1', lead_id: 'Z-NEW-1', linked: false, contact_id: contact.id })
+    expect(res.body.results[0].mirror_error).toBeUndefined()
+
+    // Note and task hang off the new lead.
+    expect(mpg.send.addNote).toHaveBeenCalledWith({ externalId: 'Z-NEW-1', subject: 'Walk-in', body: 'Walk-in · Warm — owner Ana' })
+    expect(mpg.send.createTask).toHaveBeenCalledWith({ externalId: 'Z-NEW-1', title: 'Bring statement', type: 'Follow Up', dueDate: '2026-11-10' })
+    expect(db.tables.activities.find((a) => a.external_id === 'note-Z-NOTE-1')).toMatchObject({ contact_id: contact.id })
+    expect(db.tables.tasks.find((t) => t.external_id === 'Z-TASK-1')).toMatchObject({ contact_id: contact.id })
+
+    const action = db.tables.crm_actions.at(-1)
+    expect(action).toMatchObject({ action: 'promote_prospect', business_id: 'mpg', user_id: USER, status: 'ok', contact_id: contact.id })
+    expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1', zoho_wanted: false, promoted_at: now.toISOString() })
+    expect(touchRow()).toMatchObject({ contact_id: contact.id, crm_action_id: action.id })
+    expect(db.tables.lead_ratings).toEqual([
+      { contact_id: contact.id, business_id: 'mpg', temperature: 'warm', rated_at: now.toISOString(), rated_by: USER },
+    ])
+    expect(db.calls.find((c) => c[0] === 'upsert' && c[1] === 'lead_ratings')[3]).toEqual({ onConflict: 'contact_id' })
+    // The other prospects are untouched, and the lease is given back.
+    expect(prospectRow('p-2')).toMatchObject({ status: 'working', zoho_wanted: true })
+    expect(prospectRow().promoting_at).toBeNull()
+    expect(leaseCalls()).toEqual([now.toISOString(), null])
+  })
+
+  it("rates with the prospect's temperature when the touch has none", async () => {
+    touchRow().temperature = null
+    await go(promoteReq({ note: undefined }, 101))
+    expect(db.tables.lead_ratings[0]).toMatchObject({ temperature: 'hot', rated_by: USER })
+  })
+
+  it('writes no rating when neither the touch nor the prospect has a temperature', async () => {
+    touchRow().temperature = null
+    prospectRow().temperature = null
+    expect((await go(promoteReq({}, 102))).body.status).toBe('ok')
+    expect(db.tables.lead_ratings).toEqual([])
+  })
+
+  it('links the one matching "Initial lead" and sets it to Open', async () => {
+    leads.set('Z-INIT', zohoLeadRec('Z-INIT', 'Initial lead'))
+    mpg.send.findLeads = vi.fn(async () => [candidate('Z-INIT', 'Initial lead')])
+    const res = await go(promoteReq({}, 103))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.setLeadOpen).toHaveBeenCalledWith({ externalId: 'Z-INIT' })
+    expect(mpg.send.createLead).not.toHaveBeenCalled()
+    expect(res.body.results[0]).toMatchObject({ step: 'promote', ok: true, lead_id: 'Z-INIT', linked: true })
+    expect(db.tables.contacts.find((c) => c.external_id === 'Z-INIT')).toMatchObject({ person_stage: 'Open' })
+    expect(mpg.send.addNote).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'Z-INIT' }))
+    expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-INIT' })
+  })
+
+  it('links the one matching worked lead without changing its status', async () => {
+    leads.set('Z-PEND', zohoLeadRec('Z-PEND', 'Pending'))
+    mpg.send.findLeads = vi.fn(async () => [candidate('Z-PEND', 'Pending')])
+    const res = await go(promoteReq({}, 104))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.setLeadOpen).not.toHaveBeenCalled()
+    expect(mpg.send.createLead).not.toHaveBeenCalled()
+    expect(res.body.results[0]).toMatchObject({ lead_id: 'Z-PEND', linked: true })
+    expect(db.tables.contacts.find((c) => c.external_id === 'Z-PEND')).toMatchObject({ person_stage: 'Pending' })
+  })
+
+  it('returns the candidates when more than one lead matches, and writes nothing', async () => {
+    const candidates = [candidate('Z-A', 'Pending'), candidate('Z-B', 'Initial lead')]
+    mpg.send.findLeads = vi.fn(async () => candidates)
+    const res = await go(promoteReq({}, 105))
+    expect(res.body).toEqual({ status: 'choose', candidates })
+    expect(db.tables.crm_actions).toEqual([])
+    expect(writesBesidesLease()).toEqual([])
+    expect(zohoWrites()).toEqual([])
+    // The lease was taken for the search and given back.
+    expect(leaseCalls()).toEqual([now.toISOString(), null])
+    expect(prospectRow()).toMatchObject({ status: 'working', zoho_wanted: true, promoting_at: null })
+  })
+
+  it('reports a failed search without claiming anything', async () => {
+    mpg.send.findLeads = vi.fn(async () => { throw new Error('Zoho POST coql -> 500: down') })
+    const res = await go(promoteReq({}, 106))
+    expect(res.body).toEqual({ status: 'error', error: 'Zoho POST coql -> 500: down' })
+    expect(db.tables.crm_actions).toEqual([])
+    expect(writesBesidesLease()).toEqual([])
+    expect(zohoWrites()).toEqual([])
+    expect(prospectRow().promoting_at).toBeNull()
+  })
+
+  it('links the chosen lead without searching again', async () => {
+    leads.set('Z-B', zohoLeadRec('Z-B', 'Initial lead'))
+    const res = await go(promoteReq({ link_lead_id: 'Z-B' }, 107))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(mpg.read.lead).toHaveBeenCalledWith('Z-B')
+    expect(mpg.send.setLeadOpen).toHaveBeenCalledWith({ externalId: 'Z-B' })
+    expect(mpg.send.createLead).not.toHaveBeenCalled()
+    expect(res.body.results[0]).toMatchObject({ lead_id: 'Z-B', linked: true })
+  })
+
+  it('refuses a chosen lead id that is not a Zoho id', async () => {
+    const res = await go(promoteReq({ link_lead_id: '../Deals/1' }, 130))
+    expect(res.body).toEqual({ status: 'refused', error: 'Unknown Zoho lead id' })
+    expect(mpg.read.lead).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+  })
+
+  it('creates a new lead without searching when asked to', async () => {
+    const res = await go(promoteReq({ create_new: true }, 108))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(mpg.send.createLead).toHaveBeenCalledTimes(1)
+    expect(res.body.results[0]).toMatchObject({ lead_id: 'Z-NEW-1', linked: false })
+  })
+
+  it("links the prospect's own Zoho lead without searching", async () => {
+    prospectRow().zoho_lead_id = 'Z-MINE'
+    leads.set('Z-MINE', zohoLeadRec('Z-MINE', 'Open'))
+    const res = await go(promoteReq({}, 109))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(mpg.send.createLead).not.toHaveBeenCalled()
+    expect(res.body.results[0]).toMatchObject({ lead_id: 'Z-MINE', linked: true })
+  })
+
+  it("refuses another user's prospect or touch without a row or a Zoho call", async () => {
+    const cases = [
+      { prospect_id: 'p-other', touch_id: 'touch-other' },
+      { prospect_id: 'p-other', touch_id: 'touch-1' },
+      { prospect_id: 'p-1', touch_id: 'touch-other' },
+      { prospect_id: 'p-1', touch_id: 'touch-2' }, // my touch, but on another prospect
+      { prospect_id: 'nope', touch_id: 'touch-1' },
+      { prospect_id: 'p-1', touch_id: 'nope' },
+    ]
+    for (const [i, ids] of cases.entries()) {
+      expect((await go(promoteReq({}, 110 + i, ids))).body).toEqual({ status: 'refused', error: 'Prospect not found' })
+    }
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+    expect(db.calls).toEqual([])
+  })
+
+  it('needs a prospect and a touch', async () => {
+    expect((await go(promoteReq({}, 120, { prospect_id: undefined }))).body).toEqual({ status: 'refused', error: 'prospect_id and touch_id are required' })
+    expect((await go(promoteReq({}, 121, { touch_id: undefined }))).body).toEqual({ status: 'refused', error: 'prospect_id and touch_id are required' })
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+  })
+
+  it('refuses a prospect that is already in Zoho', async () => {
+    const res = await go(promoteReq({}, 122, { prospect_id: 'p-done', touch_id: 'touch-done' }))
+    expect(res.body).toEqual({ status: 'refused', error: 'Already in Zoho' })
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+  })
+
+  it('refuses and records when new-lead create is off for MPG, before searching', async () => {
+    db.tables.settings.find((s) => s.key === 'create_lead_enabled').value = { bay: true, mpg: false }
+    const res = await go(promoteReq({}, 123))
+    expect(res.body).toEqual({ status: 'refused', error: 'New lead is off for MPG' })
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'promote_prospect', status: 'refused', user_id: USER })
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+    expect(prospectRow()).toMatchObject({ status: 'working' })
+  })
+
+  it('refuses and records when MPG write-back is off, before searching', async () => {
+    db.tables.settings[0].value = { bay: true, mpg: false }
+    const res = await go(promoteReq({}, 124))
+    expect(res.body).toEqual({ status: 'refused', error: 'Write-back is off for MPG' })
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ status: 'refused' })
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+  })
+
+  it('refuses the assistant before searching', async () => {
+    const own = await go(promoteReq({}, 125, { prospect_id: 'p-asst', touch_id: 'touch-asst' }), { userId: ASSISTANT, role: 'assistant' })
+    expect(own.body).toEqual({ status: 'refused', error: 'The assistant login cannot do that' })
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ action: 'promote_prospect', status: 'refused', user_id: ASSISTANT })
+    const chandlers = await go(promoteReq({}, 126), { userId: ASSISTANT, role: 'assistant' })
+    expect(chandlers.body).toEqual({ status: 'refused', error: 'Prospect not found' })
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+  })
+
+  it('stops when the create fails and leaves the prospect not promoted', async () => {
+    mpg.send.createLead = vi.fn(async () => { throw new Error('Zoho POST Leads -> 400: MANDATORY_NOT_FOUND') })
+    const res = await go(promoteReq({ follow_up: { due_date: '2026-11-10' } }, 127))
+    expect(res.body).toEqual({ status: 'error', results: [{ step: 'promote', ok: false, error: 'Zoho POST Leads -> 400: MANDATORY_NOT_FOUND' }] })
+    expect(mpg.send.addNote).not.toHaveBeenCalled()
+    expect(mpg.send.createTask).not.toHaveBeenCalled()
+    expect(prospectRow()).toMatchObject({ status: 'working', zoho_lead_id: null, zoho_wanted: true, promoting_at: null })
+    expect(touchRow()).toMatchObject({ contact_id: null, crm_action_id: null })
+    expect(db.tables.lead_ratings).toEqual([])
+    expect(db.tables.crm_actions.at(-1)).toMatchObject({ status: 'error' })
+  })
+
+  it('is partial when the note fails after the create, and the prospect is still promoted', async () => {
+    mpg.send.addNote.mockRejectedValueOnce(new Error('Zoho POST Leads/Z-NEW-1/Notes -> 500'))
+    const res = await go(promoteReq({}, 128))
+    expect(res.body.status).toBe('partial')
+    expect(res.body.results.map((r) => [r.step, r.ok])).toEqual([['promote', true], ['add_note', false]])
+    expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1', zoho_wanted: false })
+    expect(touchRow().crm_action_id).toBe(db.tables.crm_actions.at(-1).id)
+  })
+
+  it('reports a failed bookkeeping write on the promote result without failing the run', async () => {
+    db.failUpsertOn('lead_ratings')
+    const res = await go(promoteReq({}, 129))
+    expect(res.body.status).toBe('ok')
+    expect(res.body.results[0].mirror_error).toMatch(/lead_ratings/)
+    expect(prospectRow()).toMatchObject({ status: 'promoted' })
+    expect(db.tables.crm_actions.at(-1).results[0].mirror_error).toMatch(/lead_ratings/)
+  })
+
+  // --- the lease: one promotion of a prospect at a time ---------------------
+
+  it('answers busy to a second promotion while the first holds the lease', async () => {
+    let release
+    mpg.send.createLead = vi.fn(() => new Promise((r) => {
+      release = () => {
+        leads.set('Z-NEW-1', zohoLeadRec('Z-NEW-1', 'Open'))
+        r({ id: 'Z-NEW-1' })
+      }
+    }))
+    const first = go(promoteReq({}, 140))
+    await vi.waitFor(() => expect(mpg.send.createLead).toHaveBeenCalledTimes(1))
+    expect(prospectRow().promoting_at).toBe(now.toISOString())
+
+    const second = await go(promoteReq({ create_new: true }, 141))
+    expect(second.body).toEqual({ status: 'busy', error: 'Already adding this business to Zoho' })
+    expect(db.tables.crm_actions.map((r) => r.client_action_id)).toEqual([uuid(140)])
+
+    release()
+    expect((await first).body.status).toBe('ok')
+    expect(mpg.send.createLead).toHaveBeenCalledTimes(1)
+    expect(prospectRow()).toMatchObject({ status: 'promoted', promoting_at: null })
+  })
+
+  it('answers busy, with no Zoho call and no row, while a fresh lease is held', async () => {
+    prospectRow().promoting_at = new Date(now.getTime() - 30_000).toISOString()
+    const res = await go(promoteReq({}, 142))
+    expect(res.body).toEqual({ status: 'busy', error: 'Already adding this business to Zoho' })
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+    expect(db.tables.crm_actions).toEqual([])
+    // Not ours to give back.
+    expect(prospectRow().promoting_at).toBe(new Date(now.getTime() - 30_000).toISOString())
+  })
+
+  it('takes over a lease older than two minutes', async () => {
+    prospectRow().promoting_at = new Date(now.getTime() - 3 * 60_000).toISOString()
+    expect((await go(promoteReq({}, 143))).body.status).toBe('ok')
+    expect(prospectRow()).toMatchObject({ status: 'promoted', promoting_at: null })
+  })
+
+  it('gives the lease back when the run refuses after the claim', async () => {
+    // The flag flips off between the pre-claim check and the claim.
+    const settings = db.tables.settings.find((s) => s.key === 'create_lead_enabled')
+    mpg.send.findLeads = vi.fn(async () => {
+      settings.value = { mpg: false }
+      return []
+    })
+    const res = await go(promoteReq({}, 144))
+    expect(res.body).toEqual({ status: 'refused', error: 'New lead is off for MPG' })
+    expect(prospectRow().promoting_at).toBeNull()
+  })
+
+  // --- the same submit twice ------------------------------------------------
+
+  it('replays a finished promotion to the same submit instead of refusing it', async () => {
+    const first = await go(promoteReq({}, 150))
+    expect(first.body.status).toBe('ok')
+    const second = await go(promoteReq({}, 150))
+    expect(second.body).toEqual({ ...first.body, replay: true })
+    expect(mpg.send.createLead).toHaveBeenCalledTimes(1)
+    expect(db.tables.crm_actions).toHaveLength(1)
+  })
+
+  // --- lead ids -------------------------------------------------------------
+
+  it("refuses a stored zoho_lead_id that isn't a Zoho id before any Zoho call", async () => {
+    prospectRow().zoho_lead_id = 'Leads/../Deals'
+    const res = await go(promoteReq({}, 160))
+    expect(res.body).toEqual({ status: 'refused', error: 'Unknown Zoho lead id' })
+    expect(mpg.send.findLeads).not.toHaveBeenCalled()
+    expect(mpg.read.lead).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+  })
+
+  it("fails the promote on a search match whose id isn't a Zoho id", async () => {
+    mpg.send.findLeads = vi.fn(async () => [candidate('../Deals/1', 'Pending')])
+    const res = await go(promoteReq({}, 161))
+    expect(res.body).toEqual({ status: 'error', results: [{ step: 'promote', ok: false, error: 'Unknown Zoho lead id' }] })
+    expect(mpg.read.lead).not.toHaveBeenCalled()
+    expect(zohoWrites()).toEqual([])
+    expect(prospectRow()).toMatchObject({ status: 'working', promoting_at: null })
+  })
+
+  it('creates when asked to, even with a stored zoho_lead_id', async () => {
+    prospectRow().zoho_lead_id = 'Z-STALE'
+    const res = await go(promoteReq({ create_new: true }, 162))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.read.lead).not.toHaveBeenCalledWith('Z-STALE')
+    expect(mpg.send.createLead).toHaveBeenCalledTimes(1)
+    expect(res.body.results[0]).toMatchObject({ lead_id: 'Z-NEW-1', linked: false })
+    expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1' })
+  })
+
+  // --- one "Initial lead" rule (isExcludedLead) -----------------------------
+
+  it('opens a linked lead whose status is "Initial lead" in any case or spacing', async () => {
+    leads.set('Z-I', zohoLeadRec('Z-I', 'INITIAL LEAD '))
+    expect((await go(promoteReq({ link_lead_id: 'Z-I' }, 170))).body.status).toBe('ok')
+    expect(mpg.send.setLeadOpen).toHaveBeenCalledWith({ externalId: 'Z-I' })
+  })
+
+  it('leaves "Initial lead follow up" as it is', async () => {
+    leads.set('Z-F', zohoLeadRec('Z-F', 'Initial lead follow up'))
+    expect((await go(promoteReq({ link_lead_id: 'Z-F' }, 171))).body.status).toBe('ok')
+    expect(mpg.send.setLeadOpen).not.toHaveBeenCalled()
+  })
+
+  // --- failures around the promote step -------------------------------------
+
+  it('fails the promote when the chosen lead cannot be read, and marks nothing', async () => {
+    const res = await go(promoteReq({ link_lead_id: 'Z-GONE' }, 180))
+    expect(res.body).toEqual({ status: 'error', results: [{ step: 'promote', ok: false, error: 'Zoho GET Leads/Z-GONE returned no record' }] })
+    expect(zohoWrites()).toEqual([])
+    expect(prospectRow()).toMatchObject({ status: 'working', zoho_lead_id: null, zoho_wanted: true, promoting_at: null })
+    expect(touchRow()).toMatchObject({ contact_id: null, crm_action_id: null })
+  })
+
+  it('fails the promote when opening the lead fails', async () => {
+    leads.set('Z-INIT', zohoLeadRec('Z-INIT', 'Initial lead'))
+    mpg.send.setLeadOpen = vi.fn(async () => { throw new Error('Zoho PUT Leads/Z-INIT -> 500') })
+    const res = await go(promoteReq({ link_lead_id: 'Z-INIT' }, 181))
+    expect(res.body.status).toBe('error')
+    expect(res.body.results).toEqual([{ step: 'promote', ok: false, error: 'Zoho PUT Leads/Z-INIT -> 500' }])
+    expect(mpg.send.addNote).not.toHaveBeenCalled()
+    expect(prospectRow()).toMatchObject({ status: 'working', promoting_at: null })
+  })
+
+  it('still marks the prospect promoted when the lead read-back fails after a create', async () => {
+    mpg.read.lead = vi.fn(async () => { throw new Error('Zoho GET Leads/Z-NEW-1 -> 500') })
+    const res = await go(promoteReq({}, 182))
+expect(res.body.status).toBe('ok')
+    expect(res.body.results[0]).toMatchObject({ step: 'promote', ok: true, lead_id: 'Z-NEW-1', mirror_error: 'Zoho GET Leads/Z-NEW-1 -> 500' })
+    expect(res.body.results[1]).toMatchObject({ step: 'add_note', ok: true })
+    expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1', zoho_wanted: false, promoting_at: null })
+    expect(touchRow()).toMatchObject({ contact_id: null, crm_action_id: db.tables.crm_actions.at(-1).id })
+  })
+
+  it('still sends the note and task to the new lead when the mirror read-back fails', async () => {
+    mpg.read.lead = vi.fn(async () => { throw new Error('Zoho GET Leads/Z-NEW-1 -> 500') })
+    mpg.read.task = async () => { throw new Error('Zoho GET Tasks -> 500') }
+    const res = await go(promoteReq({ follow_up: { due_date: '2026-11-10', title: 'Bring statement' } }, 190))
+    expect(mpg.send.addNote).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'Z-NEW-1' }))
+    expect(mpg.send.createTask).toHaveBeenCalledWith(expect.objectContaining({ externalId: 'Z-NEW-1', dueDate: '2026-11-10' }))
+    expect(res.body.results.map((r) => [r.step, r.ok])).toEqual([['promote', true], ['add_note', true], ['create_task', true]])
+    expect(res.body.results[1].mirror_error).toBeTruthy()
+    expect(res.body.results[2].mirror_error).toBeTruthy()
+    expect(prospectRow()).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1' })
+  })
+
+  it('re-opens a created lead that a Zoho workflow set to Initial lead, before mirroring', async () => {
+    mpg.send.createLead = vi.fn(async () => {
+      leads.set('Z-NEW-1', zohoLeadRec('Z-NEW-1', 'Initial lead'))
+      return { id: 'Z-NEW-1' }
+    })
+    const res = await go(promoteReq({}, 191))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.setLeadOpen).toHaveBeenCalledWith({ externalId: 'Z-NEW-1' })
+    expect(db.tables.contacts.find((c) => c.external_id === 'Z-NEW-1')).toMatchObject({ person_stage: 'Open' })
+  })
+
+  it('replays a failed result with its error', async () => {
+    mpg.send.createLead = vi.fn(async () => { throw new Error('Zoho POST Leads -> 400: bad') })
+    await go(promoteReq({}, 192))
+    const again = await go(promoteReq({}, 192))
+    expect(again.body).toMatchObject({ replay: true, status: 'error', error: 'Zoho POST Leads -> 400: bad' })
+  })
+
+  it('quotes the lease timestamp in the or() filter', async () => {
+    await go(promoteReq({}, 193))
+    expect(db.orExprs[0]).toMatch(/promoting_at.lt."[^"]+"/)
+  })
+
+  it('marks the prospect promoted before the note and follow-up are sent', async () => {
+    let atNote
+    mpg.send.addNote = vi.fn(async () => {
+      atNote = { ...prospectRow() }
+      return { id: 'Z-NOTE-1' }
+    })
+    await go(promoteReq({}, 183))
+    expect(atNote).toMatchObject({ status: 'promoted', zoho_lead_id: 'Z-NEW-1', zoho_wanted: false, promoted_at: now.toISOString() })
+  })
+
+  it('reports a failed prospect update on the promote result and stays ok', async () => {
+    db.failUpdateOn('mpg_prospects', (patch) => 'status' in patch)
+    const res = await go(promoteReq({}, 184))
+    expect(res.body.status).toBe('ok')
+    expect(res.body.results[0].mirror_error).toMatch(/mpg_prospects update: update down/)
+    expect(prospectRow()).toMatchObject({ status: 'working', promoting_at: null })
+    expect(touchRow().crm_action_id).toBe(db.tables.crm_actions.at(-1).id)
   })
 })

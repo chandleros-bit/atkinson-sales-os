@@ -1,7 +1,7 @@
 # MPG touch log, prospect lists and daily tracker export: Design
 
 **Date:** 2026-11-05
-**Status:** Slice 1 built on `feat/mpg-tracker-visits`, not deployed. The rest is not built.
+**Status:** Slice 1 live; slice 2 built on `feat/mpg-promote-to-zoho`, not deployed. The rest is not built.
 **Decided with Chandler:** 2026-11-05 (Claude Code session reviewing `MPG_Chandler_Private_Tracker.xlsx`).
 **Set aside (not in this spec):** writing to the spreadsheet automatically (Microsoft Graph). Chandler does not want a Microsoft sign-in; the sheet is filled by copy-paste. Deriving the Reports sprint numbers (statements received, proposals sent) from the touch log is a natural follow-on, not part of this spec.
 
@@ -28,7 +28,7 @@ The OS can't fill it today because it doesn't record most of what the sheet asks
 | Follow-ups | Calls and emails to businesses already in Zoho count as Follow-ups on the sheet. They do not count toward the 60. |
 | Repeat visits | A walk-in always goes on the Visits tab, even when the business is already in Zoho. If it is in Zoho, the visit is also written there as a note. |
 | ISV partners | Kept in the OS and on the sheet until their stage reaches **Proposal**, then promoted to Zoho. |
-| Promoted lead | A Zoho **Lead** with `Lead_Status = 'Open'` and `Lead_Source = 'Chandler'`. Never "Initial lead": the OS hides that status (migration 0044). |
+| Promoted lead | A Zoho **Lead** with `Lead_Status = 'Open'` and `Lead_Source = 'Chandler'` (the rep, `MPG_REP = 'Chandler'`; chosen over "Chandler Atkinson"). The contact's role goes in `Designation`, and `Description` is "Address: …". `Last_Name` falls back to the company when there is no contact name, and is capped at 80 characters (Company at 100). Never "Initial lead": the OS hides that status (migration 0044). |
 | Call lists | Built outside Zoho (Google Maps exports and other sources) and imported into the OS as prospect lists. |
 | Sheet connection | Copy-paste from an OS export panel into the workbook in Excel desktop. The file stays in the synced OneDrive folder so the manager's shared view updates through AutoSave. |
 
@@ -51,7 +51,7 @@ The Points and Entry status columns are formulas. The export never fills them.
 | App-owned, per-user tables with own-row RLS (`user_id default auth.uid()`). | `work_items` (0041), `contact_events` (0045) |
 | CRM writes go through `crm-action` and are logged in `crm_actions`, with per-step results and a retry path for a single failed step. | 0028, `src/lib/crmActions.js` (`buildActionRequest`, `retryRequestFor`) |
 | MPG write-back is live: OS-logged calls appear in Zoho as `Call: <outcome>` from Oct 20. | Zoho Calls |
-| `buildZohoLead` creates MPG leads, but hard-codes `Lead_Status = 'Not Contacted'`. | `_shared/zoho-write.ts` |
+| `buildZohoLead` creates MPG leads, but hard-codes `Lead_Status = 'Not Contacted'`. Promotion uses its own builder, `buildPromotedLead`. | `_shared/zoho-write.ts`, `_shared/zoho-leads.ts` |
 | Zoho Lead_Status values seen: `Initial lead` (hidden from the OS), `Open`, `Pending`. Lead_Source `Chandler` is in use. | Zoho, docs |
 | Lead temperature (Hot/Warm/Cold) is planned as the `lead_ratings` table. | `2026-11-03-temperature-forecast-briefings-design.md` |
 | The dialer works over `v_dial_contacts`, which only covers synced CRM contacts. | 0049 |
@@ -90,6 +90,8 @@ create table mpg_prospects (
                  check (status in ('new', 'working', 'cold', 'bad_number', 'promoted')),
   zoho_lead_id   text,            -- set on promotion; joins to contacts.external_id once synced
   promoted_at    timestamptz,
+  zoho_wanted    boolean not null default false, -- set by the Log visit toggle, cleared on success or when untoggled on a later visit; drives the Retry tag
+  promoting_at   timestamptz,     -- the promotion lease (see Promotion to Zoho)
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );
@@ -127,7 +129,7 @@ create table mpg_touches (
   application     boolean not null default false,
   boarded         boolean not null default false,
   isv_stage       text,           -- ISV: stage after this touch
-  crm_action_id   uuid references crm_actions(id) on delete set null, -- the Zoho write this touch caused, if any (not filled in slice 1)
+  crm_action_id   uuid references crm_actions(id) on delete set null, -- the Zoho write this touch caused, if any (filled in by promotion since slice 2)
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()  -- maintained by a before-update trigger
 );
@@ -150,7 +152,8 @@ Opened from **+ New → Log visit…** (shown on every view except Bayway, and n
 
 - **Business:** search across MPG contacts and prospects (by business or contact name; phone search is deferred), or type a new one, which creates a prospect with `list_id = null`.
 - **Fields:** contact name, role, phone/email, notes, next step, follow-up date, Hot / Warm / Cold (optional), and five outcome checkboxes (decision-maker conversation, statement received, demo/proposal, application submitted, merchant boarded).
-- **Zoho toggle (slice 2):** "Add to Zoho as Open" follows the promotion rule above and updates live as the fields change. It is hidden when the business is already in Zoho.
+- **Zoho toggle (slice 2):** "Add to Zoho as Open" follows the promotion rule above and updates live as the fields change. It needs both MPG flags (`writeback_enabled` and `create_lead_enabled`), is hidden when the business is already in Zoho, and is hidden in edit mode.
+- **After Save** with the toggle on, the promotion step (`ZohoPromote`) replaces the form. Closing it early leaves the server run going.
 - **On save:**
   - Always insert an `mpg_touches` row (`channel = 'walk_in'`).
   - **Prospect + toggle on:** run promotion (below).
@@ -183,19 +186,42 @@ The Workbench dialer gains a **Prospects** source: pick a list, then walk its `n
 
 This is a new `crm-action` action, `promote_prospect`. It is idempotent per `client_action_id` and logged in `crm_actions` like the others.
 
-1. **Duplicate check.** A prospect with `zoho_lead_id` already set (an Initial-lead match from import) skips the search, has its status set to `Open`, and goes to step 3. Otherwise, search Zoho Leads by phone (last 10 digits), then by exact company name.
-   - **Match found:** link to that lead and skip creation. If its status is `Initial lead`, set it to `Open`.
-   - **Several matches:** the action returns `refused` with the candidates. The UI asks which one to link, or whether to create a new lead anyway.
-2. **Create the lead.** Use `buildZohoLead` with a new `status` parameter set to `'Open'` (the default stays `'Not Contacted'` for New lead), plus `Lead_Source = 'Chandler'`. Name, company, phone and email come from the prospect, and `Description` holds role and address.
+Only the owner can promote, and both MPG flags (`writeback_enabled`, `create_lead_enabled`) must be on.
+
+0. **Replay.** The same `client_action_id` replays its recorded result before the "Already in Zoho" check.
+1. **Duplicate check.** A read-only search that runs before the claim and leaves no `crm_actions` row.
+   - A prospect with `zoho_lead_id` already set is linked without a search.
+   - Otherwise search Zoho Leads with COQL: `(Phone like '%<last4>' or Mobile like '%<last4>') or Company = '<name>'`, limit 50, quotes doubled. The results are filtered in code on the full 10 digits or the company ignoring case and spacing. The company is not searched if it contains a backslash or is over 100 characters. A COQL error body throws.
+   - **One match:** link to that lead and skip creation.
+   - **Several matches:** the action returns `status: 'choose'` with the candidates. The UI asks which one to link, or whether to create a new lead anyway. The payload may carry `link_lead_id` or `create_new`.
+   - An `Initial lead` that is linked is set to `Open`; other statuses are left alone.
+2. **Create the lead.** `buildPromotedLead` in `_shared/zoho-leads.ts` sets `Lead_Status = 'Open'` and `Lead_Source = 'Chandler'`, as in the Decisions table (`New lead` keeps its own builder and `'Not Contacted'`).
 3. **Add a note** with the promoting touch's notes and outcomes.
 4. **Create a task** for the follow-up date, if one is set.
-5. **Mirror in the OS:**
-   - Set `zoho_lead_id`, `status = 'promoted'` and `promoted_at` on the prospect.
-   - Set `crm_action_id` on the touch.
-   - The next `zoho-sync` brings the lead into `contacts`. Until then, the prospect row links to Zoho through `zoho_lead_id`.
-6. **Carry the temperature.** If `lead_ratings` exists by then (temperature spec), write the rating for the synced contact. Until the contact syncs, keep it on the prospect.
+5. **Mirror and bookkeeping:**
+   - The lead is mirrored into `contacts` right away through the zoho-sync mapper. It is re-opened first if a workflow set it to Initial lead.
+   - The prospect is marked promoted (`zoho_lead_id`, `status = 'promoted'`, `promoted_at`, `zoho_wanted = false`) right after the promote step.
+   - The touch gets `contact_id` and `crm_action_id`.
+   - `lead_ratings` is written from the touch's temperature, else the prospect's.
+   - Bookkeeping failures go into the promote result's `mirror_error`; the run's status is unchanged.
+   - If the mirror fails, the note and task fall back to the new lead id.
 
-**If promotion fails:** the touch and the prospect are already saved, so nothing is lost and the export is unaffected. The prospect shows "Not in Zoho yet · Retry", using the existing partial-failure pattern.
+**Lease.** An atomic `promoting_at` lease, 2 minutes, stops two promotions of one prospect making two leads. A held lease replies `{status:'busy'}`. It is released in `finally`, only if the stamp still matches.
+
+**Refusals.** `Prospect not found` (an ownership check, since the function runs as the service role), `Already in Zoho`, `Unknown Zoho lead id`.
+
+### ZohoPromote (the UI step)
+
+Used by Log visit and by the Daily tracker's Retry. Phases: running / choose / failed / done.
+
+- **choose** lists the matches, plus "Create a new lead".
+- **failed** has Try again (same pick) and Close. An error after a pick returns to the list instead.
+- **busy** shows a message and Close.
+- **partial** (the lead is in but the note or task failed) is a toast with no retry.
+- **"Already in Zoho"** counts as success.
+- `onDone` only fires while the component is mounted.
+
+**If promotion fails:** the touch and the prospect are already saved, so nothing is lost and the export is unaffected. The prospect shows "Not in Zoho yet · Retry" on its Daily tracker row (its own button, which opens a modal with `ZohoPromote`), and "In Zoho" once promoted or linked.
 
 ## Prospect list import
 
@@ -245,9 +271,9 @@ Until the manager changes the sheet, the cold-call line is copied into whatever 
 ## Error handling
 
 - **Capture never waits on Zoho.** The touch row saves first. Zoho writes (promotion, note, task) run afterwards, and their failures appear on the prospect or contact with Retry.
-- **Slice 1:** a Zoho failure shows an error toast with Retry, which resends only the failed write. `crm_action_id` isn't filled in yet.
+- **Slice 1:** a Zoho failure shows an error toast with Retry, which resends only the failed write.
 - **The export reads only `mpg_touches`,** so Zoho or sync outages can't change what is exported.
-- **Promotion is idempotent** (`client_action_id`). A double tap can't create two leads.
+- **Promotion is idempotent** (`client_action_id`) and takes a 2-minute lease on the prospect. A double tap can't create two leads.
 - **Imports are all or nothing per file:** a parse error rejects the file and names the bad row.
 
 ## Testing
@@ -260,7 +286,7 @@ Until the manager changes the sheet, the cold-call line is copied into whatever 
   - `phone_key` normalization,
   - header guessing for the CSV mapping,
   - "Copy new rows only" selection.
-- **Edge function:** `promote_prospect` plan tests, following `crm-action/plan.test.js`. Cover no match, one match with Initial lead (status set to Open), several matches (refused), and a failed note step retried.
+- **Edge function:** `promote_prospect` plan tests, following `crm-action/plan.test.js`. Cover no match, one match with Initial lead (status set to Open), several matches (`choose`), and a failed note step retried.
 - **Render tests:** Log visit (the toggle follows the rules; hidden for Zoho contacts; the toggle and its test are slice 2), the dialer's prospect mode (result taps, 60 counter) and the Daily tracker panel (blocks, copy states).
 - **Manual check before launch:** paste one day's blocks into a copy of the real workbook. Confirm every row reads "Counted" and the points calculate.
 
@@ -277,8 +303,8 @@ Each slice ships on its own and is useful by itself.
 
 ## Verify before build
 
-- **Duplicate search:** the Zoho Leads search endpoint (`/Leads/search` with `phone` / `criteria`) and its rate limits.
-- **Lead_Status picklist:** confirm `Open` is a valid value on the Leads layout used for new leads.
-- **Lead_Source picklist:** confirm `Chandler` is a picklist value, not just a stored legacy value.
-- **ISV field in Zoho:** check whether MPG Zoho has a partner/vendor module or a lead field for ISV partners. If not, the note text is the only marker.
-- **Write-back flag:** confirm `writeback_enabled.mpg` is `true` in production. Calls from Oct 20 suggest it is; the migration default is `false`.
+- **Duplicate search:** resolved. The search uses COQL.
+- **Lead_Status picklist:** resolved. `Open` is valid.
+- **Lead_Source picklist:** resolved. `Chandler` is valid.
+- **Write-back flags:** resolved. `writeback_enabled.mpg` and `create_lead_enabled.mpg` are both on in production.
+- **ISV field in Zoho:** still open, for slice 5. Zoho Leads has `Reseller` (boolean) and `Reseller_Type` (picklist, includes 'ISV'), which may serve as the marker; otherwise the note text is.

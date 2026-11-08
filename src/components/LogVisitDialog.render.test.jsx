@@ -13,11 +13,15 @@ const invoke = vi.fn()
 const inserted = []
 const updated = []
 const state = { failTouches: 0 }
-const DATA = { contacts: [], prospects: [], writeback: { bay: true, mpg: true } }
+const DATA = { contacts: [], prospects: [], writeback: { bay: true, mpg: true }, createLead: { mpg: true } }
 
 function query(table) {
   const q = {}
-  for (const m of ['select', 'eq', 'neq', 'or', 'ilike', 'gte', 'lt', 'order', 'limit']) q[m] = () => q
+  q.eq = (col, val) => {
+    if (col === 'key') q.settingKey = val
+    return q
+  }
+  for (const m of ['select', 'neq', 'or', 'ilike', 'gte', 'lt', 'order', 'limit']) q[m] = () => q
   q.insert = (row) => {
     inserted.push({ table, row })
     if (table === 'mpg_touches' && state.failTouches > 0) {
@@ -32,7 +36,7 @@ function query(table) {
     return q
   }
   q.single = async () => ({ data: { id: 't1' }, error: null })
-  q.maybeSingle = async () => (table === 'settings' ? { data: { value: DATA.writeback }, error: null } : { data: null, error: null })
+  q.maybeSingle = async () => (table === 'settings' ? { data: { value: q.settingKey === 'create_lead_enabled' ? DATA.createLead : DATA.writeback }, error: null } : { data: null, error: null })
   q.then = (resolve) => resolve({
     data: table === 'contacts' ? DATA.contacts : table === 'mpg_prospects' ? DATA.prospects : [],
     error: null,
@@ -57,6 +61,7 @@ beforeEach(() => {
   DATA.contacts = []
   DATA.prospects = []
   DATA.writeback = { bay: true, mpg: true }
+  DATA.createLead = { mpg: true }
   resetWritebackFlags()
   invoke.mockReset()
   invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'add_note', ok: true }] }, error: null })
@@ -107,7 +112,8 @@ describe('LogVisitDialog', () => {
       channel: 'walk_in', prospect_id: 'p-new', business_name: 'Feges BBQ',
       contact_label: 'Patrick', temperature: 'warm', dm_conversation: true,
     })
-    expect(invoke).not.toHaveBeenCalled()
+    // Warm + an outcome is interested, so the default toggle promotes it.
+    expect(invoke.mock.calls.map((c) => c[1].body.action)).toEqual(['promote_prospect'])
     expect(onClose).toHaveBeenCalled()
   })
 
@@ -213,6 +219,115 @@ describe('LogVisitDialog', () => {
     expect(byLabel('Phone').value).toBe('')
   })
 })
+
+describe('LogVisitDialog: Add to Zoho as Open', () => {
+  async function newBusiness() {
+    await type(byLabel('Business'), 'Feges BBQ')
+    await wait()
+    await click(button('Add new business'))
+  }
+  const toggle = () => byLabel('Add to Zoho as Open')
+
+  it('Warm shows the toggle checked; Save promotes after the touch insert with zoho_wanted', async () => {
+    await render(React.createElement(LogVisitDialog, { onClose: () => {} }))
+    await newBusiness()
+    await click(button('Warm'))
+    expect(toggle().checked).toBe(true)
+    expect(toggle().disabled).toBe(false)
+    await click(button('Save visit'))
+    await wait(50)
+    expect(inserted.map((i) => i.table)).toEqual(['mpg_prospects', 'mpg_touches'])
+    expect(inserted[0].row.zoho_wanted).toBe(true)
+    const calls = invoke.mock.calls.map((c) => c[1].body.action)
+    expect(calls).toEqual(['promote_prospect'])
+    expect(invoke.mock.calls[0][1].body.prospect_id).toBe('p-new')
+  })
+
+  it('unticking the toggle after Warm saves without promoting', async () => {
+    const onClose = vi.fn()
+    await render(React.createElement(LogVisitDialog, { onClose }))
+    await newBusiness()
+    await click(button('Warm'))
+    await click(toggle())
+    expect(toggle().checked).toBe(false)
+    await click(button('Save visit'))
+    await wait(50)
+    expect(inserted[0].row.zoho_wanted).toBe(false)
+    expect(invoke).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('keeps the dialog open on the promote step until it finishes', async () => {
+    const onClose = vi.fn()
+    let release
+    invoke.mockReturnValue(new Promise((r) => { release = r }))
+    await render(React.createElement(LogVisitDialog, { onClose }))
+    await newBusiness()
+    await click(button('Warm'))
+    await click(button('Save visit'))
+    await wait(50)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Adding to Zoho')
+    await act(async () => { release({ data: { status: 'ok', results: [{ step: 'create_lead', ok: true }] }, error: null }) })
+    await wait(50)
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('Escape still closes during the promote step', async () => {
+    const onClose = vi.fn()
+    invoke.mockReturnValue(new Promise(() => {}))
+    await render(React.createElement(LogVisitDialog, { onClose }))
+    await newBusiness()
+    await click(button('Warm'))
+    await click(button('Save visit'))
+    await wait(50)
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('a checked Statement forces the toggle on and disabled with a hint', async () => {
+    await render(React.createElement(LogVisitDialog, { onClose: () => {} }))
+    await newBusiness()
+    await click(byLabel('Statement'))
+    expect(toggle().checked).toBe(true)
+    expect(toggle().disabled).toBe(true)
+    expect(document.body.textContent).toContain('Statement or later always goes to Zoho')
+  })
+
+  it('a cold visit with no outcomes starts unchecked', async () => {
+    await render(React.createElement(LogVisitDialog, { onClose: () => {} }))
+    await newBusiness()
+    expect(toggle().checked).toBe(false)
+  })
+
+  it('no toggle for a Zoho contact preset', async () => {
+    await render(React.createElement(LogVisitDialog, {
+      onClose: () => {},
+      preset: { type: 'contact', id: 'c1', name: 'NJR Salons' },
+    }))
+    await wait(50)
+    expect(toggle()).toBeUndefined()
+  })
+
+  it('no toggle when create_lead_enabled.mpg is false', async () => {
+    DATA.createLead = { mpg: false }
+    await render(React.createElement(LogVisitDialog, { onClose: () => {} }))
+    await newBusiness()
+    await wait(50)
+    expect(toggle()).toBeUndefined()
+  })
+
+  it('no toggle in edit mode', async () => {
+    await render(React.createElement(LogVisitDialog, { onClose: () => {}, touch: { ...TOUCH_FOR_EDIT } }))
+    await wait(50)
+    expect(toggle()).toBeUndefined()
+  })
+})
+
+const TOUCH_FOR_EDIT = {
+  id: 't9', business_name: 'Feges BBQ', prospect_id: 'p1', occurred_at: new Date(2026, 10, 3, 9, 30).toISOString(),
+  contact_label: '', reach_label: '', notes: '', next_step: null, follow_up_on: null, temperature: null,
+}
 
 describe('LogVisitDialog: Escape', () => {
   it('closes itself and stops the keydown reaching a parent window listener', async () => {
