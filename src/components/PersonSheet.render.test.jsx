@@ -11,7 +11,7 @@ import { MemoryRouter } from 'react-router-dom'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const invoke = vi.fn()
-const DATA = { notes: [], firstNote: null, activity: [], board: null, signal: null, priority: null, tasks: [], onBoard: false, docs: [] }
+const DATA = { company: null, biz: 'bay', notes: [], firstNote: null, activity: [], board: null, signal: null, priority: null, tasks: [], onBoard: false, docs: [] }
 
 function query(table) {
   const q = {}
@@ -23,7 +23,7 @@ function query(table) {
   }
   q.maybeSingle = async () => {
     if (table === 'v_people') {
-      return { data: { id: 'c1', business_id: 'bay', name: 'Cj Blackman', company: null, phone: '8325550100', email: null, stage: 'Application Received', on_board: DATA.onBoard, crm_profile_url: '#' }, error: null }
+      return { data: { id: 'c1', business_id: DATA.biz, name: 'Cj Blackman', company: DATA.company, phone: '8325550100', email: null, stage: 'Application Received', on_board: DATA.onBoard, crm_profile_url: '#' }, error: null }
     }
     if (table === 'contacts') {
       return {
@@ -48,6 +48,14 @@ vi.mock('../lib/supabase', () => ({
   supabase: { from: (t) => query(t), rpc: async () => ({ data: [], error: null }), functions: { invoke: (...a) => invoke(...a) } },
 }))
 
+const visitProps = []
+vi.mock('./LogVisitDialog', () => ({
+  default: (props) => {
+    visitProps.push(props)
+    return React.createElement('div', { 'data-visit-dialog': true })
+  },
+}))
+
 const { PersonSheetHost } = await import('./PersonSheet')
 const { default: PersonLink } = await import('./PersonLink')
 
@@ -55,6 +63,9 @@ beforeEach(() => {
   document.body.innerHTML = ''
   invoke.mockReset()
   invoke.mockResolvedValue({ data: { status: 'ok', notes: 2 }, error: null })
+  DATA.biz = 'bay'
+  DATA.company = null
+  visitProps.length = 0
   DATA.onBoard = false
   DATA.board = null
   DATA.signal = null
@@ -121,6 +132,42 @@ describe('contact card', () => {
     const dialog = document.querySelector('[role="dialog"]')
     expect(dialog.textContent).toContain("Couldn't read every note from FollowUpBoss (NOT_SUPPORTED)")
     expect(dialog.querySelectorAll('[data-note]')).toHaveLength(2)
+  })
+})
+
+describe('contact card: Log visit', () => {
+  async function open(biz) {
+    DATA.biz = biz
+    const host = await mount()
+    await act(async () => host.querySelector('[data-person-link]').click())
+    await act(async () => {})
+    await act(async () => {})
+    return document.querySelector('[role="dialog"]')
+  }
+  const visitBtn = (d) => [...d.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Log visit')
+
+  it('shows Log visit for an MPG person', async () => {
+    const dialog = await open('mpg')
+    expect(visitBtn(dialog)).toBeTruthy()
+  })
+
+  it('passes the person as the preset (no company: name is the person)', async () => {
+    const dialog = await open('mpg')
+    await act(async () => visitBtn(dialog).click())
+    expect(document.querySelector('[data-visit-dialog]')).not.toBe(null)
+    expect(visitProps.at(-1).preset).toMatchObject({ type: 'contact', id: 'c1', name: 'Cj Blackman', contactName: null, phone: '8325550100', email: null })
+  })
+
+  it('passes the company as the name and the person as the contact', async () => {
+    DATA.company = 'Acme Plumbing'
+    const dialog = await open('mpg')
+    await act(async () => visitBtn(dialog).click())
+    expect(visitProps.at(-1).preset).toMatchObject({ name: 'Acme Plumbing', contactName: 'Cj Blackman' })
+  })
+
+  it('does not show Log visit for a Bayway person', async () => {
+    const dialog = await open('bay')
+    expect(visitBtn(dialog)).toBeFalsy()
   })
 })
 

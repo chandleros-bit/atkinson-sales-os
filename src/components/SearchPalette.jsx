@@ -13,6 +13,7 @@ import { useSearch } from '../lib/useSearch'
 import { cleanQuery, matchPages, MIN_QUERY } from '../lib/search'
 import { dueLabel } from '../lib/tasks'
 import BizBadge from './BizBadge'
+import Icon from './Icon'
 import PersonSheet from './PersonSheet'
 import QuickActions from './QuickActions'
 import { showToast } from './Toaster'
@@ -29,7 +30,7 @@ const isTyping = (el) =>
   !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
 
 function Heading({ children }) {
-  return <div className="px-2 pb-1 pt-2 text-[10.5px] font-bold tracking-[1px] text-dim">{children}</div>
+  return <div className="px-2 pb-1 pt-2 text-micro font-bold tracking-[1px] text-dim">{children}</div>
 }
 
 function Row({ item, active, onPick, onHover, children }) {
@@ -172,12 +173,13 @@ export default function SearchPalette() {
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 sm:p-4 sm:pt-[12vh]" onClick={close}>
           <div
             role="dialog"
+        aria-modal="true"
             aria-label="Search"
             className="flex h-full w-full flex-col bg-panel sm:h-auto sm:max-h-[70vh] sm:max-w-xl sm:rounded-card sm:border sm:border-line"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-              <span aria-hidden="true" className="text-[16px] text-muted">⌕</span>
+              <Icon name="search" size={18} className="flex-none text-muted" />
               <input
                 ref={inputRef}
                 aria-label="Search people, tasks and pages"
@@ -185,28 +187,28 @@ export default function SearchPalette() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onKeyDown}
-                className="min-w-0 flex-1 bg-transparent text-[15px] outline-none"
+                className="min-w-0 flex-1 bg-transparent text-ui outline-none"
               />
-              <button type="button" onClick={close} className="min-h-[36px] rounded-md px-2 text-[12px] text-muted">
+              <button type="button" onClick={close} className="min-h-[36px] rounded-md px-2 text-caption text-muted">
                 Esc
               </button>
             </div>
             {pick && (
-              <div className="px-4 pt-2 text-[12px] font-semibold text-muted">{PICK_LABEL[pick]} · choose a person</div>
+              <div className="px-4 pt-2 text-caption font-semibold text-muted">{PICK_LABEL[pick]} · choose a person</div>
             )}
             <div role="listbox" aria-label="Results" className="flex-1 overflow-y-auto p-2">
-              {short && <div className="px-2 py-3 text-[12.5px] text-muted">Type a name, phone, company or email.</div>}
-              {!short && error && <div className="px-2 py-3 text-[12.5px]" style={{ color: 'var(--neg-ink)' }}>{error}</div>}
+              {short && <div className="px-2 py-3 text-body text-muted">Type a name, phone, company or email.</div>}
+              {!short && error && <div className="px-2 py-3 text-body" style={{ color: 'var(--neg-ink)' }}>{error}</div>}
               {people.length > 0 && <Heading>People</Heading>}
               {people.map((p) =>
                 row(
                   { kind: 'person', key: `p:${p.id}`, p },
                   <>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13.5px] font-semibold">
+                      <div className="truncate text-body font-semibold">
                         {p.business_id === 'mpg' && p.company ? `${p.company} · ${p.name}` : p.name}
                       </div>
-                      <div className="truncate text-[12px] text-muted">
+                      <div className="truncate text-caption text-muted">
                         {[p.stage, p.phone || p.email].filter(Boolean).join(' · ')}
                         {p.on_board ? '' : ' · not on the board'}
                       </div>
@@ -221,8 +223,8 @@ export default function SearchPalette() {
                   { kind: 'task', key: `t:${t.id}`, t },
                   <>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13.5px] font-semibold">{t.title || 'Task'}</div>
-                      <div className="truncate text-[12px] text-muted">
+                      <div className="truncate text-body font-semibold">{t.title || 'Task'}</div>
+                      <div className="truncate text-caption text-muted">
                         {[t.contact_name, dueLabel(t.due_at)].filter(Boolean).join(' · ')}
                       </div>
                     </div>
@@ -232,12 +234,12 @@ export default function SearchPalette() {
               )}
               {pages.length > 0 && <Heading>Go to</Heading>}
               {pages.map((g) =>
-                row({ kind: 'page', key: `g:${g.to}`, g }, <span className="text-[13.5px] font-semibold">{g.label}</span>),
+                row({ kind: 'page', key: `g:${g.to}`, g }, <span className="text-body font-semibold">{g.label}</span>),
               )}
               {!short && !loading && !error && items.length === 0 && (
-                <div className="px-2 py-3 text-[12.5px] text-muted">No matches.</div>
+                <div className="px-2 py-3 text-body text-muted">No matches.</div>
               )}
-              {!short && loading && items.length === 0 && <div className="px-2 py-3 text-[12.5px] text-muted">Searching…</div>}
+              {!short && loading && items.length === 0 && <div className="px-2 py-3 text-body text-muted">Searching…</div>}
             </div>
           </div>
         </div>

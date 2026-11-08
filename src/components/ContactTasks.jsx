@@ -17,7 +17,7 @@ export function PopupTabs({ label, tabs, tab, onTab }) {
           role="tab"
           aria-selected={tab === id}
           onClick={() => onTab(id)}
-          className={`-mb-px min-h-[36px] border-b-2 px-3 text-[13px] ${
+          className={`-mb-px min-h-[36px] border-b-2 px-3 text-body ${
             tab === id ? 'border-[color:var(--text)] font-semibold' : 'border-transparent text-muted hover:text-[color:var(--text)]'
           }`}
         >
@@ -39,15 +39,15 @@ export default function ContactTasks({ businessId, contactId, contactName, tasks
   }
   return (
     <div role="tabpanel" aria-label="Tasks" className="pt-1">
-      {tasks.loading && <div className="py-3 text-[13px] text-muted">Loading…</div>}
-      {!tasks.loading && tasks.tasks.length === 0 && <div className="py-3 text-[13px] text-muted">No open tasks.</div>}
+      {tasks.loading && <div className="py-3 text-body text-muted">Loading…</div>}
+      {!tasks.loading && tasks.tasks.length === 0 && <div className="py-3 text-body text-muted">No open tasks.</div>}
       {tasks.tasks.map((t) => {
         const late = t.due_at && dueDayKey(t.due_at) < today
         return (
           <div key={t.id} data-peek-task className="flex items-center gap-2 border-b border-hoverbg py-2 last:border-b-0">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13.5px] font-semibold">{t.title || 'Task'}</div>
-              <div className="text-[12px]" style={{ color: late ? 'var(--neg-ink)' : 'var(--muted)' }}>
+              <div className="truncate text-body font-semibold">{t.title || 'Task'}</div>
+              <div className="text-caption" style={{ color: late ? 'var(--neg-ink)' : 'var(--muted)' }}>
                 {dueLabel(t.due_at)}
                 {late ? ' · overdue' : ''}
               </div>
@@ -63,7 +63,7 @@ export default function ContactTasks({ businessId, contactId, contactName, tasks
           </div>
         )
       })}
-      <div className="mt-1 flex items-center gap-1 text-[12.5px] font-semibold text-muted">
+      <div className="mt-1 flex items-center gap-1 text-body font-semibold text-muted">
         <QuickActions businessId={businessId} contactId={contactId} contactName={contactName} only={['followup']} onDone={changed} />
         Add a follow-up
       </div>

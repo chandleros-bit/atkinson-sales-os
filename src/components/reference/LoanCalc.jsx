@@ -48,14 +48,14 @@ export default function LoanCalc({ mode, v, setV }) {
         <Field label="Price" value={v.price} onChange={set('price')} />
         <div className="min-w-0">
           <Field label={v.downMode === 'pct' ? 'Down payment %' : 'Down payment $'} value={v.down} onChange={set('down')} />
-          <button type="button" className="mt-0.5 text-[11px] text-[#1d4ed8]" onClick={() => setV((s) => ({ ...s, downMode: s.downMode === 'pct' ? 'amt' : 'pct', down: '' }))}>
+          <button type="button" className="mt-0.5 text-micro text-link" onClick={() => setV((s) => ({ ...s, downMode: s.downMode === 'pct' ? 'amt' : 'pct', down: '' }))}>
             Use {v.downMode === 'pct' ? '$' : '%'}
           </button>
         </div>
         <Field label="Rate %" value={v.rate} onChange={set('rate')} />
         <label className="block min-w-0">
-          <span className="mb-0.5 block text-[11px] font-medium text-muted">Term</span>
-          <select aria-label="Term" value={v.years} onChange={(e) => set('years')(e.target.value)} className="w-full rounded-[8px] border border-line2 bg-panel2 px-2 py-1.5 text-[13px]">
+          <span className="mb-0.5 block text-micro font-medium text-muted">Term</span>
+          <select aria-label="Term" value={v.years} onChange={(e) => set('years')(e.target.value)} className="w-full rounded-lg border border-line2 bg-panel2 px-2 py-1.5 text-body">
             {['30', '25', '20', '15', '10'].map((y) => (
               <option key={y} value={y}>
                 {y} years
@@ -78,7 +78,7 @@ export default function LoanCalc({ mode, v, setV }) {
         <Out k="pi" label="Principal and interest">{money(p.pi, true)}</Out>
         <Out k="total" label="Total monthly">{money(p.total, true)}</Out>
       </div>
-      <div className="text-[12.5px] text-muted">
+      <div className="text-body text-muted">
         Taxes {money(p.taxes, true)} · Insurance {money(p.insurance, true)} · HOA {money(p.hoa, true)}
         {p.miOn ? ` · MI ${money(p.mi, true)}` : ''} · Cash to close {money(p.cashToClose)}
       </div>
@@ -93,7 +93,7 @@ export default function LoanCalc({ mode, v, setV }) {
           </Out>
         </div>
       )}
-      <button type="button" className="self-start text-[12.5px] font-semibold text-[#1d4ed8]" onClick={async () => setCopied(await copyText(summary()))}>
+      <button type="button" className="self-start text-body font-semibold text-link" onClick={async () => setCopied(await copyText(summary()))}>
         {copied ? 'Copied' : 'Copy summary'}
       </button>
     </div>

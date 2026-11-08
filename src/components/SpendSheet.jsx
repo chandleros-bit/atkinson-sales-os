@@ -12,7 +12,7 @@ const BOOKS = { bay: { name: 'Bayway', accent: 'var(--bay)' }, mpg: { name: 'MPG
 const BOOK_IDS = Object.keys(BOOKS)
 const NO_EDITS = { bay: {}, mpg: {} }
 const monthLabel = (m) => new Date(`${m}T12:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }).replace(" '", ' ')
-const BOX = 'w-[72px] rounded-[8px] border border-line2 bg-panel2 px-1.5 py-1 text-right text-[12.5px] outline-none'
+const BOX = 'w-[72px] rounded-lg border border-line2 bg-panel2 px-1.5 py-1 text-right text-body outline-none'
 
 export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSaved, nowMs }) {
   const [now] = useState(() => nowMs ?? Date.now())
@@ -143,9 +143,9 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
   return (
     <Sheet title="Marketing spend" subtitle={`${BOOKS[book].name} · monthly, by source`} t={{ accent: BOOKS[book].accent }} onClose={close}>
       {biz === 'all' && (
-        <div role="tablist" aria-label="Book" className="mb-3 flex gap-1 rounded-xl bg-panel2 p-1">
+        <div role="tablist" aria-label="Book" className="mb-3 flex gap-1 rounded-lg bg-panel2 p-1">
           {Object.entries(BOOKS).map(([id, b]) => (
-            <button key={id} type="button" role="tab" aria-selected={book === id} disabled={busy} onClick={() => setBook(id)} className={`flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${book === id ? 'bg-panel' : 'text-muted'}`}>
+            <button key={id} type="button" role="tab" aria-selected={book === id} disabled={busy} onClick={() => setBook(id)} className={`flex-1 rounded-lg px-3 py-1.5 text-body font-semibold ${book === id ? 'bg-panel' : 'text-muted'}`}>
               {b.name}
             </button>
           ))}
@@ -153,9 +153,9 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
       )}
 
       <div className="-mx-5 overflow-x-auto px-5">
-        <table className="text-[12.5px]">
+        <table className="text-body">
           <thead>
-            <tr className="text-[11px] text-muted">
+            <tr className="text-micro text-muted">
               <th className="sticky left-0 bg-panel py-1 pr-2 text-left font-semibold">Source</th>
               <th className="px-1 font-semibold">Free</th>
               {months.map((m) => (
@@ -169,7 +169,7 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
             {paid.map((label) => row(label, false))}
             {free.length > 0 && (
               <tr>
-                <td colSpan={months.length + 2} className="sticky left-0 bg-panel pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-dim">
+                <td colSpan={months.length + 2} className="sticky left-0 bg-panel pb-1 pt-3 text-micro font-semibold uppercase tracking-wide text-dim">
                   Free sources
                 </td>
               </tr>
@@ -179,8 +179,8 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
         </table>
       </div>
 
-      <div className="mt-4 border-t border-line pt-3 text-[12.5px]">
-        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-dim">Merge sources</div>
+      <div className="mt-4 border-t border-line pt-3 text-body">
+        <div className="mb-1 text-micro font-semibold uppercase tracking-wide text-dim">Merge sources</div>
         <div className="flex flex-wrap gap-x-3 gap-y-1">
           {raws.map((raw) => (
             <label key={raw} className="inline-flex items-center gap-1.5">
@@ -191,8 +191,8 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
           ))}
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <input aria-label="Merged label" placeholder="Self-sourced" value={mergeLabel} onChange={(e) => setMergeLabel(e.target.value)} className="flex-1 rounded-[8px] border border-line2 bg-panel2 px-2.5 py-1.5 text-[13px] outline-none" />
-          <button type="button" aria-label="Merge sources" disabled={busy} onClick={merge} className="rounded-[8px] border border-line2 px-3 py-1.5 font-semibold">
+          <input aria-label="Merged label" placeholder="Self-sourced" value={mergeLabel} onChange={(e) => setMergeLabel(e.target.value)} className="flex-1 rounded-lg border border-line2 bg-panel2 px-2.5 py-1.5 text-body outline-none" />
+          <button type="button" aria-label="Merge sources" disabled={busy} onClick={merge} className="rounded-lg border border-line2 px-3 py-1.5 font-semibold">
             Merge
           </button>
         </div>
@@ -201,7 +201,7 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
             <span>
               {label}: {rows.map((r) => r.raw).join(', ')}
             </span>
-            <button type="button" aria-label={`Unmerge ${label}`} disabled={busy} onClick={() => unmerge(rows)} className="text-[#1d4ed8]">
+            <button type="button" aria-label={`Unmerge ${label}`} disabled={busy} onClick={() => unmerge(rows)} className="text-link">
               Unmerge
             </button>
           </div>
@@ -209,11 +209,11 @@ export default function SpendSheet({ biz, leads, aliases, spend, onClose, onSave
       </div>
 
       {problem && (
-        <div role="alert" className="mt-3 text-[12px] text-[#b42318]">
+        <div role="alert" className="mt-3 text-caption text-neg-ink">
           {problem}
         </div>
       )}
-      <button type="button" aria-label="Save spend" disabled={busy} onClick={saveGrid} className="btn-primary mt-4 rounded-[10px] px-4 py-2 text-[13px] font-semibold">
+      <button type="button" aria-label="Save spend" disabled={busy} onClick={saveGrid} className="btn-primary mt-4 rounded-lg px-4 py-2 text-body font-semibold">
         {busy ? 'Saving…' : 'Save'}
       </button>
     </Sheet>

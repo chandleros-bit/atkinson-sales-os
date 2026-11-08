@@ -3,7 +3,7 @@
 // complete and a follow-up to create, and those run after the call, in that
 // order, so the user's "done" and "next" both hang off a call that happened.
 
-export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact', 'whoami', 'smart_lists', 'contact_notes', 'contact_relationships']
+export const ACTIONS = ['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact', 'promote_prospect', 'whoami', 'smart_lists', 'contact_notes', 'contact_relationships']
 
 // Actions that act on one of our contacts / tasks (the request carries its uuid).
 export const CONTACT_ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'set_stage', 'set_temperature'])
@@ -53,6 +53,16 @@ export function planSteps(request) {
       if (s(p.note)) steps.push({ step: 'add_note', subject: null, body: s(p.note) })
       return steps
     }
+    case 'promote_prospect': {
+      // An MPG walk-in to Zoho: create or link the lead, then the visit's note
+      // and follow-up go on it.
+      const steps = [{ step: 'promote' }]
+      if (p.note) steps.push({ step: 'add_note', subject: 'Walk-in', body: p.note })
+      if (p.follow_up) {
+        steps.push({ step: 'create_task', title: p.follow_up.title || 'Follow up', type: 'Follow Up', dueDate: p.follow_up.due_date })
+      }
+      return steps
+    }
     case 'whoami':
       return [{ step: 'whoami' }]
     default:
@@ -62,9 +72,10 @@ export function planSteps(request) {
 
 // Nothing after a failed call runs: the user is reacting to that call. Any
 // other failed step doesn't block the steps after it.
-// Likewise nothing runs after a failed create: there's no lead to attach to.
+// Likewise nothing runs after a failed create or promote: there's no lead to
+// attach to.
 export function shouldStop(step, ok) {
-  return (step === 'log_call' || step === 'create_contact') && !ok
+  return (step === 'log_call' || step === 'create_contact' || step === 'promote') && !ok
 }
 
 // FollowUpBoss answers 404 on /people/<id> (and "Contact not found" on a note)

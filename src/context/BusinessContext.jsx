@@ -10,12 +10,37 @@ export const BIZ = {
   bay: { key: 'bay', label: 'Bayway', color: 'var(--bay)', soft: 'var(--bay-soft)' },
 }
 
+const BOOK_KEY = 'book-pick'
+
+function rememberedBook() {
+  try {
+    return localStorage.getItem(BOOK_KEY) === 'mpg' ? 'mpg' : 'bay'
+  } catch {
+    return 'bay'
+  }
+}
+
 export function BusinessProvider({ children }) {
   const { role } = useAuth() || {}
   const [picked, setPicked] = useState(() => localStorage.getItem('biz-filter') || 'all')
+  const [pickedBook, setPickedBook] = useState(rememberedBook)
   // The assistant login is Bayway only: the switch is hidden and fixed.
   const biz = role === 'assistant' ? 'bay' : picked
   const setBiz = role === 'assistant' ? () => {} : setPicked
+
+  // Pipeline and Contacts show one book at a time. On All they fall back to
+  // the last book picked on this device; picking a book there sets the one
+  // business switch, so every page agrees on what is selected.
+  const book = biz === 'all' ? pickedBook : biz
+  const setBook = (b) => {
+    setPickedBook(b)
+    try {
+      localStorage.setItem(BOOK_KEY, b)
+    } catch {
+      /* private window: the pick lasts for this visit */
+    }
+    setBiz(b)
+  }
 
   useEffect(() => {
     if (role !== 'assistant') localStorage.setItem('biz-filter', biz)
@@ -31,7 +56,7 @@ export function BusinessProvider({ children }) {
   const matches = (rowBiz) => biz === 'all' || rowBiz === biz
 
   return (
-    <BusinessContext.Provider value={{ biz, setBiz, matches }}>
+    <BusinessContext.Provider value={{ biz, setBiz, matches, book, setBook }}>
       {children}
     </BusinessContext.Provider>
   )

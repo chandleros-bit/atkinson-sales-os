@@ -70,18 +70,18 @@ export default function LoanImport({ existing, rates, onClose, onImported }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={(e) => { if (e.target === e.currentTarget && !busy) dismiss() }}>
       <div role="dialog" aria-modal="true" aria-label="Import Arive loans" className="w-full max-w-[460px] rounded-card border border-line bg-panel p-5">
-        <div className="text-[15px] font-semibold">Import Arive loans</div>
-        <p className="mt-1 text-[12.5px] text-muted">Export the saved “OS – Loan Export” Pipeline Report from Arive as CSV and pick it here.</p>
-        <input type="file" accept=".csv,text/csv" aria-label="Arive CSV export" autoFocus onChange={pick} disabled={busy || !!warning} className="mt-3 block w-full text-[13px]" />
-        {busy && <div className="mt-3 text-[12.5px] text-muted">Working…</div>}
-        {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+        <div className="text-ui font-semibold">Import Arive loans</div>
+        <p className="mt-1 text-body text-muted">Export the saved “OS – Loan Export” Pipeline Report from Arive as CSV and pick it here.</p>
+        <input type="file" accept=".csv,text/csv" aria-label="Arive CSV export" autoFocus onChange={pick} disabled={busy || !!warning} className="mt-3 block w-full text-body" />
+        {busy && <div className="mt-3 text-body text-muted">Working…</div>}
+        {error && <div className="mt-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{error}</div>}
         {warning && (
           <div role="status" className="mt-3 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}>
             {warning}
           </div>
         )}
         {preview && (
-          <div className="mt-4 text-[13px]">
+          <div className="mt-4 text-body">
             <div className="font-semibold">{preview.counts.total} loans in this file</div>
             <ul className="mt-2 space-y-0.5">
               {LINES.filter(([k]) => preview.counts[k] > 0).map(([k, label]) => (
@@ -89,21 +89,21 @@ export default function LoanImport({ existing, rates, onClose, onImported }) {
               ))}
             </ul>
             {preview.unknownStages.length > 0 && (
-              <div className="mt-2 text-[12px] text-[color:var(--bay-gold)]">Unknown stages (imported as Other): {preview.unknownStages.join(', ')}</div>
+              <div className="mt-2 text-caption text-[color:var(--bay-gold)]">Unknown stages (imported as Other): {preview.unknownStages.join(', ')}</div>
             )}
           </div>
         )}
         <div className="mt-5 flex justify-end gap-2">
           {warning ? (
-            <button type="button" onClick={() => onImported()} className="min-h-[32px] rounded-[9px] bg-[color:var(--text)] px-3 text-[13px] font-semibold text-white">Done</button>
+            <button type="button" onClick={() => onImported()} className="min-h-[32px] rounded-lg bg-[color:var(--text)] px-3 text-body font-semibold text-white">Done</button>
           ) : (
             <>
-              <button type="button" onClick={onClose} disabled={busy} className="min-h-[32px] rounded-[9px] border border-line2 px-3 text-[13px] font-semibold disabled:opacity-40">Cancel</button>
+              <button type="button" onClick={onClose} disabled={busy} className="min-h-[32px] rounded-lg border border-line2 px-3 text-body font-semibold disabled:opacity-40">Cancel</button>
               <button
                 type="button"
                 onClick={confirm}
                 disabled={!preview || busy}
-                className="min-h-[32px] rounded-[9px] bg-[color:var(--text)] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
+                className="min-h-[32px] rounded-lg bg-[color:var(--text)] px-3 text-body font-semibold text-white disabled:opacity-40"
               >
                 Import {preview ? preview.counts.total : ''} loans
               </button>

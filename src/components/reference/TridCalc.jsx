@@ -18,8 +18,8 @@ export default function TridCalc() {
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Field label="Application date" type="date" value={application} onChange={setApplication} />
         <label className="block">
-          <span className="mb-0.5 block text-[11px] font-medium text-muted">Delivery</span>
-          <select aria-label="Delivery" value={mailed ? 'mail' : 'hand'} onChange={(e) => setMailed(e.target.value === 'mail')} className="w-full rounded-[8px] border border-line2 bg-panel2 px-2 py-1.5 text-[13px]">
+          <span className="mb-0.5 block text-micro font-medium text-muted">Delivery</span>
+          <select aria-label="Delivery" value={mailed ? 'mail' : 'hand'} onChange={(e) => setMailed(e.target.value === 'mail')} className="w-full rounded-lg border border-line2 bg-panel2 px-2 py-1.5 text-body">
             <option value="hand">In person or email</option>
             <option value="mail">Mailed</option>
           </select>
@@ -35,7 +35,7 @@ export default function TridCalc() {
           {t.cdReceiveBy && mailed && <Out k="cdSendBy" label="Closing Disclosure mailed by">{nice(t.cdSendBy)}</Out>}
         </div>
       )}
-      <p className="text-[12px] text-muted">Planning dates. The lender&apos;s disclosure system is the official record.</p>
+      <p className="text-caption text-muted">Planning dates. The lender&apos;s disclosure system is the official record.</p>
     </div>
   )
 }

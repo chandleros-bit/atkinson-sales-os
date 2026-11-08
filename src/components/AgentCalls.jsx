@@ -14,7 +14,7 @@ import { textFor, smsHref } from '../lib/dialTexts'
 import { invokeCrmAction } from '../lib/writeback'
 import { buildActionRequest, summarizeResult } from '../lib/crmActions'
 
-const quiet = 'min-h-[36px] rounded-[10px] border border-line2 px-2.5 text-[12.5px] font-semibold text-[#344054]'
+const quiet = 'min-h-[36px] rounded-lg border border-line2 px-2.5 text-body font-semibold text-ink2'
 const OUTCOMES = [
   { key: 'no_answer', label: 'No answer', crm: 'No Answer', note: 'no answer' },
   { key: 'voicemail', label: 'Voicemail', crm: 'Left Message', note: 'left voicemail' },
@@ -29,14 +29,14 @@ const nameLink = (a, className) => (
 // agents: this borrower's agents or undefined (not read yet). checked: FUB answered.
 export function AgentLines({ agents, checked }) {
   if (!agents?.length) {
-    return checked ? <div data-agents-missing className="mt-1 text-[12px] text-dim">Add agents in FUB</div> : null
+    return checked ? <div data-agents-missing className="mt-1 text-caption text-dim">Add agents in FUB</div> : null
   }
   return (
     <div className="mt-1 flex flex-col gap-0.5">
       {agents.map((a) => {
         const tel = telHref(phoneOf(a))
         return (
-          <div key={a.id} data-agent-line className="flex min-w-0 items-center gap-1.5 text-[12.5px]">
+          <div key={a.id} data-agent-line className="flex min-w-0 items-center gap-1.5 text-body">
             <span className="flex-none text-dim">{AGENT_LABEL[a.kind]}</span>
             {nameLink(a, 'min-w-0 truncate font-semibold')}
             {tel && <a href={tel} className="num ml-auto flex-none text-muted underline">{formatPhone(phoneOf(a))}</a>}
@@ -67,24 +67,24 @@ export default function AgentCalls({ agents, checked, borrowerId, borrowerName }
 
   return (
     <section data-agent-calls className="mt-4 border-t border-line pt-3">
-      <div className="text-[12px] font-semibold text-dim">Agents on this loan</div>
-      {!agents?.length && <div className="mt-1 text-[12.5px] text-muted">{checked ? 'Add agents in FUB' : 'Checking FUB…'}</div>}
+      <div className="text-caption font-semibold text-dim">Agents on this loan</div>
+      {!agents?.length && <div className="mt-1 text-body text-muted">{checked ? 'Add agents in FUB' : 'Checking FUB…'}</div>}
       {(agents || []).map((a) => {
         const phone = phoneOf(a)
         const text = textFor('bay', 'agent_update', a.name, { borrower: borrowerName })
         return (
           <div key={a.id} data-agent className="mt-2.5">
-            <div className="flex min-w-0 items-baseline gap-1.5 text-[13px]">
+            <div className="flex min-w-0 items-baseline gap-1.5 text-body">
               <span className="flex-none text-dim">{AGENT_LABEL[a.kind]}</span>
               {nameLink(a, 'min-w-0 truncate font-semibold')}
             </div>
             <div className="mt-1 flex items-center gap-2">
-              <span className="num text-[14px] font-semibold">{formatPhone(phone) || 'No phone'}</span>
+              <span className="num text-ui font-semibold">{formatPhone(phone) || 'No phone'}</span>
               {telHref(phone) && <a href={telHref(phone)} className={`${quiet} ml-auto grid place-items-center`}>Call</a>}
               {smsHref(phone, text) && <a href={smsHref(phone, text)} className={`${quiet} grid place-items-center ${telHref(phone) ? '' : 'ml-auto'}`}>Text</a>}
             </div>
             {logged[a.id] ? (
-              <div className="mt-1.5 text-[12.5px] text-muted">Logged: {logged[a.id]}</div>
+              <div className="mt-1.5 text-body text-muted">Logged: {logged[a.id]}</div>
             ) : (
               <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                 {OUTCOMES.map((o) => (
@@ -92,7 +92,7 @@ export default function AgentCalls({ agents, checked, borrowerId, borrowerName }
                 ))}
               </div>
             )}
-            {error?.id === a.id && <div role="alert" className="mt-1 text-[12px]" style={{ color: 'var(--neg-ink)' }}>{error.text}</div>}
+            {error?.id === a.id && <div role="alert" className="mt-1 text-caption" style={{ color: 'var(--neg-ink)' }}>{error.text}</div>}
           </div>
         )
       })}

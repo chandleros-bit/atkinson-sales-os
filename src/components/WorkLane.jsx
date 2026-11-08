@@ -55,7 +55,7 @@ const chip = (on) =>
 function StatusPill({ status }) {
   if (status !== 'working' && status !== 'waiting') return null
   return (
-    <span className="rounded-full border border-line2 px-2 py-[1px] text-[11px] font-semibold text-muted">
+    <span className="rounded-full border border-line2 px-2 py-[1px] text-micro font-semibold text-muted">
       {status === 'working' ? 'Working' : 'Waiting'}
     </span>
   )
@@ -130,7 +130,7 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
       <div className={`flex flex-col gap-3 ${tab === 'update' ? '' : 'hidden'}`}>
         <div className={`grid gap-2 ${reviewable ? 'grid-cols-2' : 'grid-cols-3'}`}>
           {statuses.map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)} className="min-h-[40px] rounded-[10px] border text-[12.5px] font-semibold" style={chip(status === k)}>
+            <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)} className="min-h-[40px] rounded-lg border text-body font-semibold" style={chip(status === k)}>
               {label}
             </button>
           ))}
@@ -138,20 +138,20 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
         {status === 'waiting' && (
           <>
             <div>
-              <div className="mb-1.5 text-[12px] font-semibold text-muted">Waiting on</div>
+              <div className="mb-1.5 text-caption font-semibold text-muted">Waiting on</div>
               <div className="flex flex-wrap gap-2">
                 {WAITING_ON.map((w) => (
-                  <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(w)} className="min-h-[36px] rounded-[10px] border px-3 text-[12.5px] font-semibold" style={chip(who === w)}>
+                  <button key={w} type="button" aria-pressed={who === w} onClick={() => setWho(w)} className="min-h-[36px] rounded-lg border px-3 text-body font-semibold" style={chip(who === w)}>
                     {w}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <div className="mb-1.5 text-[12px] font-semibold text-muted">Check back</div>
+              <div className="mb-1.5 text-caption font-semibold text-muted">Check back</div>
               <div className="flex flex-wrap gap-2">
                 {BACK.map(([k, label]) => (
-                  <button key={k} type="button" aria-pressed={back === k} onClick={() => setBack(k)} className="min-h-[36px] rounded-[10px] border px-3 text-[12.5px] font-semibold" style={chip(back === k)}>
+                  <button key={k} type="button" aria-pressed={back === k} onClick={() => setBack(k)} className="min-h-[36px] rounded-lg border px-3 text-body font-semibold" style={chip(back === k)}>
                     {label}
                   </button>
                 ))}
@@ -162,7 +162,7 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
                   aria-label="Check back on"
                   value={picked}
                   onChange={(e) => setPicked(e.target.value)}
-                  className="mt-2 w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px]"
+                  className="mt-2 w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body"
                 />
               )}
             </div>
@@ -170,28 +170,28 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
         )}
         {status === 'review' && (
           <div>
-            <div className="mb-1.5 text-[12px] font-semibold text-muted">Outcome</div>
+            <div className="mb-1.5 text-caption font-semibold text-muted">Outcome</div>
             <div className="grid grid-cols-2 gap-2">
               {OUTCOMES.map((o) => (
-                <button key={o.key} type="button" aria-pressed={outcome === o.key} onClick={() => setOutcome(o.key)} className="min-h-[40px] rounded-[10px] border text-[12.5px] font-semibold" style={chip(outcome === o.key)}>
+                <button key={o.key} type="button" aria-pressed={outcome === o.key} onClick={() => setOutcome(o.key)} className="min-h-[40px] rounded-lg border text-body font-semibold" style={chip(outcome === o.key)}>
                   {o.label}
                 </button>
               ))}
             </div>
             {outcome === 'lost' && (
               <div className="mt-3">
-                <div className="mb-1.5 text-[12px] font-semibold text-muted">Why?</div>
+                <div className="mb-1.5 text-caption font-semibold text-muted">Why?</div>
                 <div className="flex flex-wrap gap-2">
                   {LOST_REASONS.map((r) => (
-                    <button key={r} type="button" aria-pressed={reason === r} onClick={() => setReason(r)} className="min-h-[36px] rounded-[10px] border px-3 text-[12.5px] font-semibold" style={chip(reason === r)}>
+                    <button key={r} type="button" aria-pressed={reason === r} onClick={() => setReason(r)} className="min-h-[36px] rounded-lg border px-3 text-body font-semibold" style={chip(reason === r)}>
                       {r}
                     </button>
                   ))}
                 </div>
-                <div className="mt-2 text-[12px] text-muted">{LOST_WARNING}</div>
+                <div className="mt-2 text-caption text-muted">{LOST_WARNING}</div>
               </div>
             )}
-            {!canReview && <div className="mt-2 text-[12px] text-[color:var(--neg-ink)]">{role === 'assistant' ? 'Chandler sends review outcomes to FollowUpBoss.' : "Write-back to FollowUpBoss is off, so the outcome can't be sent."}</div>}
+            {!canReview && <div className="mt-2 text-caption text-[color:var(--neg-ink)]">{role === 'assistant' ? 'Chandler sends review outcomes to FollowUpBoss.' : "Write-back to FollowUpBoss is off, so the outcome can't be sent."}</div>}
           </div>
         )}
         <textarea
@@ -200,17 +200,17 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="w-full rounded-[10px] border border-line2 bg-panel px-3 py-2 text-[13px]"
+          className="w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body"
         />
-        <div className="text-[11.5px] text-muted">
+        <div className="text-caption text-muted">
           {status === 'review' ? 'The outcome goes to FollowUpBoss; notes stay in the dashboard.' : `Saved in the dashboard only, not in ${item.book === 'mpg' ? 'Zoho' : 'FollowUpBoss'}.`}
         </div>
-        {error && <div className="text-[12px] text-[color:var(--neg-ink)]">{error}</div>}
+        {error && <div className="text-caption text-[color:var(--neg-ink)]">{error}</div>}
         <button
           type="button"
           disabled={busy || (status === 'review' && !canReview)}
           onClick={save}
-          className="min-h-[44px] rounded-[10px] text-[13.5px] font-semibold text-white disabled:opacity-50"
+          className="min-h-[44px] rounded-lg text-body font-semibold text-white disabled:opacity-50"
           style={{ background: 'var(--text)' }}
         >
           Save
@@ -230,15 +230,15 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2 leading-5">
           {showBook && <BizBadge biz={it.book} />}
-          <span className="min-w-0 truncate text-[14px] font-semibold">{it.title}</span>
+          <span className="min-w-0 truncate text-ui font-semibold">{it.title}</span>
           <StatusPill status={it.status} />
           {it.minutes && (
-            <span className="num flex-none rounded-full bg-panel2 px-2 py-[1px] text-[11px] font-semibold text-muted" title="Rough time">
+            <span className="num flex-none rounded-full bg-panel2 px-2 py-[1px] text-micro font-semibold text-muted" title="Rough time">
               ~{it.minutes}m
             </span>
           )}
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-[12.5px] leading-[18px] text-muted">
+        <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap text-body leading-[18px] text-muted">
           {it.name &&
             (it.contactId ? (
               <button type="button" onClick={onOpen} title="Open contact card" className={`min-w-0 truncate font-semibold text-[color:var(--text)] ${PERSON_LINK_CLS}`}>
@@ -248,7 +248,7 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
               <span className="min-w-0 truncate">{it.name}</span>
             ))}
           {it.why && (
-            <Pill tone={it.late ? 'neg' : 'neutral'} className="flex-none text-[11.5px]" data-health={it.late ? 'late' : 'ok'}>
+            <Pill tone={it.late ? 'neg' : 'neutral'} className="flex-none text-caption" data-health={it.late ? 'late' : 'ok'}>
               {it.why}
             </Pill>
           )}
@@ -256,7 +256,7 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
         </div>
       </div>
       <div className="flex flex-none gap-1.5">
-        <button type="button" onClick={onUpdate} className="min-h-[32px] rounded-[9px] border border-line2 px-2.5 text-[12.5px] font-semibold text-[#344054]">
+        <button type="button" onClick={onUpdate} className="min-h-[32px] rounded-lg border border-line2 px-2.5 text-body font-semibold text-ink2">
           Update
         </button>
         {finish && (
@@ -264,7 +264,7 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
             type="button"
             disabled={busy}
             onClick={onFinish}
-            className="min-h-[32px] rounded-[9px] px-2.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
+            className="min-h-[32px] rounded-lg px-2.5 text-body font-semibold text-white disabled:opacity-50"
             style={{ background: 'var(--chrome)' }}
           >
             {finish}
@@ -281,8 +281,8 @@ function GroupTitle({ g, count, children }) {
   return (
     <div className="flex items-center gap-2 border-b border-line px-4 pb-1.5 pt-4">
       {g.book && <BizBadge biz={g.book} />}
-      <h3 className="text-[15px] font-bold tracking-[-0.1px] text-[color:var(--text)]">{g.title}</h3>
-      <span className="num rounded-full bg-hoverbg px-2 py-[1px] text-[12px] font-semibold text-muted">{count}</span>
+      <h3 className="text-ui font-bold tracking-[-0.1px] text-[color:var(--text)]">{g.title}</h3>
+      <span className="num rounded-full bg-hoverbg px-2 py-[1px] text-caption font-semibold text-muted">{count}</span>
       {children}
     </div>
   )
@@ -356,7 +356,7 @@ export default function WorkLane({ groups, onChanged }) {
                 type="button"
                 aria-expanded={showWaiting}
                 onClick={() => setShowWaiting((v) => !v)}
-                className="flex w-full items-center justify-between border-b border-dashed border-line2 px-4 pb-1.5 pt-4 text-left text-[15px] font-bold"
+                className="flex w-full items-center justify-between border-b border-dashed border-line2 px-4 pb-1.5 pt-4 text-left text-ui font-bold"
               >
                 <span>{`${g.title} · ${g.items.length}`}</span>
                 <span aria-hidden="true" className="text-muted">{showWaiting ? '▴' : '▾'}</span>
@@ -369,7 +369,7 @@ export default function WorkLane({ groups, onChanged }) {
           <section key={g.id}>
             <GroupTitle g={g} count={g.items.length} />
             {g.items.length === 0 && (
-              <div className="px-4 py-2.5 text-[13px] text-muted">{g.id === 'custom' ? 'Add your own with + Work item.' : 'Nothing here right now.'}</div>
+              <div className="px-4 py-2.5 text-body text-muted">{g.id === 'custom' ? 'Add your own with + Work item.' : 'Nothing here right now.'}</div>
             )}
             {g.items.map((it) => row(g, it))}
           </section>
@@ -389,14 +389,14 @@ export default function WorkLane({ groups, onChanged }) {
                     type="button"
                     aria-describedby={suggested ? 'sent-suggested' : undefined}
                     onClick={() => sent(s)}
-                    className={`min-h-[44px] rounded-[10px] border text-[13.5px] font-semibold ${suggested ? 'border-transparent text-white' : 'border-line2'}`}
+                    className={`min-h-[44px] rounded-lg border text-body font-semibold ${suggested ? 'border-transparent text-white' : 'border-line2'}`}
                     style={suggested ? { background: 'var(--text)' } : undefined}
                   >
                     {s.label}
                   </button>
                 )
               })}
-            <div id="sent-suggested" className="text-[12px] text-muted">
+            <div id="sent-suggested" className="text-caption text-muted">
               {picking.suggestedSent === 'estimate_sent' ? 'Suggested: DSCR lead, usually comparing lenders.' : 'Suggested: buyer who needs a pre-approval.'}
             </div>
           </div>

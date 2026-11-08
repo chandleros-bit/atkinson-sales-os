@@ -7,6 +7,7 @@ import { fetchLoanBundle } from './loansData'
 import { DEFAULT_RATES } from './loans'
 import { useLeadRatings, useLeadRatingsStatus } from './useLeadRatings'
 import { resolveForecast, avgFundedLoan, mpgPerAccount, forecastLines, latestMpgMetrics } from './forecast'
+import { friendlyError } from './friendlyError'
 
 const EMPTY = { loans: [], rates: DEFAULT_RATES, settings: resolveForecast(null), mpgMetrics: {}, at: 0, error: null }
 let store = EMPTY
@@ -26,7 +27,7 @@ export function __resetForecastForTest() {
 
 // A thrown query becomes a { data: null, error } like a failed one, so the
 // other queries' results are still used.
-const settle = (p) => Promise.resolve(p).then((v) => v, (e) => ({ data: null, error: { message: String(e?.message || e) } }))
+const settle = (p) => Promise.resolve(p).then((v) => v, (e) => ({ data: null, error: { message: friendlyError(e) } }))
 
 // One pass over all three sources. A source that failed leaves its part of the
 // store as it was; every failure message lands in `error`.
@@ -73,7 +74,7 @@ export function refreshForecastInputs() {
         if (!dirty) break
       }
     } catch (e) {
-      store = { ...store, error: String(e?.message || e), at: Date.now() }
+      store = { ...store, error: friendlyError(e), at: Date.now() }
     } finally {
       inflight = null
       dirty = false

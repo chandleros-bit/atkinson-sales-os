@@ -145,6 +145,76 @@ describe('zohoAdapter', () => {
     const rec = await zohoAdapter(env()).read.note('N1', { externalId: 'L5', body: 'Sent rates' })
     expect(rec).toMatchObject({ id: 'N1', Note_Content: 'Sent rates', Parent_Id: { id: 'L5' }, $se_module: 'Leads' })
   })
+
+  describe('promotion', () => {
+    const zohoFetch = (apiResponse) =>
+      vi.fn(async (url) => (String(url).includes('/oauth/') ? token : apiResponse))
+    const apiCall = () => globalThis.fetch.mock.calls.find(([u]) => !String(u).includes('/oauth/'))
+
+    it('findLeads POSTs the COQL query and returns only real matches', async () => {
+      globalThis.fetch = zohoFetch(response(200, { data: [
+        { id: 'L1', Company: 'Acme Cafe', First_Name: 'Jo', Last_Name: 'Re', Phone: '(555) 123-4567', Lead_Status: 'Open' },
+        { id: 'L2', Company: 'Other', Phone: '555-000-4567' },
+      ] }))
+      const out = await zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme Cafe' })
+      const [url, init] = apiCall()
+      expect([String(url), init.method]).toEqual(['https://www.zohoapis.com/crm/v2/coql', 'POST'])
+      const q = JSON.parse(init.body).select_query
+      expect(q).toContain("Phone like '%4567'")
+      expect(q).toContain("Company = 'Acme Cafe'")
+      expect(out).toEqual([{ id: 'L1', company: 'Acme Cafe', name: 'Jo Re', phone: '(555) 123-4567', status: 'Open' }])
+    })
+
+    it('findLeads returns [] on a 204 with no body', async () => {
+      globalThis.fetch = zohoFetch({ ok: true, status: 204, headers: { get: () => null }, text: async () => '', json: async () => { throw new Error('no body') } })
+      expect(await zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme' })).toEqual([])
+    })
+
+    it('findLeads makes no request without a phone or company', async () => {
+      globalThis.fetch = zohoFetch(response(200, {}))
+      expect(await zohoAdapter(env()).send.findLeads({ phoneKey: null, company: '' })).toEqual([])
+      expect(globalThis.fetch).not.toHaveBeenCalled()
+    })
+
+    it('createLead POSTs the promoted-lead body and returns the new id', async () => {
+      globalThis.fetch = zohoFetch(response(201, { data: [{ status: 'success', details: { id: 'Z99' } }] }))
+      const out = await zohoAdapter(env()).send.createLead({ business: 'Acme Cafe', contactName: 'Jo Re', phone: '5551234567' })
+      expect(out).toEqual({ id: 'Z99' })
+      const [url, init] = apiCall()
+      expect([String(url), init.method]).toEqual(['https://www.zohoapis.com/crm/v2/Leads', 'POST'])
+      expect(JSON.parse(init.body).data[0]).toMatchObject({ Company: 'Acme Cafe', Last_Name: 'Re', Lead_Status: 'Open', Lead_Source: 'Chandler', MPG_REP: 'Chandler' })
+    })
+
+    it('setLeadOpen PUTs only Lead_Status Open to the lead', async () => {
+      globalThis.fetch = zohoFetch(response(200, { data: [{ status: 'success', details: { id: 'L7' } }] }))
+      expect(await zohoAdapter(env()).send.setLeadOpen({ externalId: 'L7' })).toEqual({ id: 'L7' })
+      const [url, init] = apiCall()
+      expect([String(url), init.method, JSON.parse(init.body)]).toEqual([
+        'https://www.zohoapis.com/crm/v2/Leads/L7', 'PUT', { data: [{ Lead_Status: 'Open' }] },
+      ])
+    })
+
+    it('findLeads throws on a 2xx COQL error body', async () => {
+      globalThis.fetch = zohoFetch(response(200, { code: 'INVALID_QUERY', message: 'bad', status: 'error' }))
+      await expect(zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme' })).rejects.toThrow(/Zoho COQL -> INVALID_QUERY: bad/)
+    })
+
+    it('findLeads throws on a code/message body without status', async () => {
+      globalThis.fetch = zohoFetch(response(200, { code: 'X', message: 'oops' }))
+      await expect(zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme' })).rejects.toThrow(/Zoho COQL -> X: oops/)
+    })
+
+    it('findLeads throws on an HTTP error', async () => {
+      globalThis.fetch = zohoFetch(response(400, { code: 'SYNTAX_ERROR' }))
+      await expect(zohoAdapter(env()).send.findLeads({ phoneKey: '5551234567', company: 'Acme' })).rejects.toThrow()
+    })
+
+    it('reads a lead from Leads/<id>', async () => {
+      globalThis.fetch = zohoFetch(response(200, { data: [{ id: 'L1' }] }))
+      expect(await zohoAdapter(env()).read.lead('L1')).toEqual({ id: 'L1' })
+      expect(String(apiCall()[0])).toMatch(/Leads\/L1$/)
+    })
+  })
 })
 
 describe('summarizeSmartLists', () => {

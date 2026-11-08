@@ -3,6 +3,7 @@
 // (the sidebar's New Task, later the natural-language updates) share them.
 import { useEffect, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
+import { friendlyError } from './friendlyError'
 
 const flagPromises = new Map()
 
@@ -66,6 +67,6 @@ export async function invokeCrmAction(request) {
     }
     return { status: 'error', error: message }
   } catch (e) {
-    return { status: 'error', error: String(e?.message || e) }
+    return { status: 'error', error: friendlyError(e) }
   }
 }

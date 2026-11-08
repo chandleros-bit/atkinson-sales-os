@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { demoBayPipeline, demoMpgLeads } from '../lib/demoData'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel, daysSince, STALE_TOUCH_DAYS } from '../lib/overview'
 import { buildColumns, MPG_LEAD_FLOW, dropTargetFor, withPendingMoves } from '../lib/pipeline'
@@ -26,6 +27,7 @@ import { useForecast } from '../lib/useForecastInputs'
 import { PAGE_SIZE, pageSlice } from '../lib/paging'
 import Pager from '../components/Pager'
 import { useAuth } from '../context/AuthContext'
+import { friendlyError } from '../lib/friendlyError'
 
 function BizHeader({ biz, note }) {
   const isMpg = biz === 'mpg'
@@ -69,7 +71,7 @@ function Avatar({ r, biz, size = 38 }) {
   return (
     <div
       aria-hidden="true"
-      className="grid flex-none place-items-center rounded-full text-[12.5px] font-bold"
+      className="grid flex-none place-items-center rounded-full text-body font-bold"
       style={{ width: size, height: size, background: soft(biz), color: ink(biz) }}
     >
       {initials(headline(r, biz))}
@@ -84,15 +86,15 @@ function KpiCards({ kpis, biz }) {
         <section key={k.id} data-kpi={k.id} className="cc-card flex flex-col overflow-hidden">
           <div className="flex-1 p-4 sm:p-5">
             <div
-              className="grid h-10 w-10 place-items-center rounded-[10px] border border-line"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-line"
               style={{ color: k.tone === 'neg' ? 'var(--neg-ink)' : ink(biz) }}
             >
               <Icon name={k.icon} size={20} />
             </div>
-            <div className="mt-4 text-[13.5px] text-muted sm:mt-5 sm:text-[14px]">{k.label}</div>
-            <div className="num mt-1 text-[26px] font-semibold tracking-[-0.6px] sm:text-[28px]">{k.value}</div>
+            <div className="mt-4 text-body text-muted sm:mt-5 sm:text-ui">{k.label}</div>
+            <div className="num mt-1 text-title font-semibold tracking-[-0.6px] sm:text-title">{k.value}</div>
           </div>
-          <div className="border-t border-line bg-panel2 px-4 py-2.5 text-[13px] text-dim sm:px-5">{k.foot}</div>
+          <div className="border-t border-line bg-panel2 px-4 py-2.5 text-body text-dim sm:px-5">{k.foot}</div>
         </section>
       ))}
     </div>
@@ -105,7 +107,7 @@ function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
   return (
     <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2.5">
-        <div role="group" aria-label="View" className="flex gap-0.5 rounded-[11px] border border-line2 bg-panel p-[3px]">
+        <div role="group" aria-label="View" className="flex gap-0.5 rounded-lg border border-line2 bg-panel p-[3px]">
           {VIEWS.map((v) => {
             const on = v.id === view
             return (
@@ -114,7 +116,7 @@ function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
                 type="button"
                 aria-pressed={on}
                 onClick={() => onView(v.id)}
-                className={`flex min-h-[36px] items-center gap-2 rounded-lg px-3 text-[14px] ${
+                className={`flex min-h-[36px] items-center gap-2 rounded-lg px-3 text-ui ${
                   on ? 'btn-primary font-semibold' : 'font-medium text-muted hover:text-[color:var(--text)]'
                 }`}
               >
@@ -124,13 +126,13 @@ function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
             )
           })}
         </div>
-        <label className="flex h-[42px] items-center gap-2 rounded-[10px] border border-line2 bg-panel px-3 text-muted">
+        <label className="flex h-[42px] items-center gap-2 rounded-lg border border-line2 bg-panel px-3 text-muted">
           <Icon name="list" size={16} />
           <select
             aria-label="Sort"
             value={sort}
             onChange={(e) => onSort(e.target.value)}
-            className="bg-transparent text-[14px] font-medium text-[#344054] outline-none"
+            className="bg-transparent text-ui font-medium text-ink2 outline-none"
           >
             {SORTS.filter((o) => o.id !== 'pays_first' || role !== 'assistant').map((o) => (
               <option key={o.id} value={o.id}>
@@ -139,12 +141,12 @@ function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
             ))}
           </select>
         </label>
-        <label className="flex h-[42px] items-center gap-2 rounded-[10px] border border-line2 bg-panel px-3 text-muted">
+        <label className="flex h-[42px] items-center gap-2 rounded-lg border border-line2 bg-panel px-3 text-muted">
           <select
             aria-label="Temperature"
             value={temp}
             onChange={(e) => onTemp(e.target.value)}
-            className="bg-transparent text-[14px] font-medium text-[#344054] outline-none"
+            className="bg-transparent text-ui font-medium text-ink2 outline-none"
           >
             {TEMP_FILTERS.map((o) => (
               <option key={o.id} value={o.id}>
@@ -154,14 +156,14 @@ function Toolbar({ view, onView, sort, onSort, temp, onTemp, query, onQuery }) {
           </select>
         </label>
       </div>
-      <label className="flex h-[42px] w-full items-center gap-2.5 rounded-[10px] border border-line2 bg-panel px-3 text-dim sm:w-[280px]">
+      <label className="flex h-[42px] w-full items-center gap-2.5 rounded-lg border border-line2 bg-panel px-3 text-dim sm:w-[280px]">
         <Icon name="search" />
         <input
           aria-label="Search this pipeline"
           placeholder="Search name, company, phone, source"
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-[14px] text-[color:var(--text)] outline-none"
+          className="min-w-0 flex-1 bg-transparent text-ui text-[color:var(--text)] outline-none"
         />
       </label>
     </div>
@@ -172,20 +174,20 @@ function Touch({ r }) {
   const d = daysSince(r.last_touch_at)
   const stale = d === null || d >= STALE_TOUCH_DAYS
   return (
-    <span className={`num text-[14px] ${stale ? 'font-semibold' : ''}`} style={{ color: stale ? 'var(--warn-ink)' : '#344054' }}>
-      {lastTouchLabel(r.last_touch_at)}
+    <span className={`num text-ui ${stale ? 'font-semibold' : ''}`} style={{ color: stale ? 'var(--warn-ink)' : '#344054' }}>
+      {r.last_touch_at ? lastTouchLabel(r.last_touch_at) : 'No contact yet'}
     </span>
   )
 }
 
 function DocsCell({ r }) {
   const state = docsState(r)
-  if (state === 'untracked') return <span className="text-[13.5px] text-dim">Not tracked</span>
-  if (state === 'clear') return <span className="text-[13.5px] font-semibold" style={{ color: 'var(--pos-ink)' }}>✓ All in</span>
+  if (state === 'untracked') return <span className="text-body text-dim">Not tracked</span>
+  if (state === 'clear') return <span className="text-body font-semibold" style={{ color: 'var(--pos-ink)' }}>✓ All in</span>
   const aging = isDocAging(r.docs_oldest_requested_at)
   const days = daysSince(r.docs_oldest_requested_at)
   return (
-    <span className="text-[13.5px] font-semibold" style={{ color: aging ? 'var(--warn-ink)' : '#344054' }} title={docSummary(r.docs_outstanding)}>
+    <span className="text-body font-semibold" style={{ color: aging ? 'var(--warn-ink)' : '#344054' }} title={docSummary(r.docs_outstanding)}>
       {r.docs_outstanding_count} missing{days !== null ? ` · ${days}d` : ''}
     </span>
   )
@@ -194,7 +196,7 @@ function DocsCell({ r }) {
 function StageCell({ r, biz }) {
   return (
     <div className="min-w-0">
-      <div className="truncate text-[14.5px]">{r.stage || '—'}</div>
+      <div className="truncate text-ui">{r.stage || '—'}</div>
       {biz !== 'mpg' && <StageProgress stage={r.stage} className="mt-1.5" />}
     </div>
   )
@@ -237,7 +239,7 @@ function SourcePill({ r, className = '' }) {
     <span
       title={`Lead source: ${source}`}
       data-lead-source
-      className={`inline-block max-w-[160px] flex-none truncate rounded-full border border-line2 px-2 py-px align-middle text-[11px] font-semibold leading-[16px] text-muted ${className}`}
+      className={`inline-block max-w-[160px] flex-none truncate rounded-full border border-line2 px-2 py-px align-middle text-micro font-semibold leading-[16px] text-muted ${className}`}
     >
       {source}
     </span>
@@ -263,15 +265,15 @@ function ListView({ rows, biz, rules, now }) {
             <div className="flex items-center gap-3">
               <Avatar r={r} biz={biz} size={36} />
               <div className="min-w-0 flex-1">
-                <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[15px] font-semibold">
+                <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-ui font-semibold">
                   {headline(r, biz)}
                 </PersonLink>
-                <div className="truncate text-[13px] text-muted">{formatPhone(r.phone) || r.email || 'no contact info'}</div>
+                <div className="truncate text-body text-muted">{formatPhone(r.phone) || r.email || 'no contact info'}</div>
               </div>
               <Touch r={r} />
             </div>
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              <span className="text-[13px] text-muted">{r.stage}</span>
+              <span className="text-body text-muted">{r.stage}</span>
               {biz !== 'mpg' && <StageProgress stage={r.stage} />}
               <SourcePill r={r} />
             </div>
@@ -288,7 +290,7 @@ function ListView({ rows, biz, rules, now }) {
       <div className="overflow-x-auto">
       <div className="min-w-[980px]">
         <div
-          className="grid h-[50px] items-center gap-3 rounded-xl border border-line bg-panel2 px-4 text-[14px] text-muted"
+          className="grid h-[50px] items-center gap-3 rounded-lg border border-line bg-panel2 px-4 text-ui text-muted"
           style={{ gridTemplateColumns: cols }}
         >
           {(LIST_HEAD[biz] || LIST_HEAD.bay).map(([label, icon]) => (
@@ -304,25 +306,25 @@ function ListView({ rows, biz, rules, now }) {
             <div
               key={r.id}
               data-row-id={r.id}
-              className="grid min-h-[72px] items-center gap-3 rounded-xl border border-line bg-panel px-4 py-2.5 shadow-[var(--card-shadow)]"
+              className="grid min-h-[72px] items-center gap-3 rounded-lg border border-line bg-panel px-4 py-2.5 shadow-[var(--card-shadow)]"
               style={{ gridTemplateColumns: cols }}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar r={r} biz={biz} />
                 <div className="min-w-0">
-                  <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[15px] font-semibold">
+                  <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-ui font-semibold">
                     {headline(r, biz)}
                   </PersonLink>
                   {/* The source sits by the email, so a long one never cuts the name short. */}
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 truncate text-[13px] text-muted">{(biz === 'mpg' ? r.name : r.email) || '—'}</span>
+                    <span className="min-w-0 truncate text-body text-muted">{(biz === 'mpg' ? r.name : r.email) || '—'}</span>
                     <SourcePill r={r} />
                   </div>
                 </div>
               </div>
               <StageCell r={r} biz={biz} />
               <HealthPills h={health(r)} />
-              <span className="num whitespace-nowrap text-[14.5px]">{formatPhone(r.phone) || '—'}</span>
+              <span className="num whitespace-nowrap text-ui">{formatPhone(r.phone) || '—'}</span>
               {biz !== 'mpg' && <DocsCell r={r} />}
               <Touch r={r} />
               <MoreButton r={r} biz={biz} />
@@ -344,10 +346,10 @@ function StageGroup({ col, biz, rules, now }) {
   return (
     <section aria-label={col.stage} data-group={col.stage} className="cc-card overflow-hidden">
       <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel2 px-4 py-3 sm:px-5">
-        <h2 className={`text-[16px] font-semibold ${col.isLost ? 'text-dim' : ''}`}>{col.stage}</h2>
+        <h2 className={`text-lead font-semibold ${col.isLost ? 'text-dim' : ''}`}>{col.stage}</h2>
         {biz !== 'mpg' && <StageProgress stage={col.stage} />}
-        {summary && <span className="text-[13px] font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</span>}
-        <span className="num ml-auto rounded-full border border-line2 bg-panel px-2.5 text-[13px] font-semibold text-[#344054]">
+        {summary && <span className="text-body font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</span>}
+        <span className="num ml-auto rounded-full border border-line2 bg-panel px-2.5 text-body font-semibold text-ink2">
           {col.cards.length} {col.cards.length === 1 ? 'lead' : 'leads'}
         </span>
       </div>
@@ -355,12 +357,12 @@ function StageGroup({ col, biz, rules, now }) {
         <div key={r.id} data-row-id={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line px-4 py-3 first:border-t-0 sm:px-5">
           <div className="flex min-w-0 flex-[1_1_240px] items-center gap-3">
             <Avatar r={r} biz={biz} size={34} />
-            <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-[15px] font-semibold">
+            <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-ui font-semibold">
               {headline(r, biz)}
             </PersonLink>
             <SourcePill r={r} />
           </div>
-          <span className="num flex-[0_1_160px] whitespace-nowrap text-[14px]">{formatPhone(r.phone) || '—'}</span>
+          <span className="num flex-[0_1_160px] whitespace-nowrap text-ui">{formatPhone(r.phone) || '—'}</span>
           <HealthPills h={rules ? cardHealth(r, rules, now) : null} className="flex-[1_1_220px]" />
           <span className="flex-[0_0_96px] text-right">
             <Touch r={r} />
@@ -389,11 +391,11 @@ function GroupedView({ columns, biz, rules, now }) {
 function DocsBlock({ r }) {
   const state = docsState(r)
   if (state === 'untracked') {
-    return <div className="mt-1.5 text-[11px] text-dim">Docs not tracked</div>
+    return <div className="mt-1.5 text-micro text-dim">Docs not tracked</div>
   }
   if (state === 'clear') {
     return (
-      <div className="mt-1.5 text-[11px]" style={{ color: 'var(--bay-ink)' }}>
+      <div className="mt-1.5 text-micro" style={{ color: 'var(--bay-ink)' }}>
         ✓ All docs received
       </div>
     )
@@ -403,20 +405,20 @@ function DocsBlock({ r }) {
   return (
     <div className="mt-1.5">
       <div
-        className={`text-[11px] ${aging ? 'font-semibold' : 'text-muted'}`}
+        className={`text-micro ${aging ? 'font-semibold' : 'text-muted'}`}
         style={aging ? { color: 'var(--bay-gold)' } : undefined}
       >
         {aging ? '⚠ ' : ''}
         {r.docs_outstanding_count} doc{r.docs_outstanding_count === 1 ? '' : 's'}
         {days !== null ? ` · oldest ${days}d` : ''}
       </div>
-      <div className="truncate text-[11px] text-muted">{docSummary(r.docs_outstanding)}</div>
+      <div className="truncate text-micro text-muted">{docSummary(r.docs_outstanding)}</div>
       {/* The assistant's own note from the sheet's Notes column — why a doc is
           still outstanding. Only shown here, in the outstanding state: on a
           cleared or untracked card it has nothing to explain, and the board's
           value is scanning a column in one pass. */}
       {r.doc_notes ? (
-        <div className="truncate text-[11px] text-dim">{r.doc_notes}</div>
+        <div className="truncate text-micro text-dim">{r.doc_notes}</div>
       ) : null}
     </div>
   )
@@ -428,7 +430,7 @@ function LastNote({ r }) {
   if (!r.last_note_snippet) return null
   const d = daysSince(r.last_note_at)
   return (
-    <div className="mt-1.5 truncate text-[11px] text-muted">
+    <div className="mt-1.5 truncate text-micro text-muted">
       💬 “{r.last_note_snippet}”
       {d !== null ? <span className="text-dim"> · {d}d</span> : null}
     </div>
@@ -445,7 +447,7 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
   const sub = biz === 'mpg' ? r.name || formatPhone(r.phone) || r.email : formatPhone(r.phone) || r.email
   return (
     <div
-      className={`relative min-w-0 rounded-xl border border-line bg-panel px-3 py-2.5 shadow-[var(--card-shadow)] ${
+      className={`relative min-w-0 rounded-lg border border-line bg-panel px-3 py-2.5 shadow-[var(--card-shadow)] ${
         drag && !r.moving ? 'cursor-grab active:cursor-grabbing' : ''
       } ${r.moving ? 'opacity-60' : ''}`}
       draggable={!!drag && !r.moving}
@@ -467,21 +469,21 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
         style={{ background: lost ? 'var(--dim)' : health?.stuck ? 'var(--neg-ink)' : accent }}
       />
       {r.moving && (
-        <span className="absolute right-2 top-2 text-[10.5px] font-semibold text-dim">Moving…</span>
+        <span className="absolute right-2 top-2 text-micro font-semibold text-dim">Moving…</span>
       )}
-      <PersonLink id={r.id} url={r.crm_profile_url} className="block w-full truncate text-[13px] font-semibold">
+      <PersonLink id={r.id} url={r.crm_profile_url} className="block w-full truncate text-body font-semibold">
         {headline || '(no name)'}
       </PersonLink>
-      <div className="mt-0.5 truncate text-[11.5px] text-muted">
+      <div className="mt-0.5 truncate text-caption text-muted">
         {sub || 'no contact info'}
       </div>
       <SourcePill r={r} className="mt-1" />
       <HealthPills h={health} className="mt-1.5" />
       <div
-        className={`mt-1 text-[11px] ${stale ? 'font-semibold' : 'text-dim'}`}
+        className={`mt-1 text-micro ${stale ? 'font-semibold' : 'text-dim'}`}
         style={stale ? { color: 'var(--warn-ink)' } : undefined}
       >
-        {lastTouchLabel(r.last_touch_at)}
+        {r.last_touch_at ? lastTouchLabel(r.last_touch_at) : 'No contact yet'}
       </div>
       {biz !== 'mpg' && !lost && (
         <>
@@ -544,14 +546,14 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
     >
       <div className="border-b border-line bg-panel px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
-          <span className={`min-w-0 text-[13.5px] font-semibold leading-[18px] ${col.isLost ? 'text-dim' : ''}`}>
+          <span className={`min-w-0 text-body font-semibold leading-[18px] ${col.isLost ? 'text-dim' : ''}`}>
             {col.stage}
           </span>
-          <span className="num flex-none text-[12px] leading-[18px] text-muted" data-col-count>
+          <span className="num flex-none text-caption leading-[18px] text-muted" data-col-count>
             {col.cards.length}
           </span>
         </div>
-        {summary && <div className="mt-0.5 text-[11.5px] font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</div>}
+        {summary && <div className="mt-0.5 text-caption font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</div>}
         {biz !== 'mpg' && <StageProgress stage={col.stage} className="mt-1.5" />}
       </div>
       <div className="flex min-h-[64px] flex-col gap-2 p-2">
@@ -568,7 +570,7 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
           />
         ))}
         {col.cards.length === 0 && (
-          <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-[11.5px] text-dim">
+          <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-caption text-dim">
             {drag ? 'Drop a lead here' : 'Empty'}
           </div>
         )}
@@ -576,7 +578,7 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
           <button
             type="button"
             onClick={() => setLimit((n) => n + PAGE_SIZE)}
-            className="min-h-[34px] rounded-lg border border-line2 bg-panel text-[12.5px] font-semibold text-[#344054] hover:bg-hoverbg"
+            className="min-h-[34px] rounded-lg border border-line2 bg-panel text-body font-semibold text-ink2 hover:bg-hoverbg"
           >
             Show {Math.min(rest, PAGE_SIZE)} more · {rest} left
           </button>
@@ -602,11 +604,11 @@ function StageTabs({ columns, current, onPick }) {
             role="tab"
             aria-selected={on}
             onClick={() => onPick(c.stage)}
-            className="flex min-h-[36px] flex-none items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[12.5px] font-semibold"
+            className="flex min-h-[36px] flex-none items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-body font-semibold"
             style={on ? { borderColor: 'var(--text)', color: 'var(--text)', background: 'var(--panel)' } : { borderColor: 'var(--line2)', color: 'var(--muted)' }}
           >
             {c.stage}
-            <span className="num text-[11px] opacity-70">{c.cards.length}</span>
+            <span className="num text-micro opacity-70">{c.cards.length}</span>
           </button>
         )
       })}
@@ -663,7 +665,7 @@ function DropZones({ drag }) {
           <div
             key={z.key}
             data-zone={z.key}
-            className="flex min-h-[56px] min-w-[240px] items-center justify-center rounded-card border-2 border-dashed px-4 text-[13px] font-semibold transition-colors"
+            className="flex min-h-[56px] min-w-[240px] items-center justify-center rounded-card border-2 border-dashed px-4 text-body font-semibold transition-colors"
             style={{
               borderColor: over ? 'var(--bay)' : 'var(--line2)',
               background: over ? 'var(--bay-soft)' : undefined,
@@ -688,32 +690,6 @@ function DropZones({ drag }) {
   )
 }
 
-const demoAge = (days) => new Date(Date.now() - days * 86_400_000).toISOString()
-
-const demoRows = [
-  {
-    id: 'd1', stage: 'Application Received', name: 'Ramirez · Purchase', phone: '(713) 555-0142',
-    last_touch_at: null, crm_profile_url: '#',
-    docs_tracked: true, docs_outstanding: ['Paystubs', 'W2', 'Bank Statements'],
-    docs_outstanding_count: 3, docs_oldest_requested_at: demoAge(12),
-    doc_notes: 'Employer reissuing the W2 — chasing weekly',
-    last_note_snippet: 'Sending W2 tomorrow, has to dig up the 2024 one',
-    last_note_at: demoAge(2),
-  },
-  {
-    id: 'd2', stage: 'Application/Estimate Sent', name: 'Nguyen · Refi', phone: '(281) 555-0195',
-    last_touch_at: null, crm_profile_url: '#',
-    docs_tracked: true, docs_outstanding: [], docs_outstanding_count: 0,
-    docs_oldest_requested_at: null,
-    last_note_snippet: 'Locked rate, clear to close', last_note_at: demoAge(1),
-  },
-  {
-    id: 'd3', stage: 'Application/Estimate Sent', name: 'Okafor · Purchase', phone: '(832) 555-0110',
-    last_touch_at: null, crm_profile_url: '#',
-    docs_tracked: false, docs_outstanding: [], docs_outstanding_count: 0,
-    docs_oldest_requested_at: null, last_note_snippet: null, last_note_at: null,
-  },
-]
 
 // Per-business query + presentation config. MPG reads Zoho leads through
 // v_mpg_contacts (0 deals today — the pipeline lives on leads); Bayway reads
@@ -755,26 +731,27 @@ function PickSheet({ title, subtitle, note, options, onPick, onCancel }) {
     >
       <div
         role="dialog"
+        aria-modal="true"
         aria-label={title}
         className="w-full rounded-t-2xl border border-line bg-panel p-5 sm:max-w-sm sm:rounded-card"
         style={{ borderTop: '3px solid var(--bay)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-[15px] font-bold">{title}</div>
-        <div className="mt-0.5 text-[12px] text-muted">{subtitle}</div>
-        {note && <div className="mt-2 text-[12px] font-semibold" style={{ color: 'var(--bay-gold)' }}>{note}</div>}
+        <div className="text-ui font-bold">{title}</div>
+        <div className="mt-0.5 text-caption text-muted">{subtitle}</div>
+        {note && <div className="mt-2 text-caption font-semibold" style={{ color: 'var(--bay-gold)' }}>{note}</div>}
         <div className="mt-3 flex flex-col gap-2">
           {options.map((c) => (
             <button
               key={c.key}
               type="button"
               onClick={() => onPick(c.key)}
-              className="min-h-[44px] rounded-[10px] border border-line2 text-[13.5px] font-semibold hover:bg-hoverbg"
+              className="min-h-[44px] rounded-lg border border-line2 text-body font-semibold hover:bg-hoverbg"
             >
               {c.label}
             </button>
           ))}
-          <button type="button" onClick={onCancel} className="min-h-[40px] text-[12.5px] text-muted">
+          <button type="button" onClick={onCancel} className="min-h-[40px] text-body text-muted">
             Cancel
           </button>
         </div>
@@ -839,7 +816,7 @@ export default function Pipeline({ biz }) {
       }
       setRows(data || [])
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoading(false)
     }
@@ -916,11 +893,12 @@ export default function Pipeline({ biz }) {
       }
     : null
 
-  if (isDemoMode && biz !== 'mpg') {
+  if (isDemoMode) {
+    const demo = biz === 'mpg' ? demoMpgLeads() : demoBayPipeline()
     return (
       <div>
-        <BizHeader biz="bay" note={<span className="text-xs text-dim">demo</span>} />
-        <Board columns={buildColumns(demoRows)} biz="bay" />
+        <BizHeader biz={biz} note={<span className="num text-caption text-muted">{demo.length} {cfg.countLabel} · demo</span>} />
+        <Board columns={buildColumns(demo, cfg.flowOrder)} biz={biz} />
       </div>
     )
   }
@@ -946,7 +924,7 @@ export default function Pipeline({ biz }) {
         biz={biz}
         note={
           !loading && !error && (
-            <span className="num text-[12px] text-muted">
+            <span className="num text-caption text-muted">
               {rows.length} {cfg.countLabel}
             </span>
           )
@@ -954,7 +932,7 @@ export default function Pipeline({ biz }) {
       />
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}

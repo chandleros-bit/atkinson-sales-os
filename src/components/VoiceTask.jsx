@@ -34,7 +34,7 @@ export default function VoiceTask({ defaultBook = 'bay', onAdded }) {
         onClick={begin}
         aria-label="Say a task"
         title='Say a task, e.g. "MPG send Vinay the receipt, today"'
-        className="flex min-h-[40px] items-center gap-1.5 rounded-[10px] border border-line2 px-3 text-[13px] font-semibold"
+        className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-line2 px-3 text-body font-semibold"
       >
         <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="9" y="2" width="6" height="12" rx="3" />
@@ -45,16 +45,16 @@ export default function VoiceTask({ defaultBook = 'bay', onAdded }) {
       {open && (
         <Sheet title={speech.listening ? 'Listening…' : 'Say a task'} subtitle='Book first, then the task and when: "MPG send Vinay the receipt, today"' t={quickActionTone(defaultBook)} onClose={close}>
           <div className="flex flex-col gap-3">
-            <div aria-live="polite" className="min-h-[56px] rounded-[10px] bg-panel2 px-3 py-2 text-[14px]">
+            <div aria-live="polite" className="min-h-[56px] rounded-lg bg-panel2 px-3 py-2 text-ui">
               {speech.interim || <span className="text-muted">{speech.listening ? 'Go ahead…' : ' '}</span>}
             </div>
-            {speech.error && <div className="text-[12px] text-[color:var(--neg-ink)]">{speech.error}</div>}
+            {speech.error && <div className="text-caption text-[color:var(--neg-ink)]">{speech.error}</div>}
             {speech.listening ? (
-              <button type="button" onClick={speech.stop} className="min-h-[44px] rounded-[10px] text-[13.5px] font-semibold text-white" style={{ background: 'var(--text)' }}>
+              <button type="button" onClick={speech.stop} className="min-h-[44px] rounded-lg text-body font-semibold text-white" style={{ background: 'var(--text)' }}>
                 Done talking
               </button>
             ) : (
-              <button type="button" onClick={speech.start} className="min-h-[44px] rounded-[10px] border border-line2 text-[13.5px] font-semibold">
+              <button type="button" onClick={speech.start} className="min-h-[44px] rounded-lg border border-line2 text-body font-semibold">
                 Try again
               </button>
             )}

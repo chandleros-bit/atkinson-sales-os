@@ -16,7 +16,7 @@ export const FOLLOW_UP_PRESETS = [
   { key: 'pick', label: 'Pick a date' },
 ]
 
-const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact'])
+const ACTIONS = new Set(['log_call', 'add_note', 'create_task', 'complete_task', 'push_task', 'set_stage', 'set_temperature', 'create_contact', 'promote_prospect'])
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -199,6 +199,19 @@ export function buildActionRequest(form) {
     ]
     for (const [k, v] of fields) if (trimmed(v)) payload[k] = trimmed(v)
     return { ...base, business_id: form.businessId, payload }
+  }
+  if (action === 'promote_prospect') {
+    if (!form.prospectId) throw new Error('Missing prospect')
+    if (!form.touchId) throw new Error('Missing visit')
+    const payload = {}
+    const note = trimmed(form.note)
+    if (note) payload.note = note
+    if (form.followUp?.dueDate) {
+      payload.follow_up = { due_date: form.followUp.dueDate, title: trimmed(form.followUp.title) || 'Follow up' }
+    }
+    if (form.linkLeadId) payload.link_lead_id = form.linkLeadId
+    if (form.createNew) payload.create_new = true
+    return { ...base, business_id: 'mpg', prospect_id: form.prospectId, touch_id: form.touchId, payload }
   }
   if (action === 'set_temperature') {
     if (!['hot', 'warm', 'cold'].includes(form.temperature)) throw new Error('Pick Hot, Warm or Cold')

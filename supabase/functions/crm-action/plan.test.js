@@ -95,3 +95,28 @@ describe('planSteps: create_contact', () => {
     expect(shouldStop('create_contact', true)).toBe(false)
   })
 })
+
+describe('planSteps: promote_prospect', () => {
+  const req = (payload) => ({ action: 'promote_prospect', business_id: 'mpg', prospect_id: 'p1', touch_id: 't1', payload })
+  it('promotes, then adds the note, then the follow-up', () => {
+    expect(planSteps(req({ note: 'Walk-in · Warm', follow_up: { due_date: '2026-11-10', title: 'Bring statement' } }))).toEqual([
+      { step: 'promote' },
+      { step: 'add_note', subject: 'Walk-in', body: 'Walk-in · Warm' },
+      { step: 'create_task', title: 'Bring statement', type: 'Follow Up', dueDate: '2026-11-10' },
+    ])
+  })
+  it('titles a follow-up without a title "Follow up"', () => {
+    expect(planSteps(req({ follow_up: { due_date: '2026-11-10' } }))).toEqual([
+      { step: 'promote' },
+      { step: 'create_task', title: 'Follow up', type: 'Follow Up', dueDate: '2026-11-10' },
+    ])
+  })
+  it('is one step without a note or a follow-up', () => {
+    expect(planSteps(req({}))).toEqual([{ step: 'promote' }])
+    expect(planSteps({ action: 'promote_prospect' })).toEqual([{ step: 'promote' }])
+  })
+  it('stops after a failed promote', () => {
+    expect(shouldStop('promote', false)).toBe(true)
+    expect(shouldStop('promote', true)).toBe(false)
+  })
+})

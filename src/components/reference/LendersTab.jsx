@@ -61,17 +61,17 @@ function LenderForm({ initial, onSave, onDelete, onClose, error }) {
         <Field className="col-span-2" label="Turn time" value={f.turn_time} onChange={set('turn_time')} />
         <Field className="col-span-2" label="Comp and pricing" value={f.comp_notes} onChange={set('comp_notes')} />
         <label className="col-span-2 block">
-          <span className="mb-0.5 block text-[11px] font-medium text-muted">Notes</span>
-          <textarea aria-label="Notes" rows={3} value={f.notes} onChange={(e) => set('notes')(e.target.value)} className="w-full rounded-[8px] border border-line2 bg-panel2 px-2.5 py-1.5 text-[13px] outline-none" />
+          <span className="mb-0.5 block text-micro font-medium text-muted">Notes</span>
+          <textarea aria-label="Notes" rows={3} value={f.notes} onChange={(e) => set('notes')(e.target.value)} className="w-full rounded-lg border border-line2 bg-panel2 px-2.5 py-1.5 text-body outline-none" />
         </label>
       </div>
-      {(problem || error) && <div className="mt-2 text-[12px] text-[#b42318]">{problem || error}</div>}
+      {(problem || error) && <div className="mt-2 text-caption text-neg-ink">{problem || error}</div>}
       <div className="mt-3 flex items-center gap-2">
-        <button type="button" aria-label="Save lender" onClick={save} className="btn-primary rounded-[10px] px-4 py-2 text-[13px] font-semibold">
+        <button type="button" aria-label="Save lender" onClick={save} className="btn-primary rounded-lg px-4 py-2 text-body font-semibold">
           Save
         </button>
         {initial && (
-          <button type="button" aria-label="Delete lender" onClick={() => window.confirm(`Delete ${initial.lender}?`) && onDelete(initial.id)} className="ml-auto text-[12.5px] text-[#b42318]">
+          <button type="button" aria-label="Delete lender" onClick={() => window.confirm(`Delete ${initial.lender}?`) && onDelete(initial.id)} className="ml-auto text-body text-neg-ink">
             Delete
           </button>
         )}
@@ -96,8 +96,8 @@ export default function LendersTab() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <input aria-label="Search lenders" placeholder="Search lender, AE or notes" value={q} onChange={(e) => setQ(e.target.value)} className="min-w-[200px] flex-1 rounded-[8px] border border-line2 bg-panel2 px-2.5 py-1.5 text-[13px] outline-none" />
-        <button type="button" aria-label="Add lender" onClick={() => setEditing(null)} className="rounded-[8px] border border-line2 px-3 py-1.5 text-[12.5px] font-semibold">
+        <input aria-label="Search lenders" placeholder="Search lender, AE or notes" value={q} onChange={(e) => setQ(e.target.value)} className="min-w-[200px] flex-1 rounded-lg border border-line2 bg-panel2 px-2.5 py-1.5 text-body outline-none" />
+        <button type="button" aria-label="Add lender" onClick={() => setEditing(null)} className="rounded-lg border border-line2 px-3 py-1.5 text-body font-semibold">
           + Add lender
         </button>
       </div>
@@ -109,24 +109,24 @@ export default function LendersTab() {
             aria-label={`Filter ${p}`}
             aria-pressed={program === p}
             onClick={() => setProgram(program === p ? null : p)}
-            className={`rounded-full border px-2.5 py-0.5 text-[11.5px] ${program === p ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted'}`}
+            className={`rounded-full border px-2.5 py-0.5 text-caption ${program === p ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted'}`}
           >
             {p}
           </button>
         ))}
       </div>
-      {error && <div className="text-[12px] text-[#b42318]">{error}</div>}
+      {error && <div className="text-caption text-neg-ink">{error}</div>}
       {loading ? (
-        <div className="text-[13px] text-muted">Loading lenders…</div>
+        <div className="text-body text-muted">Loading lenders…</div>
       ) : shown.length === 0 ? (
-        <div className="text-[13px] text-muted">{rows.length ? 'No lenders match.' : 'No lenders yet. Add your first AE.'}</div>
+        <div className="text-body text-muted">{rows.length ? 'No lenders match.' : 'No lenders yet. Add your first AE.'}</div>
       ) : (
         <ul className="flex flex-col gap-2">
           {shown.map((r) => (
-            <li key={r.id} data-lender={r.lender} className="cc-card flex flex-col gap-1 p-3 text-[13px]">
+            <li key={r.id} data-lender={r.lender} className="cc-card flex flex-col gap-1 p-3 text-body">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="font-semibold">{r.lender}</span>
-                <button type="button" aria-label={`Edit ${r.lender}`} onClick={() => setEditing(r)} className="text-[12px] text-[#1d4ed8]">
+                <button type="button" aria-label={`Edit ${r.lender}`} onClick={() => setEditing(r)} className="text-caption text-link">
                   Edit
                 </button>
               </div>
@@ -135,24 +135,24 @@ export default function LendersTab() {
               </div>
               {r.comp_notes && <div>Comp: {r.comp_notes}</div>}
               {r.notes && <div className="whitespace-pre-line text-muted">{r.notes}</div>}
-              <div className="flex flex-wrap items-center gap-3 text-[12.5px]">
+              <div className="flex flex-wrap items-center gap-3 text-body">
                 {r.ae_phone && (
-                  <a href={`tel:${r.ae_phone}`} className="text-[#1d4ed8]">
+                  <a href={`tel:${r.ae_phone}`} className="text-link">
                     Call {formatPhone(r.ae_phone)}
                   </a>
                 )}
                 {r.ae_email && (
-                  <a href={`mailto:${r.ae_email}`} className="text-[#1d4ed8]">
+                  <a href={`mailto:${r.ae_email}`} className="text-link">
                     Email
                   </a>
                 )}
                 {r.portal_url && (
-                  <a href={r.portal_url} target="_blank" rel="noreferrer" className="text-[#1d4ed8]">
+                  <a href={r.portal_url} target="_blank" rel="noreferrer" className="text-link">
                     Portal ↗
                   </a>
                 )}
                 {r.updated_at && (
-                  <span className="ml-auto text-[11.5px] text-dim">
+                  <span className="ml-auto text-caption text-dim">
                     Updated {shortDate(r.updated_at)}
                     {r.updated_by_name ? ` · ${firstName(r.updated_by_name)}` : ''}
                   </span>

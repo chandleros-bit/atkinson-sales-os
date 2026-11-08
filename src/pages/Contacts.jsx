@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
+import { demoBayPipeline, demoMpgLeads } from '../lib/demoData'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel } from '../lib/overview'
 import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
@@ -7,6 +8,7 @@ import { formatPhone, telHref } from '../lib/phone'
 import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
 import { ScheduleButton } from '../components/ScheduleEvent'
+import { friendlyError } from '../lib/friendlyError'
 
 const PER_PAGE = 50
 
@@ -17,26 +19,26 @@ function MobileContactRow({ r, config }) {
   return (
     <div data-contact-row className="border-b border-line px-4 py-3 last:border-b-0 sm:hidden">
       <div className="flex items-baseline justify-between gap-3">
-        <div className="min-w-0 truncate text-[14px] font-semibold">
+        <div className="min-w-0 truncate text-ui font-semibold">
           <PersonLink id={r.id} url={r.crm_profile_url}>
             {name}
           </PersonLink>
         </div>
-        <div className="flex flex-none items-center gap-1 text-[11.5px] text-muted">
+        <div className="flex flex-none items-center gap-1 text-caption text-muted">
           {lastTouchLabel(r.last_touch_at)}
           <ScheduleButton variant="icon" businessId={config.biz} contactId={r.id} contactName={r.name} />
         </div>
       </div>
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        {r.company && <span className="min-w-0 truncate text-[12.5px] text-muted">{r.company}</span>}
+        {r.company && <span className="min-w-0 truncate text-body text-muted">{r.company}</span>}
         {r.stage && (
-          <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={config.stagePill(r.stage)}>
+          <span className="rounded-full px-2 py-0.5 text-micro font-semibold" style={config.stagePill(r.stage)}>
             {r.stage}
           </span>
         )}
       </div>
       {(r.phone || r.email) && (
-        <div className="mt-1 truncate text-[12.5px]">
+        <div className="mt-1 truncate text-body">
           {r.phone ? (
             <a href={telHref(r.phone)} className="font-semibold" style={{ color: 'var(--text)' }}>
               {formatPhone(r.phone)}
@@ -77,9 +79,9 @@ const CONFIGS = {
     stageHeader: 'Stage',
     filters: BAY_FILTERS,
     stagePill: bayStagePill,
-    demoRows: [
-      { id: 'd1', name: 'Ramirez · Purchase', email: null, phone: '(713) 555-0142', stage: 'Application/Estimate Sent', last_touch_at: null, crm_profile_url: '#' },
-      { id: 'd2', name: 'Nguyen · Refi', email: 'nguyen@example.com', phone: '(281) 555-0195', stage: NURTURE, last_touch_at: null, crm_profile_url: '#' },
+    demoRows: () => [
+      ...demoBayPipeline(),
+      { id: 'd5', name: 'Patel · Purchase', email: 'patel@example.com', phone: '(713) 555-0168', stage: NURTURE, last_touch_at: null, crm_profile_url: '#' },
     ],
   },
   mpg: {
@@ -91,10 +93,7 @@ const CONFIGS = {
     stageHeader: 'Status',
     filters: [],
     stagePill: mpgStagePill,
-    demoRows: [
-      { id: 'd1', name: 'Chef Rasi', company: 'Craft Pita', email: null, phone: '(832) 804-9056', stage: 'Open', last_touch_at: null, crm_profile_url: '#' },
-      { id: 'd2', name: 'Owner ?', company: 'Barnaby’s Cafe', email: 'x@example.com', phone: '(832) 831-8296', stage: 'Open', last_touch_at: null, crm_profile_url: '#' },
-    ],
+    demoRows: demoMpgLeads,
   },
 }
 
@@ -105,7 +104,7 @@ const COLUMNS = {
     thClass: 'flex-1 text-left',
     sortKey: 'name',
     cell: (r) => (
-      <div className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+      <div className="min-w-0 flex-1 truncate text-body font-semibold">
         <PersonLink id={r.id} url={r.crm_profile_url}>
           {r.name || '(no name)'}
         </PersonLink>
@@ -116,7 +115,7 @@ const COLUMNS = {
     header: () => 'Company',
     thClass: 'w-40 text-left',
     sortKey: 'company',
-    cell: (r) => <div className="w-40 truncate text-[12.5px] text-muted">{r.company || '—'}</div>,
+    cell: (r) => <div className="w-40 truncate text-body text-muted">{r.company || '—'}</div>,
   },
   stage: {
     header: (config) => config.stageHeader,
@@ -124,7 +123,7 @@ const COLUMNS = {
     sortKey: 'stage',
     cell: (r, config) => (
       <div className="w-32">
-        <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={config.stagePill(r.stage)}>
+        <span className="rounded-full px-2 py-0.5 text-micro font-semibold" style={config.stagePill(r.stage)}>
           {r.stage || '—'}
         </span>
       </div>
@@ -135,7 +134,7 @@ const COLUMNS = {
     thClass: 'w-40 text-left',
     sortKey: null,
     cell: (r) => (
-      <div className="w-40 truncate text-[11.5px] text-muted">{r.phone || r.email || 'no contact info'}</div>
+      <div className="w-40 truncate text-caption text-muted">{r.phone || r.email || 'no contact info'}</div>
     ),
   },
   last_touch: {
@@ -143,7 +142,7 @@ const COLUMNS = {
     thClass: 'w-24 text-right',
     sortKey: 'last_touch_at',
     cell: (r) => (
-      <div className="w-24 text-right text-[11.5px] text-muted">{lastTouchLabel(r.last_touch_at)}</div>
+      <div className="w-24 text-right text-caption text-muted">{lastTouchLabel(r.last_touch_at)}</div>
     ),
   },
   // Schedule a call or meeting with this contact (ScheduleEvent).
@@ -191,7 +190,7 @@ export default function Contacts({ biz }) {
       }
       setRows(data || [])
     } catch (e) {
-      setError(String(e?.message || e))
+      setError(friendlyError(e))
     } finally {
       setLoading(false)
     }
@@ -201,7 +200,7 @@ export default function Contacts({ biz }) {
     load()
   }, [load])
 
-  const sourceRows = isDemoMode ? config.demoRows : rows
+  const sourceRows = useMemo(() => (isDemoMode ? config.demoRows() : rows), [config, rows])
   const filtered = useMemo(
     () => sortContacts(filterContacts(sourceRows, { query, stageFilter }), { key: sortKey, dir: sortDir }),
     [sourceRows, query, stageFilter, sortKey, sortDir],
@@ -237,7 +236,7 @@ export default function Contacts({ biz }) {
         note={
           !loading &&
           !error && (
-            <span className="num text-[12px] text-muted">
+            <span className="num text-caption text-muted">
               {sourceRows.length} contacts · showing {filtered.length}
             </span>
           )
@@ -249,7 +248,7 @@ export default function Contacts({ biz }) {
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Search name, company, email, or phone…"
-          className="min-h-[40px] w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-[13px] outline-none sm:min-h-0 sm:w-64 placeholder:text-dim focus:border-line2"
+          className="min-h-[40px] w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-body outline-none sm:min-h-0 sm:w-64 placeholder:text-dim focus:border-line2"
         />
         {config.filters.length > 0 && (
           <div className="flex gap-1">
@@ -269,7 +268,7 @@ export default function Contacts({ biz }) {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="mt-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
@@ -278,7 +277,7 @@ export default function Contacts({ biz }) {
 
       {!loading && !error && (
         <div className="mt-4 overflow-hidden rounded-card border border-line bg-panel">
-          <div className="hidden items-center gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-dim sm:flex">
+          <div className="hidden items-center gap-3 border-b border-line px-4 py-2.5 text-micro font-semibold uppercase tracking-wide text-dim sm:flex">
             {config.columns.map((colKey) => {
               const col = COLUMNS[colKey]
               return col.sortKey ? (

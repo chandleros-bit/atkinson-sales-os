@@ -13,6 +13,7 @@ import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useNow } from '../lib/useNow'
 import { lateLeadCount, titleFor } from '../lib/cardHealth'
 import { canVisit } from '../lib/roles'
+import { filterScope } from '../lib/filterScope'
 
 // Under 640px (phones) the sidebar becomes a slide-in menu behind a top bar,
 // and the pages used most get a bottom tab bar, so pages get the full width.
@@ -31,6 +32,9 @@ const TITLES = [
   [/^\/mpg\/contacts/, 'Contacts'],
   [/^\/bayway\/pipeline/, 'Pipeline'],
   [/^\/bayway\/priority-leads/, 'Priority Leads'],
+  [/^\/bayway\/loans/, 'Loans'],
+  [/^\/reference/, 'Reference'],
+  [/^\/rate/, 'Rate leads'],
   [/^\/bayway\/activity/, 'Activity'],
   [/^\/bayway\/contacts/, 'Contacts'],
   [/^\/sync/, 'Sync Status'],
@@ -41,29 +45,30 @@ export const pageTitle = (path) => TITLES.find(([re]) => re.test(path))?.[1] || 
 function MobileBar({ onMenu }) {
   const { pathname } = useLocation()
   const { role } = useAuth()
+  const scope = filterScope(pathname)
   return (
     <div className="sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-2 border-b border-line bg-panel/95 px-4 py-2 backdrop-blur sm:hidden">
       <button
         type="button"
         onClick={onMenu}
         aria-label="Open menu"
-        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border border-line2 text-muted"
+        className="grid h-10 w-10 flex-none place-items-center rounded-lg border border-line2 text-muted"
       >
         <Icon name="menu" size={19} />
       </button>
-      <div className="min-w-0 flex-1 truncate text-[15px] font-semibold" data-page-title>
+      <div className="min-w-0 flex-1 truncate text-ui font-semibold" data-page-title>
         {pageTitle(pathname)}
       </div>
-      {role !== 'assistant' && (
-        <div className="w-[164px] flex-none">
-          <BusinessFilter compact />
+      {role !== 'assistant' && scope !== 'none' && (
+        <div className={`flex-none ${scope === 'book' ? 'w-[132px]' : 'w-[164px]'}`}>
+          <BusinessFilter compact books={scope === 'book'} />
         </div>
       )}
       <button
         type="button"
         onClick={openSearch}
         aria-label="Search"
-        className="grid h-10 w-10 flex-none place-items-center rounded-[10px] border border-line2 text-muted"
+        className="grid h-10 w-10 flex-none place-items-center rounded-lg border border-line2 text-muted"
       >
         <Icon name="search" size={19} />
       </button>
@@ -71,23 +76,21 @@ function MobileBar({ onMenu }) {
   )
 }
 
-// Desktop top bar: the page's name, the business switch and + New.
+// Desktop top bar: the business switch and + New. The page names itself in
+// its own header (PageHeader's h1), so the bar doesn't repeat it. The switch
+// shows only where it changes the page (lib/filterScope).
 function TopBar() {
   const { pathname } = useLocation()
   const { role } = useAuth()
+  const scope = filterScope(pathname)
   return (
-    <div className="mb-7 hidden h-[72px] items-center justify-between gap-4 border-b border-line sm:flex">
-      <div className="truncate text-[22px] font-semibold tracking-[-0.4px]" data-page-title>
-        {pageTitle(pathname)}
-      </div>
-      <div className="flex flex-none items-center gap-3">
-        {role !== 'assistant' && (
-          <div className="w-[248px]">
-            <BusinessFilter />
-          </div>
-        )}
-        <NewMenu />
-      </div>
+    <div className="mb-6 hidden h-[64px] items-center justify-end gap-3 border-b border-line sm:flex">
+      {role !== 'assistant' && scope !== 'none' && (
+        <div className={scope === 'book' ? 'w-[184px]' : 'w-[248px]'}>
+          <BusinessFilter books={scope === 'book'} />
+        </div>
+      )}
+      <NewMenu />
     </div>
   )
 }
@@ -116,7 +119,7 @@ function BottomNav() {
           key={it.label}
           to={it.to}
           aria-current={it.on ? 'page' : undefined}
-          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[10.5px] font-semibold ${it.on ? 'text-[color:var(--text)]' : 'text-muted'}`}
+          className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-micro font-semibold ${it.on ? 'text-[color:var(--text)]' : 'text-muted'}`}
         >
           <Icon name={it.icon} size={20} strokeWidth={1.9} />
           {it.label}
@@ -157,9 +160,8 @@ export default function Layout() {
         <MobileBar onMenu={() => setMenuOpen(true)} />
         <TopBar />
         {isDemoMode && (
-          <div className="mb-5 rounded-[11px] border border-line bg-panel px-4 py-2.5 text-xs text-muted">
-            Demo mode — Supabase is not connected yet. Copy .env.example to .env,
-            add your project URL and anon key, and restart to enable sign-in.
+          <div className="mb-5 rounded-lg border border-line bg-panel px-4 py-2.5 text-xs text-muted">
+            Demo mode — every page shows sample data. Add your Supabase URL and anon key to .env and restart to sign in.
           </div>
         )}
         <Outlet />

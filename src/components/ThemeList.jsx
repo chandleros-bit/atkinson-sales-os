@@ -21,7 +21,7 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
       <div className={SECTION_HEAD}>
         <SectionTitle icon="calendar" count={total}>{title}</SectionTitle>
         {items.length > 0 && (
-          <button type="button" data-theme-start onClick={() => onDial(0)} className="ml-auto min-h-[34px] flex-none rounded-[10px] px-3 text-[13px] font-bold text-white" style={{ background: 'var(--chrome)' }}>
+          <button type="button" data-theme-start onClick={() => onDial(0)} className="ml-auto min-h-[34px] flex-none rounded-lg px-3 text-body font-bold text-white" style={{ background: 'var(--chrome)' }}>
             Start dialing
           </button>
         )}
@@ -37,7 +37,7 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
               aria-current={w.isToday ? 'date' : undefined}
               aria-pressed={active}
               onClick={() => onPickDay(w.isToday ? null : w.day)}
-              className={`min-w-0 rounded-[10px] border px-1 py-1.5 text-center text-[11.5px] leading-tight ${active ? 'border-[color:var(--chrome)] bg-panel2 font-semibold' : 'border-line text-muted'}`}
+              className={`min-w-0 rounded-lg border px-1 py-1.5 text-center text-caption leading-tight ${active ? 'border-[color:var(--chrome)] bg-panel2 font-semibold' : 'border-line text-muted'}`}
             >
               <span className="block font-bold">{DAY_NAMES[w.day]}</span>
               {/* Own lines, so a narrow phone cuts the theme name, never the count. */}
@@ -47,8 +47,8 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
           )
         })}
       </div>
-      {!theme && <div className="border-b border-line px-4 py-3 text-[13px] text-muted">No theme list on weekends.</div>}
-      {theme && items.length === 0 && <div className="border-b border-line px-4 py-3 text-[13px] text-muted">Nobody due on {theme.label} right now.</div>}
+      {!theme && <div className="border-b border-line px-4 py-3 text-body text-muted">No theme list on weekends.</div>}
+      {theme && items.length === 0 && <div className="border-b border-line px-4 py-3 text-body text-muted">Nobody due on {theme.label} right now.</div>}
       {items.map((it, i) => {
         const r = it.row
         const tel = telHref(r.phone)
@@ -56,11 +56,11 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
           <div key={it.id} data-theme-row className="border-b border-line px-4 py-2.5">
             <div className="flex items-center gap-3">
               <div role="button" tabIndex={0} onClick={() => onDial(i)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onDial(i)} className="min-w-0 flex-1 cursor-pointer text-left" aria-label={`Dial ${r.name || 'contact'}`}>
-                <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-[14px] font-semibold">{r.name || '(no name)'}</PersonLink>
-                <div className="mt-0.5 text-[12.5px] text-muted">{[it.label, it.hint].filter(Boolean).join(' · ')}</div>
+                <PersonLink id={r.id} url={r.crm_profile_url} className="block truncate text-ui font-semibold">{r.name || '(no name)'}</PersonLink>
+                <div className="mt-0.5 text-body text-muted">{[it.label, it.hint].filter(Boolean).join(' · ')}</div>
               </div>
               {tel && (
-                <a href={tel} aria-label={`Call ${r.name || 'contact'}`} className="grid h-10 w-10 flex-none place-items-center rounded-[10px] text-muted hover:bg-hoverbg">
+                <a href={tel} aria-label={`Call ${r.name || 'contact'}`} className="grid h-10 w-10 flex-none place-items-center rounded-lg text-muted hover:bg-hoverbg">
                   <CallIcon />
                 </a>
               )}
@@ -69,7 +69,7 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
           </div>
         )
       })}
-      {total > items.length && <div className="border-b border-line px-4 py-2 text-[12px] text-dim">{total - items.length} more due, they'll come up next week.</div>}
+      {total > items.length && <div className="border-b border-line px-4 py-2 text-caption text-dim">{total - items.length} more due, they'll come up next week.</div>}
     </section>
   )
 }

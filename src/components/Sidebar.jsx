@@ -52,7 +52,7 @@ function Item({ to, icon, on, children, badge, onNavigate, sync }) {
       to={to}
       onClick={onNavigate}
       aria-current={on ? 'page' : undefined}
-      className={`flex min-h-[32px] items-center gap-2.5 rounded-[9px] px-2.5 text-[13px] ${
+      className={`flex min-h-[32px] items-center gap-2.5 rounded-lg px-2.5 text-body ${
         on
           ? 'bg-[color:var(--chrome-soft)] font-semibold text-[color:var(--text)]'
           : 'font-medium text-muted hover:bg-hoverbg hover:text-[color:var(--text)]'
@@ -61,7 +61,7 @@ function Item({ to, icon, on, children, badge, onNavigate, sync }) {
       <Icon name={icon} size={16} strokeWidth={1.8} />
       <span className="flex-1 truncate">{children}</span>
       {badge != null && (
-        <span className="rounded-full bg-[color:var(--text)] px-1.5 text-[10.5px] font-semibold leading-[17px] text-white">{badge}</span>
+        <span className="rounded-full bg-[color:var(--text)] px-1.5 text-micro font-semibold leading-[17px] text-white">{badge}</span>
       )}
       {sync && <SyncMark />}
     </Link>
@@ -69,7 +69,7 @@ function Item({ to, icon, on, children, badge, onNavigate, sync }) {
 }
 
 function GroupLabel({ children }) {
-  return <div className="px-2.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[.5px] text-dim">{children}</div>
+  return <div className="px-2.5 pb-1 text-micro font-semibold uppercase tracking-[.5px] text-dim">{children}</div>
 }
 
 export default function Sidebar({ onNavigate }) {
@@ -88,9 +88,9 @@ export default function Sidebar({ onNavigate }) {
     <aside className="flex h-full w-[216px] flex-none flex-col gap-3 overflow-y-auto border-r border-line bg-panel2 px-3 py-4">
       <div className="flex items-center gap-2 px-1">
         <LogoMark size={26} />
-        <h1 className="truncate text-[15px] font-bold tracking-[-0.3px]">
+        <div className="truncate text-ui font-bold tracking-[-0.3px]">
           Atkinson <span className="font-normal text-muted">Sales OS</span>
-        </h1>
+        </div>
       </div>
 
       {/* Looks like a search field; opens the search palette. */}
@@ -100,11 +100,11 @@ export default function Sidebar({ onNavigate }) {
           onNavigate?.()
           openSearch()
         }}
-        className="flex h-[34px] flex-none items-center gap-2 rounded-[9px] border border-line2 bg-panel px-2.5 text-left text-[13px] text-dim"
+        className="flex h-[34px] flex-none items-center gap-2 rounded-lg border border-line2 bg-panel px-2.5 text-left text-body text-dim"
       >
         <Icon name="search" size={16} />
         <span className="flex-1">Search</span>
-        <span className="rounded-[5px] border border-line2 px-1.5 text-[10.5px]">Ctrl K</span>
+        <span className="rounded-md border border-line2 px-1.5 text-micro">Ctrl K</span>
       </button>
 
       {/* Phones: + New lives here (the desktop top bar has it otherwise). */}
@@ -132,15 +132,15 @@ export default function Sidebar({ onNavigate }) {
       </nav>
 
       <div className="mt-auto flex items-center gap-2 border-t border-line px-1 pt-2.5">
-        <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-[#E4E7EC] text-[11.5px] font-semibold text-[#344054]">
+        <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-line text-caption font-semibold text-ink2">
           {initials}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold">{shownName}</div>
-          <div className="flex items-center gap-1 text-[11.5px] text-dim">
+          <div className="truncate text-body font-semibold">{shownName}</div>
+          <div className="flex items-center gap-1 text-caption text-dim">
             <span className="truncate">{roleLabel(role)}</span>
             {!isDemoMode && (
-              <button onClick={signOut} className="flex-none rounded px-1 text-[11.5px] text-dim hover:text-[color:var(--text)]">
+              <button onClick={signOut} className="flex-none rounded px-1 text-caption text-dim hover:text-[color:var(--text)]">
                 Sign out
               </button>
             )}

@@ -83,6 +83,8 @@ let mobile = false
 beforeEach(() => {
   document.body.innerHTML = ''
   invoke.mockReset()
+  // Opening a lead card reads its CRM notes; answer that read instead of resolving undefined.
+  invoke.mockResolvedValue({ data: { status: 'ok', results: [] }, error: null })
   writes.length = 0
   DATA.workItems = []
   DATA.contacts = []
@@ -143,7 +145,7 @@ describe('Workbench', () => {
   it('shows the Calls and Work lanes with counts', async () => {
     mobile = false
     const host = await render()
-    expect(host.querySelector('header h2').textContent).toBe('Workbench')
+    expect(host.querySelector('header h1').textContent).toBe('Workbench')
     expect(host.querySelector('[aria-label="Calls"]').textContent).toContain('Ana Inbound')
     const work = host.querySelector('[aria-label="Work"]')
     expect(work.textContent).toContain('Estimates to Work')

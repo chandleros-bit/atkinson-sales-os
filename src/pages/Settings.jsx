@@ -69,10 +69,10 @@ export default function Settings() {
     <div>
       <PageHeader title="Settings" subtitle="Forecast odds and lead temperature." />
       <section className="mt-6 max-w-xl rounded-card border border-line bg-panel p-5">
-        <h3 className="text-[15px] font-semibold">Forecast</h3>
+        <h3 className="text-ui font-semibold">Forecast</h3>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
           {FIELDS.map(([group, k, label, unit]) => (
-            <label key={`${group}.${k}`} className="flex flex-col gap-1 text-[12.5px] text-muted">
+            <label key={`${group}.${k}`} className="flex flex-col gap-1 text-body text-muted">
               {label}
               <span className="flex items-center gap-1">
                 <input
@@ -80,20 +80,20 @@ export default function Settings() {
                   inputMode="numeric"
                   value={String(form[group][k] ?? '')}
                   onChange={(e) => set(group, k, e.target.value.replace(/[^\d]/g, ''))}
-                  className="w-20 rounded-[10px] border border-line2 bg-panel px-2 py-1.5 text-[13px] text-[color:var(--text)]"
+                  className="w-20 rounded-lg border border-line2 bg-panel px-2 py-1.5 text-body text-[color:var(--text)]"
                 />
                 {unit}
               </span>
             </label>
           ))}
-          <label className="flex flex-col gap-1 text-[12.5px] text-muted sm:col-span-3">
+          <label className="flex flex-col gap-1 text-body text-muted sm:col-span-3">
             MPG est. residual per account (until residuals arrive)
             <input
               aria-label="MPG est. residual per account"
               inputMode="numeric"
               value={form.mpg_est_residual_per_account == null ? '' : String(form.mpg_est_residual_per_account)}
               onChange={(e) => setForm((f) => ({ ...f, mpg_est_residual_per_account: e.target.value.replace(/[^\d]/g, '') || null }))}
-              className="w-28 rounded-[10px] border border-line2 bg-panel px-2 py-1.5 text-[13px] text-[color:var(--text)]"
+              className="w-28 rounded-lg border border-line2 bg-panel px-2 py-1.5 text-body text-[color:var(--text)]"
             />
           </label>
         </div>
@@ -102,17 +102,17 @@ export default function Settings() {
             type="button"
             onClick={save}
             disabled={!loaded}
-            className="btn-primary rounded-[10px] px-4 py-2 text-[13px] font-semibold disabled:opacity-50"
+            className="btn-primary rounded-lg px-4 py-2 text-body font-semibold disabled:opacity-50"
           >
             Save odds
           </button>
-          {status && <span className="text-[12.5px] text-muted">{status}</span>}
+          {status && <span className="text-body text-muted">{status}</span>}
         </div>
       </section>
-      <section className="mt-4 max-w-xl rounded-card border border-line bg-panel p-5 text-[13px]">
-        <h3 className="text-[15px] font-semibold">Lead temperature</h3>
+      <section className="mt-4 max-w-xl rounded-card border border-line bg-panel p-5 text-body">
+        <h3 className="text-ui font-semibold">Lead temperature</h3>
         <p className="mt-1 text-muted">Rate the leads you've already called, one at a time.</p>
-        <Link to="/rate" className="mt-2 inline-block font-semibold">
+        <Link to="/rate" className="mt-3 inline-flex min-h-[38px] items-center rounded-lg border border-line2 px-3.5 text-body font-semibold text-ink2 hover:bg-hoverbg">
           Open Rate leads
         </Link>
       </section>
