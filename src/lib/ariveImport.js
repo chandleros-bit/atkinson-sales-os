@@ -34,14 +34,20 @@ const phone10 = (v) => {
   return d.length >= 10 ? d.slice(-10) : null
 }
 
+// Arive date cell -> 'YYYY-MM-DD' or null. Exports have used both M/D/YYYY
+// and YYYY-MM-DD (sometimes in the same file), and a few columns add a time
+// ("2026-09-14 12:00:10 AM"), which is dropped. Impossible dates are null.
 export function parseUsDate(v) {
-  const m = String(v ?? '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (!m) return null
-  const [y, mo, d] = [Number(m[3]), Number(m[1]), Number(m[2])]
+  const s = String(v ?? '').trim()
+  const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/)
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[\sT]|$)/)
+  if (!us && !iso) return null
+  const [y, mo, d] = us ? [Number(us[3]), Number(us[1]), Number(us[2])] : [Number(iso[1]), Number(iso[2]), Number(iso[3])]
   const dt = new Date(0)
   dt.setUTCFullYear(y, mo - 1, d)
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null
-  return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${String(y).padStart(4, '0')}-${pad(mo)}-${pad(d)}`
 }
 
 const PLACEHOLDER_LOCALS = new Set(['aaa', '123', '456', 'lead', 'test'])
