@@ -105,8 +105,10 @@ export function Sheet({ title, subtitle, t, onClose, children }) {
         style={{ borderTop: `3px solid ${t.accent}` }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Pinned: the title and close stay in view while a long form scrolls. */}
-        <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-3 flex items-start justify-between gap-3 bg-panel px-5 pb-2 pt-5">
+        {/* Pinned: the title and close stay in view while a long form scrolls.
+            Sticky offsets count from inside the panel padding, so -top-5 cancels
+            the p-5; top-0 would push the header 20px down over the content. */}
+        <div className="sticky -top-5 z-10 -mx-5 -mt-5 mb-3 flex items-start justify-between gap-3 bg-panel px-5 pb-2 pt-5">
           <div className="min-w-0">
             <div className="text-ui font-bold">{title}</div>
             {subtitle && <div className="truncate text-caption text-muted">{subtitle}</div>}

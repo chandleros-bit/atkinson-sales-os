@@ -172,8 +172,10 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full overflow-y-auto rounded-t-2xl border border-line bg-panel p-5 sm:max-w-md sm:rounded-card"
       >
-        {/* Pinned: the title and close stay in view while a long form scrolls. */}
-        <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-3 flex items-start justify-between gap-3 bg-panel px-5 pb-2 pt-5">
+        {/* Pinned: the title and close stay in view while a long form scrolls.
+            Sticky offsets count from inside the panel padding, so -top-5 cancels
+            the p-5; top-0 would push the header 20px down over the content. */}
+        <div className="sticky -top-5 z-10 -mx-5 -mt-5 mb-3 flex items-start justify-between gap-3 bg-panel px-5 pb-2 pt-5">
           <div className="text-ui font-bold">{touch ? 'Edit visit' : 'Log visit'}</div>
           <button type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-hoverbg">✕</button>
         </div>
@@ -273,7 +275,7 @@ export default function LogVisitDialog({ onClose, preset = null, touch = null })
         {problem && <div role="alert" className="mt-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{problem}</div>}
 
         {/* Pinned: Save is always reachable without scrolling the whole form. */}
-        <div className="sticky bottom-0 -mx-5 -mb-5 mt-4 flex gap-2 border-t border-line bg-panel px-5 pb-5 pt-3">
+        <div className="sticky -bottom-5 -mx-5 -mb-5 mt-4 flex gap-2 border-t border-line bg-panel px-5 pb-5 pt-3">
           {touch && (
             <button type="button" disabled={saving} onClick={remove} className="min-h-[44px] rounded-lg border border-line2 px-4 text-body text-muted">Delete</button>
           )}
