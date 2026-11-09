@@ -39,6 +39,28 @@ describe('parseUsDate', () => {
     expect(parseUsDate('0/5/2026')).toBeNull()
     expect(parseUsDate('2/29/2024')).toBe('2024-02-29')
     expect(parseUsDate('2/29/2026')).toBeNull()
+    expect(parseUsDate('2026-02-30')).toBeNull()
+    expect(parseUsDate('2026-13-01')).toBeNull()
+  })
+  it('reads the YYYY-MM-DD dates newer Arive exports use', () => {
+    expect(parseUsDate('2026-10-05')).toBe('2026-10-05')
+    expect(parseUsDate(' 2026-11-03 ')).toBe('2026-11-03')
+  })
+  it('ignores a time after the date', () => {
+    expect(parseUsDate('2026-09-14 12:00:10 AM')).toBe('2026-09-14')
+    expect(parseUsDate('10/3/2026 4:15 PM')).toBe('2026-10-03')
+  })
+})
+
+describe('rowToLoan dates', () => {
+  it('fills funded_on and closed_on from an ISO-dated export', () => {
+    const loan = rowToLoan(
+      { 'ARIVE Loan Id': '1', 'Stage Name': 'Loan Finalized', 'Loan Funded': '2026-10-05', 'Docs Signed / Loan Closed': '2026-10-05', 'Firm Closing Date': '10/5/2026' },
+      { loName: 'x' },
+    )
+    expect(loan.funded_on).toBe('2026-10-05')
+    expect(loan.closed_on).toBe('2026-10-05')
+    expect(loan.firm_closing_on).toBe('2026-10-05')
   })
 })
 
