@@ -5,6 +5,7 @@ import { fetchAllSettled } from '../lib/fetchAll'
 import { lastTouchLabel } from '../lib/overview'
 import { filterContacts, sortContacts, NURTURE } from '../lib/contacts'
 import { formatPhone, telHref } from '../lib/phone'
+import { callAttrs } from '../lib/pendingCall'
 import PersonLink from '../components/PersonLink'
 import PageHeader from '../components/PageHeader'
 import { ScheduleButton } from '../components/ScheduleEvent'
@@ -40,7 +41,7 @@ function MobileContactRow({ r, config }) {
       {(r.phone || r.email) && (
         <div className="mt-1 truncate text-body">
           {r.phone ? (
-            <a href={telHref(r.phone)} className="font-semibold" style={{ color: 'var(--text)' }}>
+            <a href={telHref(r.phone)} {...callAttrs({ id: r.id, book: config.biz, name: r.name })} className="font-semibold" style={{ color: 'var(--text)' }}>
               {formatPhone(r.phone)}
             </a>
           ) : (

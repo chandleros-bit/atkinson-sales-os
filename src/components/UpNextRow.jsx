@@ -12,6 +12,7 @@ import { refreshPriorityQueue } from '../lib/usePriorityQueue'
 import { BUCKET_LABEL, reasonText, lastCallLabel } from '../lib/priorityQueue'
 import { followUpDate } from '../lib/crmActions'
 import { formatPhone, telHref } from '../lib/phone'
+import { callAttrs } from '../lib/pendingCall'
 import { noteFacts } from '../lib/noteFacts'
 import { useRecentNotes } from '../lib/contactNotes'
 import { useContactTasks } from '../lib/useContactTasks'
@@ -176,7 +177,7 @@ function ActionsSheet({ row, onClose }) {
         {!snoozing ? (
           <div className="flex flex-col gap-2">
             {tel && (
-              <a href={tel} className="flex min-h-[44px] items-center justify-center rounded-lg bg-[color:var(--text)] text-ui font-bold text-white">
+              <a href={tel} {...callAttrs({ id: row.id, book: row.business_id, name: row.name })} className="flex min-h-[44px] items-center justify-center rounded-lg bg-[color:var(--text)] text-ui font-bold text-white">
                 Call {formatPhone(row.phone)}
               </a>
             )}
@@ -342,7 +343,7 @@ function LeadPeek({ row, rect, anchor, onClose }) {
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {tel && (
-            <a href={tel} className="flex min-h-[36px] items-center rounded-lg bg-[color:var(--chrome)] px-3.5 text-body font-semibold text-white hover:opacity-90">
+            <a href={tel} {...callAttrs({ id: row.id, book: row.business_id, name: row.name })} className="flex min-h-[36px] items-center rounded-lg bg-[color:var(--chrome)] px-3.5 text-body font-semibold text-white hover:opacity-90">
               Call
             </a>
           )}
@@ -415,7 +416,7 @@ function DenseRow({ row }) {
         </div>
         <div className="mt-1 flex min-w-0 items-center gap-2.5 overflow-hidden whitespace-nowrap text-body leading-[18px] text-muted">
           {phone && (
-            <a href={tel} onClick={stop} aria-label={`Call ${row.name || 'lead'} at ${phone}`} className="num flex-none font-semibold text-[color:var(--text)] hover:underline">
+            <a href={tel} {...callAttrs({ id: row.id, book: row.business_id, name: row.name })} onClick={stop} aria-label={`Call ${row.name || 'lead'} at ${phone}`} className="num flex-none font-semibold text-[color:var(--text)] hover:underline">
               {phone}
             </a>
           )}
@@ -445,7 +446,7 @@ function DenseRow({ row }) {
       {/* Actions stacked: a tall Call (dial) beside Log call, note, follow-up and stage, two to a row. */}
       <div className="flex flex-none items-stretch gap-[3px]" onClick={stop}>
         {tel ? (
-          <a href={tel} title={`Call ${phone}`} aria-label={`Call ${row.name || 'lead'}`} className="grid min-h-[47px] w-10 place-items-center rounded-lg bg-[color:var(--chrome)] text-white hover:opacity-90">
+          <a href={tel} {...callAttrs({ id: row.id, book: row.business_id, name: row.name })} title={`Call ${phone}`} aria-label={`Call ${row.name || 'lead'}`} className="grid min-h-[47px] w-10 place-items-center rounded-lg bg-[color:var(--chrome)] text-white hover:opacity-90">
             <Icon name="phone" size={17} strokeWidth={1.9} />
           </a>
         ) : (
@@ -515,7 +516,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
           <div className="num mt-0.5 text-body font-semibold text-muted">{phone}</div>
         ) : (
           <a
-            href={tel}
+            href={tel} {...callAttrs({ id: row.id, book: row.business_id, name: row.name })}
             aria-label={`Call ${row.name || 'lead'} at ${phone}`}
             className="num mt-0.5 inline-block text-body font-semibold text-muted hover:text-[color:var(--text)] hover:underline"
           >
@@ -549,7 +550,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
   return (
     <div className="flex items-center gap-2 border-b border-line py-3 last:border-b-0">
       {mobile && tel ? (
-        <a href={tel} className="flex min-w-0 flex-1 items-center" aria-label={`Call ${row.name}`}>
+        <a href={tel} {...callAttrs({ id: row.id, book: row.business_id, name: row.name })} className="flex min-w-0 flex-1 items-center" aria-label={`Call ${row.name}`}>
           {body}
         </a>
       ) : (
@@ -559,7 +560,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
       {!mobile && !compact && (
         <div className="hidden flex-none items-center gap-1 lg:flex">
           {tel && (
-            <a href={tel} className="grid h-10 place-items-center rounded-lg px-2.5 text-body font-semibold text-muted hover:bg-hoverbg" title={`Call ${phone}`}>
+            <a href={tel} {...callAttrs({ id: row.id, book: row.business_id, name: row.name })} className="grid h-10 place-items-center rounded-lg px-2.5 text-body font-semibold text-muted hover:bg-hoverbg" title={`Call ${phone}`}>
               Call
             </a>
           )}

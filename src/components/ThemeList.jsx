@@ -5,6 +5,7 @@ import PersonLink from './PersonLink'
 import { SECTION_HEAD, SectionTitle } from './CallSection'
 import { AgentLines } from './AgentCalls'
 import { telHref } from '../lib/phone'
+import { callAttrs } from '../lib/pendingCall'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const CallIcon = () => (
@@ -60,7 +61,7 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
                 <div className="mt-0.5 text-body text-muted">{[it.label, it.hint].filter(Boolean).join(' · ')}</div>
               </div>
               {tel && (
-                <a href={tel} aria-label={`Call ${r.name || 'contact'}`} className="grid h-10 w-10 flex-none place-items-center rounded-lg text-muted hover:bg-hoverbg">
+                <a href={tel} {...callAttrs({ id: r.id, book: it.book, name: r.name })} aria-label={`Call ${r.name || 'contact'}`} className="grid h-10 w-10 flex-none place-items-center rounded-lg text-muted hover:bg-hoverbg">
                   <CallIcon />
                 </a>
               )}
