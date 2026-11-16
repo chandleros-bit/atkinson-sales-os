@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { base64url, buildClaims, pemToPkcs8 } from './google-auth.ts'
+import { base64url, buildClaims, pemToPkcs8, CALENDAR_EVENTS_SCOPE } from './google-auth.ts'
 
 describe('base64url', () => {
   it('removes padding and replaces + and / with url-safe chars', () => {
@@ -32,6 +32,11 @@ describe('buildClaims', () => {
     expect(c.iss).toBe('svc@proj.iam.gserviceaccount.com')
     expect(c.aud).toBe('https://oauth2.googleapis.com/token')
     expect(c.scope).toBe('https://www.googleapis.com/auth/spreadsheets.readonly')
+  })
+
+  it('uses the scope the caller passes (calendar push)', () => {
+    const c = buildClaims(creds, 1_700_000_000_000, CALENDAR_EVENTS_SCOPE)
+    expect(c.scope).toBe('https://www.googleapis.com/auth/calendar.events')
   })
 
   it('expires an hour out, in seconds not milliseconds', () => {

@@ -17,6 +17,7 @@ const SOURCE_LABELS = {
   'zoho-activity': { label: 'Zoho activity (MPG)', biz: 'mpg' },
   'outlook-mpg': { label: 'Outlook — MPG', biz: 'mpg' },
   'outlook-bayway': { label: 'Outlook — Bayway', biz: 'bay' },
+  'gcal-push': { label: 'Google Calendar push (calls, meetings, follow-ups)', biz: 'bay' },
   'briefing-owner': { label: 'Daily briefing (you)', biz: 'bay' },
   'briefing-owner-test': { label: 'Daily briefing (test)', biz: 'bay' },
   'briefing-assistant': { label: 'Daily briefing (Shelby)', biz: 'bay' },

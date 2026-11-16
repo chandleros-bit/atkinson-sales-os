@@ -1,12 +1,15 @@
-// Google service-account auth for the Sheets API. The ONLY asymmetric-signing
+// Google service-account auth (Google Calendar push; also the retired
+// sheets-docs-sync, which is unscheduled since migration 0057). The ONLY asymmetric-signing
 // code in this repo, kept in its own module (with its own tests) so a malformed
 // key never has to be debugged through a sync function.
 //
-// Read-only scope, and the sheet is shared with the service account as Viewer —
-// the app must never be able to write to the assistant's sheet.
+// Scope is per caller. The default is read-only Sheets, and the sheet is shared
+// with the service account as Viewer, so the docs sync can never write to the
+// assistant's sheet. gcal-push asks for CALENDAR_EVENTS_SCOPE instead.
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
+export const SHEETS_READONLY_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
+export const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events'
 const TTL_SECONDS = 3600
 
 export interface ServiceAccountCreds {
@@ -20,14 +23,18 @@ export function base64url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-export function buildClaims(creds: ServiceAccountCreds, nowMs: number) {
+export function buildClaims(
+  creds: ServiceAccountCreds,
+  nowMs: number,
+  scope: string = SHEETS_READONLY_SCOPE,
+) {
   if (!creds?.client_email) {
     throw new Error('service account JSON has no client_email')
   }
   const iat = Math.floor(nowMs / 1000)
   return {
     iss: creds.client_email,
-    scope: SCOPE,
+    scope,
     aud: TOKEN_URL,
     iat,
     exp: iat + TTL_SECONDS,
@@ -50,12 +57,12 @@ export function pemToPkcs8(pem: string): ArrayBuffer {
   return out.buffer
 }
 
-async function signJwt(creds: ServiceAccountCreds, nowMs: number): Promise<string> {
+async function signJwt(creds: ServiceAccountCreds, nowMs: number, scope: string): Promise<string> {
   const header = { alg: 'RS256', typ: 'JWT' }
   const enc = new TextEncoder()
   const unsigned =
     `${base64url(enc.encode(JSON.stringify(header)))}.` +
-    `${base64url(enc.encode(JSON.stringify(buildClaims(creds, nowMs))))}`
+    `${base64url(enc.encode(JSON.stringify(buildClaims(creds, nowMs, scope))))}`
 
   const key = await crypto.subtle.importKey(
     'pkcs8',
@@ -74,8 +81,9 @@ async function signJwt(creds: ServiceAccountCreds, nowMs: number): Promise<strin
 export async function getAccessToken(
   creds: ServiceAccountCreds,
   nowMs: number = Date.now(),
+  scope: string = SHEETS_READONLY_SCOPE,
 ): Promise<string> {
-  const jwt = await signJwt(creds, nowMs)
+  const jwt = await signJwt(creds, nowMs, scope)
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
