@@ -1,6 +1,6 @@
 // The contact card's tabs: what each one shows, as plain rows. Pure, no React,
 // no I/O (useContactCard fetches). Notes stays the first tab, as the card
-// opened before tabs; Loan is Bayway only (MPG has no loan scenario).
+// opened before tabs; Tasks completes, pushes and adds follow-ups; Loan is Bayway only (MPG has no loan scenario).
 import { noteFacts } from './noteFacts'
 import { isDocAging } from './borrowerDocs'
 import { daysSince } from './overview'
@@ -9,6 +9,7 @@ export function cardTabs(biz) {
   return [
     { id: 'notes', label: 'Notes' },
     { id: 'activity', label: 'Activity' },
+    { id: 'tasks', label: 'Tasks' },
     ...(biz === 'bay' ? [{ id: 'loan', label: 'Loan' }] : []),
     { id: 'details', label: 'Details' },
   ]
