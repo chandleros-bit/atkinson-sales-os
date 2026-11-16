@@ -13,13 +13,19 @@ can't be written to.
 - Only the owner's events are pushed, not the assistant's.
 - Window: yesterday through the next 60 days.
 
-## 1. Google Cloud (reuses the docs-sync service account if it exists)
+## 1. Google Cloud service account
 
-1. In the Google Cloud project that holds the service account used by
-   `sheets-docs-sync`, go to APIs & Services > Library and enable
+`sheets-docs-sync` was retired on 2026-11-05 (migration 0057 moved borrower
+docs into the OS and unscheduled it). Its service account and the
+`GOOGLE_SERVICE_ACCOUNT_JSON` secret may still exist and can be reused here.
+Nothing else uses them now.
+
+1. In Google Cloud, open the project that held the old docs-sync service
+   account (or make a new project), go to APIs & Services > Library and enable
    **Google Calendar API**.
-2. If there is no service account yet: create one, create a **JSON key**, and
-   set it as a secret:
+2. If that service account or its key is gone, or you'd rather start clean:
+   create a service account, create a **JSON key**, and set it as a secret
+   (this overwrites the old one, which is fine):
    `supabase secrets set GOOGLE_SERVICE_ACCOUNT_JSON="$(cat path/to/key.json)"`
 3. Copy the service account's email (`...@...iam.gserviceaccount.com`).
 

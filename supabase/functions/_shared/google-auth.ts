@@ -1,4 +1,5 @@
-// Google service-account auth (Sheets docs sync, Google Calendar push). The ONLY asymmetric-signing
+// Google service-account auth (Google Calendar push; also the retired
+// sheets-docs-sync, which is unscheduled since migration 0057). The ONLY asymmetric-signing
 // code in this repo, kept in its own module (with its own tests) so a malformed
 // key never has to be debugged through a sync function.
 //

@@ -1,8 +1,9 @@
 -- Push Sales OS calls, meetings and timed follow-ups (contact_events) to
 -- Google Calendar every 5 minutes via pg_cron. Mirrors 0008. Bearer is the
 -- public ANON key (safe to commit); gcal-push is deployed with --no-verify-jwt.
--- Until GOOGLE_CALENDAR_ID is set (GOOGLE_SERVICE_ACCOUNT_JSON already is, for
--- the docs sync), each run logs a "not set" error row on the Sync Status screen.
+-- Until GOOGLE_CALENDAR_ID and GOOGLE_SERVICE_ACCOUNT_JSON are set (the latter
+-- may be left over from the retired sheets-docs-sync), each run logs a
+-- "not set" error row on the Sync Status screen.
 -- Setup: docs/phase-gcal-push-setup.md.
 
 create extension if not exists pg_cron;
