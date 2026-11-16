@@ -24,6 +24,7 @@ import { deriveAlert } from '../lib/overview'
 import { MPG_LEAD_FLOW } from '../lib/pipeline'
 import { pipelineKpis } from '../lib/pipelineView'
 import { formatPhone, telHref } from '../lib/phone'
+import { callAttrs } from '../lib/pendingCall'
 import { DEFAULT_TARGETS, resolveTargets, monthWindow, sprintWindow, formatValue, MPG_SPRINT } from '../lib/reports'
 import { fetchLoanBundle } from '../lib/loansData'
 import { loanStats } from '../lib/loans'
@@ -482,7 +483,7 @@ function UpNextCard({ queue, loading, error }) {
                 </div>
               </div>
               {tel && (
-                <a href={tel} aria-label={`Call ${r.name || 'lead'}`} title={`Call ${formatPhone(r.phone)}`} className="grid h-[34px] w-[34px] flex-none place-items-center rounded-lg bg-[color:var(--chrome)] text-white hover:opacity-90">
+                <a href={tel} {...callAttrs({ id: r.id, book: r.business_id, name: r.name })} aria-label={`Call ${r.name || 'lead'}`} title={`Call ${formatPhone(r.phone)}`} className="grid h-[34px] w-[34px] flex-none place-items-center rounded-lg bg-[color:var(--chrome)] text-white hover:opacity-90">
                   <Icon name="phone" size={15} strokeWidth={1.9} />
                 </a>
               )}

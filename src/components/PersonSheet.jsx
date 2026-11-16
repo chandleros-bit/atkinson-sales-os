@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom'
 import { leadAddress } from '../lib/referenceLinks'
 import { noteFacts } from '../lib/noteFacts'
 import { formatPhone, telHref } from '../lib/phone'
+import { callAttrs } from '../lib/pendingCall'
 import { dueLabel } from '../lib/tasks'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { demoPerson } from '../lib/demoData'
@@ -292,7 +293,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
         <div className="flex flex-col gap-2 text-body">
           {person.company && biz === 'mpg' && <div className="font-semibold">{person.company}</div>}
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted">
-            {person.phone ? <a href={telHref(person.phone)} className="font-semibold" style={{ color: 'var(--text)' }}>{formatPhone(person.phone)}</a> : <span>No phone</span>}
+            {person.phone ? <a href={telHref(person.phone)} {...callAttrs({ id, book: biz, name: person.name })} className="font-semibold" style={{ color: 'var(--text)' }}>{formatPhone(person.phone)}</a> : <span>No phone</span>}
             {person.email && <a href={`mailto:${person.email}`}>{person.email}</a>}
           </div>
           {(h || (biz === 'bay' && person.on_board)) && (

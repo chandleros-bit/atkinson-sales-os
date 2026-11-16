@@ -4,7 +4,8 @@
 // credit_repair (Bayway parked in Credit Repair); and the Bayway weekday
 // themes (dialThemes.js): new_realtor, loan_status, past_client,
 // pre_approved, top_partner; agent_update (a buyer's / seller's agent on a
-// Tuesday loan, {borrower} = the borrower's name).
+// Tuesday loan, {borrower} = the borrower's name); after_missed /
+// after_talked (the post-call pop-up, PostCallHost).
 export const TEXTS = {
   bay: {
     a1: "Hi {first}, this is Chandler with Bayway. Just tried calling about your home loan. When's a good time to talk?",
@@ -19,6 +20,8 @@ export const TEXTS = {
     pre_approved: 'Hi {first}, checking in on the house hunt. Found anything you like yet?',
     top_partner: 'Hey {first}, Chandler here. Just checking in, anything I can help with on your deals?',
     agent_update: "Hi {first}, Chandler with Bayway. Quick check in on {borrower}'s loan. Anything you need from me?",
+    after_missed: "Hi {first}, this is Chandler with Bayway. Just tried calling. When's a good time to connect?",
+    after_talked: 'Great talking with you, {first}. Text me here anytime if anything comes up.',
   },
   mpg: {
     a1: "Hi {first}, this is Chandler with Media Payments Group. Just tried calling about your card processing. When's a good time?",
@@ -26,6 +29,8 @@ export const TEXTS = {
     a5: '{first}, quick check in. Still want to look at lowering your fees, or should I check back later?',
     a6: "Hi {first}, I'll stop reaching out for now. Text me here if you want to pick it back up.",
     nurture: 'Hey {first}, Chandler with MPG checking in. Anything I can help with on the processing side?',
+    after_missed: "Hi {first}, this is Chandler with Media Payments Group. Just tried calling. When's a good time to connect?",
+    after_talked: 'Great talking with you, {first}. Text me here anytime if anything comes up.',
   },
 }
 
