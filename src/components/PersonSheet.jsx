@@ -3,8 +3,9 @@
 // Actions, Schedule (a call or meeting, ScheduleEvent) and the CRM link, the
 // contact's upcoming calls and meetings, then tabs: Notes (the lead form's
 // first note and every note, useContactNotes), Activity (calls, texts, emails,
-// appointments), Loan (Bayway: lead form scenario and docs) and Details
-// (source, owner, dates, tags, open tasks; useContactCard). Opens from search, the Workbench,
+// appointments), Tasks (open tasks to complete or push, plus Add a follow-up;
+// ContactTasks), Loan (Bayway: lead form scenario and docs) and Details
+// (source, owner, dates, tags; useContactCard). Opens from search, the Workbench,
 // and any contact name in the app (openPerson / PersonLink).
 // Spec: docs/superpowers/specs/2026-10-19-tier1-pipeline-flow-design.md (5)
 import { Fragment, useCallback, useEffect, useState } from 'react'
@@ -34,6 +35,7 @@ import { CRM_LABEL } from '../lib/crmActions'
 import { isCadenceStage } from '../lib/dialList'
 import QuickActions, { Sheet, quickActionTone } from './QuickActions'
 import { ScheduleButton, UpcomingEvents } from './ScheduleEvent'
+import ContactTasks from './ContactTasks'
 import LogVisitDialog from './LogVisitDialog'
 
 const BOOK = { bay: 'Bayway', mpg: 'MPG' }
@@ -175,36 +177,16 @@ function LoanTab({ loan, contactId, onDocsChange, address }) {
   )
 }
 
-function DetailsTab({ rows, tasks, byAssistant = new Set() }) {
+function DetailsTab({ rows }) {
   return (
-    <div className="flex flex-col gap-3" aria-label="Details">
-      <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1.5 text-body">
-        {rows.map((r) => (
-          <Fragment key={r.k}>
-            <dt className="text-muted">{r.k}</dt>
-            <dd data-detail={r.k} className="min-w-0 break-words">{r.v}</dd>
-          </Fragment>
-        ))}
-      </dl>
-      <div>
-        <div className="mb-1.5 text-micro font-semibold uppercase tracking-wide text-dim">Open tasks</div>
-        {tasks.length === 0 ? (
-          <div className="text-body text-muted">No open tasks.</div>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {tasks.map((t) => (
-              <li key={t.id} className="flex items-baseline justify-between gap-3 text-body">
-                <span className="min-w-0 break-words">
-                  {t.title}
-                  {byAssistant.has(t.id) && <span data-by-assistant className="text-caption text-dim"> · by assistant</span>}
-                </span>
-                <span className="num flex-none text-caption text-dim">{t.due_at ? dueLabel(t.due_at) : 'No date'}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
+    <dl aria-label="Details" className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1.5 text-body">
+      {rows.map((r) => (
+        <Fragment key={r.k}>
+          <dt className="text-muted">{r.k}</dt>
+          <dd data-detail={r.k} className="min-w-0 break-words">{r.v}</dd>
+        </Fragment>
+      ))}
+    </dl>
   )
 }
 
@@ -372,6 +354,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
               >
                 {x.label}
                 {x.id === 'notes' && notes.notes.length > 0 ? <span className="num ml-1 text-dim">{notes.notes.length}{notes.more ? '+' : ''}</span> : null}
+                {x.id === 'tasks' && !extra.loading ? <span className="num ml-1 text-dim">{extra.tasks.length}</span> : null}
               </button>
             ))}
           </div>
@@ -379,7 +362,16 @@ export default function PersonSheet({ id, initial = null, onClose }) {
             {tab === 'notes' && <Notes notes={notes} crm={CRM_LABEL[biz]} />}
             {tab === 'activity' && <ActivityTab rows={extra.activity} loading={extra.loading} />}
             {tab === 'loan' && <LoanTab loan={loanView({ firstNote: notes.firstNote, board })} contactId={id} onDocsChange={load} address={leadAddress({ addresses: extra.contact?.addresses })} />}
-            {tab === 'details' && <DetailsTab rows={detailRows({ person, signal: extra.signal, contact: extra.contact })} tasks={extra.tasks} byAssistant={notes.assistantTaskIds} />}
+            {tab === 'tasks' && (
+              <ContactTasks
+                businessId={biz}
+                contactId={person.id}
+                contactName={person.name}
+                tasks={{ tasks: extra.tasks, loading: extra.loading, reload: extra.reload }}
+                byAssistant={notes.assistantTaskIds}
+              />
+            )}
+            {tab === 'details' && <DetailsTab rows={detailRows({ person, signal: extra.signal, contact: extra.contact })} />}
           </div>
         </div>
       )}

@@ -6,8 +6,8 @@ const daysAgo = (n) => new Date(NOW - n * 86400000).toISOString()
 
 describe('cardTabs', () => {
   it('Notes first; Loan only for Bayway', () => {
-    expect(cardTabs('bay').map((t) => t.id)).toEqual(['notes', 'activity', 'loan', 'details'])
-    expect(cardTabs('mpg').map((t) => t.id)).toEqual(['notes', 'activity', 'details'])
+    expect(cardTabs('bay').map((t) => t.id)).toEqual(['notes', 'activity', 'tasks', 'loan', 'details'])
+    expect(cardTabs('mpg').map((t) => t.id)).toEqual(['notes', 'activity', 'tasks', 'details'])
   })
 })
 

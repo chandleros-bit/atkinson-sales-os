@@ -1,6 +1,7 @@
-// A lead's open tasks inside a pop-up (the Workbench quick look and the Work
-// item sheet): each completable or pushable, plus Add a follow-up. The host
-// owns useContactTasks so its tab bar can show the count.
+// A lead's open tasks inside a pop-up (the Workbench quick look, the Work
+// item sheet and the contact card): each completable or pushable, plus Add a follow-up. The host
+// owns the task list ({ tasks, loading, reload }) so its tab bar can show the
+// count. byAssistant: task ids the assistant login created, marked as such.
 import { refreshPriorityQueue } from '../lib/usePriorityQueue'
 import { dueLabel, dueDayKey } from '../lib/tasks'
 import { dayKey } from '../lib/calendar'
@@ -31,7 +32,7 @@ export function PopupTabs({ label, tabs, tab, onTab }) {
 
 export const taskCount = (tasks) => (tasks.loading ? null : tasks.tasks.length)
 
-export default function ContactTasks({ businessId, contactId, contactName, tasks }) {
+export default function ContactTasks({ businessId, contactId, contactName, tasks, byAssistant }) {
   const today = dayKey(new Date().toISOString())
   const changed = () => {
     tasks.reload()
@@ -46,7 +47,10 @@ export default function ContactTasks({ businessId, contactId, contactName, tasks
         return (
           <div key={t.id} data-peek-task className="flex items-center gap-2 border-b border-hoverbg py-2 last:border-b-0">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-body font-semibold">{t.title || 'Task'}</div>
+              <div className="truncate text-body font-semibold">
+                {t.title || 'Task'}
+                {byAssistant?.has(t.id) && <span data-by-assistant className="text-caption font-normal text-dim"> · by assistant</span>}
+              </div>
               <div className="text-caption" style={{ color: late ? 'var(--neg-ink)' : 'var(--muted)' }}>
                 {dueLabel(t.due_at)}
                 {late ? ' · overdue' : ''}

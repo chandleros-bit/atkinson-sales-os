@@ -200,7 +200,7 @@ describe('contact card tabs', () => {
 
   it('opens on Notes, with the stage step, health pills and priority score above the tabs', async () => {
     const dialog = await open()
-    expect([...dialog.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Notes2', 'Activity', 'Loan', 'Details'])
+    expect([...dialog.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Notes2', 'Activity', 'Tasks1', 'Loan', 'Details'])
     expect(tab(dialog, 'Notes').getAttribute('aria-selected')).toBe('true')
     expect(dialog.querySelector('[data-stage-step]').getAttribute('data-stage-step')).toBe('5')
     expect(dialog.querySelector('[data-health="overdue"]')).not.toBe(null)
@@ -226,12 +226,25 @@ describe('contact card tabs', () => {
     expect(look.getAttribute('href')).toBe('/reference?tab=links&address=3042%20Oak%20Forest%20Dr%2C%20Houston%2C%20TX%2077018')
   })
 
-  it('Details shows source, owner, tags and open tasks', async () => {
+  it('Tasks lists open tasks with complete and push, plus Add a follow-up', async () => {
+    const dialog = await open()
+    await pick(dialog, 'Tasks')
+    const rows = dialog.querySelectorAll('[data-peek-task]')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].textContent).toContain('Call about W2')
+    expect(rows[0].querySelector('[aria-label="Complete task"]')).not.toBe(null)
+    expect(rows[0].querySelector('[aria-label="Push task"]')).not.toBe(null)
+    const panel = dialog.querySelector('[aria-label="Tasks"]')
+    expect(panel.querySelector('[aria-label="Schedule follow-up"]')).not.toBe(null)
+    expect(panel.textContent).toContain('Add a follow-up')
+  })
+
+  it('Details shows source, owner and tags', async () => {
     const dialog = await open()
     await pick(dialog, 'Details')
     expect(dialog.querySelector('[data-detail="Lead source"]').textContent).toBe('LendingFlow')
     expect(dialog.querySelector('[data-detail="Owner"]').textContent).toBe('Chandler Atkinson')
     expect(dialog.querySelector('[data-detail="Tags"]').textContent).toBe('DSCR')
-    expect(dialog.querySelector('[aria-label="Details"]').textContent).toContain('Call about W2')
+    expect(dialog.querySelector('[aria-label="Details"]').textContent).not.toContain('Call about W2')
   })
 })
