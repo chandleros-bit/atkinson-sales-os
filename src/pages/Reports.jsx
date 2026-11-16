@@ -517,15 +517,16 @@ function computeValues(tab, biz, data) {
     const win = monthWindow()
     const arive = ariveFor(data, biz)
     // Board columns from the FUB stage tags (bay-stages.ts).
-    const stageCounts = deriveStageCounts(data.activeRows, ['Application/Estimate Sent', 'Application Received', 'Disclosed'])
+    const stageCounts = deriveStageCounts(data.activeRows, ['Application/Estimate Sent', 'Application Received', 'Pre-Approved', 'Disclosed'])
     const dbTotal =
       biz === 'all' ? data.bayContacts + data.mpgContacts
       : biz === 'bay' ? data.bayContacts
       : data.mpgContacts
     return {
       ...manual,
-      // Disclosed files were pre-approved first (they sat in Application Received).
-      pre_approvals: stageCounts['Application Received'] + stageCounts.Disclosed,
+      // Application Received counts as pre-approval production, as before the
+      // Pre-Approved column; Disclosed files were pre-approved first.
+      pre_approvals: stageCounts['Application Received'] + stageCounts['Pre-Approved'] + stageCounts.Disclosed,
       applications: stageCounts['Application/Estimate Sent'],
       loans_closed: arive.loans_closed,
       loan_volume: arive.loan_volume,

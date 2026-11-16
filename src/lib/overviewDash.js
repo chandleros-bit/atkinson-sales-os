@@ -17,7 +17,7 @@ import { isLostStage } from './pipeline'
 import { isScenario } from './loans'
 
 export const CHART_DAYS = 30
-export const PRODUCTION_STAGES = new Set(['Application/Estimate Sent', 'Application Received', 'Disclosed'])
+export const PRODUCTION_STAGES = new Set(['Application/Estimate Sent', 'Application Received', 'Pre-Approved', 'Disclosed'])
 const TOUCH_TYPES = new Set(['call', 'text', 'email'])
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 

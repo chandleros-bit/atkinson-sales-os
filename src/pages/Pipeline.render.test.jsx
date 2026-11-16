@@ -154,7 +154,7 @@ describe('Pipeline drag between stages', () => {
   it('shows every Bayway column, empty ones as drop zones', async () => {
     await mount()
     expect([...document.querySelectorAll('[data-stage]')].map((e) => e.getAttribute('data-stage'))).toEqual([
-      'New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Disclosed', 'Nurture / Credit Repair',
+      'New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Pre-Approved', 'Disclosed', 'Nurture / Credit Repair',
     ])
     expect(column('Attempted').textContent).toContain('Drop a lead here')
     expect(cardEl('a').getAttribute('draggable')).toBe('true')
@@ -456,7 +456,7 @@ describe('Pipeline on a phone', () => {
       await mount()
       const tabs = [...document.querySelectorAll('[role="tablist"][aria-label="Stage"] [role="tab"]')]
       expect(tabs.map((t) => t.textContent)).toEqual([
-        'New Lead1', 'Attempted0', 'Contacted/Working1', 'Application/Estimate Sent0', 'Application Received0', 'Disclosed0', 'Nurture / Credit Repair0',
+        'New Lead1', 'Attempted0', 'Contacted/Working1', 'Application/Estimate Sent0', 'Application Received0', 'Pre-Approved0', 'Disclosed0', 'Nurture / Credit Repair0',
       ])
       expect([...document.querySelectorAll('[data-stage]')].map((e) => e.getAttribute('data-stage'))).toEqual(['New Lead'])
       await act(async () => tabs[2].click())

@@ -565,7 +565,7 @@ describe('QuickActions: Move stage', () => {
     await click(byLabel('Move stage'))
     const options = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')]
     expect(options.map((b) => b.textContent.replace('Now', ''))).toEqual([
-      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received', 'Disclosed', 'Nurture', 'Credit Repair', 'Lost',
+      'New Lead', 'Attempted', 'Contacted/Working', 'Estimate Sent', 'Application Sent', 'Application Received', 'Pre-Approved', 'Disclosed', 'Nurture', 'Credit Repair', 'Lost',
     ])
     expect(options.filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent.replace('Now', '')))
       .toEqual(['Estimate Sent', 'Application Sent'])

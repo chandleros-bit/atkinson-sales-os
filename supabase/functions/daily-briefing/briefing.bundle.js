@@ -47,6 +47,9 @@ var BAY_STAGES = [
   "Contacted/Working",
   "Application/Estimate Sent",
   "Application Received",
+  // Tag `Pre-Approved`: the application is reviewed and the borrower is
+  // pre-approved, not yet disclosed.
+  "Pre-Approved",
   // Tag `Disclosed`: past Application Received, on its way to closing. Will
   // move to an Under Contract pipeline once that exists.
   "Disclosed",
@@ -56,6 +59,7 @@ var BAY_STAGES = [
   "Nurture / Credit Repair"
 ];
 var PARKED = "Nurture / Credit Repair";
+var PRE_APPROVED = "Pre-Approved";
 var DISCLOSED = "Disclosed";
 var LOST = "Lost";
 var STAGE_TAGS = {
@@ -63,6 +67,7 @@ var STAGE_TAGS = {
   "Contacted/Working": ["working estimate"],
   "Application/Estimate Sent": ["estimate sent", "application sent"],
   "Application Received": ["application received", "need docs", "under contract"],
+  [PRE_APPROVED]: ["pre-approved"],
   Disclosed: ["disclosed"],
   "Nurture / Credit Repair": ["credit repair", "nurture"],
   [LOST]: ["lost"]
@@ -81,24 +86,31 @@ var STAGE_TARGETS = [
     tag: "application received",
     keep: ["application received", "need docs", "under contract"]
   },
-  // Disclosed keeps the application's tags (need docs, under contract...) for
-  // the Under Contract pipeline to come.
+  // Pre-Approved and Disclosed keep the application's tags (need docs, under
+  // contract...) for the Under Contract pipeline to come; Disclosed also keeps
+  // Pre-Approved (the pre-approval check-in theme reads it).
+  {
+    key: "pre_approved",
+    label: "Pre-Approved",
+    stage: PRE_APPROVED,
+    tag: "Pre-Approved",
+    keep: ["pre-approved"],
+    carry: ["application received", "need docs", "under contract"]
+  },
   {
     key: "disclosed",
     label: "Disclosed",
     stage: DISCLOSED,
     tag: "Disclosed",
     keep: ["disclosed"],
-    carry: ["application received", "need docs", "under contract"]
+    carry: ["application received", "need docs", "under contract", "pre-approved"]
   },
   // Two ways to park, one column: picking one swaps out the other's tag.
   { key: "nurture", label: "Nurture", stage: PARKED, tag: "Nurture", keep: ["nurture"] },
   { key: "credit_repair", label: "Credit Repair", stage: PARKED, tag: "Credit Repair", keep: ["credit repair"] },
   { key: "lost", label: "Lost", stage: LOST, tag: "Lost", keep: ["lost"] }
 ];
-var TAG_TARGETS = [
-  { key: "pre_approved", label: "Pre-Approved", tag: "Pre-Approved", additive: true }
-];
+var TAG_TARGETS = [];
 var TARGET = Object.fromEntries([...STAGE_TARGETS, ...TAG_TARGETS].map((t) => [t.key, t]));
 
 // src/lib/pipeline.js
@@ -284,6 +296,8 @@ var DEFAULT_RULES = {
     "Contacted/Working": 7,
     "Application/Estimate Sent": 7,
     "Application Received": 14,
+    // Pre-approved buyers are house hunting (Pre-approval check-in theme).
+    "Pre-Approved": null,
     // Waiting on closing, tracked in the Workbench Disclosed group.
     Disclosed: null,
     "Nurture / Credit Repair": null
@@ -676,7 +690,7 @@ function loanStats(loans, rates, win) {
 }
 
 // src/lib/overviewDash.js
-var PRODUCTION_STAGES = /* @__PURE__ */ new Set(["Application/Estimate Sent", "Application Received", "Disclosed"]);
+var PRODUCTION_STAGES = /* @__PURE__ */ new Set(["Application/Estimate Sent", "Application Received", "Pre-Approved", "Disclosed"]);
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var pad2 = (n) => String(n).padStart(2, "0");
 var keyOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;

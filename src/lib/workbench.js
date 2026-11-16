@@ -4,8 +4,8 @@
 //
 //   Estimates to Work (Bayway)        leads in Contacted/Working (tag Working Estimate)
 //   Applications to Review (Bayway)   leads in Application Received, until
-//                                     Review complete tags them Pre-Approved
-//                                     or moves them to Disclosed in FUB
+//                                     Review complete moves them to Pre-Approved
+//                                     or Disclosed in FUB
 //   Disclosed (Bayway)                leads in Disclosed, tracked to closing
 //                                     (until an Under Contract pipeline exists)
 //   Statement/Proposal Review (MPG)   open Zoho tasks about statements or a

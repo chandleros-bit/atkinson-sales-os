@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { BAY_STAGES, STAGE_TARGETS, REVIEWED_TAGS, bayStageFromTags, retagForTarget, targetForStage } from './bay-stages.ts'
 
 describe('BAY_STAGES', () => {
-  it('lists the seven columns in board order', () => {
-    expect(BAY_STAGES).toEqual(['New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Disclosed', 'Nurture / Credit Repair'])
+  it('lists the eight columns in board order', () => {
+    expect(BAY_STAGES).toEqual(['New Lead', 'Attempted', 'Contacted/Working', 'Application/Estimate Sent', 'Application Received', 'Pre-Approved', 'Disclosed', 'Nurture / Credit Repair'])
   })
 })
 
@@ -46,6 +46,15 @@ describe('bayStageFromTags', () => {
     expect(bayStageFromTags(['Disclosed', 'Lost'], 'Lead')).toBe('Lost')
     expect(bayStageFromTags(['Disclosed'], 'Closed')).toBe(null)
   })
+  it('puts a Pre-Approved-tagged lead in Pre-Approved, between Application Received and Disclosed', () => {
+    expect(bayStageFromTags(['Pre-Approved'], 'Lead')).toBe('Pre-Approved')
+    expect(bayStageFromTags(['application received', 'need docs', ' pre-approved '], 'Lead')).toBe('Pre-Approved')
+    expect(bayStageFromTags(['Pre-Approved'], 'Pre-Qualified')).toBe('Pre-Approved')
+    expect(bayStageFromTags(['Pre-Approved', 'Disclosed'], 'Lead')).toBe('Disclosed')
+    expect(bayStageFromTags(['Pre-Approved', 'Credit Repair'], 'Lead')).toBe('Nurture / Credit Repair')
+    expect(bayStageFromTags(['Pre-Approved', 'Lost'], 'Lead')).toBe('Lost')
+    expect(bayStageFromTags(['Pre-Approved'], 'Closed')).toBe(null)
+  })
   it('treats Pre-Qualified as Application Received', () => {
     expect(bayStageFromTags([], 'Pre-Qualified')).toBe('Application Received')
     expect(bayStageFromTags(['attempted'], 'Pre-Qualified')).toBe('Application Received')
@@ -66,9 +75,12 @@ describe('bayStageFromTags', () => {
 describe('retagForTarget', () => {
   const others = ['DSCR', 'Active', 'HOT']
 
-  it('adds the Pre-Approved review tag without moving the lead', () => {
+  it('moves to Pre-Approved keeping the application tags and dropping earlier and later ones', () => {
     expect(retagForTarget(['DSCR', 'application received', 'need docs'], 'pre_approved')).toEqual(['DSCR', 'application received', 'need docs', 'Pre-Approved'])
     expect(retagForTarget(['application received', 'pre-approved'], 'pre_approved')).toEqual(['application received', 'pre-approved'])
+    expect(retagForTarget(['attempted', 'Nurture', 'DSCR'], 'pre_approved')).toEqual(['DSCR', 'Pre-Approved'])
+    expect(retagForTarget(['Pre-Approved', 'Disclosed', 'under contract'], 'pre_approved')).toEqual(['Pre-Approved', 'under contract'])
+    expect(retagForTarget(['Pre-Approved', 'application received'], 'application_received')).toEqual(['application received'])
   })
   it('moves to Disclosed keeping the application tags (for the Under Contract pipeline) and dropping earlier ones', () => {
     expect(retagForTarget(['application received'], 'disclosed')).toEqual(['application received', 'Disclosed'])
@@ -115,8 +127,8 @@ describe('retagForTarget', () => {
   it('rejects an unknown target', () => {
     expect(() => retagForTarget([], 'closed')).toThrow(/Unknown stage target/)
   })
-  it('lists ten targets, Disclosed after Application Received, Nurture and Credit Repair as two, Lost last', () => {
-    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'disclosed', 'nurture', 'credit_repair', 'lost'])
+  it('lists eleven targets, Pre-Approved then Disclosed after Application Received, Nurture and Credit Repair as two, Lost last', () => {
+    expect(STAGE_TARGETS.map((t) => t.key)).toEqual(['new_lead', 'attempted', 'working', 'estimate_sent', 'application_sent', 'application_received', 'pre_approved', 'disclosed', 'nurture', 'credit_repair', 'lost'])
     expect(STAGE_TARGETS.filter((t) => t.stage === 'Nurture / Credit Repair').map((t) => t.label)).toEqual(['Nurture', 'Credit Repair'])
   })
 })
@@ -131,6 +143,7 @@ describe('targetForStage', () => {
     expect(targetForStage(['estimate sent'], 'Nurture')).toBe(null)
     expect(targetForStage(['Nurture'], 'Lead')).toBe('nurture')
     expect(targetForStage(['Disclosed'], 'Pre-Qualified')).toBe('disclosed')
+    expect(targetForStage(['need docs', 'Pre-Approved'], 'Lead')).toBe('pre_approved')
     expect(targetForStage(['credit repair'], 'Lead')).toBe('credit_repair')
   })
 })
