@@ -43,6 +43,8 @@ export const DEFAULT_RULES = {
     'Contacted/Working': 7,
     'Application/Estimate Sent': 7,
     'Application Received': 14,
+    // Pre-approved buyers are house hunting (Pre-approval check-in theme).
+    'Pre-Approved': null,
     // Waiting on closing, tracked in the Workbench Disclosed group.
     Disclosed: null,
     'Nurture / Credit Repair': null,

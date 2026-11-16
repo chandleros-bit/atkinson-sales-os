@@ -6,8 +6,8 @@
 //   mpg_task     Done -> completes the Zoho task
 //   application  Mark reviewed -> hidden for 3 days, or until its missing docs
 //                change or the lead re-enters the stage. Update > Review
-//                complete sends the outcome to FUB: Pre-Approved (tag; off
-//                review for good), Disclosed (moves to the Disclosed stage),
+//                complete sends the outcome to FUB: Pre-Approved or Disclosed
+//                (moves to that stage; off review for good),
 //                Nurture or Credit Repair (parked),
 //                Trash (Lost)
 //   custom       Done
@@ -37,7 +37,7 @@ const STATUS = [
 ]
 // Review complete outcomes (applications): crm-action set_stage targets.
 const OUTCOMES = [
-  { key: 'pre_approved', label: 'Pre-Approved', done: (n) => `${n} tagged Pre-Approved in FollowUpBoss` },
+  { key: 'pre_approved', label: 'Pre-Approved', done: (n) => `${n} moved to Pre-Approved in FollowUpBoss` },
   { key: 'disclosed', label: 'Disclosed', done: (n) => `${n} moved to Disclosed in FollowUpBoss` },
   { key: 'nurture', label: 'Nurture', done: (n) => `${n} tagged Nurture in FollowUpBoss` },
   { key: 'credit_repair', label: 'Credit Repair', done: (n) => `${n} tagged Credit Repair in FollowUpBoss` },

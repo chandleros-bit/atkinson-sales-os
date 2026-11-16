@@ -377,7 +377,7 @@ describe('Workbench', () => {
     await act(async () => button(dialog(), 'Save').click())
     await act(async () => {})
     expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a1', payload: { target: 'pre_approved' } })
-    expect(document.body.textContent).toContain('Ivy Application tagged Pre-Approved in FollowUpBoss')
+    expect(document.body.textContent).toContain('Ivy Application moved to Pre-Approved in FollowUpBoss')
     expect(writes.at(-1)).toMatchObject({ op: 'upsert', body: { source_key: 'application:a1', status: 'done', notes: 'Sent PA letter' } })
   })
 
