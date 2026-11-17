@@ -113,7 +113,7 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
           contactId={it.id}
           contactName={r.name}
           hasPhone={!!r.phone}
-          stage={it.book === 'bay' ? r.stage : null}
+          stage={r.stage}
           cadence={it.kind === 'attempt'}
           only={[]}
           autoOpen="call"

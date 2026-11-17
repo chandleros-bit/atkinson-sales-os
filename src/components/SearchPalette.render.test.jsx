@@ -90,7 +90,7 @@ const settle = (ms = 220) => act(async () => new Promise((r) => setTimeout(r, ms
 const ok = (data) => Promise.resolve({ data, error: null })
 
 const jo = { id: 'c1', business_id: 'bay', name: 'Jo Ramirez', company: null, phone: '7135550142', email: null, stage: 'New Lead', on_board: true, crm_profile_url: 'https://fub/1' }
-const kim = { id: 'c2', business_id: 'mpg', name: 'Jo Kim', company: 'Kim Deli', phone: null, email: 'jo@deli.test', stage: 'Open', on_board: true, crm_profile_url: 'https://zoho/2' }
+const kim = { id: 'c2', business_id: 'mpg', name: 'Jo Kim', company: 'Kim Deli', phone: null, email: 'jo@deli.test', stage: 'Not Contacted', on_board: true, crm_profile_url: 'https://zoho/2' }
 
 beforeEach(() => {
   document.body.innerHTML = ''
@@ -166,7 +166,7 @@ describe('SearchPalette', () => {
 
   it('picks with the arrow keys and Enter, and opens the person sheet', async () => {
     rpc.mockImplementation(() => ok([jo, kim]))
-    DATA.board.c2 = { id: 'c2', stage: 'Open', open_task_count: 0, oldest_open_due_at: null, stage_since: null, crm_created_at: null, last_outbound_call_at: null }
+    DATA.board.c2 = { id: 'c2', stage: 'Not Contacted', open_task_count: 0, oldest_open_due_at: null, stage_since: null, crm_created_at: null, last_outbound_call_at: null }
     await mount()
     await act(async () => openSearch())
     await type('jo')
@@ -175,9 +175,9 @@ describe('SearchPalette', () => {
     await key(input(), 'Enter')
     expect(palette()).toBe(null)
     const sheet = document.querySelector('[role="dialog"][aria-label="Jo Kim"]')
-    expect(sheet.textContent).toContain('MPG · Open')
+    expect(sheet.textContent).toContain('MPG · Not Contacted')
     expect(sheet.textContent).toContain('jo@deli.test')
-    // MPG Open is on the call cadence: its next step is the next attempt.
+    // MPG Not Contacted is on the call cadence: its next step is the next attempt.
     expect(sheet.textContent).toContain('Call cadence')
     expect(sheet.textContent).toContain('Open in Zoho')
     expect(sheet.querySelector('[aria-label="Log call"]')).not.toBe(null)

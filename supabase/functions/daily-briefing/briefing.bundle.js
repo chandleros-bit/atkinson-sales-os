@@ -113,16 +113,40 @@ var STAGE_TARGETS = [
 var TAG_TARGETS = [];
 var TARGET = Object.fromEntries([...STAGE_TARGETS, ...TAG_TARGETS].map((t) => [t.key, t]));
 
-// src/lib/pipeline.js
-var MPG_LEAD_FLOW = [
-  "Not Contacted",
-  "Open",
-  "Attempted to Contact",
-  "Contacted",
-  "Contact in Future",
-  "Pre-Qualified",
-  "Qualified"
+// supabase/functions/_shared/mpg-stages.ts
+var MPG_STAGE_TARGETS = [
+  { key: "not_contacted", label: "Not Contacted", status: "Not Contacted", aliases: [] },
+  // Attempted: called, not reached yet.
+  {
+    key: "follow_up",
+    label: "Initial Lead Follow Up",
+    status: "Initial lead follow up",
+    aliases: ["attempted to contact", "follow up", "reschedule"]
+  },
+  // In contact, working on the proposal.
+  { key: "open", label: "Open", status: "Open", aliases: ["contacted", "contact in future", "pre-qualified", "qualified"] },
+  {
+    key: "submitted",
+    label: "Submitted",
+    status: "Submitted",
+    aliases: ["application complete", "pending", "conditional approval", "mpa pending follow up", "mpa conditional approval follow up", "mpa no response follow up"]
+  },
+  { key: "approved", label: "Approved", status: "Approved", aliases: [] },
+  { key: "closed_non_compatible", label: "Closed Non-Compatible", status: "Closed non-compatible", aliases: ["declined", "closed lost"] },
+  { key: "nurture", label: "Nurture", status: "Nurture", aliases: [] }
 ];
+var MPG_STAGES = MPG_STAGE_TARGETS.map((t) => t.label);
+var norm = (s) => String(s ?? "").trim().toLowerCase();
+var BY_STATUS = /* @__PURE__ */ new Map();
+for (const t of MPG_STAGE_TARGETS) {
+  BY_STATUS.set(norm(t.status), t);
+  BY_STATUS.set(norm(t.label), t);
+  for (const a of t.aliases) BY_STATUS.set(a, t);
+}
+var BY_KEY = Object.fromEntries(MPG_STAGE_TARGETS.map((t) => [t.key, t]));
+
+// src/lib/pipeline.js
+var MPG_LEAD_FLOW = MPG_STAGES;
 var LOST_KEYWORDS = [
   "lost",
   "dead",
@@ -131,13 +155,16 @@ var LOST_KEYWORDS = [
   "denied",
   "junk",
   "unqualified",
-  "not qualified"
+  "not qualified",
+  // MPG's Closed Non-Compatible.
+  "non-compatible"
 ];
 function isLostStage(stage) {
   const s = (stage || "").toLowerCase();
   return LOST_KEYWORDS.some((k) => s.includes(k));
 }
 var BAY_PATH = BAY_STAGES.slice(0, BAY_STAGES.indexOf("Application Received") + 1);
+var MPG_PATH = MPG_STAGES.slice(0, MPG_STAGES.indexOf("Approved") + 1);
 
 // src/lib/leadRatings.js
 var DEFAULT_CLOSE_OFFSET = { hot: 1, warm: 2, cold: 3 };
@@ -176,7 +203,7 @@ var DAY = 24 * HOUR;
 var ATTEMPTS = 6;
 var NURTURE_CALLS = 2;
 var BAY_CADENCE = /* @__PURE__ */ new Set(["New Lead", "Attempted"]);
-var MPG_CADENCE = /* @__PURE__ */ new Set(["Not Contacted", "Open", "Attempted to Contact"]);
+var MPG_CADENCE = /* @__PURE__ */ new Set(["Not Contacted", "Initial Lead Follow Up"]);
 var PARKED2 = "Nurture / Credit Repair";
 function isCadenceStage(stage, book) {
   if (book === "bay") return BAY_CADENCE.has(stage);
@@ -300,15 +327,19 @@ var DEFAULT_RULES = {
     "Pre-Approved": null,
     // Waiting on closing, tracked in the Workbench Disclosed group.
     Disclosed: null,
-    "Nurture / Credit Repair": null
+    "Nurture / Credit Repair": null,
+    // MPG's end-of-road stages (mpg-stages.ts).
+    Approved: null,
+    "Closed Non-Compatible": null,
+    Nurture: null
   },
   // Minutes before a new, uncalled lead's timer turns red (board + tab title).
   speed_to_lead_minutes: 5,
   daily_cap: 15,
   use_crm_last_activity_fallback: true,
-  mpg_active_statuses: ["Open", "Pending", "Initial lead follow up"],
+  mpg_active_statuses: ["Initial Lead Follow Up", "Open", "Submitted"],
   mpg_hot_statuses: [],
-  mpg_dead_statuses: [],
+  mpg_dead_statuses: ["Closed Non-Compatible"],
   bay_partner_stages: ["Realtors"],
   bay_excluded_stages: ["Nurture", "Closed", "Lost"]
 };
@@ -435,7 +466,7 @@ function reasonText(row, now = Date.now()) {
 }
 
 // src/lib/cardHealth.js
-var SPEED_STAGES = /* @__PURE__ */ new Set(["New Lead", "Not Contacted", "Open"]);
+var SPEED_STAGES = /* @__PURE__ */ new Set(["New Lead", "Not Contacted"]);
 function formatElapsed(minutes) {
   if (minutes < 60) return `${minutes}m`;
   if (minutes < 48 * 60) {
@@ -651,8 +682,8 @@ var STAGE_GROUPS = [
   { key: "funded", label: "Funded", stages: ["Loan Funded", "Broker Check Received", "Loan Finalized"] },
   { key: "adverse", label: "Adverse", stages: ["Adverse"] }
 ];
-var norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
-var GROUP_OF = new Map(STAGE_GROUPS.flatMap((g) => g.stages.map((s) => [norm(s), g.key])));
+var norm2 = (s) => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+var GROUP_OF = new Map(STAGE_GROUPS.flatMap((g) => g.stages.map((s) => [norm2(s), g.key])));
 
 // src/lib/loans.js
 var DEFAULT_RATES = { lo_name: "Chandler Dean Atkinson", primary_pct: 1.25, assisted_pct: 0.75 };

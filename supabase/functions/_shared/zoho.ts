@@ -5,6 +5,7 @@
 // is the crm-action write path (see docs/phase-writeback-setup.md).
 // See docs/phase5-zoho-setup.md.
 
+import { mpgStageFromStatus } from './mpg-stages.ts'
 import { withRetry429 } from './retry.ts'
 
 const DEFAULT_ACCOUNTS_HOST = 'https://accounts.zoho.com'
@@ -222,7 +223,8 @@ export function mapContact(rec, kind) {
     email: rec.Email || null,
     phone: rec.Phone || rec.Mobile || null,
     owner,
-    person_stage: kind === 'Leads' ? rec.Lead_Status || null : null,
+    // The board label (mpg-stages.ts): Zoho's Lead Status, normalized.
+    person_stage: kind === 'Leads' ? mpgStageFromStatus(rec.Lead_Status) : null,
     last_touch_at: rec.Last_Activity_Time || rec.Modified_Time || null,
     raw: rec,
     updated_at: new Date().toISOString(),

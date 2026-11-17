@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase'
 import { useWritebackFlags, invokeCrmAction } from '../lib/writeback'
 import { showToast } from './Toaster'
 import { STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
+import { MPG_STAGE_TARGETS } from '../../supabase/functions/_shared/mpg-stages.ts'
 import { dueLabel } from '../lib/tasks'
 import { isCadenceStage } from '../lib/dialList'
 import {
@@ -373,7 +374,8 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
     setNextStep(k)
     setNextTouched(true)
   }
-  const reasons = businessId === 'bay' ? NO_NEXT_STEP_REASONS : NO_NEXT_STEP_REASONS.filter((r) => r !== PARK_REASON)
+  // Moving to Nurture parks the lead: FUB's Nurture tag, or Zoho's Nurture status.
+  const reasons = NO_NEXT_STEP_REASONS
   const advance = callStageAdvance(businessId, stage)
   const parking = nextStep === 'none' && reason === PARK_REASON
   const nextReady =
@@ -517,7 +519,9 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
 
       {advance && !parking && (
         <div data-stage-advance className="mt-2 text-body text-muted">
-          Moves {contactName || 'the lead'} from New Lead to <span className="font-semibold text-[color:var(--text)]">Attempted</span> in FollowUpBoss.
+          Moves {contactName || 'the lead'} from {stage} to{' '}
+          <span className="font-semibold text-[color:var(--text)]">{businessId === 'mpg' ? 'Initial Lead Follow Up' : 'Attempted'}</span> in{' '}
+          {businessId === 'mpg' ? 'Zoho' : 'FollowUpBoss'}.
         </div>
       )}
 
@@ -621,9 +625,11 @@ function PushForm({ businessId, task, t, onSuccess, onPending, onFailed }) {
   )
 }
 
-// Move a Bayway lead between board columns. Writes FUB workflow tags via
-// crm-action set_stage (bay-stages.ts). Estimate Sent and Application Sent
-// share a column but are separate tags (Smart Lists 04 / 05).
+// Move a lead between board columns via crm-action set_stage. Bayway writes
+// FUB workflow tags (bay-stages.ts): Estimate Sent and Application Sent share
+// a column but are separate tags (Smart Lists 04 / 05). MPG writes Zoho's
+// Lead Status (mpg-stages.ts), one per column.
+const MPG_MOVE_TARGETS = MPG_STAGE_TARGETS.map((t) => ({ key: t.key, label: t.label, stage: t.label }))
 function StageForm({ businessId, contactId, stage, t, onSuccess }) {
   // Tell the caller which target moved, so it can offer a next step.
   const sent = useRef(null)
@@ -671,7 +677,7 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
   return (
     <>
       <div className="flex flex-col gap-2">
-        {STAGE_TARGETS.map((target) => {
+        {(businessId === 'mpg' ? MPG_MOVE_TARGETS : STAGE_TARGETS).map((target) => {
           const current = target.stage === stage
           return (
             <button
@@ -689,7 +695,11 @@ function StageForm({ businessId, contactId, stage, t, onSuccess }) {
           )
         })}
       </div>
-      {busy && <div className="mt-3 text-body text-muted">Updating tags in FollowUpBoss…</div>}
+      {busy && (
+        <div className="mt-3 text-body text-muted">
+          {businessId === 'mpg' ? 'Updating Lead Status in Zoho…' : 'Updating tags in FollowUpBoss…'}
+        </div>
+      )}
       <ResultBox result={result} onRetry={retry} busy={busy} />
     </>
   )
@@ -827,7 +837,7 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
       {contactId && show('followup') && (
         <IconButton t={t} small={small} name="followup" label="Schedule follow-up" onClick={() => setOpen('followup')} />
       )}
-      {contactId && businessId === 'bay' && stage && show('stage') && (
+      {contactId && stage && show('stage') && (
         <IconButton t={t} small={small} name="stage" label="Move stage" onClick={() => setOpen('stage')} />
       )}
       {task && show('done') && <IconButton t={t} small={small} name="done" label="Complete task" onClick={complete} />}

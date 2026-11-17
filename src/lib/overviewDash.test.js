@@ -77,9 +77,9 @@ describe('monthValues and kpiCards', () => {
     const mv = monthValues({ biz: 'mpg', metrics, deals, activities, pipeline, now: NOW })
     expect(mv.loansClosed).toBe(0)
     expect(mv.calls).toBe(1)
-    const cards = kpiCards({ biz: 'mpg', values: mv, targets, mpgRows: [{ stage: 'Open' }, { stage: 'Qualified' }, { stage: 'Lost' }] })
+    const cards = kpiCards({ biz: 'mpg', values: mv, targets, mpgRows: [{ stage: 'Open' }, { stage: 'Submitted' }, { stage: 'Closed Non-Compatible' }] })
     expect(cards.map((c) => c.id)).toEqual(['residual', 'closed', 'calls', 'open_leads'])
-    expect(cards[3]).toMatchObject({ value: 2, delta: { text: '1 qualified' } })
+    expect(cards[3]).toMatchObject({ value: 2, delta: { text: '1 submitted' } })
   })
 })
 

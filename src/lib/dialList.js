@@ -17,7 +17,8 @@ const DAY = 24 * HOUR
 export const ATTEMPTS = 6
 const NURTURE_CALLS = 2
 const BAY_CADENCE = new Set(['New Lead', 'Attempted'])
-const MPG_CADENCE = new Set(['Not Contacted', 'Open', 'Attempted to Contact'])
+// MPG: not reached yet (mpg-stages.ts). Open means in contact, off the cadence.
+const MPG_CADENCE = new Set(['Not Contacted', 'Initial Lead Follow Up'])
 const PARKED = 'Nurture / Credit Repair'
 
 // Stages still on the 6-attempt call cadence. Their next step is the next

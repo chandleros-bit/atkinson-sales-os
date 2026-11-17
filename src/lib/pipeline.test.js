@@ -19,9 +19,14 @@ describe('LOAN_FLOW_ORDER', () => {
 })
 
 describe('MPG_LEAD_FLOW', () => {
-  it('leads with the live Open bucket and standard Zoho statuses', () => {
-    expect(MPG_LEAD_FLOW).toContain('Open')
-    expect(MPG_LEAD_FLOW.indexOf('Open')).toBeLessThan(MPG_LEAD_FLOW.indexOf('Contacted'))
+  it('is the MPG board order (Zoho Lead Status)', () => {
+    expect(MPG_LEAD_FLOW).toEqual([
+      'Not Contacted', 'Initial Lead Follow Up', 'Open', 'Submitted', 'Approved', 'Closed Non-Compatible', 'Nurture',
+    ])
+  })
+  it('reads Closed Non-Compatible as a lost stage', () => {
+    expect(isLostStage('Closed Non-Compatible')).toBe(true)
+    expect(isLostStage('Nurture')).toBe(false)
   })
 })
 
@@ -132,6 +137,13 @@ describe('dropTargetFor', () => {
   })
   it('has no target for a stage that is not a Bayway column', () => {
     expect(dropTargetFor('Somewhere Else')).toBe(null)
+    expect(dropTargetFor('Submitted')).toBe(null)
+  })
+  it('drops onto an MPG column as that Lead Status', () => {
+    expect(dropTargetFor('Initial Lead Follow Up', 'mpg')).toEqual({ key: 'follow_up' })
+    expect(dropTargetFor('Closed Non-Compatible', 'mpg')).toEqual({ key: 'closed_non_compatible' })
+    expect(dropTargetFor('Nurture', 'mpg')).toEqual({ key: 'nurture' })
+    expect(dropTargetFor('Attempted', 'mpg')).toBe(null)
   })
 })
 
@@ -157,9 +169,16 @@ describe('buildColumns sortCards', () => {
 
 describe('stageProgress', () => {
   it('steps New Lead through Application Received', () => {
-    expect(stageProgress('New Lead')).toEqual({ step: 1, of: 5, pct: 20 })
-    expect(stageProgress('Contacted/Working')).toEqual({ step: 3, of: 5, pct: 60 })
-    expect(stageProgress('Application Received')).toEqual({ step: 5, of: 5, pct: 100 })
+    expect(stageProgress('New Lead')).toEqual({ step: 1, of: 5, pct: 20, book: 'bay' })
+    expect(stageProgress('Contacted/Working')).toEqual({ step: 3, of: 5, pct: 60, book: 'bay' })
+    expect(stageProgress('Application Received')).toEqual({ step: 5, of: 5, pct: 100, book: 'bay' })
+  })
+  it('steps MPG Not Contacted through Approved', () => {
+    expect(stageProgress('Not Contacted')).toEqual({ step: 1, of: 5, pct: 20, book: 'mpg' })
+    expect(stageProgress('Submitted')).toEqual({ step: 4, of: 5, pct: 80, book: 'mpg' })
+    expect(stageProgress('Approved')).toEqual({ step: 5, of: 5, pct: 100, book: 'mpg' })
+    expect(stageProgress('Closed Non-Compatible')).toBeNull()
+    expect(stageProgress('Nurture')).toBeNull()
   })
   it('null off the path', () => {
     expect(stageProgress('Nurture / Credit Repair')).toBeNull()

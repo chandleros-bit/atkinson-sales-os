@@ -278,9 +278,9 @@ export default function PersonSheet({ id, initial = null, onClose }) {
             {person.phone ? <a href={telHref(person.phone)} {...callAttrs({ id, book: biz, name: person.name })} className="font-semibold" style={{ color: 'var(--text)' }}>{formatPhone(person.phone)}</a> : <span>No phone</span>}
             {person.email && <a href={`mailto:${person.email}`}>{person.email}</a>}
           </div>
-          {(h || (biz === 'bay' && person.on_board)) && (
+          {(h || person.on_board) && (
             <div className="flex flex-wrap items-center gap-2">
-              {biz === 'bay' && person.on_board && <StageProgress stage={person.stage} />}
+              {person.on_board && <StageProgress stage={person.stage} />}
               <HealthPills h={h} />
             </div>
           )}
@@ -308,7 +308,7 @@ export default function PersonSheet({ id, initial = null, onClose }) {
             contactId={person.id}
             contactName={person.name}
             hasPhone={!!person.phone}
-            stage={biz === 'bay' && person.on_board ? person.stage : null}
+            stage={person.on_board ? person.stage : null}
             cadence={isCadenceStage(person.stage, biz)}
             openTaskCount={board?.open_task_count}
             onDone={() => {

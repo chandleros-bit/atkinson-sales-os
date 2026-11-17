@@ -57,7 +57,7 @@ export function demoBayPipeline() {
 export function demoMpgLeads() {
   return [
     { id: 'm1', business_id: 'mpg', name: 'Chef Rasi', company: 'Craft Pita', email: null, phone: '(832) 804-9056', stage: 'Open', last_touch_at: null, crm_profile_url: '#' },
-    { id: 'm2', business_id: 'mpg', name: 'Chris Lee', company: 'Heights Auto', email: 'chris@example.com', phone: '(832) 555-0133', stage: 'Contacted', last_touch_at: ago(1), crm_profile_url: '#' },
+    { id: 'm2', business_id: 'mpg', name: 'Chris Lee', company: 'Heights Auto', email: 'chris@example.com', phone: '(832) 555-0133', stage: 'Initial Lead Follow Up', last_touch_at: ago(1), crm_profile_url: '#' },
     { id: 'm3', business_id: 'mpg', name: 'Owner ?', company: 'Barnaby’s Cafe', email: 'x@example.com', phone: '(832) 831-8296', stage: 'Qualified', last_touch_at: ago(1), crm_profile_url: '#' },
   ]
 }

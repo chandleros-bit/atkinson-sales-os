@@ -48,14 +48,18 @@ export const DEFAULT_RULES = {
     // Waiting on closing, tracked in the Workbench Disclosed group.
     Disclosed: null,
     'Nurture / Credit Repair': null,
+    // MPG's end-of-road stages (mpg-stages.ts).
+    Approved: null,
+    'Closed Non-Compatible': null,
+    Nurture: null,
   },
   // Minutes before a new, uncalled lead's timer turns red (board + tab title).
   speed_to_lead_minutes: 5,
   daily_cap: 15,
   use_crm_last_activity_fallback: true,
-  mpg_active_statuses: ['Open', 'Pending', 'Initial lead follow up'],
+  mpg_active_statuses: ['Initial Lead Follow Up', 'Open', 'Submitted'],
   mpg_hot_statuses: [],
-  mpg_dead_statuses: [],
+  mpg_dead_statuses: ['Closed Non-Compatible'],
   bay_partner_stages: ['Realtors'],
   bay_excluded_stages: ['Nurture', 'Closed', 'Lost'],
 }

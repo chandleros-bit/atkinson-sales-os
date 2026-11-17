@@ -1,7 +1,7 @@
 // Analytics: how consistently you call (a 26-week heatmap of outbound calls,
 // shaded against the busiest day, with days at the call goal counted) and
 // which lead sources turn into
-// applications, funded loans and commission (Bayway) or qualified merchants
+// applications, funded loans and commission (Bayway) or approved merchants
 // (MPG), against what each source cost. Both follow the business filter.
 // Logic lives in lib/analytics.js and lib/roi.js.
 import { useEffect, useMemo, useState } from 'react'
@@ -354,7 +354,7 @@ export default function Analytics() {
             </div>
           )}
           {inBook('bay') && <RoiTable title="Bayway · FollowUpBoss" book="bay" rateLabel="To app / estimate" roi={tables.bay} ink="var(--bay)" />}
-          {inBook('mpg') && <RoiTable title="MPG · Zoho" book="mpg" rateLabel="To qualified" roi={tables.mpg} ink="var(--mpg)" />}
+          {inBook('mpg') && <RoiTable title="MPG · Zoho" book="mpg" rateLabel="To approved" roi={tables.mpg} ink="var(--mpg)" />}
           {spendOpen && (
             <SpendSheet biz={biz} leads={data.leads} aliases={data.aliases} spend={data.spend} onClose={() => setSpendOpen(false)} onSaved={reloadRoi} />
           )}

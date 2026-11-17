@@ -5,22 +5,14 @@ import { sortByAttention } from './overview'
 // Bayway columns, from the FUB tag mapping shared with crm-action
 // (docs/superpowers/specs/2026-10-19-bayway-stage-tags-design.md).
 import { BAY_STAGES, STAGE_TARGETS } from '../../supabase/functions/_shared/bay-stages.ts'
+import { MPG_STAGES, MPG_STAGE_TARGETS } from '../../supabase/functions/_shared/mpg-stages.ts'
 
 export const LOAN_FLOW_ORDER = BAY_STAGES
 
-// MPG (Zoho) leads use lead-status buckets, not the loan flow. 'Open' is the
-// live/new bucket in Media Payments Group's Zoho; the rest are the standard
-// Zoho Leads picklist. Unknown statuses fall in alphabetically after these,
-// so the board stays correct even if Chandler adds a custom status.
-export const MPG_LEAD_FLOW = [
-  'Not Contacted',
-  'Open',
-  'Attempted to Contact',
-  'Contacted',
-  'Contact in Future',
-  'Pre-Qualified',
-  'Qualified',
-]
+// MPG (Zoho) columns: Zoho's Lead Status, normalized to these labels
+// (supabase/functions/_shared/mpg-stages.ts, shared with crm-action). Unknown
+// statuses fall in alphabetically after these.
+export const MPG_LEAD_FLOW = MPG_STAGES
 
 export const LOST_KEYWORDS = [
   'lost',
@@ -31,6 +23,8 @@ export const LOST_KEYWORDS = [
   'junk',
   'unqualified',
   'not qualified',
+  // MPG's Closed Non-Compatible.
+  'non-compatible',
 ]
 
 export function isLostStage(stage) {
@@ -38,14 +32,18 @@ export function isLostStage(stage) {
   return LOST_KEYWORDS.some((k) => s.includes(k))
 }
 
-// How far a Bayway lead is through the dashboard's part of the loan: New Lead
-// is step 1, Application Received step 5 (the LOS takes it from there).
-// Nurture, Lost and unknown stages aren't on the path: null.
+// How far a lead is along its book's path. Bayway: New Lead is step 1,
+// Application Received step 5 (the LOS takes it from there). MPG: Not
+// Contacted to Approved. Nurture, Lost, Closed and unknown stages aren't on
+// the path: null. Stage names don't overlap between the books.
 const BAY_PATH = BAY_STAGES.slice(0, BAY_STAGES.indexOf('Application Received') + 1)
+const MPG_PATH = MPG_STAGES.slice(0, MPG_STAGES.indexOf('Approved') + 1)
 export function stageProgress(stage) {
-  const i = BAY_PATH.indexOf(stage)
-  if (i < 0) return null
-  return { step: i + 1, of: BAY_PATH.length, pct: Math.round(((i + 1) / BAY_PATH.length) * 100) }
+  for (const [book, path] of [['bay', BAY_PATH], ['mpg', MPG_PATH]]) {
+    const i = path.indexOf(stage)
+    if (i >= 0) return { step: i + 1, of: path.length, pct: Math.round(((i + 1) / path.length) * 100), book }
+  }
+  return null
 }
 
 // rows: pipeline rows ({ id, stage, last_touch_at, ... }) from v_active_pipeline
@@ -89,12 +87,14 @@ export function buildColumns(rows, flowOrder = LOAN_FLOW_ORDER, { showAllFlow = 
   })
 }
 
-// Dragging a Bayway card onto a column = a Move stage to that column. Two
+// Dragging a card onto a column = a Move stage to that column. Two Bayway
 // columns hold two tags each, so a drop there asks which one:
 // Application/Estimate Sent (Smart Lists 04 / 05) and Nurture / Credit Repair.
-// null: not a Bayway column (no drop).
-export function dropTargetFor(stage) {
-  const targets = STAGE_TARGETS.filter((t) => t.stage === stage)
+// Every MPG column is one Zoho Lead Status. null: not a column of that book
+// (no drop).
+export function dropTargetFor(stage, book = 'bay') {
+  const targets = (book === 'mpg' ? MPG_STAGE_TARGETS.map((t) => ({ ...t, stage: t.label })) : STAGE_TARGETS)
+    .filter((t) => t.stage === stage)
   if (targets.length === 0) return null
   if (targets.length === 1) return { key: targets[0].key }
   return { choose: targets.map((t) => ({ key: t.key, label: t.label })) }

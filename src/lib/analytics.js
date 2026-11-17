@@ -104,8 +104,10 @@ export function mpgOutcome(row) {
   if (isLostStage(s)) return 'lost'
   const i = MPG_STEP[s]
   if (i == null) return 'other'
-  if (i >= MPG_STEP['Pre-Qualified']) return 'qualified'
-  if (i >= MPG_STEP.Contacted) return 'contacted'
+  if (s === 'Nurture') return 'nurture'
+  if (i >= MPG_STEP.Approved) return 'approved'
+  if (i >= MPG_STEP.Submitted) return 'submitted'
+  if (i >= MPG_STEP.Open) return 'contacted'
   return 'new'
 }
 
@@ -125,11 +127,12 @@ export const SOURCE_COLUMNS = {
   mpg: {
     outcome: mpgOutcome,
     cols: [
-      { id: 'contacted', label: 'Contacted', of: ['contacted', 'qualified'] },
-      { id: 'qualified', label: 'Qualified', of: ['qualified'] },
-      { id: 'lost', label: 'Lost', of: ['lost'] },
+      { id: 'contacted', label: 'Contacted', of: ['contacted', 'submitted', 'approved'] },
+      { id: 'submitted', label: 'Submitted', of: ['submitted', 'approved'] },
+      { id: 'approved', label: 'Approved', of: ['approved'] },
+      { id: 'lost', label: 'Closed', of: ['lost'] },
     ],
-    rate: 'qualified',
+    rate: 'approved',
   },
 }
 

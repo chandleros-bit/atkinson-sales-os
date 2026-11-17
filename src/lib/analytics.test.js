@@ -60,13 +60,11 @@ describe('bayOutcome', () => {
 
 describe('mpgOutcome', () => {
   it('reads the Zoho lead status', () => {
-    expect(['Not Contacted', 'Contacted', 'Qualified', 'Junk Lead', 'Weird'].map((s) => mpgOutcome({ person_stage: s }))).toEqual([
-      'new',
-      'contacted',
-      'qualified',
-      'lost',
-      'other',
-    ])
+    expect(
+      ['Not Contacted', 'Initial Lead Follow Up', 'Open', 'Submitted', 'Approved', 'Closed Non-Compatible', 'Nurture', 'Weird'].map((s) =>
+        mpgOutcome({ person_stage: s }),
+      ),
+    ).toEqual(['new', 'new', 'contacted', 'submitted', 'approved', 'lost', 'nurture', 'other'])
   })
 })
 
@@ -94,8 +92,8 @@ describe('sourceTable', () => {
     expect(t.rows[0].counts).toEqual({ contacted: 1, apps: 1, lost: 1 })
     expect(t.total).toMatchObject({ leads: 5, rate: 40, counts: { contacted: 3, apps: 2, received: 1, lost: 1 } })
   })
-  it('MPG uses qualified for the rate', () => {
-    const t = sourceTable([{ business_id: 'mpg', source: 'Web', created: '2026-09-01T12:00:00', person_stage: 'Qualified' }], 'mpg', from)
+  it('MPG uses approved for the rate', () => {
+    const t = sourceTable([{ business_id: 'mpg', source: 'Web', created: '2026-09-01T12:00:00', person_stage: 'Approved' }], 'mpg', from)
     expect(t.total).toMatchObject({ leads: 1, rate: 100 })
   })
 })

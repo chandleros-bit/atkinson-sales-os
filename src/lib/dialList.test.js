@@ -68,17 +68,17 @@ describe('dialItem: lead attempts', () => {
 })
 
 describe('dialItem: MPG runs on calls alone', () => {
-  const mpg = (o) => lead({ business_id: 'mpg', stage: 'Open', ...o })
-  it('uses Open / Not Contacted / Attempted to Contact as the cadence and stops on any other status', () => {
+  const mpg = (o) => lead({ business_id: 'mpg', stage: 'Not Contacted', ...o })
+  it('uses Not Contacted / Initial Lead Follow Up as the cadence and stops on any other status', () => {
     expect(dialItem(mpg(), at(26, 9, 1))).toMatchObject({ kind: 'attempt', step: 1 })
-    expect(dialItem(mpg({ ...called(2, at(26, 10)), stage: 'Attempted to Contact' }), at(27))).toMatchObject({ step: 3 })
-    expect(dialItem(mpg({ stage: 'Contacted' }), at(27))).toBe(null)
+    expect(dialItem(mpg({ ...called(2, at(26, 10)), stage: 'Initial Lead Follow Up' }), at(27))).toMatchObject({ step: 3 })
+    expect(dialItem(mpg({ stage: 'Open' }), at(27))).toBe(null)
   })
   it('after six calls: two weekly nurture calls, then cold every 30 days', () => {
     const last = at(28, 10)
-    expect(dialItem(mpg({ ...called(6, at(20, 10), last), stage: 'Open' }), at(28, 11))).toMatchObject({ kind: 'nurture', label: 'Nurture call 1 of 2', dueAt: last + 7 * DAY, textKey: 'nurture' })
-    expect(dialItem(mpg({ ...called(7, at(13, 10), last), stage: 'Open' }), at(28, 11))).toMatchObject({ label: 'Nurture call 2 of 2' })
-    expect(dialItem(mpg({ ...called(8, at(6, 10), last), stage: 'Open' }), at(28, 11))).toMatchObject({ kind: 'cold', label: 'Cold check-in', dueAt: businessDay(last + 30 * DAY) })
+    expect(dialItem(mpg({ ...called(6, at(20, 10), last), stage: 'Initial Lead Follow Up' }), at(28, 11))).toMatchObject({ kind: 'nurture', label: 'Nurture call 1 of 2', dueAt: last + 7 * DAY, textKey: 'nurture' })
+    expect(dialItem(mpg({ ...called(7, at(13, 10), last), stage: 'Initial Lead Follow Up' }), at(28, 11))).toMatchObject({ label: 'Nurture call 2 of 2' })
+    expect(dialItem(mpg({ ...called(8, at(6, 10), last), stage: 'Initial Lead Follow Up' }), at(28, 11))).toMatchObject({ kind: 'cold', label: 'Cold check-in', dueAt: businessDay(last + 30 * DAY) })
   })
 })
 
@@ -101,7 +101,7 @@ describe('buildDialList', () => {
     lead({ id: 'new', crm_created_at: iso(at(28, 11, 55)) }), // attempt 1, speed to lead
     lead({ id: 'over', ...called(3, at(23, 10), at(26, 10)) }), // attempt 4 due 10/26... overdue
     lead({ id: 'tomorrow', ...called(2, at(28, 9), at(28, 11)) }), // attempt 3 due tomorrow
-    lead({ id: 'mpg', business_id: 'mpg', stage: 'Open' }),
+    lead({ id: 'mpg', business_id: 'mpg', stage: 'Not Contacted' }),
   ]
   it('keeps what is due by the end of today: fresh leads on top, then most recently due, then later today', () => {
     const list = buildDialList(rows, { now })

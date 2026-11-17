@@ -441,9 +441,31 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     expect((await go(stageReq('c-pq', 'lost', 41))).body.status).toBe('ok')
   })
 
-  it('refuses MPG', async () => {
+  it('refuses a Bayway stage for MPG', async () => {
     const res = await go(stageReq('c-mpg', 'attempted', 25))
-    expect(res.body.error).toMatch(/Bayway only/)
+    expect(res.body.status).toBe('refused')
+    expect(res.body.error).toBe('Unknown stage: attempted')
+  })
+
+  // MPG stages are Zoho's Lead Status (mpg-stages.ts).
+  const zohoLead = (status) => ({ id: 'L555', Last_Name: 'Ruiz', First_Name: 'Ana', Company: 'Ana Tacos', Lead_Status: status, Modified_Time: '2026-10-18T15:00:00+00:00' })
+
+  it('moves an MPG lead by setting its Lead Status, and mirrors the new stage', async () => {
+    mpg.send.setStage = vi.fn(async ({ externalId }) => ({ id: externalId, previous: 'open' }))
+    mpg.read.person = vi.fn(async () => zohoLead('Submitted'))
+    mpg.map.contact = (rec) => zohoMapContact(rec, 'Leads')
+    const res = await go(stageReq('c-mpg', 'submitted', 26))
+    expect(res.body.status).toBe('ok')
+    expect(mpg.send.setStage).toHaveBeenCalledWith({ externalId: 'L555', target: 'submitted' })
+    expect(res.body.results[0]).toMatchObject({ step: 'set_stage', ok: true, previous_target: 'open' })
+    expect(db.tables.contacts.find((c) => c.external_id === 'L555')).toMatchObject({ person_stage: 'Submitted' })
+  })
+
+  it('refuses an unknown MPG stage before anything is sent', async () => {
+    mpg.send.setStage = vi.fn()
+    const res = await go(stageReq('c-mpg', 'won', 27))
+    expect(res.body).toMatchObject({ status: 'refused', error: 'Unknown stage: won' })
+    expect(mpg.send.setStage).not.toHaveBeenCalled()
   })
 
   const parkCall = (contactId, n) => ({
@@ -460,11 +482,21 @@ describe('crm-action run: set_stage (Bayway stage tags)', () => {
     expect(db.tables.crm_actions.at(-1).request.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture' })
   })
 
-  it('refuses a Nurture park for MPG before anything is sent', async () => {
+  it('refuses a Credit Repair park for MPG before anything is sent', async () => {
     const res = await go({ ...parkCall('c-mpg', 31), payload: { ...parkCall('c-mpg', 31).payload, set_stage: 'credit_repair' } })
     expect(res.body.status).toBe('refused')
-    expect(res.body.error).toMatch(/Bayway only/)
+    expect(res.body.error).toBe('Unknown stage: credit_repair')
     expect(mpg.send.logCall).not.toHaveBeenCalled()
+  })
+
+  it('logs an MPG call, then parks the lead in Nurture', async () => {
+    mpg.send.setStage = vi.fn(async ({ externalId }) => ({ id: externalId }))
+    mpg.read.person = vi.fn(async () => zohoLead('Nurture'))
+    mpg.map.contact = (rec) => zohoMapContact(rec, 'Leads')
+    const res = await go({ ...parkCall('c-mpg', 33), payload: { ...parkCall('c-mpg', 33).payload, set_stage: 'nurture' } })
+    expect(res.body.status).toBe('ok')
+    expect(res.body.results.map((r) => r.step)).toEqual(['log_call', 'set_stage'])
+    expect(mpg.send.setStage).toHaveBeenCalledWith({ externalId: 'L555', target: 'nurture' })
   })
 
   it('does not park when the call itself fails', async () => {
@@ -871,7 +903,8 @@ describe('crm-action run: promote_prospect (MPG walk-in to a Zoho Open lead)', (
     expect(mpg.send.setLeadOpen).not.toHaveBeenCalled()
     expect(mpg.send.createLead).not.toHaveBeenCalled()
     expect(res.body.results[0]).toMatchObject({ lead_id: 'Z-PEND', linked: true })
-    expect(db.tables.contacts.find((c) => c.external_id === 'Z-PEND')).toMatchObject({ person_stage: 'Pending' })
+    // Zoho keeps Pending; the board reads it as Submitted (mpg-stages.ts).
+    expect(db.tables.contacts.find((c) => c.external_id === 'Z-PEND')).toMatchObject({ person_stage: 'Submitted' })
   })
 
   it('returns the candidates when more than one lead matches, and writes nothing', async () => {

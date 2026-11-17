@@ -17,6 +17,7 @@ import { getAccessToken, zohoGet, zohoSend, mapContact as zohoMapContact } from 
 import {
   buildZohoCall, buildZohoNote, buildZohoTask, buildZohoTaskUpdate, buildZohoLead, zohoCreatedId,
 } from '../_shared/zoho-write.ts'
+import { mpgTarget, mpgTargetForStatus } from '../_shared/mpg-stages.ts'
 import { findLeadsQuery, matchLeads, buildPromotedLead } from '../_shared/zoho-leads.ts'
 import { mapActivity as zohoMapActivity } from '../_shared/zoho-activity.ts'
 import { mapTask as zohoMapTask } from '../_shared/zoho-tasks.ts'
@@ -225,6 +226,15 @@ export function zohoAdapter(env, { db = null } = {}) {
         return matchLeads(json?.data || [], { phoneKey, company })
       },
       createLead: async (p) => ({ id: zohoCreatedId(await send('POST', 'Leads', buildPromotedLead(p))) }),
+      // Move stage = set Lead Status (mpg-stages.ts). previous: the stage it
+      // left, so an Undo can put it back.
+      setStage: async ({ externalId, target }) => {
+        const t = mpgTarget(target)
+        if (!t) throw new Error(`Unknown stage: ${target}`)
+        const lead = await readOne(`Leads/${externalId}`)
+        await send('PUT', `Leads/${externalId}`, { data: [{ Lead_Status: t.status }] })
+        return { id: String(externalId), previous: mpgTargetForStatus(lead.Lead_Status) }
+      },
       // Only ever sets Open, on an "Initial lead" being linked.
       setLeadOpen: async ({ externalId }) => {
         await send('PUT', `Leads/${externalId}`, { data: [{ Lead_Status: 'Open' }] })
@@ -233,6 +243,8 @@ export function zohoAdapter(env, { db = null } = {}) {
     },
     read: {
       lead: (id) => readOne(`Leads/${id}`),
+      // The stage mirror re-reads "the person" (run.ts); for MPG that's the lead.
+      person: (id) => readOne(`Leads/${id}`),
       call: (id) => readOne(`Calls/${id}`),
       task: (id) => readOne(`Tasks/${id}`),
       // Every note on one lead (contact card). Profiles without Notes access

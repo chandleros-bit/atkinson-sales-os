@@ -163,7 +163,7 @@ describe('buildOwnerBriefing: review fixes', () => {
   it('counts the call cadence per book and honors skips', () => {
     const d = base()
     const row = (id, business_id, stage) => ({ id, business_id, stage, outbound_calls: 0, crm_created_at: iso('2026-11-04T10:00:00Z') })
-    d.dialRows = [row('d1', 'bay', 'New Lead'), row('d2', 'mpg', 'Open'), row('d3', 'bay', 'New Lead')]
+    d.dialRows = [row('d1', 'bay', 'New Lead'), row('d2', 'mpg', 'Not Contacted'), row('d3', 'bay', 'New Lead')]
     d.dialSkips = ['d3']
     expect(buildOwnerBriefing(d, NOW).callFirst.cadence).toEqual({ bay: 1, mpg: 1 })
   })

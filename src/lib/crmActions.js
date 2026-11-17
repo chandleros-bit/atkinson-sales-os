@@ -94,7 +94,12 @@ export function defaultNextStep(outcome, hasFutureTask = false, onCadence = fals
 // Nurture needs none, a lead moved onto the call cadence (New Lead, Attempted)
 // gets its next attempt instead, and callers that don't know the open-task
 // count never prompt.
-const NO_PROMPT_TARGETS = new Set(['nurture', 'credit_repair', 'lost', 'new_lead', 'attempted'])
+// MPG: Not Contacted and Initial Lead Follow Up are its call cadence; Closed
+// Non-Compatible is the end of the road.
+const NO_PROMPT_TARGETS = new Set([
+  'nurture', 'credit_repair', 'lost', 'new_lead', 'attempted',
+  'not_contacted', 'follow_up', 'closed_non_compatible',
+])
 export function needsNextStepPrompt(targetKey, openTaskCount) {
   if (NO_PROMPT_TARGETS.has(targetKey) || openTaskCount == null) return false
   return !(openTaskCount > 0)
@@ -132,11 +137,14 @@ export function newLeadProblem(form) {
   return null
 }
 
-// The stage a logged call moves a lead to, or null. Bayway only (MPG stages
-// come from Zoho), and only forward: a New Lead becomes Attempted; a lead
-// already further along stays where it is. stage: the lead's board column.
+// The stage a logged call moves a lead to, or null. Only forward, from the
+// first column: a Bayway New Lead becomes Attempted, an MPG Not Contacted
+// lead becomes Initial Lead Follow Up. A lead further along stays where it
+// is. stage: the lead's board column.
 export function callStageAdvance(businessId, stage) {
-  return businessId === 'bay' && stage === 'New Lead' ? 'attempted' : null
+  if (businessId === 'bay' && stage === 'New Lead') return 'attempted'
+  if (businessId === 'mpg' && stage === 'Not Contacted') return 'follow_up'
+  return null
 }
 
 // form -> the crm-action request body. Throws on a form the UI should not have

@@ -1,6 +1,7 @@
-// How far a Bayway lead is from New Lead to Application Received, as five
-// segments (stageProgress in pipeline.js). Nothing for stages off that path
-// (Nurture, Lost, MPG statuses).
+// How far a lead is along its book's path, one segment per step
+// (stageProgress in pipeline.js): Bayway New Lead to Application Received,
+// MPG Not Contacted to Approved. Nothing for stages off the path (Nurture,
+// Lost, Closed Non-Compatible).
 import { stageProgress } from '../lib/pipeline'
 
 export default function StageProgress({ stage, label = false, className = '' }) {
@@ -14,7 +15,7 @@ export default function StageProgress({ stage, label = false, className = '' }) 
           <span
             key={i}
             className="h-[5px] w-[14px] rounded-full"
-            style={{ background: i < p.step ? 'var(--bay)' : 'var(--line2)' }}
+            style={{ background: i < p.step ? (p.book === 'mpg' ? 'var(--mpg)' : 'var(--bay)') : 'var(--line2)' }}
           />
         ))}
       </div>

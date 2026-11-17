@@ -197,7 +197,7 @@ function StageCell({ r, biz }) {
   return (
     <div className="min-w-0">
       <div className="truncate text-ui">{r.stage || '—'}</div>
-      {biz !== 'mpg' && <StageProgress stage={r.stage} className="mt-1.5" />}
+      <StageProgress stage={r.stage} className="mt-1.5" />
     </div>
   )
 }
@@ -274,7 +274,7 @@ function ListView({ rows, biz, rules, now }) {
             </div>
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className="text-body text-muted">{r.stage}</span>
-              {biz !== 'mpg' && <StageProgress stage={r.stage} />}
+              <StageProgress stage={r.stage} />
               <SourcePill r={r} />
             </div>
             <HealthPills h={health(r)} className="mt-2" />
@@ -347,7 +347,7 @@ function StageGroup({ col, biz, rules, now }) {
     <section aria-label={col.stage} data-group={col.stage} className="cc-card overflow-hidden">
       <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel2 px-4 py-3 sm:px-5">
         <h2 className={`text-lead font-semibold ${col.isLost ? 'text-dim' : ''}`}>{col.stage}</h2>
-        {biz !== 'mpg' && <StageProgress stage={col.stage} />}
+        <StageProgress stage={col.stage} />
         {summary && <span className="text-body font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</span>}
         <span className="num ml-auto rounded-full border border-line2 bg-panel px-2.5 text-body font-semibold text-ink2">
           {col.cards.length} {col.cards.length === 1 ? 'lead' : 'leads'}
@@ -498,7 +498,7 @@ function Card({ r, lost, biz, onDone, onPrompt, drag, health }) {
         contactId={r.id}
         contactName={r.name}
         hasPhone={!!r.phone}
-        stage={biz === 'mpg' ? null : r.stage}
+        stage={r.stage}
         openTaskCount={r.open_task_count}
         onNeedsNextStep={onPrompt ? () => onPrompt(r) : undefined}
         onDone={onDone}
@@ -554,7 +554,7 @@ function Column({ col, biz, onDone, onPrompt, drag, rules, now }) {
           </span>
         </div>
         {summary && <div className="mt-0.5 text-caption font-semibold" style={{ color: 'var(--neg-ink)' }}>{summary}</div>}
-        {biz !== 'mpg' && <StageProgress stage={col.stage} className="mt-1.5" />}
+        <StageProgress stage={col.stage} className="mt-1.5" />
       </div>
       <div className="flex min-h-[64px] flex-col gap-2 p-2">
         {cards.map((r) => (
@@ -643,16 +643,24 @@ function Board({ columns, biz, onDone, onPrompt, drag, rules, now }) {
 // Off-flow moves while dragging, so parking a lead needs no scroll to the
 // far-right column. Nurture and Credit Repair are separate FUB tags that share
 // one column. Lost asks why first and leaves the board.
-const DROP_ZONES = [
-  { key: 'nurture', stage: 'Nurture / Credit Repair', label: 'Nurture' },
-  { key: 'credit_repair', stage: 'Nurture / Credit Repair', label: 'Credit Repair' },
-  { key: 'lost', stage: 'Lost', needsReason: true },
-]
+// MPG: Nurture and Closed Non-Compatible, the two end-of-road Lead Statuses.
+const DROP_ZONES = {
+  bay: [
+    { key: 'nurture', stage: 'Nurture / Credit Repair', label: 'Nurture' },
+    { key: 'credit_repair', stage: 'Nurture / Credit Repair', label: 'Credit Repair' },
+    { key: 'lost', stage: 'Lost', needsReason: true },
+  ],
+  mpg: [
+    { key: 'nurture', stage: 'Nurture' },
+    { key: 'closed_non_compatible', stage: 'Closed Non-Compatible' },
+  ],
+}
 const PARKED_LABEL = { nurture: 'Nurture', credit_repair: 'Credit Repair' }
+const CRM_NAME = { bay: 'FollowUpBoss', mpg: 'Zoho' }
 
-function DropZones({ drag }) {
+function DropZones({ drag, biz }) {
   if (!drag?.draggingId) return null
-  const zones = DROP_ZONES.filter((z) => z.stage !== drag.draggingStage)
+  const zones = (DROP_ZONES[biz] || DROP_ZONES.bay).filter((z) => z.stage !== drag.draggingStage)
   if (zones.length === 0) return null
   return (
     <div
@@ -667,9 +675,9 @@ function DropZones({ drag }) {
             data-zone={z.key}
             className="flex min-h-[56px] min-w-[240px] items-center justify-center rounded-card border-2 border-dashed px-4 text-body font-semibold transition-colors"
             style={{
-              borderColor: over ? 'var(--bay)' : 'var(--line2)',
-              background: over ? 'var(--bay-soft)' : undefined,
-              color: over ? 'var(--bay-ink)' : 'var(--muted)',
+              borderColor: over ? `var(--${biz === 'mpg' ? 'mpg' : 'bay'})` : 'var(--line2)',
+              background: over ? `var(--${biz === 'mpg' ? 'mpg' : 'bay'}-soft)` : undefined,
+              color: over ? `var(--${biz === 'mpg' ? 'mpg' : 'bay'}-ink)` : 'var(--muted)',
             }}
             onDragOver={(e) => {
               e.preventDefault()
@@ -768,11 +776,12 @@ export default function Pipeline({ biz }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
   const [error, setError] = useState(null)
-  // Drag between stages: Bayway only, writes FUB tags via crm-action set_stage
-  // (same as Quick Actions' Move stage). Touch screens use Move stage instead.
+  // Drag between stages: writes FUB tags (Bayway) or Zoho's Lead Status (MPG)
+  // via crm-action set_stage (same as Quick Actions' Move stage). Touch
+  // screens use Move stage instead.
   const flags = useWritebackFlags()
   const { role } = useAuth() || {}
-  const canDrag = biz === 'bay' && !isDemoMode && flags.bay === true && role !== 'assistant'
+  const canDrag = (biz === 'bay' || biz === 'mpg') && !isDemoMode && flags[biz] === true && role !== 'assistant'
   const [pending, setPending] = useState({})
   const [dragging, setDragging] = useState(null)
   const [over, setOver] = useState(null)
@@ -837,15 +846,17 @@ export default function Pipeline({ biz }) {
     const res = await invokeCrmAction(
       buildActionRequest({ action: 'set_stage', contactId: row.id, target: targetKey, reason }),
     )
-    const summary = summarizeResult(res, 'bay')
+    const book = biz === 'mpg' ? 'mpg' : 'bay'
+    const summary = summarizeResult(res, book)
+    const crm = CRM_NAME[book]
     const name = row.name || 'Lead'
     // The tag move is what matters; a failed Lost note still counts as moved.
     const moved = Array.isArray(res?.results) ? res.results.find((r) => r.step === 'set_stage') : null
     if (moved?.ok) {
       const done =
-        targetKey === 'lost' ? `${name} marked Lost in FollowUpBoss`
-        : PARKED_LABEL[targetKey] ? `${name} tagged ${PARKED_LABEL[targetKey]} in FollowUpBoss`
-        : `${name} moved to ${stage} in FollowUpBoss`
+        targetKey === 'lost' ? `${name} marked Lost in ${crm}`
+        : book === 'bay' && PARKED_LABEL[targetKey] ? `${name} tagged ${PARKED_LABEL[targetKey]} in ${crm}`
+        : `${name} moved to ${stage} in ${crm}`
       showToast({ ...summary, text: summary.tone === 'ok' ? done : summary.text })
       if (needsNextStepPrompt(targetKey, row.open_task_count)) setPrompt(row)
       await load({ quiet: true })
@@ -877,7 +888,7 @@ export default function Pipeline({ biz }) {
           setDragging(null)
           setOver(null)
           if (!row || row.stage === stage || pending[row.id]) return
-          const target = dropTargetFor(stage)
+          const target = dropTargetFor(stage, biz === 'mpg' ? 'mpg' : 'bay')
           if (!target) return
           if (target.key) moveTo(row, target.key, stage)
           else setChoice({ row, stage, choices: target.choose })
@@ -903,7 +914,7 @@ export default function Pipeline({ biz }) {
     )
   }
 
-  // The draggable Bayway board shows every column, so empty stages take drops.
+  // The draggable board shows every column, so empty stages take drops.
   // A lead on its way to Lost leaves the board at once.
   const rated = withRatings(rows, ratings)
   const visible = rated.filter((r) => pending[r.id] !== 'Lost')
@@ -970,7 +981,7 @@ export default function Pipeline({ biz }) {
           )}
         </>
       )}
-      <DropZones drag={drag} />
+      <DropZones drag={drag} biz={biz} />
       {choice && (
         <PickSheet
           title={choice.stage === 'Nurture / Credit Repair' ? 'Nurture or Credit Repair?' : 'Which was sent?'}

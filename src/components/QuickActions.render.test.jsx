@@ -621,8 +621,53 @@ describe('QuickActions: Move stage', () => {
     expect(document.querySelector('[role="dialog"]')).toBe(null)
   })
 
-  it('is not offered for MPG or without a board stage', async () => {
+  it('is not offered without a board stage', async () => {
     await mount({ ...bay, stage: null })
     expect(byLabel('Move stage')).toBe(null)
+  })
+})
+
+describe('QuickActions: MPG stages (Zoho Lead Status)', () => {
+  beforeEach(() => {
+    flags.mpg = true
+    resetWritebackFlags()
+  })
+  const mpg = { businessId: 'mpg', contactId: 'c9', contactName: 'Ana Ruiz', hasPhone: true }
+  const save = () => byText('Log call')
+  const ok = () => invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'log_call', ok: true }] }, error: null })
+
+  it('lists the MPG stages with the current one marked, and sends set_stage', async () => {
+    invoke.mockResolvedValueOnce({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await mount({ ...mpg, stage: 'Open', openTaskCount: 1 })
+    await click(byLabel('Move stage'))
+    const options = [...document.querySelectorAll('[role="dialog"] button[aria-pressed]')]
+    expect(options.map((b) => b.textContent.replace('Now', ''))).toEqual([
+      'Not Contacted', 'Initial Lead Follow Up', 'Open', 'Submitted', 'Approved', 'Closed Non-Compatible', 'Nurture',
+    ])
+    expect(options.filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.textContent.replace('Now', ''))).toEqual(['Open'])
+    await click(byText('Submitted'))
+    expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'c9', payload: { target: 'submitted' } })
+    expect(document.querySelector('[role="dialog"]')).toBe(null)
+  })
+
+  it('moves a Not Contacted lead to Initial Lead Follow Up with the call', async () => {
+    ok()
+    await mount({ ...mpg, stage: 'Not Contacted' })
+    await click(byLabel('Log call'))
+    expect(document.querySelector('[data-stage-advance]').textContent).toContain('from Not Contacted to Initial Lead Follow Up in Zoho')
+    await click(byText('No Answer'))
+    await click(save())
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ outcome: 'No Answer', set_stage: 'follow_up' })
+  })
+
+  it('offers Moving to Nurture as a reason, which parks the lead in Zoho', async () => {
+    ok()
+    await mount({ ...mpg, stage: 'Open' })
+    await click(byLabel('Log call'))
+    await click(byText('Interested'))
+    await click(byText('No next step'))
+    await click(byText('Moving to Nurture'))
+    await click(save())
+    expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture', set_stage: 'nurture' })
   })
 })
