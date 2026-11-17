@@ -47,7 +47,7 @@ export function stuckFor(row, rules, now = Date.now()) {
 }
 
 // The first column of each book, where a new lead's next step is the first call.
-export const SPEED_STAGES = new Set(['New Lead', 'Not Contacted', 'Open'])
+export const SPEED_STAGES = new Set(['New Lead', 'Not Contacted'])
 
 export function formatElapsed(minutes) {
   if (minutes < 60) return `${minutes}m`

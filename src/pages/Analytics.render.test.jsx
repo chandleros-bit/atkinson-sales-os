@@ -68,7 +68,7 @@ beforeEach(() => {
     { id: 'c1', business_id: 'bay', person_stage: 'Lead', bay_source: 'LendingFlow', bay_created: daysAgo(10), tags: ['estimate sent'] },
     { id: 'c2', business_id: 'bay', person_stage: 'Lead', bay_source: 'LendingFlow', bay_created: daysAgo(20), tags: [] },
     { id: 'c3', business_id: 'bay', person_stage: 'Lead', bay_source: 'Old', bay_created: daysAgo(200), tags: [] },
-    { id: 'c4', business_id: 'mpg', person_stage: 'Qualified', mpg_source: 'Web', mpg_created: daysAgo(5), tags: null },
+    { id: 'c4', business_id: 'mpg', person_stage: 'Approved', mpg_source: 'Web', mpg_created: daysAgo(5), tags: null },
   ]
   const d = new Date()
   const key = (x) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`

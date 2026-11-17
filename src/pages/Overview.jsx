@@ -51,8 +51,10 @@ import { friendlyError } from '../lib/friendlyError'
 const BAY_MIX_STAGES = BAY_STAGES.slice(0, 5)
 const BAY_MIX_COLORS = ['#C5DDA6', '#A4C97A', '#7CAD44', '#4F7A22', '#1F2A5C']
 // Shorter names for the legend, which sits beside the donut.
-const SHORT_STAGE = { 'Application/Estimate Sent': 'App/Estimate Sent', 'Application Received': 'App Received', 'Attempted to Contact': 'Attempted', 'Contact in Future': 'Contact later' }
-const MPG_MIX_COLORS = ['#CDEBF8', '#A6DCF2', '#7CCBEB', '#4FB8E3', '#26ABE0', '#0F7AA8', '#1F2A5C']
+const SHORT_STAGE = { 'Application/Estimate Sent': 'App/Estimate Sent', 'Application Received': 'App Received', 'Initial Lead Follow Up': 'Follow Up', 'Closed Non-Compatible': 'Closed' }
+// MPG's working stages, Not Contacted to Approved (Closed and Nurture are off the mix).
+const MPG_MIX_STAGES = MPG_LEAD_FLOW.slice(0, 5)
+const MPG_MIX_COLORS = ['#CDEBF8', '#7CCBEB', '#26ABE0', '#0F7AA8', '#1F2A5C']
 const STATUS_COLOR = { hit: 'var(--chrome)', pace: 'var(--bay)', behind: '#F79009' }
 const STATUS_LABEL = { hit: 'Hit', pace: 'On pace', behind: 'Behind' }
 const DELTA_INK = { up: 'var(--pos-ink)', down: 'var(--neg-ink)', flat: 'var(--text)' }
@@ -354,7 +356,7 @@ function Donut({ slices, size = 150, center, sub, label }) {
 
 function PipelineMixCard({ biz, rows, rules }) {
   const mpg = biz === 'mpg'
-  const stages = mpg ? MPG_LEAD_FLOW : BAY_MIX_STAGES
+  const stages = mpg ? MPG_MIX_STAGES : BAY_MIX_STAGES
   const colors = mpg ? MPG_MIX_COLORS : BAY_MIX_COLORS
   const mix = pipelineMix(rows, stages)
   const kpis = pipelineKpis(rows.filter((r) => stages.includes(r.stage)), rules, mpg ? 'mpg' : 'bay')
@@ -388,7 +390,7 @@ function PipelineMixCard({ biz, rows, rules }) {
 
 function SourcesCard({ biz, sources }) {
   const max = Math.max(1, ...sources.map((s) => s.leads))
-  const rateWord = biz === 'mpg' ? 'qualified' : biz === 'bay' ? 'reached app' : 'reached app / qualified'
+  const rateWord = biz === 'mpg' ? 'approved' : biz === 'bay' ? 'reached app' : 'reached app / approved'
   return (
     <Card title="Lead Sources" sub={`New leads this month · % ${rateWord}`} link={{ to: '/analytics', label: 'Analytics' }}>
       <div className="flex flex-col gap-[13px] px-5 pb-[18px] pt-3.5">
@@ -755,7 +757,7 @@ function demoData() {
     leads: [
       { business_id: 'bay', source: 'LendingFlow', created: ago(3), person_stage: 'Lead', tags: ['Application/Estimate Sent'] },
       { business_id: 'bay', source: 'LendingFlow', created: ago(5), person_stage: 'Lead', tags: [] },
-      { business_id: 'mpg', source: 'Website', created: ago(2), person_stage: 'Contacted', tags: null },
+      { business_id: 'mpg', source: 'Website', created: ago(2), person_stage: 'Open', tags: null },
     ],
     bayPipe: demoBayPipeline(),
     deals: [

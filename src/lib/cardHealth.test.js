@@ -27,7 +27,7 @@ describe('nextStep', () => {
     expect(nextStep(row(), NOW)).toEqual({ state: 'none', text: 'No next step' })
   })
   it('a lead on the call cadence with nothing open is on the cadence, not "No next step"', () => {
-    for (const stage of ['New Lead', 'Attempted', 'Not Contacted', 'Open', 'Attempted to Contact']) {
+    for (const stage of ['New Lead', 'Attempted', 'Not Contacted', 'Initial Lead Follow Up']) {
       expect(nextStep(row({ stage }), NOW)).toEqual({ state: 'cadence', text: 'Call cadence' })
     }
     // A real task on a cadence lead still shows.
@@ -68,7 +68,7 @@ describe('stuckFor', () => {
   it('never for a lead on the call cadence', () => {
     expect(stuckFor(row({ stage: 'Attempted', stage_since: daysAgo(30) }), rules, NOW)).toBeNull()
     expect(stuckFor(row({ stage: 'New Lead', stage_since: daysAgo(30) }), rules, NOW)).toBeNull()
-    expect(stuckFor(row({ stage: 'Open', stage_since: daysAgo(30) }), rules, NOW)).toBeNull()
+    expect(stuckFor(row({ stage: 'Initial Lead Follow Up', stage_since: daysAgo(30) }), rules, NOW)).toBeNull()
   })
 })
 
@@ -105,9 +105,9 @@ describe('speedToLead', () => {
     expect(speedToLead(fresh(), rules, NOW)).toEqual({ minutes: 4, late: false, text: '4m · not called' })
     expect(speedToLead(fresh({ crm_created_at: daysAgo(0, '08:55:00') }), rules, NOW)).toEqual({ minutes: 5, late: true, text: '5m · not called' })
   })
-  it('also runs on MPG Not Contacted / Open', () => {
+  it('also runs on MPG Not Contacted, not on Open (in contact)', () => {
     expect(speedToLead(fresh({ stage: 'Not Contacted' }), rules, NOW)).not.toBeNull()
-    expect(speedToLead(fresh({ stage: 'Open' }), rules, NOW)).not.toBeNull()
+    expect(speedToLead(fresh({ stage: 'Open' }), rules, NOW)).toBeNull()
   })
   it('stops once called, outside the first column, or after new_lead_days', () => {
     expect(speedToLead(fresh({ last_outbound_call_at: daysAgo(0, '08:58:00') }), rules, NOW)).toBeNull()
@@ -142,7 +142,7 @@ describe('tab title', () => {
   it('counts late new leads across both books', () => {
     const rows = [
       row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:00:00') }),
-      row({ stage: 'Open', crm_created_at: daysAgo(0, '08:30:00') }),
+      row({ stage: 'Not Contacted', crm_created_at: daysAgo(0, '08:30:00') }),
       row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:58:00') }),
       row({ stage: 'New Lead', crm_created_at: daysAgo(0, '08:00:00'), last_outbound_call_at: daysAgo(0, '08:10:00') }),
     ]

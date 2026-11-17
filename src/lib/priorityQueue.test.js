@@ -149,7 +149,7 @@ describe('leads on the call cadence', () => {
     is_active: true, is_hot: true, stage_since: daysAgo(30), last_outbound_at: daysAgo(20), last_outbound_call_at: daysAgo(20), ...o,
   })
   it('never lands in no next step, stuck, quiet or hot going cold', () => {
-    for (const [business_id, stage] of [['bay', 'New Lead'], ['bay', 'Attempted'], ['mpg', 'Not Contacted'], ['mpg', 'Open'], ['mpg', 'Attempted to Contact']]) {
+    for (const [business_id, stage] of [['bay', 'New Lead'], ['bay', 'Attempted'], ['mpg', 'Not Contacted'], ['mpg', 'Initial Lead Follow Up']]) {
       expect(bucketsFor(cadence({ business_id, stage }), rules, NOW)).toEqual([])
     }
   })

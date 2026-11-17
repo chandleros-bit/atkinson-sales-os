@@ -187,7 +187,7 @@ function ActionsSheet({ row, onClose }) {
                 contactId={row.id}
                 contactName={row.name}
                 hasPhone={!!row.phone}
-                stage={row.business_id === 'bay' ? row.stage : null}
+                stage={row.stage}
                 cadence={isCadenceStage(row.stage, row.business_id)}
                 onDone={() => {
                   refreshPriorityQueue()
@@ -421,7 +421,7 @@ function DenseRow({ row }) {
             </a>
           )}
           {row.stage &&
-            (row.business_id === 'bay' && stageProgress(row.stage) ? (
+            (stageProgress(row.stage) ? (
               <StageProgress stage={row.stage} label className="flex-none" />
             ) : (
               <span className="flex-none">{row.stage}</span>
@@ -458,7 +458,7 @@ function DenseRow({ row }) {
           contactId={row.id}
           contactName={row.name}
           hasPhone={!!row.phone}
-          stage={row.business_id === 'bay' ? row.stage : null}
+          stage={row.stage}
           cadence={isCadenceStage(row.stage, row.business_id)}
           only={['call', 'note', 'followup', 'stage']}
           onDone={() => refreshPriorityQueue()}
@@ -526,7 +526,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
       {!compact && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-micro">
           {row.stage &&
-            (row.business_id === 'bay' && stageProgress(row.stage) ? (
+            (stageProgress(row.stage) ? (
               <StageProgress stage={row.stage} label className="rounded-full border border-line px-2 py-0.5" />
             ) : (
               <span className="rounded-full border border-line px-2 py-0.5 text-muted">{row.stage}</span>
@@ -569,7 +569,7 @@ export default function UpNextRow({ row, compact = false, dense = false }) {
             contactId={row.id}
             contactName={row.name}
             hasPhone={!!row.phone}
-                stage={row.business_id === 'bay' ? row.stage : null}
+                stage={row.stage}
                 cadence={isCadenceStage(row.stage, row.business_id)}
             only={['call', 'note', 'followup', 'stage']}
             onDone={() => refreshPriorityQueue()}

@@ -178,18 +178,19 @@ export function kpiCards({ biz, values: v, targets, mpgRows = [] }) {
     }
   } else {
     const open = mpgRows.filter((r) => !isLostStage(r.stage))
-    const qualified = open.filter((r) => r.stage === 'Pre-Qualified' || r.stage === 'Qualified').length
+    // Submitted or further (mpg-stages.ts): the application is in.
+    const submitted = open.filter((r) => r.stage === 'Submitted' || r.stage === 'Approved').length
     fourth = {
       id: 'open_leads',
       label: 'Open MPG leads',
       value: open.length,
       unit: 'count',
       goal: 0,
-      pct: open.length ? Math.round((qualified / open.length) * 100) : 0,
+      pct: open.length ? Math.round((submitted / open.length) * 100) : 0,
       tag: 'Live',
       icon: 'pipeline',
       tone: 'neutral',
-      delta: { text: `${qualified} qualified`, tone: 'flat' },
+      delta: { text: `${submitted} submitted`, tone: 'flat' },
       foot: 'Zoho leads not lost',
     }
   }
@@ -352,7 +353,7 @@ export function pipelineMix(rows, stages) {
 }
 
 // The biggest lead sources this month across the visible books, with the
-// share that reached an application (Bayway) or qualified (MPG).
+// share that reached an application (Bayway) or was approved (MPG).
 export function topSources(leads, biz, fromMs, n = 5) {
   const books = biz === 'all' ? ['bay', 'mpg'] : [biz]
   return books

@@ -15,6 +15,7 @@
 
 import { planSteps, shouldStop, overallStatus, fubPersonGone, PERSON_GONE, ACTIONS, CONTACT_ACTIONS, TASK_ACTIONS, ASSISTANT_ACTIONS, ASSISTANT_REFUSED, ASSISTANT_BAYWAY_ONLY } from './plan.ts'
 import { isStageTarget } from '../_shared/bay-stages.ts'
+import { isMpgStageTarget } from '../_shared/mpg-stages.ts'
 import { mapRelationship } from '../_shared/fub-relationships.ts'
 import { isExcludedLead } from '../_shared/zoho.ts'
 
@@ -138,9 +139,11 @@ async function finish(db, clientActionId, patch) {
   if (error) console.error(`crm_actions update failed for ${clientActionId}: ${error.message}`)
 }
 
-// Bayway stages are FUB tags (bay-stages.ts); MPG's come from Zoho.
+// Bayway stages are FUB tags (bay-stages.ts); MPG's are Zoho's Lead Status
+// (mpg-stages.ts).
 function stageRefusal(businessId, contact, key) {
-  if (businessId !== 'bay') return 'Move stage is Bayway only; MPG stages come from Zoho'
+  if (businessId === 'mpg') return isMpgStageTarget(key) ? null : `Unknown stage: ${key}`
+  if (businessId !== 'bay') return 'Move stage is Bayway and MPG only'
   if (!isStageTarget(key)) return `Unknown stage: ${key}`
   const ps = String(contact?.person_stage || '').trim().toLowerCase()
   // Pre-Qualified always reads as Application Received unless parked (Nurture / Credit Repair),
