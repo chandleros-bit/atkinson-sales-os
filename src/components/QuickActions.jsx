@@ -314,7 +314,10 @@ async function saveRatingWithToast(args) {
   else if (saved.tagError) showToast({ tone: 'error', text: `Temperature saved; FUB tag not updated: ${saved.tagError}`, retry })
 }
 
-function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, onSuccess }) {
+// Also used by the post-call pop-up (PostCallHost): noteSuffix is added under
+// the typed note on save (the text he opened in Messages), and children render
+// just above the Log call button (the pop-up's text templates).
+export function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, onSuccess, noteSuffix = '', children }) {
   const [outcome, setOutcome] = useState(null)
   const [note, setNote] = useState('')
   const [duration, setDuration] = useState('')
@@ -390,7 +393,7 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
         action: 'log_call',
         contactId,
         outcome,
-        note,
+        note: [note.trim(), noteSuffix].filter(Boolean).join('\n\n'),
         durationMin: Number(duration),
         nextStep,
         followUp: nextStep === 'follow_up' ? { dueDate, title } : null,
@@ -524,6 +527,8 @@ function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, 
           {businessId === 'mpg' ? 'Zoho' : 'FollowUpBoss'}.
         </div>
       )}
+
+      {children}
 
       <ResultBox result={result} onRetry={retry} busy={busy} />
       <SubmitButton

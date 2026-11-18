@@ -1,20 +1,29 @@
-// After a call placed from a contact's tel: link (callAttrs), the OS asks for
-// notes and offers a text through Messages (iMessage when the other person has
-// it). Mounted once in Layout, like ReminderHost.
+// After a call placed from a contact's tel: link (callAttrs), the OS asks how
+// the call went and offers a text through Messages (iMessage when the other
+// person has it). Mounted once in Layout, like ReminderHost.
 //
 // A web page can't see the call end. Tapping the link saves the call
 // (pendingCall.js); the tab going hidden marks it under way; the tab coming
-// back, or the page reloading, opens this sheet. Save adds a note in the CRM
-// through crm-action's add_note (with "Texted: ..." when a text was opened).
-// Skip drops it. iOS never lets a page send a text on its own: the Text
-// button opens Messages filled in, and Chandler taps Send.
+// back, or the page reloading, opens this sheet. The sheet is the Log call
+// form (crm-action log_call): an outcome, the note, and a next step. Logging
+// the call is what moves a lead on the call cadence to its next attempt and
+// counts toward the day's calls; on the cadence an unanswered call defaults to
+// "Next call attempt", so No Answer + Log call is two taps. A text opened from
+// here is added to the note as "Texted: ...". Skip drops it. The assistant
+// login can't log calls, so it gets the old note-only sheet (add_note).
+// iOS never lets a page send a text on its own: the Text button opens
+// Messages filled in, and Chandler taps Send.
 import { useCallback, useEffect, useState } from 'react'
-import { Sheet, quickActionTone, inputCls } from './QuickActions'
+import { Sheet, LogCallForm, quickActionTone, inputCls } from './QuickActions'
 import { showToast } from './Toaster'
 import { invokeCrmAction } from '../lib/writeback'
 import { buildActionRequest, summarizeResult } from '../lib/crmActions'
 import { formatPhone } from '../lib/phone'
 import { textFor, smsHref } from '../lib/dialTexts'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import { quickActionsFor } from '../lib/roles'
+import { isCadenceStage } from '../lib/dialList'
 import { callFromTarget, savePendingCall, readPendingCall, markCallLeft, clearPendingCall, postCallNote } from '../lib/pendingCall'
 
 const quiet = 'min-h-[40px] rounded-lg border border-line2 px-3 text-body font-semibold text-ink2'
@@ -59,12 +68,100 @@ export default function PostCallHost() {
   return <PostCallSheet key={`${call.id}-${call.at}`} call={call} onClose={close} />
 }
 
+// The lead's board stage, for the cadence default and the New Lead ->
+// Attempted move: v_dial_contacts' stage (Bayway's is derived from FUB), else
+// the contact's own stage. undefined while loading, null when unknown.
+function useCallStage(contactId) {
+  const [stage, setStage] = useState(undefined)
+  useEffect(() => {
+    let alive = true
+    if (!supabase) {
+      setStage(null)
+      return undefined
+    }
+    const one = (q) => Promise.resolve(q).then(({ data }) => data?.[0] || null, () => null)
+    Promise.all([
+      one(supabase.from('v_dial_contacts').select('stage').eq('id', contactId).limit(1)),
+      one(supabase.from('contacts').select('person_stage').eq('id', contactId).limit(1)),
+    ]).then(([dial, contact]) => alive && setStage(dial?.stage ?? contact?.person_stage ?? null))
+    return () => {
+      alive = false
+    }
+  }, [contactId])
+  return stage
+}
+
 function PostCallSheet({ call, onClose }) {
-  const [note, setNote] = useState('')
+  const { role } = useAuth() || {}
+  const allowed = quickActionsFor(role, undefined)
+  const canLogCall = !allowed || allowed.includes('call')
   const [texted, setTexted] = useState(null)
+  const stage = useCallStage(call.id)
+  const t = quickActionTone(call.book)
+
+  const texts = <TextTemplates call={call} texted={texted} onText={setTexted} />
+  const logged = (summary, opts) => {
+    if (opts?.keepOpen) return
+    showToast(summary)
+    onClose()
+  }
+
+  return (
+    <Sheet title={`After the call with ${call.name || 'contact'}`} subtitle={formatPhone(call.phone) || call.phone} t={t} onClose={onClose}>
+      {!canLogCall ? (
+        <NoteOnly call={call} texted={texted} t={t} onClose={onClose}>{texts}</NoteOnly>
+      ) : stage === undefined ? (
+        <div className="py-6 text-center text-body text-muted">Loading…</div>
+      ) : (
+        <>
+          <LogCallForm
+            businessId={call.book}
+            contactId={call.id}
+            contactName={call.name}
+            stage={stage}
+            onCadence={isCadenceStage(stage, call.book)}
+            t={t}
+            noteSuffix={texted ? `Texted: ${texted}` : ''}
+            onSuccess={logged}
+          >
+            <div className="mt-4">{texts}</div>
+          </LogCallForm>
+          <button type="button" className={`${quiet} mt-2 w-full`} onClick={onClose}>Skip</button>
+        </>
+      )}
+    </Sheet>
+  )
+}
+
+function TextTemplates({ call, texted, onText }) {
+  return (
+    <>
+      <div className="text-caption font-semibold text-dim">Send a text</div>
+      <div className="mt-1.5 flex flex-col gap-2">
+        {TEMPLATES.map(({ key, label }) => {
+          const text = textFor(call.book, key, call.name)
+          const href = text && smsHref(call.phone, text)
+          if (!href) return null
+          return (
+            <div key={key} data-post-call-text={key} className="rounded-lg bg-panel2 px-3 py-2">
+              <div className="text-caption font-semibold text-muted">{label}</div>
+              <div className="mt-0.5 text-body">{text}</div>
+              <a href={href} onClick={() => onText(text)} className={`${quiet} mt-2 grid place-items-center bg-panel`}>
+                {texted === text ? 'Opened in Messages' : 'Text in Messages'}
+              </a>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+// Note-only sheet for logins that can't log calls (the assistant).
+function NoteOnly({ call, texted, t, onClose, children }) {
+  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const t = quickActionTone(call.book)
   const body = postCallNote(note, texted)
 
   const save = async () => {
@@ -79,7 +176,7 @@ function PostCallSheet({ call, onClose }) {
   }
 
   return (
-    <Sheet title={`After the call with ${call.name || 'contact'}`} subtitle={formatPhone(call.phone) || call.phone} t={t} onClose={onClose}>
+    <>
       <label className="text-caption font-semibold text-dim" htmlFor="post-call-note">Notes</label>
       <textarea
         id="post-call-note"
@@ -89,31 +186,12 @@ function PostCallSheet({ call, onClose }) {
         placeholder="What happened on the call?"
         className={`${inputCls} mt-1.5`}
       />
-
-      <div className="mt-4 text-caption font-semibold text-dim">Send a text</div>
-      <div className="mt-1.5 flex flex-col gap-2">
-        {TEMPLATES.map(({ key, label }) => {
-          const text = textFor(call.book, key, call.name)
-          const href = text && smsHref(call.phone, text)
-          if (!href) return null
-          return (
-            <div key={key} data-post-call-text={key} className="rounded-lg bg-panel2 px-3 py-2">
-              <div className="text-caption font-semibold text-muted">{label}</div>
-              <div className="mt-0.5 text-body">{text}</div>
-              <a href={href} onClick={() => setTexted(text)} className={`${quiet} mt-2 grid place-items-center bg-panel`}>
-                {texted === text ? 'Opened in Messages' : 'Text in Messages'}
-              </a>
-            </div>
-          )
-        })}
-      </div>
-
+      <div className="mt-4">{children}</div>
       {error && (
         <div role="alert" className="mt-3 rounded-lg border px-3 py-2 text-body" style={{ borderColor: '#f2b8b4', background: 'var(--neg-bg)', color: 'var(--neg-ink)' }}>
           {error}
         </div>
       )}
-
       <div className="mt-4 grid grid-cols-2 gap-2">
         <button type="button" className={quiet} onClick={onClose}>Skip</button>
         <button
@@ -126,6 +204,6 @@ function PostCallSheet({ call, onClose }) {
           {busy ? 'Saving…' : 'Save note'}
         </button>
       </div>
-    </Sheet>
+    </>
   )
 }
