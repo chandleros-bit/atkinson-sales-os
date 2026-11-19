@@ -73,6 +73,16 @@ async function ownerMail(db, cfg, now, ownerId) {
     fetchAll(() => db.from('work_items').select('id, business_id, kind, contact_id, title, status, waiting_on, check_back_on, due_on, created_at, done_at, contact:contacts(name)').eq('user_id', ownerId).neq('status', 'done').order('id')),
     fetchAll(() => db.from('calendar_events').select('id, source_account, title, starts_at, is_all_day').gte('starts_at', today.from).lt('starts_at', today.to).order('starts_at')),
   ])
+  // Today's past-client picks. Read on its own and never fatal: before the
+  // opportunity tables exist (migration 0065) the briefing goes out without them.
+  const pastClientPicks = await db
+    .from('opportunity_picks')
+    .select('rank, ai_note, reason_codes, contact:contacts(name)')
+    .eq('pick_date', chicagoDateKey(now))
+    .order('rank')
+    .limit(20)
+    .then(({ data, error }) => (error ? [] : (data || []).map((p) => ({ name: p.contact?.name, headline: p.ai_note?.headline, reasons: p.reason_codes }))),
+      () => [])
   const syncLatest = {}
   await Promise.all(
     CORE_SOURCES.map(async ({ source }) => {
@@ -82,7 +92,7 @@ async function ownerMail(db, cfg, now, ownerId) {
   )
   const model = buildOwnerBriefing({
     rules, targets, rates, forecastSettings, metrics, mpgMetricRows, deals, activities, yesterdayActivities, pipeline, loans, ratings, signals, dialRows,
-    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest,
+    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks,
   }, now)
   return renderOwnerBriefing(model, { appUrl: cfg.app_url || APP_URL })
 }

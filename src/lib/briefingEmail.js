@@ -7,6 +7,12 @@ const timeLabel = (t) =>
 // 'YYYY-MM-DD' -> 'Nov 6' (UTC so the date doesn't shift).
 const dayLabel = (d) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }).format(new Date(`${d}T00:00:00Z`))
 const BOOK = { bay: 'Bayway', mpg: 'MPG' }
+// Opportunity reason codes as short email labels (no figures).
+const REASON = {
+  RATE_GAP_HIGH: 'rate gap 1+ pt', RATE_GAP: 'rate gap', EQUITY_100K: 'equity $100k+', EQUITY_50K: 'equity $50k+',
+  PMI_LIKELY_REMOVABLE: 'PMI removal', INVESTOR: 'investor', MOVE_UP_WINDOW: 'move-up window', ANNIVERSARY: 'anniversary',
+  RECENT_ENGAGEMENT: 'engaged recently', KNOWN_ARM: 'ARM',
+}
 const STATUS = { hit: 'hit', pace: 'on pace', behind: 'behind' }
 const goalFmt = (g) => (v) => (g.unit === 'currency' ? money(v) : Math.round(Number(v) || 0))
 
@@ -85,6 +91,8 @@ export function renderOwnerBriefing(m, { appUrl }) {
     section('Overdue follow-ups', cf.overdue, '/tasks'),
     section('Hot, going cold', cf.hotCold, '/workbench'),
   ].filter(Boolean)
+  const pc = m.pastClients || { count: 0, top: [] }
+  const pastClients = section('Past clients to call', pc, '/bayway/opportunities')
   const sl = m.slipping
   const slipping = m.nothingSlipping
     ? []
@@ -100,6 +108,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     `Numbers\n${numbers.map((l) => `- ${l}`).join('\n')}`,
     `Today\n${today.map((l) => `- ${l}`).join('\n')}`,
     `Call first\n${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : '- Nobody waiting'}`,
+    ...(pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join('\n')] : []),
     `Slipping\n${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : 'Nothing slipping today.'}`,
   ]
   const text = plainSeparators(`${subject}\n\n${textBlocks.join('\n\n')}\n\nOpen the dashboard: ${url('/')}\n`)
@@ -143,6 +152,11 @@ export function renderOwnerBriefing(m, { appUrl }) {
     ? table([{ label: 'Name', width: '26%' }, { label: 'Why', width: '26%' }, { label: 'Detail' }, { label: 'Book', width: '14%' }], callRows)
     : `<p style="font:14px Arial,sans-serif;margin:0">Nobody waiting.</p>`
 
+  const reasonText = (codes) => (codes || []).map((c) => REASON[c] || c).join(', ')
+  const pastTable = pc.count
+    ? table([{ label: 'Name', width: '26%' }, { label: 'Why now' }, { label: 'Signals', width: '30%' }], blockRows(pc, (p) => [esc(p.name), esc(p.detail), esc(reasonText(p.reasons) || 'Check-in')]))
+    : ''
+
   const issue = (why) => (p) => [esc(p.name), esc(why), esc(p.detail || '')]
   const slipRows = [
     ...blockRows(sl.quietApps, issue('Application quiet')),
@@ -162,6 +176,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     heading('Numbers, month to date'), goalsTable, forecastTable, dayTable,
     heading('Today'), todayTable,
     heading(`Call first (${m.callFirstCount})`, url('/workbench')), callTable,
+    ...(pc.count ? [heading(`Past clients to call (${pc.count})`, url('/bayway/opportunities')), pastTable] : []),
     heading(m.nothingSlipping ? 'Slipping' : `Slipping (${slipCount})`, url('/workbench')), slipTable,
     `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url('/'), 'Open the dashboard')}</p>`,
     `</div>`,

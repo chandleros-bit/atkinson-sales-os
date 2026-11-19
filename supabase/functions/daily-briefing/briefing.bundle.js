@@ -1208,6 +1208,8 @@ function buildOwnerBriefing(data, now = Date.now()) {
     },
     today: { meetings, closings: list(closingRows, (l) => ({ name: l.borrower_name || "(no name)", date: l.firm_closing_on })) },
     callFirst,
+    // Database Opportunity Agent: today's past-client picks (opportunity_picks).
+    pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || "(no name)", detail: p.headline || "", reasons: p.reasons || [] })),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length
@@ -1272,6 +1274,18 @@ var esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").re
 var timeLabel = (t) => t === "All day" ? t : new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" }).format(new Date(t));
 var dayLabel = (d) => new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" }).format(/* @__PURE__ */ new Date(`${d}T00:00:00Z`));
 var BOOK = { bay: "Bayway", mpg: "MPG" };
+var REASON = {
+  RATE_GAP_HIGH: "rate gap 1+ pt",
+  RATE_GAP: "rate gap",
+  EQUITY_100K: "equity $100k+",
+  EQUITY_50K: "equity $50k+",
+  PMI_LIKELY_REMOVABLE: "PMI removal",
+  INVESTOR: "investor",
+  MOVE_UP_WINDOW: "move-up window",
+  ANNIVERSARY: "anniversary",
+  RECENT_ENGAGEMENT: "engaged recently",
+  KNOWN_ARM: "ARM"
+};
 var STATUS = { hit: "hit", pace: "on pace", behind: "behind" };
 var goalFmt = (g) => (v) => g.unit === "currency" ? money(v) : Math.round(Number(v) || 0);
 var C = { text: "#101828", muted: "#667085", line: "#e4e7ec", head: "#f2f4f7", link: "#1d4ed8", red: "#b42318" };
@@ -1324,6 +1338,8 @@ function renderOwnerBriefing(m, { appUrl }) {
     section("Overdue follow-ups", cf.overdue, "/tasks"),
     section("Hot, going cold", cf.hotCold, "/workbench")
   ].filter(Boolean);
+  const pc = m.pastClients || { count: 0, top: [] };
+  const pastClients = section("Past clients to call", pc, "/bayway/opportunities");
   const sl = m.slipping;
   const slipping = m.nothingSlipping ? [] : [
     section("Applications gone quiet", sl.quietApps, "/workbench"),
@@ -1338,6 +1354,7 @@ ${numbers.map((l) => `- ${l}`).join("\n")}`,
 ${today.map((l) => `- ${l}`).join("\n")}`,
     `Call first
 ${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "- Nobody waiting"}`,
+    ...pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join("\n")] : [],
     `Slipping
 ${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "Nothing slipping today."}`
   ];
@@ -1378,6 +1395,8 @@ Open the dashboard: ${url("/")}
     callRows.push({ note: `${esc(`Cadence due today: Bayway ${cf.cadence.bay}, MPG ${cf.cadence.mpg}`)} &middot; ${link(url("/workbench"), "Open Workbench")}` });
   }
   const callTable = callRows.length ? table([{ label: "Name", width: "26%" }, { label: "Why", width: "26%" }, { label: "Detail" }, { label: "Book", width: "14%" }], callRows) : `<p style="font:14px Arial,sans-serif;margin:0">Nobody waiting.</p>`;
+  const reasonText2 = (codes) => (codes || []).map((c) => REASON[c] || c).join(", ");
+  const pastTable = pc.count ? table([{ label: "Name", width: "26%" }, { label: "Why now" }, { label: "Signals", width: "30%" }], blockRows(pc, (p) => [esc(p.name), esc(p.detail), esc(reasonText2(p.reasons) || "Check-in")])) : "";
   const issue = (why) => (p) => [esc(p.name), esc(why), esc(p.detail || "")];
   const slipRows = [
     ...blockRows(sl.quietApps, issue("Application quiet")),
@@ -1398,6 +1417,7 @@ Open the dashboard: ${url("/")}
     todayTable,
     heading(`Call first (${m.callFirstCount})`, url("/workbench")),
     callTable,
+    ...pc.count ? [heading(`Past clients to call (${pc.count})`, url("/bayway/opportunities")), pastTable] : [],
     heading(m.nothingSlipping ? "Slipping" : `Slipping (${slipCount})`, url("/workbench")),
     slipTable,
     `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url("/"), "Open the dashboard")}</p>`,
