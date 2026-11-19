@@ -23,6 +23,24 @@ const model = (o = {}) => ({
 })
 
 describe('renderOwnerBriefing', () => {
+  it('lists past clients to call with their headline and signals, and links to Opportunities', () => {
+    const pastClients = { count: 2, top: [
+      { name: 'Maria Lopez', detail: 'Rate looks high and equity has grown', reasons: ['RATE_GAP_HIGH', 'EQUITY_100K'] },
+      { name: 'Sam Ortiz', detail: 'Past client due for a check-in', reasons: [] },
+    ] }
+    const { text, html } = renderOwnerBriefing(model({ pastClients }), { appUrl: 'https://x.app' })
+    expect(text).toContain('Past clients to call (2)')
+    expect(text).toContain('Maria Lopez')
+    expect(html).toContain('Past clients to call (2)')
+    expect(html).toContain('rate gap 1+ pt, equity $100k+')
+    expect(html).toContain('Check-in')
+    expect(html).toContain('href="https://x.app/bayway/opportunities"')
+  })
+  it('leaves the past-client section out when there are no picks', () => {
+    const { text, html } = renderOwnerBriefing(model(), { appUrl: 'https://x.app' })
+    expect(text).not.toContain('Past clients to call')
+    expect(html).not.toContain('Past clients to call')
+  })
   it('subject carries the date, call-first count and forecast', () => {
     const { subject } = renderOwnerBriefing(model(), { appUrl: 'https://x.app' })
     expect(subject).toBe('Briefing | Tue Nov 3 | 7 to call first | $12,400 forecast')

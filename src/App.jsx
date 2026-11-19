@@ -19,6 +19,7 @@ import Tasks from './pages/Tasks'
 import RateLeads from './pages/RateLeads'
 import Settings from './pages/Settings'
 import Loans from './pages/Loans'
+import Opportunities from './pages/Opportunities'
 import BookPage from './components/BookPage'
 import SectionTabs from './components/SectionTabs'
 import { canVisit, homeFor } from './lib/roles'
@@ -97,6 +98,7 @@ export default function App() {
               <Route path="/mpg/contacts" element={<Contacts biz="mpg" />} />
               <Route path="/bayway/pipeline" element={<Pipeline biz="bay" />} />
               <Route path="/bayway/loans" element={<Loans />} />
+              <Route path="/bayway/opportunities" element={<Opportunities />} />
               <Route path="/bayway/priority-leads" element={<PriorityLeads />} />
               <Route path="/bayway/activity" element={<Activity biz="bay" />} />
               <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />

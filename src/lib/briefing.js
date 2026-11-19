@@ -128,6 +128,8 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     },
     today: { meetings, closings: list(closingRows, (l) => ({ name: l.borrower_name || '(no name)', date: l.firm_closing_on })) },
     callFirst,
+    // Database Opportunity Agent: today's past-client picks (opportunity_picks).
+    pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || '(no name)', detail: p.headline || '', reasons: p.reasons || [] })),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length,
