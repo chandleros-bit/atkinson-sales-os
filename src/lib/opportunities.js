@@ -195,3 +195,32 @@ export async function loadCoverage(now = new Date()) {
   for (const r of [total, withProp, t90, t180, reviews]) if (r.error) throw r.error
   return { total: total.count || 0, withProperty: withProp.count || 0, touched90: t90.count || 0, touched180: t180.count || 0, pendingReview: reviews.count || 0 }
 }
+
+export const IMPORT_SOURCES = [
+  { key: 'hcad', label: 'Harris County' },
+  { key: 'fbcad', label: 'Fort Bend County' },
+  { key: 'mcad', label: 'Montgomery County' },
+  { key: 'title_rep', label: 'Title rep' },
+  { key: 'paid', label: 'Paid data' },
+]
+
+// Sends a filled-in match file to enrichment-import. Resolves to the
+// function's counts ({ ok, accepted, review, dropped, ... }) or { ok: false, error }.
+export async function importMatchFile(source, csv, marketValueYear = new Date().getFullYear()) {
+  try {
+    const { data, error } = await supabase.functions.invoke('enrichment-import', {
+      body: { source, csv, market_value_year: marketValueYear },
+    })
+    if (!error) return data
+    let message = error.message
+    try {
+      const body = await error.context?.json?.()
+      if (body?.error) message = body.error
+    } catch {
+      // keep error.message
+    }
+    return { ok: false, error: message }
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) }
+  }
+}

@@ -13,7 +13,7 @@ import { isDemoMode } from '../lib/supabase'
 import { friendlyError } from '../lib/friendlyError'
 import {
   OUTCOMES, REASON_LABEL, centralToday, isStale, loadPicks, loadEstimates, logOutcome,
-  loadReviews, decideReview, loadCoverage,
+  loadReviews, decideReview, loadCoverage, IMPORT_SOURCES, importMatchFile,
 } from '../lib/opportunities'
 
 const TABS = [
@@ -180,6 +180,40 @@ function HistoryTab({ picks }) {
   )
 }
 
+// Upload a filled-in past_client_match_file.csv (title rep or county match).
+function ImportBox({ onDone }) {
+  const [source, setSource] = useState('hcad')
+  const [busy, setBusy] = useState(false)
+  const run = async (file) => {
+    if (!file || busy) return
+    setBusy(true)
+    try {
+      const res = await importMatchFile(source, await file.text())
+      if (!res?.ok) showToast({ tone: 'error', text: `Import failed: ${res?.error || 'unknown error'}` })
+      else {
+        showToast({ tone: 'ok', text: `${res.accepted} saved, ${res.review} to review, ${res.dropped} not matched` })
+        onDone()
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-panel p-3 text-body">
+      <span className="font-semibold">Import match file</span>
+      <select value={source} onChange={(e) => setSource(e.target.value)} className="rounded-lg border border-line2 bg-transparent px-2 py-1">
+        {IMPORT_SOURCES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+      </select>
+      <label className="cursor-pointer rounded-lg border border-line2 px-3 py-1 font-medium hover:bg-hoverbg">
+        {busy ? 'Importing…' : 'Choose CSV'}
+        <input type="file" accept=".csv,text/csv" className="hidden" disabled={busy}
+          onChange={(e) => { run(e.target.files?.[0]); e.target.value = '' }} />
+      </label>
+      <span className="text-xs text-muted">Sure matches are saved; possible ones show up below.</span>
+    </div>
+  )
+}
+
 function ReviewTab() {
   const [rows, setRows] = useState(null)
   const [busy, setBusy] = useState(null)
@@ -197,9 +231,15 @@ function ReviewTab() {
     }
   }
   if (!rows) return <p className="text-body text-muted">Loading…</p>
-  if (!rows.length) return <p className="text-body text-muted">Nothing to review.</p>
+  if (!rows.length) return (
+    <div className="flex flex-col gap-2">
+      <ImportBox onDone={load} />
+      <p className="text-body text-muted">Nothing to review.</p>
+    </div>
+  )
   return (
     <div className="flex flex-col gap-2">
+      <ImportBox onDone={load} />
       <p className="text-xs text-muted">{rows.length} possible matches. Accept saves the property; reject drops it.</p>
       {rows.map((r) => {
         const c = r.candidate || {}
