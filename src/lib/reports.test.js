@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  METRICS, DEFAULT_TARGETS, MPG_SPRINT, metricsForTab, resolveTargets, pace,
+  METRICS, DEFAULT_TARGETS, DEFAULT_TARGETS_BY_BIZ, targetsFor, targetsForBiz, resolveTargetsByBiz, mergeTargetEdits, appliesTo, MPG_SPRINT, metricsForTab, resolveTargets, pace,
   formatValue, metricCardView, buildTabModel, weekStart, monthWindow,
   rollupMetrics, sprintRows, weeksRemaining, neededPerWeek, sumWon, countWon,
   pipelineValue, deriveStageCounts, dailySeries, inWindow, periodDateFor,
@@ -397,5 +397,51 @@ describe('ariveValues / ariveNotes / revenueValues', () => {
   it('loans without a logged import say the date is unknown, never today', () => {
     const n = ariveNotes({ loans: [{ id: 1 }], lastImport: null, biz: 'all' })
     for (const k of ARIVE_KEYS) expect(n[k]).toBe('Arive · import date unknown')
+  })
+})
+
+describe('per-business targets', () => {
+  it('gives every metric a default under each business that carries it', () => {
+    for (const m of METRICS) {
+      for (const b of ['bay', 'mpg']) {
+        if (m.biz === 'both' || m.biz === b) expect(DEFAULT_TARGETS_BY_BIZ[b][m.key], `${b}.${m.key}`).toBeTypeOf('number')
+        else expect(DEFAULT_TARGETS_BY_BIZ[b][m.key], `${b}.${m.key}`).toBeUndefined()
+      }
+    }
+  })
+  it('sums shared metrics on All and keeps each business separate', () => {
+    const t = { bay: { calls: 30, realtor_convos: 15 }, mpg: { calls: 40, bizowner_convos: 40 } }
+    expect(targetsForBiz(t, 'all')).toMatchObject({ calls: 70, realtor_convos: 15, bizowner_convos: 40 })
+    expect(targetsForBiz(t, 'bay').calls).toBe(30)
+    expect(targetsForBiz(t, 'mpg').calls).toBe(40)
+  })
+  it('reads saved per-business values and ignores the old combined set', () => {
+    expect(targetsFor({ calls: 80 }, 'all').calls).toBe(DEFAULT_TARGETS.calls)
+    const saved = { by_business: { bay: { calls: 25 }, mpg: { calls: 50 } } }
+    expect(targetsFor(saved, 'all').calls).toBe(75)
+    expect(targetsFor(saved, 'bay').calls).toBe(25)
+    expect(targetsFor(saved, 'mpg').calls).toBe(50)
+  })
+  it('passes non-metric keys through', () => {
+    expect(targetsFor({ applications_weekly: 3 }).applications_weekly).toBe(3)
+  })
+  it('merges edits, writes combined flat keys, and keeps other keys', () => {
+    const v = mergeTargetEdits({ applications_weekly: 3, calls: 80 }, {
+      bay: { calls: '35', followups: '', realtor_convos: '12', bizowner_convos: '99' },
+      mpg: { calls: '45' },
+    })
+    expect(v.by_business.bay.calls).toBe(35)
+    expect(v.by_business.bay.followups).toBe(DEFAULT_TARGETS_BY_BIZ.bay.followups)
+    expect(v.by_business.bay.bizowner_convos).toBeUndefined()
+    expect(v.by_business.mpg.calls).toBe(45)
+    expect(v.calls).toBe(80)
+    expect(v.realtor_convos).toBe(12)
+    expect(v.applications_weekly).toBe(3)
+    expect(resolveTargetsByBiz(v).bay.calls).toBe(35)
+  })
+  it('knows which business carries a metric', () => {
+    expect(appliesTo('calls', 'mpg')).toBe(true)
+    expect(appliesTo('realtor_convos', 'mpg')).toBe(false)
+    expect(appliesTo('bizowner_convos', 'mpg')).toBe(true)
   })
 })

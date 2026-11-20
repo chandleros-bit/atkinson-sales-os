@@ -29,7 +29,7 @@ function query(table) {
     to = b
     return q
   }
-  q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { calls: 10 } } : null, error: null })
+  q.maybeSingle = async () => ({ data: table === 'settings' ? { value: { by_business: { bay: { calls: 10 }, mpg: { calls: 0 } } } } : null, error: null })
   q.then = (resolve) => resolve(ERRORS[table] && !write ?{ data: null, error: ERRORS[table] } : { data: (DATA[table] || []).slice(from, to + 1), error: null })
   return q
 }

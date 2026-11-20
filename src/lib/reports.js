@@ -133,34 +133,128 @@ export function revenueValues(manual, arive) {
   }
 }
 
-// Defaults straight from the doc. Editable at runtime via settings.metric_targets.
-export const DEFAULT_TARGETS = {
-  calls: 100, live_conversations: 20, followups: 25, new_contacts: 5,
-  referral_asks: 3, social_minutes: 30,
-  realtor_convos: 50, bizowner_convos: 50, past_client_touches: 25,
-  new_referral_partners: 10, merchant_proposals: 5, mortgage_consults: 5,
-  realtor_meetings: 10, pre_approvals: 20, applications: 15, loans_closed: 5,
-  loan_volume: 2_000_000, pipeline_value: 2_000_000, businesses_contacted: 1000, owner_conversations: 200,
-  merchant_proposals_delivered: 20, new_merchant_accounts: 5, new_residual: 1000,
-  db_total: 5000, db_realtors: 500, db_past_clients: 1000,
-  db_business_owners: 2000, db_prospects: 1500,
-  weekly_conversations: 100,
-  calls_weekly: 500, calls_monthly: 2000,
-  rev_closings: 5, rev_loan_volume: 2_000_000, rev_gross_commission: 17_500,
-  rev_active_merchants: 100, rev_monthly_residual: 10_000,
-  rev_combined_income: 27_500, rev_processing_volume: 1_000_000,
-  rev_avg_per_closing: 3_500, rev_avg_residual: 100, rev_annualized: 330_000,
-  mpg_targeted_contacts: 720, mpg_owner_conversations: 180,
-  mpg_discovery_meetings: 48, mpg_statements_received: 36,
-  mpg_statements_analyzed: 36, mpg_proposals_sent: 24,
-  mpg_merchants_signed: 10, mpg_merchants_activated: 8,
-  mpg_qualified_future_pipeline: 15,
-  bay_outbound_attempts: 1200, bay_live_conversations: 240,
-  bay_completed_applications: 48, bay_qualified_preapprovals: 30,
-  bay_contracts_refis: 16, bay_funded_loans: 10,
-  bay_referral_touches: 240,
-  bay_pipeline_under_contract: 1, bay_pipeline_preapproved: 3,
-  bay_pipeline_waiting_docs: 8,
+// Targets are set per business. A metric shared by both books (calls, live
+// conversations, ...) has a Bayway number and an MPG number; the All view
+// shows their sum. A one-book metric lives only under its own business.
+// Saved shape in settings.metric_targets:
+//   { by_business: { bay: {...}, mpg: {...} }, <combined flat keys>, <other keys> }
+// The combined flat keys are rewritten on every save so SQL views and older
+// readers that look at the top level keep working. Keys that are not METRICS
+// (e.g. applications_weekly for the Growth view) pass through untouched.
+// Nov 2026 defaults: sized to a realistic month, not the original stretch doc.
+export const DEFAULT_TARGETS_BY_BIZ = {
+  bay: {
+    // Daily
+    calls: 30, live_conversations: 8, followups: 15, new_contacts: 3,
+    referral_asks: 2, social_minutes: 15,
+    // Weekly
+    realtor_convos: 15, past_client_touches: 25, new_referral_partners: 1,
+    mortgage_consults: 3, weekly_conversations: 40, calls_weekly: 150,
+    // Monthly
+    realtor_meetings: 4, calls_monthly: 600, pre_approvals: 4, applications: 8,
+    loans_closed: 2, loan_volume: 700_000, pipeline_value: 1_500_000,
+    db_total: 2000, db_realtors: 200, db_past_clients: 500, db_prospects: 500,
+    // Revenue
+    rev_closings: 2, rev_loan_volume: 700_000, rev_gross_commission: 7_000,
+    rev_combined_income: 7_000, rev_avg_per_closing: 3_500, rev_annualized: 84_000,
+    // 90-day sprint (unchanged)
+    bay_outbound_attempts: 1200, bay_live_conversations: 240,
+    bay_completed_applications: 48, bay_qualified_preapprovals: 30,
+    bay_contracts_refis: 16, bay_funded_loans: 10,
+    bay_referral_touches: 240,
+    bay_pipeline_under_contract: 1, bay_pipeline_preapproved: 3,
+    bay_pipeline_waiting_docs: 8,
+  },
+  mpg: {
+    // Daily
+    calls: 40, live_conversations: 8, followups: 10, new_contacts: 10,
+    referral_asks: 1, social_minutes: 15,
+    // Weekly
+    bizowner_convos: 40, new_referral_partners: 1, merchant_proposals: 2,
+    weekly_conversations: 40, calls_weekly: 200,
+    // Monthly
+    calls_monthly: 800, businesses_contacted: 800, owner_conversations: 160,
+    merchant_proposals_delivered: 8, new_merchant_accounts: 3, new_residual: 300,
+    db_total: 1500, db_business_owners: 1500, db_prospects: 1000,
+    // Revenue
+    rev_active_merchants: 10, rev_monthly_residual: 750, rev_combined_income: 750,
+    rev_processing_volume: 300_000, rev_avg_residual: 75, rev_annualized: 9_000,
+    // 90-day sprint (unchanged)
+    mpg_targeted_contacts: 720, mpg_owner_conversations: 180,
+    mpg_discovery_meetings: 48, mpg_statements_received: 36,
+    mpg_statements_analyzed: 36, mpg_proposals_sent: 24,
+    mpg_merchants_signed: 10, mpg_merchants_activated: 8,
+    mpg_qualified_future_pipeline: 15,
+  },
+}
+
+export const BUSINESSES = ['bay', 'mpg']
+const METRIC_BIZ = Object.fromEntries(METRICS.map((m) => [m.key, m.biz]))
+
+// Does this business carry a target for the metric?
+export function appliesTo(metricKey, business) {
+  const b = METRIC_BIZ[metricKey]
+  return b === 'both' || b === business
+}
+
+// byBiz: { bay, mpg } target tables. biz: 'all' | 'bay' | 'mpg'.
+// A shared metric is that business's number, or the sum on 'all'.
+export function targetsForBiz(byBiz, biz = 'all') {
+  const out = {}
+  for (const m of METRICS) {
+    if (m.biz !== 'both') {
+      const v = byBiz[m.biz]?.[m.key]
+      if (v != null) out[m.key] = v
+      continue
+    }
+    if (biz === 'bay' || biz === 'mpg') {
+      const v = byBiz[biz]?.[m.key]
+      if (v != null) out[m.key] = v
+      continue
+    }
+    const parts = BUSINESSES.map((b) => byBiz[b]?.[m.key]).filter((v) => v != null)
+    if (parts.length) out[m.key] = parts.reduce((a, v) => a + Number(v), 0)
+  }
+  return out
+}
+
+// Combined (All view) defaults.
+export const DEFAULT_TARGETS = targetsForBiz(DEFAULT_TARGETS_BY_BIZ, 'all')
+
+const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
+
+// Saved per-business overrides over the defaults. A saved value with no
+// by_business (the old single combined set) gets the defaults: those numbers
+// were combined stretch goals and can't be split back by business.
+export function resolveTargetsByBiz(savedValue) {
+  const saved = asObject(asObject(savedValue).by_business)
+  return Object.fromEntries(BUSINESSES.map((b) => [b, { ...DEFAULT_TARGETS_BY_BIZ[b], ...asObject(saved[b]) }]))
+}
+
+// Non-metric keys saved at the top level (Growth view inputs and the like).
+function extraKeys(savedValue) {
+  return Object.fromEntries(
+    Object.entries(asObject(savedValue)).filter(([k]) => k !== 'by_business' && !(k in METRIC_BIZ)),
+  )
+}
+
+// The target set a view uses: savedValue is settings.metric_targets.value.
+export function targetsFor(savedValue, biz = 'all') {
+  return { ...DEFAULT_TARGETS, ...extraKeys(savedValue), ...targetsForBiz(resolveTargetsByBiz(savedValue), biz) }
+}
+
+// The settings value to store after an edit. edits: { bay: {key: value}, mpg: {...} };
+// blank entries are skipped, values coerced to numbers, keys a business
+// doesn't carry are dropped.
+export function mergeTargetEdits(savedValue, edits) {
+  const byBiz = resolveTargetsByBiz(savedValue)
+  for (const b of BUSINESSES) {
+    for (const [k, v] of Object.entries(asObject(edits?.[b]))) {
+      if (v === '' || v == null || !Number.isFinite(Number(v)) || !appliesTo(k, b)) continue
+      byBiz[b][k] = Number(v)
+    }
+  }
+  return { ...extraKeys(savedValue), ...targetsForBiz(byBiz, 'all'), by_business: byBiz }
 }
 
 export const MPG_SPRINT = {

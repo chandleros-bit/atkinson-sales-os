@@ -571,77 +571,202 @@ function buildAlerts({ queue = [], signals = [], pipeline = [], tasks = [], work
 }
 
 // src/lib/reports.js
-var DEFAULT_TARGETS = {
-  calls: 100,
-  live_conversations: 20,
-  followups: 25,
-  new_contacts: 5,
-  referral_asks: 3,
-  social_minutes: 30,
-  realtor_convos: 50,
-  bizowner_convos: 50,
-  past_client_touches: 25,
-  new_referral_partners: 10,
-  merchant_proposals: 5,
-  mortgage_consults: 5,
-  realtor_meetings: 10,
-  pre_approvals: 20,
-  applications: 15,
-  loans_closed: 5,
-  loan_volume: 2e6,
-  pipeline_value: 2e6,
-  businesses_contacted: 1e3,
-  owner_conversations: 200,
-  merchant_proposals_delivered: 20,
-  new_merchant_accounts: 5,
-  new_residual: 1e3,
-  db_total: 5e3,
-  db_realtors: 500,
-  db_past_clients: 1e3,
-  db_business_owners: 2e3,
-  db_prospects: 1500,
-  weekly_conversations: 100,
-  calls_weekly: 500,
-  calls_monthly: 2e3,
-  rev_closings: 5,
-  rev_loan_volume: 2e6,
-  rev_gross_commission: 17500,
-  rev_active_merchants: 100,
-  rev_monthly_residual: 1e4,
-  rev_combined_income: 27500,
-  rev_processing_volume: 1e6,
-  rev_avg_per_closing: 3500,
-  rev_avg_residual: 100,
-  rev_annualized: 33e4,
-  mpg_targeted_contacts: 720,
-  mpg_owner_conversations: 180,
-  mpg_discovery_meetings: 48,
-  mpg_statements_received: 36,
-  mpg_statements_analyzed: 36,
-  mpg_proposals_sent: 24,
-  mpg_merchants_signed: 10,
-  mpg_merchants_activated: 8,
-  mpg_qualified_future_pipeline: 15,
-  bay_outbound_attempts: 1200,
-  bay_live_conversations: 240,
-  bay_completed_applications: 48,
-  bay_qualified_preapprovals: 30,
-  bay_contracts_refis: 16,
-  bay_funded_loans: 10,
-  bay_referral_touches: 240,
-  bay_pipeline_under_contract: 1,
-  bay_pipeline_preapproved: 3,
-  bay_pipeline_waiting_docs: 8
+var METRICS = [
+  // ---- Daily -------------------------------------------------------------
+  { key: "calls", label: "Outbound calls", tab: "daily", biz: "both", source: "manual", unit: "count" },
+  { key: "live_conversations", label: "Live conversations", tab: "daily", biz: "both", source: "manual", unit: "count" },
+  { key: "followups", label: "Follow-ups completed", tab: "daily", biz: "both", source: "manual", unit: "count" },
+  { key: "new_contacts", label: "New contacts added", tab: "daily", biz: "both", source: "manual", unit: "count" },
+  { key: "referral_asks", label: "Referral asks", tab: "daily", biz: "both", source: "manual", unit: "count" },
+  { key: "social_minutes", label: "Social engagement", tab: "daily", biz: "both", source: "manual", unit: "minutes" },
+  // ---- Weekly ------------------------------------------------------------
+  { key: "realtor_convos", label: "Realtor conversations", tab: "weekly", biz: "bay", source: "manual", unit: "count" },
+  { key: "bizowner_convos", label: "Business-owner conversations", tab: "weekly", biz: "mpg", source: "manual", unit: "count" },
+  { key: "past_client_touches", label: "Past-client touches", tab: "weekly", biz: "bay", source: "manual", unit: "count" },
+  { key: "new_referral_partners", label: "New referral partners", tab: "weekly", biz: "both", source: "manual", unit: "count" },
+  { key: "merchant_proposals", label: "Merchant proposals", tab: "weekly", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mortgage_consults", label: "Mortgage consultations", tab: "weekly", biz: "bay", source: "manual", unit: "count" },
+  { key: "weekly_conversations", label: "Meaningful conversations", tab: "weekly", biz: "both", source: "derived", unit: "count" },
+  { key: "calls_weekly", label: "Outbound calls", tab: "weekly", biz: "both", source: "derived", unit: "count" },
+  // ---- Monthly: pipeline + database -------------------------------------
+  { key: "realtor_meetings", label: "Realtor meetings", tab: "monthly", biz: "bay", source: "manual", unit: "count" },
+  { key: "calls_monthly", label: "Outbound calls", tab: "monthly", biz: "both", source: "derived", unit: "count" },
+  { key: "pre_approvals", label: "Application received (now)", tab: "monthly", biz: "bay", source: "derived", unit: "count" },
+  { key: "applications", label: "App / estimate sent (now)", tab: "monthly", biz: "bay", source: "derived", unit: "count" },
+  { key: "loans_closed", label: "Loans closed (MTD)", tab: "monthly", biz: "bay", source: "live", unit: "count" },
+  { key: "loan_volume", label: "Loan volume (MTD)", tab: "monthly", biz: "bay", source: "live", unit: "currency" },
+  { key: "pipeline_value", label: "Pipeline value (open)", tab: "monthly", biz: "bay", source: "live", unit: "currency" },
+  { key: "businesses_contacted", label: "Businesses contacted", tab: "monthly", biz: "mpg", source: "manual", unit: "count" },
+  { key: "owner_conversations", label: "Owner conversations", tab: "monthly", biz: "mpg", source: "manual", unit: "count" },
+  { key: "merchant_proposals_delivered", label: "Proposals delivered", tab: "monthly", biz: "mpg", source: "manual", unit: "count" },
+  { key: "new_merchant_accounts", label: "New merchant accounts", tab: "monthly", biz: "mpg", source: "manual", unit: "count" },
+  { key: "new_residual", label: "New residual (MTD)", tab: "monthly", biz: "mpg", source: "manual", unit: "currency" },
+  { key: "db_total", label: "Total database", tab: "monthly", biz: "both", source: "live", unit: "count" },
+  { key: "db_realtors", label: "Realtors", tab: "monthly", biz: "bay", source: "manual", unit: "count" },
+  { key: "db_past_clients", label: "Past clients", tab: "monthly", biz: "bay", source: "manual", unit: "count" },
+  { key: "db_business_owners", label: "Business owners", tab: "monthly", biz: "mpg", source: "manual", unit: "count" },
+  { key: "db_prospects", label: "Prospects", tab: "monthly", biz: "both", source: "manual", unit: "count" },
+  // ---- Revenue -----------------------------------------------------------
+  { key: "rev_closings", label: "Closings (MTD)", tab: "revenue", biz: "bay", source: "live", unit: "count" },
+  { key: "rev_loan_volume", label: "Loan volume (MTD)", tab: "revenue", biz: "bay", source: "live", unit: "currency" },
+  { key: "rev_gross_commission", label: "Gross commission (MTD)", tab: "revenue", biz: "bay", source: "live", unit: "currency" },
+  { key: "rev_active_merchants", label: "Active merchants", tab: "revenue", biz: "mpg", source: "manual", unit: "count" },
+  { key: "rev_monthly_residual", label: "Monthly residual", tab: "revenue", biz: "mpg", source: "manual", unit: "currency" },
+  { key: "rev_combined_income", label: "Combined monthly income", tab: "revenue", biz: "both", source: "derived", unit: "currency" },
+  { key: "rev_processing_volume", label: "Processing volume", tab: "revenue", biz: "mpg", source: "manual", unit: "currency" },
+  { key: "rev_avg_per_closing", label: "Avg income / closing", tab: "revenue", biz: "bay", source: "derived", unit: "currency" },
+  { key: "rev_avg_residual", label: "Avg residual / account", tab: "revenue", biz: "mpg", source: "derived", unit: "currency" },
+  { key: "rev_annualized", label: "Annualized income", tab: "revenue", biz: "both", source: "derived", unit: "currency" },
+  // ---- 90-day sprint -----------------------------------------------------
+  { key: "mpg_targeted_contacts", label: "Targeted contacts", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_owner_conversations", label: "Owner conversations", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_discovery_meetings", label: "Discovery meetings", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_statements_received", label: "Statements received", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_statements_analyzed", label: "Statements analyzed", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_proposals_sent", label: "Proposals sent", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_merchants_signed", label: "Merchants signed", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_merchants_activated", label: "Activated + processing", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "mpg_qualified_future_pipeline", label: "Future pipeline", tab: "sprint", biz: "mpg", source: "manual", unit: "count" },
+  { key: "bay_outbound_attempts", label: "Outbound attempts", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_live_conversations", label: "Live conversations", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_completed_applications", label: "Completed applications", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_qualified_preapprovals", label: "Qualified pre-approvals", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_contracts_refis", label: "Contracts/refi opps", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_funded_loans", label: "Funded loans", tab: "sprint", biz: "bay", source: "live", unit: "count" },
+  { key: "bay_referral_touches", label: "Referral touches", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_pipeline_under_contract", label: "Under contract baseline", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_pipeline_preapproved", label: "Pre-approved baseline", tab: "sprint", biz: "bay", source: "manual", unit: "count" },
+  { key: "bay_pipeline_waiting_docs", label: "Waiting docs baseline", tab: "sprint", biz: "bay", source: "manual", unit: "count" }
+];
+var DEFAULT_TARGETS_BY_BIZ = {
+  bay: {
+    // Daily
+    calls: 30,
+    live_conversations: 8,
+    followups: 15,
+    new_contacts: 3,
+    referral_asks: 2,
+    social_minutes: 15,
+    // Weekly
+    realtor_convos: 15,
+    past_client_touches: 25,
+    new_referral_partners: 1,
+    mortgage_consults: 3,
+    weekly_conversations: 40,
+    calls_weekly: 150,
+    // Monthly
+    realtor_meetings: 4,
+    calls_monthly: 600,
+    pre_approvals: 4,
+    applications: 8,
+    loans_closed: 2,
+    loan_volume: 7e5,
+    pipeline_value: 15e5,
+    db_total: 2e3,
+    db_realtors: 200,
+    db_past_clients: 500,
+    db_prospects: 500,
+    // Revenue
+    rev_closings: 2,
+    rev_loan_volume: 7e5,
+    rev_gross_commission: 7e3,
+    rev_combined_income: 7e3,
+    rev_avg_per_closing: 3500,
+    rev_annualized: 84e3,
+    // 90-day sprint (unchanged)
+    bay_outbound_attempts: 1200,
+    bay_live_conversations: 240,
+    bay_completed_applications: 48,
+    bay_qualified_preapprovals: 30,
+    bay_contracts_refis: 16,
+    bay_funded_loans: 10,
+    bay_referral_touches: 240,
+    bay_pipeline_under_contract: 1,
+    bay_pipeline_preapproved: 3,
+    bay_pipeline_waiting_docs: 8
+  },
+  mpg: {
+    // Daily
+    calls: 40,
+    live_conversations: 8,
+    followups: 10,
+    new_contacts: 10,
+    referral_asks: 1,
+    social_minutes: 15,
+    // Weekly
+    bizowner_convos: 40,
+    new_referral_partners: 1,
+    merchant_proposals: 2,
+    weekly_conversations: 40,
+    calls_weekly: 200,
+    // Monthly
+    calls_monthly: 800,
+    businesses_contacted: 800,
+    owner_conversations: 160,
+    merchant_proposals_delivered: 8,
+    new_merchant_accounts: 3,
+    new_residual: 300,
+    db_total: 1500,
+    db_business_owners: 1500,
+    db_prospects: 1e3,
+    // Revenue
+    rev_active_merchants: 10,
+    rev_monthly_residual: 750,
+    rev_combined_income: 750,
+    rev_processing_volume: 3e5,
+    rev_avg_residual: 75,
+    rev_annualized: 9e3,
+    // 90-day sprint (unchanged)
+    mpg_targeted_contacts: 720,
+    mpg_owner_conversations: 180,
+    mpg_discovery_meetings: 48,
+    mpg_statements_received: 36,
+    mpg_statements_analyzed: 36,
+    mpg_proposals_sent: 24,
+    mpg_merchants_signed: 10,
+    mpg_merchants_activated: 8,
+    mpg_qualified_future_pipeline: 15
+  }
 };
+var BUSINESSES = ["bay", "mpg"];
+var METRIC_BIZ = Object.fromEntries(METRICS.map((m) => [m.key, m.biz]));
+function targetsForBiz(byBiz, biz = "all") {
+  const out = {};
+  for (const m of METRICS) {
+    if (m.biz !== "both") {
+      const v = byBiz[m.biz]?.[m.key];
+      if (v != null) out[m.key] = v;
+      continue;
+    }
+    if (biz === "bay" || biz === "mpg") {
+      const v = byBiz[biz]?.[m.key];
+      if (v != null) out[m.key] = v;
+      continue;
+    }
+    const parts2 = BUSINESSES.map((b) => byBiz[b]?.[m.key]).filter((v) => v != null);
+    if (parts2.length) out[m.key] = parts2.reduce((a, v) => a + Number(v), 0);
+  }
+  return out;
+}
+var DEFAULT_TARGETS = targetsForBiz(DEFAULT_TARGETS_BY_BIZ, "all");
+var asObject = (v) => v && typeof v === "object" && !Array.isArray(v) ? v : {};
+function resolveTargetsByBiz(savedValue) {
+  const saved = asObject(asObject(savedValue).by_business);
+  return Object.fromEntries(BUSINESSES.map((b) => [b, { ...DEFAULT_TARGETS_BY_BIZ[b], ...asObject(saved[b]) }]));
+}
+function extraKeys(savedValue) {
+  return Object.fromEntries(
+    Object.entries(asObject(savedValue)).filter(([k]) => k !== "by_business" && !(k in METRIC_BIZ))
+  );
+}
+function targetsFor(savedValue, biz = "all") {
+  return { ...DEFAULT_TARGETS, ...extraKeys(savedValue), ...targetsForBiz(resolveTargetsByBiz(savedValue), biz) };
+}
 var MPG_SPRINT = {
   from: "2026-07-30",
   to: "2026-10-29",
   label: "July 30-Oct 28"
 };
-function resolveTargets(defaults, savedValue) {
-  const saved = savedValue && typeof savedValue === "object" ? savedValue : {};
-  return { ...defaults, ...saved };
-}
 function monthWindow(now = Date.now()) {
   const d = new Date(now);
   const pad5 = (n2) => String(n2).padStart(2, "0");
@@ -1158,7 +1283,7 @@ function ratingsMap(rows) {
 }
 function buildOwnerBriefing(data, now = Date.now()) {
   const rules = resolveRules(data.rules);
-  const targets = resolveTargets(DEFAULT_TARGETS, data.targets);
+  const targets = targetsFor(data.targets, "all");
   const rates = resolveRates(data.rates);
   const fs = resolveForecast(data.forecastSettings);
   const stats = data.loans?.length ? loanStats(data.loans, rates, { month: monthWindow(now), prev: prevMonthWindow(now), sprint: sprintWindow() }) : null;

@@ -98,12 +98,12 @@ describe('buildOwnerBriefing: review fixes', () => {
   it('lists the monthly goals in order, proposals included', () => {
     const b = buildOwnerBriefing(base(), NOW)
     expect(b.numbers.goals.map((g) => g.id)).toEqual(['calls', 'closings', 'applications', 'merchants', 'proposals'])
-    expect(b.numbers.goals.find((g) => g.id === 'proposals').target).toBe(20)
+    expect(b.numbers.goals.find((g) => g.id === 'proposals').target).toBe(8)
   })
 
   it('shows needPerDay only for goals that are behind, null when on pace', () => {
     const d = base()
-    d.targets = { calls_monthly: 2 }
+    d.targets = { by_business: { bay: { calls_monthly: 1 }, mpg: { calls_monthly: 1 } } }
     const calls = buildOwnerBriefing(d, NOW).numbers.goals.find((g) => g.id === 'calls')
     expect(calls.status).toBe('hit')
     expect(calls.needPerDay).toBeNull()

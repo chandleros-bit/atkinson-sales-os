@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
-import { DEFAULT_TARGETS, resolveTargets } from '../lib/reports'
+import { targetsFor } from '../lib/reports'
 import { heatmap, countByDay, sourceTable } from '../lib/analytics'
 import { fetchLoanBundle } from '../lib/loansData'
 import { fetchRoiInputs } from '../lib/roiData'
@@ -271,7 +271,7 @@ export default function Analytics() {
       setData({
         calls: calls.data || [],
         leads: (contacts.data || []).map(toLead),
-        goal: resolveTargets(DEFAULT_TARGETS, settings.data?.value).calls,
+        savedTargets: settings.data?.value ?? null,
         loans: loans.data?.loans || [],
         rates: loans.data?.rates,
         aliases: roi.data?.aliases || [],
@@ -290,7 +290,7 @@ export default function Analytics() {
   const model = useMemo(() => {
     if (!data) return null
     const calls = data.calls.filter((r) => biz === 'all' || r.business_id === biz)
-    return heatmap(countByDay(calls), { weeks: WEEKS, goal: data.goal })
+    return heatmap(countByDay(calls), { weeks: WEEKS, goal: targetsFor(data.savedTargets, biz).calls })
   }, [data, biz])
   const tables = useMemo(() => {
     if (!data) return null
@@ -317,7 +317,7 @@ export default function Analytics() {
       )}
       {!isDemoMode && !error && !data && <div className="text-sm text-muted">Loading analytics…</div>}
 
-      {model && <Heatmap model={model} goal={data.goal} ink={ink} />}
+      {model && <Heatmap model={model} goal={targetsFor(data.savedTargets, biz).calls} ink={ink} />}
 
       {data && (
         <>

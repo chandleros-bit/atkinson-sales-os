@@ -26,7 +26,7 @@ import { MPG_LEAD_FLOW } from '../lib/pipeline'
 import { pipelineKpis } from '../lib/pipelineView'
 import { formatPhone, telHref } from '../lib/phone'
 import { callAttrs } from '../lib/pendingCall'
-import { DEFAULT_TARGETS, resolveTargets, monthWindow, sprintWindow, formatValue, MPG_SPRINT } from '../lib/reports'
+import { targetsFor, monthWindow, sprintWindow, formatValue, MPG_SPRINT } from '../lib/reports'
 import { fetchLoanBundle } from '../lib/loansData'
 import { loanStats } from '../lib/loans'
 import { todayKey } from '../lib/overviewCards'
@@ -620,7 +620,7 @@ function useOverviewData(biz) {
         }
         setData({
           metrics: res.metrics.data || [],
-          targets: resolveTargets(DEFAULT_TARGETS, res.settings.data?.value),
+          targets: targetsFor(res.settings.data?.value, biz),
           latestSync: res.sync.data,
           tasks: res.tasks.data || [],
           activities: res.activities.data || [],
@@ -752,7 +752,7 @@ function demoData() {
       { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_proposals_sent', value: 14 },
       { date: MPG_SPRINT.from, business_id: 'mpg', metric_key: 'mpg_merchants_activated', value: 2 },
     ],
-    targets: resolveTargets(DEFAULT_TARGETS, null),
+    targets: targetsFor(null, 'all'),
     latestSync: { ran_at: new Date().toISOString(), status: 'ok', message: null },
     tasks: [],
     activities,
