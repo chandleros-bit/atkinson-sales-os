@@ -271,6 +271,27 @@ begin
   end loop;
 end $$;
 
+-- ------------------------------------------------------------------ list cards
+-- One row per list for the Lists screen. dialable: leads the queue can serve
+-- (not a bad number, DNC or CRM duplicate); worked: dialable leads dialed at
+-- least once. security_invoker keeps the own-row RLS above.
+create or replace view public.v_dialer_lists with (security_invoker = true) as
+select l.*,
+       coalesce(s.dialable, 0)  as dialable,
+       coalesce(s.worked, 0)    as worked,
+       coalesce(s.confirmed, 0) as confirmed,
+       c.last_dialed_at
+from public.dialer_lists l
+left join lateral (
+  select count(*) filter (where d.status not in ('invalid_phone', 'dnc', 'crm_duplicate')) as dialable,
+         count(*) filter (where d.status not in ('invalid_phone', 'dnc', 'crm_duplicate') and d.attempt_count > 0) as worked,
+         count(*) filter (where d.status in ('confirmed', 'pushed')) as confirmed
+  from public.dialer_leads d where d.list_id = l.id
+) s on true
+left join lateral (
+  select max(k.dialed_at) as last_dialed_at from public.dialer_calls k where k.list_id = l.id
+) c on true;
+
 -- ------------------------------------------------------------------ seed
 -- Placeholder scripts and templates for each owner, edited later in Settings.
 insert into public.dialer_scripts (user_id, business_id, body, sms_template, email_subject, email_body)

@@ -21,6 +21,7 @@ import Settings from './pages/Settings'
 import Loans from './pages/Loans'
 import Opportunities from './pages/Opportunities'
 import Partners from './pages/Partners'
+import PowerDialer from './pages/PowerDialer'
 import BookPage from './components/BookPage'
 import SectionTabs from './components/SectionTabs'
 import { canVisit, homeFor } from './lib/roles'
@@ -87,6 +88,7 @@ export default function App() {
                 <Route path="/analytics" element={<Analytics />} />
               </Route>
               <Route path="/tasks" element={<Tasks />} />
+              <Route path="/dialer" element={<PowerDialer />} />
               <Route path="/reference" element={<Reference />} />
               <Route path="/rate" element={<RateLeads />} />
               {/* Follows the business filter; All merges both books. */}

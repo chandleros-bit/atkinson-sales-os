@@ -140,6 +140,13 @@ begin
   if not ok then raise exception 'FAIL: queued lead without phone'; end if;
   insert into public.dialer_leads (list_id, business_id, phone_raw, status, position)
   values ('00000000-0000-4000-8000-0000000001e1', 'bay', 'n/a', 'invalid_phone', 3);
+
+  -- List card counts: 1 dialable lead (the bad number is not), not yet worked.
+  select count(*) into n from public.v_dialer_lists;
+  if n <> 2 then raise exception 'FAIL: A sees % lists in the view, expected 2', n; end if;
+  select count(*) into n from public.v_dialer_lists
+  where id = '00000000-0000-4000-8000-0000000001e1' and dialable = 1 and worked = 0 and last_dialed_at is not null;
+  if n <> 1 then raise exception 'FAIL: list card counts wrong'; end if;
 end $$;
 
 -- B (not owner) cannot remove a DNC number; A (owner) can.
