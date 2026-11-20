@@ -52,6 +52,16 @@ export function PersonSheetHost() {
     listeners.add(setId)
     return () => listeners.delete(setId)
   }, [])
+  // ?person=<contact id> (Slack alert links) opens that contact's card once.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const linked = params.get('person')
+    if (!linked) return
+    setId(linked)
+    params.delete('person')
+    const qs = params.toString()
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`)
+  }, [])
   return id ? <PersonSheet key={id} id={id} onClose={() => setId(null)} /> : null
 }
 
