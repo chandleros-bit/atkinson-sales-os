@@ -11,6 +11,8 @@ import { applyOutcome, nextLead, outcome as outcomeOf, outcomesFor, needsPush, D
 import { formatPhone, telHref } from '../lib/phone'
 import { dayKey } from '../lib/calendar'
 import { targetsFor } from '../lib/reports'
+import { canDial } from '../lib/dialerCompliance'
+import { useNow } from '../lib/useNow'
 
 const quiet = 'min-h-[48px] rounded-lg border border-line2 bg-panel px-4 text-body font-semibold text-ink2 disabled:opacity-40'
 
@@ -44,6 +46,20 @@ function Stat({ label, value, target }) {
   )
 }
 
+// Open leads (queued, or retries now due) that the guard refuses, soonest
+// to open first.
+function nextLeadHeld(leads, skip, now, guard) {
+  return leads
+    .filter((l) => !skip.has(l.id) && (l.status === 'queued' || (l.status === 'retry' && l.next_attempt_at && Date.parse(l.next_attempt_at) <= now)))
+    .filter((l) => !canDial(l, { ...guard, now, explain: false }).ok)
+}
+
+// When the first held lead opens (looks at the first 50; enough for a hint).
+function firstOpening(held, guard, now) {
+  const times = held.slice(0, 50).map((l) => canDial(l, { ...guard, now }).opensAt).filter(Boolean)
+  return times.length ? Math.min(...times) : null
+}
+
 export default function DialScreen() {
   const { listId } = useParams()
   const [data, setData] = useState(null)
@@ -51,6 +67,7 @@ export default function DialScreen() {
   const [error, setError] = useState(null)
   const [leads, setLeads] = useState([])
   const [calls, setCalls] = useState([])
+  const [recent, setRecent] = useState([]) // every dial in the last 24 hours, any list
   const [sessionId, setSessionId] = useState(null)
   const [skip, setSkip] = useState(() => new Set())
   const [history, setHistory] = useState([])
@@ -75,6 +92,7 @@ export default function DialScreen() {
       setData(res.data)
       setLeads(res.data.leads)
       setCalls(res.data.calls)
+      setRecent(res.data.recent || [])
       const s = await startSession(res.data.list.business_id, listId)
       sid = s.id
       if (live) setSessionId(s.id)
@@ -85,10 +103,19 @@ export default function DialScreen() {
 
   const business = data?.list.business_id
   const script = data?.script
+  const now = useNow(30_000)
+  // Compliance guard: calling hours on Cold Bayway lists (unless turned off in
+  // settings), and no 4th dial to a number within 24 hours on any list.
+  const guard = useMemo(() => ({
+    cold: data?.list.business_id === 'bay' && data?.list.temperature === 'cold',
+    hoursGuard: script?.hours_guard ?? true,
+    calls: recent,
+  }), [data, script, recent])
   const lead = useMemo(() => {
     if (pinned) return leads.find((l) => l.id === pinned) || null
-    return nextLead(leads, { now: Date.now(), skip })
-  }, [leads, skip, pinned])
+    return nextLead(leads, { now, skip, canServe: (l) => canDial(l, { ...guard, now, explain: false }).ok })
+  }, [leads, skip, pinned, guard, now])
+  const check = useMemo(() => (lead ? canDial(lead, { ...guard, now }) : { ok: true }), [lead, guard, now])
   const leadCalls = useMemo(() => (lead ? calls.filter((c) => c.lead_id === lead.id && c.outcome) : []), [calls, lead])
   const targets = useMemo(() => (business ? targetsFor(data.targetsValue, business) : {}), [data, business])
 
@@ -123,8 +150,12 @@ export default function DialScreen() {
   // Runs on the tap that opens the phone's dialer; the link itself does the dialing.
   function dial() {
     setError(null)
+    // Keep this lead on screen until its outcome is saved, even though the
+    // dial itself may now make the guard refuse it.
+    setPinned(lead.id)
     setPhase('outcome')
     setStats((s) => ({ ...s, dials: s.dials + 1 }))
+    setRecent((r) => [...r, { phone_e164: lead.phone_e164, dialed_at: new Date().toISOString() }])
     const p = logDial({ lead, sessionId }).then(({ call: c, error: err }) => {
       if (err) setError(`The dial wasn't saved: ${err.message}`)
       else setCall(c)
@@ -173,7 +204,10 @@ export default function DialScreen() {
     resetOutcome()
   }
 
-  const waiting = leads.filter((l) => l.status === 'retry' && l.next_attempt_at && Date.parse(l.next_attempt_at) > Date.now())
+  const waiting = leads.filter((l) => l.status === 'retry' && l.next_attempt_at && Date.parse(l.next_attempt_at) > now)
+  // Open leads the guard holds back right now (only counted when nothing is left).
+  const held = lead ? [] : nextLeadHeld(leads, skip, now, guard)
+  const opensAt = held.length ? firstOpening(held, guard, now) : null
   const nextDue = waiting.map((l) => l.next_attempt_at).sort()[0]
 
   return (
@@ -198,6 +232,7 @@ export default function DialScreen() {
       {!lead && (
         <div className="rounded-card border border-line bg-panel px-6 py-10 text-center text-body text-muted">
           <p className="text-ui font-semibold text-[color:var(--text)]">Nothing left to dial right now.</p>
+          {held.length > 0 && <p data-held className="mt-1">{held.length} {held.length === 1 ? 'lead is' : 'leads are'} outside calling hours or at 3 calls in 24 hours.{opensAt && ` The first opens ${when(new Date(opensAt).toISOString())}.`}</p>}
           {nextDue && <p className="mt-1">{waiting.length} {waiting.length === 1 ? 'retry is' : 'retries are'} waiting. Next one is due {when(nextDue)}.</p>}
           {history.length > 0 && <button type="button" onClick={back} className={`${quiet} mt-4`}>Back</button>}
         </div>
@@ -232,6 +267,12 @@ export default function DialScreen() {
         </article>
       )}
 
+      {lead && phase === 'call' && !check.ok && (
+        <div role="status" data-blocked className="rounded-lg border px-3 py-2 text-body" style={{ borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}>
+          {check.reason}
+        </div>
+      )}
+
       {lead && phase === 'outcome' && (
         <section aria-label="Outcome" className="flex flex-col gap-3 rounded-card border border-line bg-panel p-3">
           <div className="grid grid-cols-2 gap-2">
@@ -259,7 +300,9 @@ export default function DialScreen() {
         <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-20 -mx-4 flex gap-2 border-t border-line bg-panel px-4 py-3 sm:bottom-0 sm:mx-0 sm:rounded-card sm:border">
           <button type="button" onClick={back} disabled={!history.length || busy} className={quiet}>Back</button>
           <button type="button" onClick={skipLead} disabled={busy} className={quiet}>Skip</button>
-          {phase === 'call' ? (
+          {phase === 'call' && !check.ok ? (
+            <button type="button" disabled className="min-h-[48px] flex-1 rounded-lg bg-panel2 text-ui font-semibold text-muted">Call</button>
+          ) : phase === 'call' ? (
             <a href={telHref(lead.phone_e164)} onClick={dial}
               className="flex min-h-[48px] flex-1 items-center justify-center rounded-lg text-ui font-semibold text-white" style={{ background: tone }}>
               Call

@@ -94,6 +94,9 @@ describe('nextLead', () => {
     expect(nextLead(leads, { now, skip: new Set(['q2', 'q4']) })?.id).toBe('r5')
     expect(nextLead(leads, { now, skip: new Set(['q2', 'q4', 'r5']) })?.id).toBe('r1')
   })
+  it('passes over leads the compliance guard refuses', () => {
+    expect(nextLead(leads, { now, canServe: (l) => l.id !== 'q2' })?.id).toBe('q4')
+  })
   it('never serves a retry that is not due or a finished lead', () => {
     expect(nextLead(leads, { now, skip: new Set(['q2', 'q4', 'r5', 'r1']) })).toBeNull()
   })

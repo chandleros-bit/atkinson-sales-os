@@ -59,13 +59,14 @@ export function applyOutcome(lead, key, { now = Date.now(), maxAttempts = DEFAUL
 }
 
 // Queued leads in CSV order first, then retries whose time has come, earliest
-// due first. skip: lead ids passed over in this session.
-export function nextLead(leads, { now = Date.now(), skip = new Set() } = {}) {
+// due first. skip: lead ids passed over in this session. canServe: the
+// compliance guard; leads it refuses are passed over for now.
+export function nextLead(leads, { now = Date.now(), skip = new Set(), canServe = () => true } = {}) {
   const open = leads.filter((l) => !skip.has(l.id))
   const queued = open.filter((l) => l.status === 'queued').sort((a, b) => a.position - b.position)
-  if (queued.length) return queued[0]
   const due = open
     .filter((l) => l.status === 'retry' && l.next_attempt_at && Date.parse(l.next_attempt_at) <= now)
     .sort((a, b) => Date.parse(a.next_attempt_at) - Date.parse(b.next_attempt_at) || a.position - b.position)
-  return due[0] || null
+  // The guard runs lead by lead, in serving order, only until one passes.
+  return queued.find(canServe) || due.find(canServe) || null
 }

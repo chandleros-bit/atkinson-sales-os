@@ -94,7 +94,7 @@ export async function saveList({ business, temperature, name, filename, mapping,
 export async function fetchDialData(listId, today) {
   if (isDemoMode) {
     return {
-      data: { list: DEMO_LIST, leads: DEMO_LEADS.map((l) => ({ ...l })), calls: [], script: DEMO_SCRIPT, today: { calls: 12 }, targetsValue: null },
+      data: { list: DEMO_LIST, leads: DEMO_LEADS.map((l) => ({ ...l })), calls: [], recent: [], script: DEMO_SCRIPT, today: { calls: 12 }, targetsValue: null },
       error: null,
     }
   }
@@ -102,13 +102,16 @@ export async function fetchDialData(listId, today) {
     const { data: list, error: listErr } = await supabase.from('v_dialer_lists').select('*').eq('id', listId).maybeSingle()
     if (listErr) throw new Error(listErr.message)
     if (!list) throw new Error('List not found.')
-    const [leads, calls, script, metrics, targets] = await Promise.all([
+    const since = new Date(Date.now() - 24 * 3600_000).toISOString()
+    const [leads, calls, recent, script, metrics, targets] = await Promise.all([
       fetchAll(() =>
         supabase.from('dialer_leads').select('*').eq('list_id', listId).in('status', ['queued', 'retry']).order('position').order('id'),
       ),
       fetchAll(() =>
         supabase.from('dialer_calls').select('lead_id, outcome, notes, dialed_at').eq('list_id', listId).order('dialed_at').order('id'),
       ),
+      // Every dial in the last 24 hours, any list: the 3-in-24-hours check.
+      fetchAll(() => supabase.from('dialer_calls').select('phone_e164, dialed_at').gte('dialed_at', since).order('id')),
       supabase.from('dialer_scripts').select('*').eq('business_id', list.business_id).maybeSingle(),
       // rowcap-ok: one business, one day, two metric keys
       supabase.from('metrics_daily').select('metric_key, value').eq('business_id', list.business_id).eq('date', today)
@@ -118,7 +121,7 @@ export async function fetchDialData(listId, today) {
     for (const r of [script, metrics, targets]) if (r.error) throw new Error(r.error.message)
     const todayNums = Object.fromEntries((metrics.data || []).map((m) => [m.metric_key, Number(m.value) || 0]))
     return {
-      data: { list, leads, calls, script: script.data, today: todayNums, targetsValue: targets.data?.value ?? null },
+      data: { list, leads, calls, recent, script: script.data, today: todayNums, targetsValue: targets.data?.value ?? null },
       error: null,
     }
   } catch (error) {

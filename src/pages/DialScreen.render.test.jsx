@@ -2,7 +2,7 @@
 // Power Dialer phase 3: one lead at a time, Call is a tel: link, outcomes set
 // the lead's status and side effects, Skip and Back, session numbers.
 import React from 'react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -161,5 +161,65 @@ describe('dial screen', () => {
     const host = await mount()
     expect(host.querySelector('[aria-label="Past attempts"]').textContent).toContain('Left msg with front desk')
     expect(host.querySelector('[data-attempt]').textContent).toBe('Attempt 2 of 3')
+  })
+})
+
+describe('compliance guard', () => {
+  afterEach(() => vi.useRealTimers())
+  const bayCold = () => {
+    db.data.list = { id: 'L', name: 'Katy owners', business_id: 'bay', temperature: 'cold' }
+    db.data.leads = db.data.leads.map((l) => ({ ...l, business_id: 'bay', state: 'TX' }))
+  }
+
+  it('holds every Cold lead outside calling hours and says so', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-21T03:30:00Z')) // Fri 9:30 PM in Texas
+    bayCold()
+    const host = await mount()
+    expect(current(host)).toBeUndefined()
+    expect(host.querySelector('[data-held]').textContent).toMatch(/^3 leads are outside calling hours/)
+    expect(host.querySelector('[data-held]').textContent).toMatch(/first opens/)
+  })
+
+  it('skips a Cold lead whose local time is closed and serves one that is open', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-20T15:30:00Z')) // 9:30 AM Central, 7:30 AM Pacific
+    bayCold()
+    db.data.leads[0].state = 'CA'
+    const host = await mount()
+    expect(current(host)).toBe('l2')
+  })
+
+  it('ignores calling hours on a Warm list', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-21T03:30:00Z'))
+    bayCold()
+    db.data.list.temperature = 'warm'
+    const host = await mount()
+    expect(current(host)).toBe('l1')
+  })
+
+  it('blocks a 4th dial in 24 hours with the reason, on any list', async () => {
+    db.data.recent = [
+      { phone_e164: '+17135550101', dialed_at: new Date(Date.now() - 3600_000).toISOString() },
+      { phone_e164: '+17135550101', dialed_at: new Date(Date.now() - 2 * 3600_000).toISOString() },
+    ]
+    const host = await mount()
+    expect(current(host)).toBe('l1')
+    await callNow(host)
+    await click(button(host, 'No answer'))
+    await click(button(host, 'Save and next'))
+    expect(current(host)).toBe('l2')
+    await click(button(host, 'Back'))
+    expect(current(host)).toBe('l1')
+    expect(host.querySelector('a[href^="tel:"]')).toBeNull()
+    expect(button(host, 'Call').disabled).toBe(true)
+    expect(host.querySelector('[data-blocked]').textContent).toMatch(/3 calls to this number in the last 24 hours/)
+  })
+
+  it('passes over a lead already called 3 times today', async () => {
+    db.data.recent = [1, 2, 3].map((h) => ({ phone_e164: '+17135550101', dialed_at: new Date(Date.now() - h * 3600_000).toISOString() }))
+    const host = await mount()
+    expect(current(host)).toBe('l2')
   })
 })
