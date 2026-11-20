@@ -27,6 +27,7 @@ vi.mock('../lib/dialerData', () => ({
   fetchLists: async () => ({ data: data.lists, error: null }),
   fetchDncSet: async (phones) => { data.dncAsked = phones; return new Set(['+18325550199']) },
   saveList: async (args) => { data.saved = args; return { id: 'new-list', error: null } },
+  queueCount: async () => 2,
   checkCrm: async (business, phones) => { data.crmAsked = { business, phones }; return { matches: data.crm, error: data.crmError ? new Error(data.crmError) : null } },
 }))
 

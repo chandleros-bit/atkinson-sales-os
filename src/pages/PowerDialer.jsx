@@ -8,7 +8,7 @@ import BizBadge from '../components/BizBadge'
 import DialerUpload from '../components/DialerUpload'
 import { useBusiness } from '../context/BusinessContext'
 import { useAuth } from '../context/AuthContext'
-import { fetchLists } from '../lib/dialerData'
+import { fetchLists, queueCount } from '../lib/dialerData'
 import { isDemoMode } from '../lib/supabase'
 
 const fmtDay = (iso) =>
@@ -49,6 +49,7 @@ export default function PowerDialer() {
   const [lists, setLists] = useState(null)
   const [error, setError] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [waiting, setWaiting] = useState(0)
 
   const load = useCallback(async () => {
     const { data, error: err } = await fetchLists()
@@ -56,6 +57,7 @@ export default function PowerDialer() {
     else { setError(null); setLists(data) }
   }, [])
   useEffect(() => { load() }, [load])
+  useEffect(() => { queueCount().then(setWaiting) }, [])
 
   const shown = (lists || []).filter((l) => l.status !== 'archived' && (biz === 'all' || l.business_id === biz))
 
@@ -64,11 +66,19 @@ export default function PowerDialer() {
       <PageHeader
         title="Power Dialer"
         subtitle="Upload a list, work it one call at a time. Nothing reaches Zoho or FUB until you approve it."
-        actions={!uploading && (
-          <button type="button" onClick={() => setUploading(true)} className="min-h-[40px] rounded-lg bg-[color:var(--text)] px-4 text-body font-semibold text-white">
-            Upload CSV
-          </button>
-        )}
+        actions={
+          <>
+            <Link to="/dialer/queue" data-queue-link className="flex min-h-[40px] items-center gap-2 rounded-lg border border-line2 px-3 text-body font-semibold">
+              Ready to Push
+              {waiting > 0 && <span className="rounded-full bg-[color:var(--text)] px-1.5 text-micro font-semibold leading-[17px] text-white">{waiting}</span>}
+            </Link>
+            {!uploading && (
+              <button type="button" onClick={() => setUploading(true)} className="min-h-[40px] rounded-lg bg-[color:var(--text)] px-4 text-body font-semibold text-white">
+                Upload CSV
+              </button>
+            )}
+          </>
+        }
       />
 
       {uploading && (

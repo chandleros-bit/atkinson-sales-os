@@ -211,3 +211,67 @@ export async function checkCrm(business, phones) {
   }
   return { matches: data?.matches || {}, error: null }
 }
+
+// ------------------------------------------------------------------ Ready to Push
+
+// Rows waiting for review (pending) or a retry (failed), with the lead, its
+// list and its call history.
+const demoQueue = () => [{
+  id: 'demo-q1', business_id: 'mpg', target: 'zoho', outcome: 'interested', status: 'pending', payload: {}, error: null,
+  dialer_leads: {
+    ...DEMO_LEADS[0], status: 'confirmed', dialer_lists: { name: DEMO_LIST.name, temperature: null },
+    dialer_calls: [{ outcome: 'interested', notes: 'Wants a statement review', dialed_at: '2026-11-20T20:15:00Z', callback_at: null }],
+  },
+}]
+
+export async function fetchQueue() {
+  if (isDemoMode) return { data: demoQueue(), error: null }
+  try {
+    const data = await fetchAll(() =>
+      supabase
+        .from('dialer_push_queue')
+        .select('*, dialer_leads(*, dialer_lists(name, temperature), dialer_calls(outcome, notes, dialed_at, callback_at))')
+        .in('status', ['pending', 'approved', 'failed'])
+        .order('created_at')
+        .order('id'),
+    )
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error }
+  }
+}
+
+export async function queueCount() {
+  if (isDemoMode) return 1
+  const { count } = await supabase
+    .from('dialer_push_queue')
+    .select('id', { count: 'exact', head: true })
+    .in('status', ['pending', 'failed'])
+  return count || 0
+}
+
+// Field edits made in the queue, applied on top of the lead when pushing.
+export async function saveQueueEdits(id, fields) {
+  if (isDemoMode) return { error: null }
+  const { error } = await supabase.from('dialer_push_queue').update({ payload: { fields } }).eq('id', id)
+  return { error }
+}
+
+// Skip: the lead stays in Sales OS only.
+export async function skipQueueRows(ids) {
+  if (isDemoMode) return { error: null }
+  const { error } = await supabase.from('dialer_push_queue').update({ status: 'skipped' }).in('id', ids)
+  return { error }
+}
+
+// Approve: dialer-crm-push writes to Zoho / FUB. -> { results: [{ id, status, error? }] }
+export async function approveQueueRows(ids) {
+  if (isDemoMode) return { results: ids.map((id) => ({ id, status: 'failed', error: 'Demo mode: nothing is sent to a CRM.' })), error: null }
+  const { data, error } = await supabase.functions.invoke('dialer-crm-push', { body: { ids } })
+  if (error) {
+    let msg = error.message
+    try { msg = (await error.context?.json?.())?.error || msg } catch { /* keep the generic message */ }
+    return { results: [], error: new Error(msg) }
+  }
+  return { results: data?.results || [], error: null }
+}
