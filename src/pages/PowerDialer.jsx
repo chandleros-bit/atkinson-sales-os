@@ -1,7 +1,8 @@
-// Power Dialer (spec 2026-11-20): the Lists screen and the CSV upload. The
-// dial screen, push queue and settings arrive in later phases. Follows the
+// Power Dialer (spec 2026-11-20): the Lists screen and the CSV upload. A card
+// opens the dial screen (DialScreen); push queue and settings come later. Follows the
 // All / MPG / Bayway switch; archived lists are hidden.
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import BizBadge from '../components/BizBadge'
 import DialerUpload from '../components/DialerUpload'
@@ -17,7 +18,8 @@ function ListCard({ list }) {
   const pct = list.dialable ? Math.round((list.worked / list.dialable) * 100) : 0
   const color = list.business_id === 'mpg' ? 'var(--mpg)' : 'var(--bay)'
   return (
-    <li data-list-id={list.id} className="flex overflow-hidden rounded-card border border-line bg-panel">
+    <li data-list-id={list.id}>
+     <Link to={`/dialer/${list.id}`} aria-label={`Dial ${list.name}`} className="flex overflow-hidden rounded-card border border-line bg-panel hover:border-line2">
       <span aria-hidden="true" className="w-1 flex-none" style={{ background: color }} />
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -36,6 +38,7 @@ function ListCard({ list }) {
           <span data-stat="last">{fmtDay(list.last_dialed_at)}</span>
         </div>
       </div>
+     </Link>
     </li>
   )
 }
@@ -77,7 +80,7 @@ export default function PowerDialer() {
         />
       )}
 
-      {isDemoMode && <p className="text-body text-muted">Demo mode: lists can be mapped and checked but not saved.</p>}
+      {isDemoMode && <p className="text-body text-muted">Demo mode: a sample list to try the dial screen. Uploads can be mapped and checked but not saved.</p>}
       {error && <div role="alert" className="rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-body text-neg-ink">Couldn't load lists: {error}</div>}
 
       {lists && !shown.length && !uploading && (
