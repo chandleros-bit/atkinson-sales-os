@@ -21,6 +21,10 @@ import Settings from './pages/Settings'
 import Loans from './pages/Loans'
 import Opportunities from './pages/Opportunities'
 import Partners from './pages/Partners'
+import PowerDialer from './pages/PowerDialer'
+import DialScreen from './pages/DialScreen'
+import PushQueue from './pages/PushQueue'
+import DialerSettings from './pages/DialerSettings'
 import BookPage from './components/BookPage'
 import SectionTabs from './components/SectionTabs'
 import { canVisit, homeFor } from './lib/roles'
@@ -87,6 +91,10 @@ export default function App() {
                 <Route path="/analytics" element={<Analytics />} />
               </Route>
               <Route path="/tasks" element={<Tasks />} />
+              <Route path="/dialer" element={<PowerDialer />} />
+              <Route path="/dialer/queue" element={<PushQueue />} />
+              <Route path="/dialer/settings" element={<DialerSettings />} />
+              <Route path="/dialer/:listId" element={<DialScreen />} />
               <Route path="/reference" element={<Reference />} />
               <Route path="/rate" element={<RateLeads />} />
               {/* Follows the business filter; All merges both books. */}
