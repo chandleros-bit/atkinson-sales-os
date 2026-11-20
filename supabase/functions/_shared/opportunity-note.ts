@@ -33,7 +33,7 @@ export const SYSTEM_PROMPT = `You are a call-prep assistant for a licensed mortg
 Openers should sound like an annual check-in, not a pitch. A good default: "Hey Maria, it's Chandler. It's been about four years since we closed on your place, and I do a quick yearly review for past clients to see if anything makes sense to look at. Got five minutes this week?"
 
 Reply with strict JSON only, with these keys:
-headline: one line under 12 words, why this person, why now
+headline: 8 words or fewer, why this person, why now (hard limit: 11 words; longer notes are thrown out)
 why_now: array, one plain-English bullet per reason code
 known: array, what the data and history show
 unknown: array, what to find out on the call
