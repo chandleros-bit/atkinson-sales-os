@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { googleEventId, toGoogleEvent, planSync, hashString, MASS_DELETE_GUARD } from './gcal-map.ts'
+import { googleEventId, toGoogleEvent, planSync, hashString, MASS_DELETE_GUARD, dialerCallbackEventRow } from './gcal-map.ts'
 
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 const row = (n, extra = {}) => ({
@@ -95,5 +95,29 @@ describe('hashString', () => {
     expect(hashString('abc')).toBe(hashString('abc'))
     expect(hashString('abc')).toMatch(/^[0-9a-f]{8}$/)
     expect(hashString('abc')).not.toBe(hashString('abd'))
+  })
+})
+
+describe('dialerCallbackEventRow', () => {
+  const cb = {
+    id: uuid(77), business_id: 'mpg', callback_at: '2026-11-21T16:30:00.000Z', notes: 'Wants a rate review',
+    dialer_leads: { first_name: 'Jane', last_name: 'Smith', company: 'Acme Cafe', phone_e164: '+17135550101', email: null },
+  }
+  it('becomes a 15-minute call event with a reminder, through planSync', () => {
+    const ev = toGoogleEvent(dialerCallbackEventRow(cb))
+    expect(ev.id).toBe(googleEventId(uuid(77)))
+    expect(ev.summary).toBe('Call: Jane Smith (MPG)')
+    expect(ev.start.dateTime).toBe('2026-11-21T16:30:00.000Z')
+    expect(ev.end.dateTime).toBe('2026-11-21T16:45:00.000Z')
+    expect(ev.description).toContain('Power Dialer callback (Acme Cafe): Wants a rate review')
+    expect(ev.description).toContain('Phone: +17135550101')
+    expect(ev.reminders.overrides).toEqual([{ method: 'popup', minutes: 10 }])
+    const plan = planSync([dialerCallbackEventRow(cb)], [], Date.parse('2026-11-20T00:00:00Z'), Date.parse('2026-12-20T00:00:00Z'))
+    expect(plan.creates.map((e) => e.id)).toEqual([googleEventId(uuid(77))])
+  })
+  it('names the company when there is no person', () => {
+    const ev = toGoogleEvent(dialerCallbackEventRow({ ...cb, notes: null, dialer_leads: { company: 'Acme Cafe' } }))
+    expect(ev.summary).toBe('Call: Acme Cafe (MPG)')
+    expect(ev.description.split(String.fromCharCode(10))[0]).toBe('Power Dialer callback')
   })
 })

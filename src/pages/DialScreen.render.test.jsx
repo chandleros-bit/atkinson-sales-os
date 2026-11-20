@@ -33,7 +33,8 @@ beforeEach(() => {
     list: { id: 'L', name: 'Houston cafes', business_id: 'mpg' },
     leads: [lead(1, { extra: { 'Year Built': '1999' } }), lead(2), lead(3)],
     calls: [],
-    script: { body: '# MPG script\n- Ask for the owner', max_attempts: 3, min_retry_hours: 4 },
+    script: { body: '# MPG script\n- Ask for the owner', max_attempts: 3, min_retry_hours: 4,
+      sms_template: 'Hi {first_name}, Chandler here.', email_subject: 'Hello {company}', email_body: 'Hi {first_name}' },
     today: { calls: 10, live_conversations: 2 },
     targetsValue: null,
   }
@@ -221,5 +222,56 @@ describe('compliance guard', () => {
     db.data.recent = [1, 2, 3].map((h) => ({ phone_e164: '+17135550101', dialed_at: new Date(Date.now() - h * 3600_000).toISOString() }))
     const host = await mount()
     expect(current(host)).toBe('l2')
+  })
+})
+
+describe('follow-ups and callbacks', () => {
+  it('offers a text and email after a warm outcome, then moves on', async () => {
+    db.data.leads[0].email = 'jane@co.test'
+    const host = await mount()
+    await callNow(host)
+    await click(button(host, 'Appointment set'))
+    await click(button(host, 'Save and next'))
+    const box = host.querySelector('[aria-label="Follow up"]')
+    expect(box).not.toBeNull()
+    expect(current(host)).toBe('l1')
+    const links = [...box.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+    expect(links[0]).toBe(`sms:+17135550101?&body=${encodeURIComponent('Hi First1, Chandler here.')}`)
+    expect(links[1].startsWith('mailto:jane%40co.test?subject=Hello%20Co%201')).toBe(true)
+    expect(box.querySelector('[data-hint]').textContent).toMatch(/meeting time/)
+    await click(button(host, 'Next lead'))
+    expect(current(host)).toBe('l2')
+    expect(host.querySelector('[aria-label="Follow up"]')).toBeNull()
+  })
+
+  it('goes straight to the next lead after a cold outcome', async () => {
+    const host = await mount()
+    await callNow(host)
+    await click(button(host, 'Not interested'))
+    await click(button(host, 'Save and next'))
+    expect(host.querySelector('[aria-label="Follow up"]')).toBeNull()
+    expect(current(host)).toBe('l2')
+  })
+
+  it('creates the Sales OS task with the callback', async () => {
+    const host = await mount()
+    await callNow(host)
+    await click(button(host, 'Callback requested'))
+    const input = host.querySelector('input[aria-label="Callback time"]')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '2026-11-21T10:30')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await click(button(host, 'Save and next'))
+    expect(db.outcomes[0].workItem).toMatchObject({ business_id: 'mpg', kind: 'custom', title: 'Callback: First1 Smith', due_on: '2026-11-21', status: 'open' })
+    expect(host.querySelector('[aria-label="Follow up"]')).not.toBeNull()
+  })
+
+  it('creates no task for other outcomes', async () => {
+    const host = await mount()
+    await callNow(host)
+    await click(button(host, 'Interested'))
+    await click(button(host, 'Save and next'))
+    expect(db.outcomes[0].workItem).toBeNull()
   })
 })

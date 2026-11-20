@@ -12,6 +12,7 @@ import { formatPhone, telHref } from '../lib/phone'
 import { dayKey } from '../lib/calendar'
 import { targetsFor } from '../lib/reports'
 import { canDial } from '../lib/dialerCompliance'
+import { offersFollowUp, followUpLinks, followUpHint, callbackWorkItem } from '../lib/dialerFollowUp'
 import { useNow } from '../lib/useNow'
 
 const quiet = 'min-h-[48px] rounded-lg border border-line2 bg-panel px-4 text-body font-semibold text-ink2 disabled:opacity-40'
@@ -72,7 +73,8 @@ export default function DialScreen() {
   const [skip, setSkip] = useState(() => new Set())
   const [history, setHistory] = useState([])
   const [pinned, setPinned] = useState(null) // lead id shown by Back
-  const [phase, setPhase] = useState('call') // call | outcome
+  const [phase, setPhase] = useState('call') // call | outcome | followup
+  const [followUp, setFollowUp] = useState(null) // { lead, outcome } after a warm outcome
   const [call, setCall] = useState(null) // { id } once the dial is logged
   const [picked, setPicked] = useState(null)
   const [notes, setNotes] = useState('')
@@ -139,6 +141,7 @@ export default function DialScreen() {
     setPicked(null)
     setNotes('')
     setCallbackAt('')
+    setFollowUp(null)
   }
 
   function moveOn() {
@@ -177,6 +180,7 @@ export default function DialScreen() {
       callId: c.id, lead, outcomeKey: picked, notes: notes.trim(),
       callbackAt: callbackAt ? new Date(callbackAt).toISOString() : null,
       update, pushTarget: needsPush(picked) ? (business === 'mpg' ? 'zoho' : 'fub') : null,
+      workItem: picked === 'callback_requested' ? callbackWorkItem(lead, new Date(callbackAt).toISOString(), notes.trim()) : null,
     })
     setBusy(false)
     if (err) { setError(`Couldn't save the outcome: ${err.message}`); return }
@@ -187,6 +191,12 @@ export default function DialScreen() {
     }))
     setCalls((cs) => [...cs, { lead_id: lead.id, outcome: picked, notes: notes.trim() || null, dialed_at: c.dialed_at }])
     setStats((s) => ({ ...s, connects: s.connects + (o.connect ? 1 : 0), confirmed: s.confirmed + (o.status === 'confirmed' ? 1 : 0) }))
+    // Warm outcomes get the quick follow-up row before the next lead loads.
+    if (offersFollowUp(picked)) {
+      setFollowUp({ lead: { ...lead, ...update }, outcome: picked })
+      setPhase('followup')
+      return
+    }
     moveOn()
   }
 
@@ -247,7 +257,11 @@ export default function DialScreen() {
             <div className="num text-ui font-semibold">{formatPhone(lead.phone_e164?.replace(/^\+1/, '')) || lead.phone_e164}</div>
             <div className="flex flex-wrap gap-x-3 text-body text-muted">
               {(lead.city || lead.state) && <span>{[lead.city, lead.state].filter(Boolean).join(', ')}</span>}
-              <span data-attempt>Attempt {Math.min((lead.attempt_count || 0) + 1, maxAttempts)} of {maxAttempts}</span>
+              {['queued', 'retry'].includes(lead.status) && phase !== 'followup' ? (
+                <span data-attempt>Attempt {Math.min((lead.attempt_count || 0) + 1, maxAttempts)} of {maxAttempts}</span>
+              ) : (
+                <span data-attempt>{lead.attempt_count || 0} {lead.attempt_count === 1 ? 'attempt' : 'attempts'}</span>
+              )}
             </div>
             {Object.keys(lead.extra || {}).length > 0 && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-body">
@@ -266,6 +280,25 @@ export default function DialScreen() {
           </div>
         </article>
       )}
+
+      {followUp && phase === 'followup' && (() => {
+        const links = followUpLinks(followUp.lead, script)
+        const hint = followUpHint(followUp.outcome, business)
+        return (
+          <section aria-label="Follow up" className="flex flex-col gap-2 rounded-card border border-line bg-panel p-3">
+            <div className="text-ui font-semibold">Saved. Send a quick follow-up?</div>
+            {hint && <p data-hint className="text-body text-muted">{hint}</p>}
+            <div className="flex gap-2">
+              {links.sms && <a href={links.sms} className={`${quiet} flex flex-1 items-center justify-center`}>Text</a>}
+              {links.email ? (
+                <a href={links.email} className={`${quiet} flex flex-1 items-center justify-center`}>Email</a>
+              ) : (
+                <span className="flex flex-1 items-center justify-center text-body text-dim">No email on file</span>
+              )}
+            </div>
+          </section>
+        )
+      })()}
 
       {lead && phase === 'call' && !check.ok && (
         <div role="status" data-blocked className="rounded-lg border px-3 py-2 text-body" style={{ borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}>
@@ -300,7 +333,12 @@ export default function DialScreen() {
         <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-20 -mx-4 flex gap-2 border-t border-line bg-panel px-4 py-3 sm:bottom-0 sm:mx-0 sm:rounded-card sm:border">
           <button type="button" onClick={back} disabled={!history.length || busy} className={quiet}>Back</button>
           <button type="button" onClick={skipLead} disabled={busy} className={quiet}>Skip</button>
-          {phase === 'call' && !check.ok ? (
+          {phase === 'followup' ? (
+            <button type="button" onClick={moveOn}
+              className="min-h-[48px] flex-1 rounded-lg bg-[color:var(--text)] text-ui font-semibold text-white">
+              Next lead
+            </button>
+          ) : phase === 'call' && !check.ok ? (
             <button type="button" disabled className="min-h-[48px] flex-1 rounded-lg bg-panel2 text-ui font-semibold text-muted">Call</button>
           ) : phase === 'call' ? (
             <a href={telHref(lead.phone_e164)} onClick={dial}

@@ -8,7 +8,7 @@
 // since there is no write access to the work Outlook calendars.
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
 import { getAccessToken, CALENDAR_EVENTS_SCOPE } from '../_shared/google-auth.ts'
-import { planSync, SOURCE_TAG } from '../_shared/gcal-map.ts'
+import { planSync, SOURCE_TAG, dialerCallbackEventRow } from '../_shared/gcal-map.ts'
 
 const SOURCE = 'gcal-push'
 const DAY = 86_400_000
@@ -91,8 +91,20 @@ Deno.serve(async () => {
         .lt('starts_at', timeMax)
         .order('starts_at'),
     )
+    // Power Dialer callbacks (migration 0072) ride along as call events.
+    const callbacks = await fetchAll(() =>
+      db
+        .from('dialer_calls')
+        .select('id, business_id, callback_at, notes, dialer_leads(first_name, last_name, company, phone_e164, email)')
+        .eq('user_id', owner.user_id)
+        .eq('outcome', 'callback_requested')
+        .gte('callback_at', timeMin)
+        .lt('callback_at', timeMax)
+        .order('callback_at')
+        .order('id'),
+    )
     const existing = await listOurEvents(token, calId, timeMin, timeMax)
-    const plan = planSync(rows, existing, windowStart, windowEnd)
+    const plan = planSync([...rows, ...callbacks.map(dialerCallbackEventRow)], existing, windowStart, windowEnd)
     const base = `${API}/calendars/${encodeURIComponent(calId)}/events`
 
     for (const ev of plan.creates) {

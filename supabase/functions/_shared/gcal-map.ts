@@ -137,3 +137,36 @@ export function planSync(
   }
   return { creates, updates, deletes }
 }
+
+// Power Dialer callbacks (spec 2026-11-20): a dialer_calls row with outcome
+// callback_requested becomes a 15-minute call event at callback_at, through
+// the same planSync as contact_events. Its uuid is the event id, as above.
+export interface DialerCallbackRow {
+  id: string
+  business_id: string
+  callback_at: string
+  notes?: string | null
+  dialer_leads?: {
+    first_name?: string | null
+    last_name?: string | null
+    company?: string | null
+    phone_e164?: string | null
+    email?: string | null
+  } | null
+}
+
+export function dialerCallbackEventRow(r: DialerCallbackRow): ContactEventRow {
+  const l = r.dialer_leads || {}
+  const person = [l.first_name, l.last_name].filter(Boolean).join(' ')
+  return {
+    id: r.id,
+    business_id: r.business_id,
+    kind: 'call',
+    starts_at: r.callback_at,
+    duration_min: 15,
+    note: [`Power Dialer callback${person && l.company ? ` (${l.company})` : ''}`, r.notes].filter(Boolean).join(': '),
+    remind_min: 10,
+    status: 'scheduled',
+    contacts: { name: person || l.company || null, phone: l.phone_e164 || null, email: l.email || null },
+  }
+}

@@ -20,6 +20,9 @@ const DEMO_LEADS = [
 const DEMO_SCRIPT = {
   business_id: 'mpg', max_attempts: 3, min_retry_hours: 4,
   body: '# MPG call script\n\n- Opener: Hi, is this the owner of {company}?\n- Ask: a 10 minute statement review.',
+  sms_template: 'Hi {first_name}, this is Chandler with Media Payments Group. Thanks for the time today.',
+  email_subject: 'Following up from our call, {company}',
+  email_body: 'Hi {first_name},\n\nThanks for taking my call today.\n\nChandler Atkinson',
 }
 
 const DNC_CHUNK = 200 // numbers per .in() lookup, keeps the URL short
@@ -152,8 +155,9 @@ export async function logDial({ lead, sessionId }) {
 }
 
 // Outcome logged: the call row, the lead's status, and the side effects the
-// outcome carries (DNC list, Ready to Push row). update: from applyOutcome.
-export async function logOutcome({ callId, lead, outcomeKey, notes, callbackAt, update, pushTarget }) {
+// outcome carries (DNC list, callback task, Ready to Push row). update: from
+// applyOutcome.
+export async function logOutcome({ callId, lead, outcomeKey, notes, callbackAt, update, pushTarget, workItem }) {
   if (isDemoMode) return { error: null }
   const done = async (q) => {
     const { error } = await q
@@ -175,6 +179,10 @@ export async function logOutcome({ callId, lead, outcomeKey, notes, callbackAt, 
       await done(supabase.from('dialer_leads').update({ status: 'dnc', next_attempt_at: null })
         .eq('phone_e164', lead.phone_e164).in('status', ['queued', 'retry']))
     }
+    // Callback: the Sales OS task now, not when the push is approved, so it is
+    // never missed while the row waits in the queue. (The calendar event comes
+    // from gcal-push reading the callback off dialer_calls.)
+    if (workItem) await done(supabase.from('work_items').insert(workItem))
     if (pushTarget) {
       await done(supabase.from('dialer_push_queue').upsert(
         { lead_id: lead.id, business_id: lead.business_id, target: pushTarget, outcome: outcomeKey, status: 'pending' },
