@@ -130,7 +130,7 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     today: {
       meetings,
       closings: list(closingRows, (l) => ({ name: l.borrower_name || '(no name)', date: l.firm_closing_on })),
-      // Rate locks expiring in 7 days or expired without funding (locks.js).
+      // Rate locks expiring in 10 days or expired without funding (locks.js).
       locks: list(locksExpiring(data.loans, now), (r) => ({ name: r.name, detail: lockDetail(r), alert: r.expired || r.daysLeft <= 2 || r.closesAfterLock })),
     },
     callFirst,

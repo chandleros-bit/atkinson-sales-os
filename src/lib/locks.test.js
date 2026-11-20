@@ -5,10 +5,10 @@ const NOW = new Date('2026-11-19T16:00:00Z').getTime() // Nov 19, Central
 const loan = (over) => ({ id: 'l', borrower_name: 'Ann Lee', stage_group: 'processing', lock_expires_on: '2026-11-22', ...over })
 
 describe('locksExpiring', () => {
-  it('keeps open, unfunded, real loans locked to expire within 7 days or expired in the last 30', () => {
+  it('keeps open, unfunded, real loans locked to expire within 10 days or expired in the last 30', () => {
     const rows = locksExpiring([
       loan({ id: 'a', lock_expires_on: '2026-11-22' }),
-      loan({ id: 'b', lock_expires_on: '2026-11-27' }),
+      loan({ id: 'b', lock_expires_on: '2026-11-30' }),
       loan({ id: 'c', lock_expires_on: '2026-11-15' }),
       loan({ id: 'd', lock_expires_on: '2026-10-19' }),
       loan({ id: 'e', lock_expires_on: '2026-11-20', funded_on: '2026-11-18' }),

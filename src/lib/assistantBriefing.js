@@ -36,7 +36,7 @@ export function buildAssistantBriefing(data, now = Date.now()) {
     sellerAgent: agent(l.seller_agent_name, l.seller_agent_phone),
   }))
 
-  // 1b. Rate locks expiring in 7 days or already expired without funding.
+  // 1b. Rate locks expiring in 10 days or already expired without funding.
   const locks = list(locksExpiring(data.loans, now), (r) => ({ name: r.name, detail: lockDetail(r), alert: r.expired || r.daysLeft <= 2 || r.closesAfterLock }))
 
   // 2. Disclosures due: Application Received, not yet Disclosed. TRID: the

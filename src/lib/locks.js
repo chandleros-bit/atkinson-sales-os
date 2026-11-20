@@ -1,11 +1,11 @@
 // Rate locks expiring (Bayway Bot Engine doc, Sales OS week 2). Open, real
-// loans whose Arive lock expires within LOCK_WARN_DAYS, or expired in the last
+// loans whose Arive lock expires within LOCK_WARN_DAYS (10, per the doc), or expired in the last
 // LOCK_EXPIRED_LOOKBACK days without funding (needs an extension or relock).
 // Flags a firm closing date that falls after the lock. Pure, no I/O.
 import { isOpen, isScenario } from './loans'
 import { chicagoDateKey } from './briefingTime'
 
-export const LOCK_WARN_DAYS = 7
+export const LOCK_WARN_DAYS = 10
 export const LOCK_EXPIRED_LOOKBACK = 30
 
 const dayNum = (key) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 86_400_000
