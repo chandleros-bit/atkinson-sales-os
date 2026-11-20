@@ -55,12 +55,14 @@ describe('parseUsDate', () => {
 describe('rowToLoan dates', () => {
   it('fills funded_on and closed_on from an ISO-dated export', () => {
     const loan = rowToLoan(
-      { 'ARIVE Loan Id': '1', 'Stage Name': 'Loan Finalized', 'Loan Funded': '2026-10-05', 'Docs Signed / Loan Closed': '2026-10-05', 'Firm Closing Date': '10/5/2026' },
+      { 'ARIVE Loan Id': '1', 'Stage Name': 'Loan Finalized', 'Loan Funded': '2026-10-05', 'Docs Signed / Loan Closed': '2026-10-05', 'Firm Closing Date': '10/5/2026', 'Lock Date': '2026-09-18 12:00:22 AM', 'Lock Expiration': '2026-10-19 11:59:22 PM' },
       { loName: 'x' },
     )
     expect(loan.funded_on).toBe('2026-10-05')
     expect(loan.closed_on).toBe('2026-10-05')
     expect(loan.firm_closing_on).toBe('2026-10-05')
+    expect(loan.lock_date).toBe('2026-09-18')
+    expect(loan.lock_expires_on).toBe('2026-10-19')
   })
 })
 

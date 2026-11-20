@@ -82,6 +82,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
   const today = [
     ...(m.today.meetings.length ? m.today.meetings.map((e) => `${timeLabel(e.time)} · ${e.title} (${BOOK[e.book]})`) : ['No meetings today']),
     ...(m.today.closings.count ? [`Closing this week (${m.today.closings.count}): ${m.today.closings.top.map((c) => `${c.name} ${dayLabel(c.date)}`).join(', ')}`] : []),
+    ...((m.today.locks?.top || []).map((l) => `Lock: ${l.name} ${l.detail}`)),
   ]
   const cf = m.callFirst
   const callFirst = [
@@ -133,8 +134,9 @@ export function renderOwnerBriefing(m, { appUrl }) {
   const todayRows = m.today.meetings
     .map((e) => ({ cells: [esc(timeLabel(e.time)), esc(e.title), esc(BOOK[e.book] || '')] }))
     .concat(blockRows(m.today.closings, (c) => [esc(dayLabel(c.date)), esc(`Closing: ${c.name}`), 'Bayway']))
+    .concat(blockRows(m.today.locks || { count: 0, top: [] }, (l) => [esc(l.alert ? 'Act now' : 'This week'), esc(`Lock: ${l.name} ${l.detail}`), 'Bayway'], (l) => l.alert))
   const todayTable = table(
-    [{ label: 'When', width: '20%' }, { label: 'Meeting or closing' }, { label: 'Book', width: '16%' }],
+    [{ label: 'When', width: '20%' }, { label: 'Meeting, closing or lock' }, { label: 'Book', width: '16%' }],
     todayRows.length ? todayRows : [{ note: 'No meetings or closings today' }],
   )
 
@@ -211,6 +213,7 @@ export function renderAssistantBriefing(m, { appUrl }) {
       ].filter(Boolean).join(' | '),
       alert: false,
     })),
+    block('Locks expiring', m.locks || { count: 0, top: [] }, '/bayway/loans', (l) => ({ text: `${l.name} - lock ${l.detail}${l.alert ? ' - ACT NOW' : ''}`, alert: l.alert })),
     block('Disclosures due', m.disclosures, '/pipeline', (d) => ({ text: `${d.name} - disclose by ${dayLabel(d.dueBy)}${d.due ? ' (DUE)' : ''}`, alert: d.due })),
     block('Missing docs', m.missingDocs, '/pipeline', (d) => ({
       text: `${d.name} - ${d.docs.join(', ')}${d.days != null ? ` - ${d.days} days` : ''}${d.chase ? ' - CHASE TODAY' : ''}`,
@@ -233,6 +236,12 @@ export function renderAssistantBriefing(m, { appUrl }) {
         table(
           [{ label: 'Borrower', width: '20%' }, { label: 'Closes', width: '11%' }, { label: 'Title', width: '20%' }, { label: 'Agents', width: '27%' }, { label: 'Docs needed' }],
           blockRows(m.closing, (c) => [esc(c.name), esc(dayLabel(c.date)), esc(c.title || 'Not set'), agentHtml(c), esc(c.docs.length ? c.docs.join(', ') : 'None')]),
+        ),
+    m.locks?.count &&
+      heading(`Locks expiring (${m.locks.count})`, url('/bayway/loans')) +
+        table(
+          [{ label: 'Borrower', width: '34%' }, { label: 'Lock' }, { label: 'Action', width: '18%' }],
+          blockRows(m.locks, (l) => [esc(l.name), esc(l.detail), l.alert ? '<b>Act now</b>' : 'Watch'], (l) => l.alert),
         ),
     m.disclosures.count &&
       heading(`Disclosures due (${m.disclosures.count})`, url('/pipeline')) +

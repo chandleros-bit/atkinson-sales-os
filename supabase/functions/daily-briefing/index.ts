@@ -64,7 +64,7 @@ async function ownerMail(db, cfg, now, ownerId) {
     fetchAll(() => db.from('activities').select('type, direction, raw').gte('occurred_at', yesterday.from).lt('occurred_at', yesterday.to).order('id')),
     // The whole Bayway board (no stage filter); the builders pick their stages.
     fetchAll(() => db.from('v_active_pipeline').select('id, business_id, name, stage, stage_since, last_touch_at, crm_created_at, last_outbound_call_at, open_task_count, oldest_open_due_at, docs_outstanding_count, docs_oldest_requested_at').eq('business_id', 'bay').order('id')),
-    fetchAll(() => db.from('loans').select('id, borrower_name, role, amount, stage_group, funded_on, firm_closing_on, application_on, contact_id, comp_override, scenario_auto, scenario_override, updated_at, last_seen_at').order('id')),
+    fetchAll(() => db.from('loans').select('id, borrower_name, role, amount, stage_group, funded_on, firm_closing_on, lock_expires_on, application_on, contact_id, comp_override, scenario_auto, scenario_override, updated_at, last_seen_at').order('id')),
     fetchAll(() => db.from('lead_ratings').select('contact_id, business_id, temperature, est_amount, close_month, rated_at, contact:contacts(name)').order('contact_id')),
     fetchAll(() => db.from('v_lead_signals').select('*').order('id')),
     fetchAll(() => db.from('v_dial_contacts').select('*').order('id')),
@@ -99,7 +99,7 @@ async function ownerMail(db, cfg, now, ownerId) {
 
 async function assistantMail(db, cfg, now, assistantId) {
   const [loans, pipeline, workItems] = await Promise.all([
-    fetchAll(() => db.from('loans').select('id, contact_id, borrower_name, stage_group, firm_closing_on, title_company, buyer_agent_name, buyer_agent_phone, seller_agent_name, seller_agent_phone, scenario_auto, scenario_override').eq('business_id', 'bay').order('id')),
+    fetchAll(() => db.from('loans').select('id, contact_id, borrower_name, stage_group, funded_on, firm_closing_on, lock_expires_on, title_company, buyer_agent_name, buyer_agent_phone, seller_agent_name, seller_agent_phone, scenario_auto, scenario_override').eq('business_id', 'bay').order('id')),
     fetchAll(() => db.from('v_active_pipeline').select('id, name, stage, stage_since, docs_tracked, docs_outstanding, docs_outstanding_count, docs_oldest_requested_at').eq('business_id', 'bay').order('id')),
     assistantId
       ? fetchAll(() => db.from('work_items').select('id, kind, title, status, check_back_on, due_on, contact_id, contact:contacts(name)').eq('user_id', assistantId).eq('business_id', 'bay').neq('status', 'done').order('id'))

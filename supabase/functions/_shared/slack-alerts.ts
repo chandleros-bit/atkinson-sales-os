@@ -6,9 +6,10 @@
 //   docs_aging   Application Received, docs requested 7+ days ago, still missing
 //   quiet_app    Application Received, no touch in 5+ days
 //   closing      a Bayway loan closes within 3 days
+//   lock         a rate lock expires within 3 days, or expired without funding
 //   sync_fail    a sync's latest run failed
-// Everything else stays in the 7:30 AM briefing. Lock expirations and the
-// daily "drafts waiting" message come with those features.
+// Everything else stays in the 7:30 AM briefing. The daily "drafts waiting"
+// message comes with the Drafts inbox.
 // Pure: no I/O. Each alert has a dedupe key; the function sends a key once.
 // Keys include the timestamp that makes it new (a fresh inbound, a new touch),
 // so the same lead can alert again after the situation resets.
@@ -43,8 +44,10 @@ export interface LoanRow {
   id: string
   borrower_name: string | null
   firm_closing_on?: string | null
+  lock_expires_on?: string | null
   funded_on?: string | null
   stage_group?: string | null
+  scenario?: boolean | null
 }
 
 export interface SyncRow {
@@ -65,6 +68,9 @@ export const SPEED_STAGES = new Set(['New Lead', 'Not Contacted'])
 export const QUIET_APP_DAYS = 5
 export const DOC_AGING_DAYS = 7
 export const CLOSING_DAYS = 3
+export const LOCK_DAYS = 3
+export const LOCK_EXPIRED_LOOKBACK = 30
+const OPEN_GROUPS = new Set(['prospect', 'processing', 'closing'])
 export const NEW_LEAD_HOURS = 24
 export const REACHED_OUT_HOURS = 24
 const APP_RECEIVED = 'Application Received'
@@ -193,11 +199,23 @@ export function buildAlerts(i: Inputs): Alert[] {
 
   const today = centralDate(now)
   const until = centralDate(now + CLOSING_DAYS * DAY)
+  const lockUntil = centralDate(now + LOCK_DAYS * DAY)
+  const lockFrom = centralDate(now - LOCK_EXPIRED_LOOKBACK * DAY)
   for (const l of i.loans) {
+    if (l.funded_on || l.scenario) continue
+    if (l.stage_group && !OPEN_GROUPS.has(l.stage_group)) continue
+    const loan = `<${link('/bayway/loans')}|${nameOf(l.borrower_name)}>`
     const d = l.firm_closing_on
-    if (!d || l.funded_on || d < today || d > until) continue
-    const when = d === today ? 'today' : `on ${d}`
-    out.push({ key: `closing:${l.id}:${d}`, kind: 'closing', book: 'bay', text: `:house: Closing ${when}: <${link('/bayway/loans')}|${nameOf(l.borrower_name)}>. Check that everything's clear.` })
+    if (d && d >= today && d <= until) {
+      const when = d === today ? 'today' : `on ${d}`
+      out.push({ key: `closing:${l.id}:${d}`, kind: 'closing', book: 'bay', text: `:house: Closing ${when}: ${loan}. Check that everything's clear.` })
+    }
+    const x = l.lock_expires_on
+    if (x && x <= lockUntil && x >= lockFrom) {
+      const when = x < today ? `expired ${x}` : x === today ? 'expires today' : `expires ${x}`
+      const clash = d && d > x ? ` Closing (${d}) is after the lock.` : ''
+      out.push({ key: `lock:${l.id}:${x}`, kind: 'lock', book: 'bay', text: `:lock: Rate lock ${when}: ${loan}.${clash} Extend or relock.` })
+    }
   }
 
   for (const s of i.syncs) {
@@ -212,7 +230,7 @@ export function buildAlerts(i: Inputs): Alert[] {
 }
 
 // Order inside a message: what to do first, first.
-const RANK: Record<string, number> = { reached_out: 0, new_lead: 1, closing: 2, hot_cold: 3, docs_aging: 4, quiet_app: 5, sync_fail: 6 }
+const RANK: Record<string, number> = { reached_out: 0, new_lead: 1, lock: 2, closing: 3, hot_cold: 4, docs_aging: 5, quiet_app: 6, sync_fail: 7 }
 
 // Unsent alerts grouped into one Slack message per book, at most `cap` lines
 // each, with a pointer to the Workbench for the rest. Returns the keys that

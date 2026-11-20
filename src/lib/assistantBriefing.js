@@ -3,6 +3,7 @@
 // the service role and renders the result. No money: no comp, no forecast, no
 // MPG, nothing sensitive from the loan file (income, SSN, credit).
 import { isOpen, isScenario } from './loans'
+import { locksExpiring, lockDetail } from './locks'
 import { daysSince } from './overview'
 import { chicagoDateKey, previousBusinessDateKey, longDateLabel, addBusinessDays } from './briefingTime'
 
@@ -34,6 +35,9 @@ export function buildAssistantBriefing(data, now = Date.now()) {
     buyerAgent: agent(l.buyer_agent_name, l.buyer_agent_phone),
     sellerAgent: agent(l.seller_agent_name, l.seller_agent_phone),
   }))
+
+  // 1b. Rate locks expiring in 7 days or already expired without funding.
+  const locks = list(locksExpiring(data.loans, now), (r) => ({ name: r.name, detail: lockDetail(r), alert: r.expired || r.daysLeft <= 2 || r.closesAfterLock }))
 
   // 2. Disclosures due: Application Received, not yet Disclosed. TRID: the
   // Loan Estimate goes out within 3 business days of the application.
@@ -75,12 +79,13 @@ export function buildAssistantBriefing(data, now = Date.now()) {
   return {
     dateLabel: longDateLabel(now),
     closing,
+    locks,
     disclosures,
     missingDocs,
     newApps,
     waiting,
     closingCount: closing.count,
     chaseCount,
-    quiet: !closing.count && !disclosures.count && !missingDocs.count && !newApps.count && !waiting.count,
+    quiet: !closing.count && !locks.count && !disclosures.count && !missingDocs.count && !newApps.count && !waiting.count,
   }
 }

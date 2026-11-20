@@ -11,7 +11,7 @@
 // Scheduled by 0068. Deployed --no-verify-jwt like the other cron functions.
 
 import { serviceClient, logSync, fetchAll } from '../_shared/db.ts'
-import { buildAlerts, planMessages, inSendWindow, centralDate, CLOSING_DAYS, NEW_LEAD_HOURS, type Book } from '../_shared/slack-alerts.ts'
+import { buildAlerts, planMessages, inSendWindow, NEW_LEAD_HOURS, type Book } from '../_shared/slack-alerts.ts'
 
 const APP_URL = 'https://atkinson-sales-os.vercel.app'
 const WEBHOOK: Record<Book, string | undefined> = {
@@ -62,12 +62,11 @@ Deno.serve(async (req) => {
       db.from('v_active_pipeline').select('id, name, stage, last_touch_at, docs_outstanding_count, docs_oldest_requested_at')
         .eq('business_id', 'bay').eq('stage', 'Application Received').order('id'))
 
-    const today = centralDate(now)
-    const until = centralDate(now + CLOSING_DAYS * 86_400_000)
-    const { data: loans, error: loanErr } = await db.from('loans')
-      .select('id, borrower_name, firm_closing_on, funded_on, stage_group')
-      .eq('business_id', 'bay').is('funded_on', null).gte('firm_closing_on', today).lte('firm_closing_on', until).limit(200)
+    const { data: loanRows, error: loanErr } = await db.from('loans')
+      .select('id, borrower_name, firm_closing_on, lock_expires_on, funded_on, stage_group, scenario_auto, scenario_override')
+      .eq('business_id', 'bay').is('funded_on', null).in('stage_group', ['prospect', 'processing', 'closing']).limit(1000)
     if (loanErr) throw new Error(`loans: ${loanErr.message}`)
+    const loans = (loanRows || []).map((l) => ({ ...l, scenario: l.scenario_override ?? !!l.scenario_auto }))
 
     const { data: logRows, error: logErr } = await db.from('sync_log').select('source, status, ran_at, message')
       .gte('ran_at', new Date(now - 2 * 3_600_000).toISOString()).order('ran_at', { ascending: false }).limit(1000)
@@ -76,7 +75,7 @@ Deno.serve(async (req) => {
     for (const r of logRows || []) if (!latest.has(r.source)) latest.set(r.source, r)
 
     const alerts = buildAlerts({
-      signals, pipeline, loans: loans || [], syncs: [...latest.values()],
+      signals, pipeline, loans, syncs: [...latest.values()],
       hotColdDays: Number(rules.hot_cold_days ?? 3),
       useCrmActivity: rules.use_crm_last_activity_fallback !== false,
       link, now,
@@ -90,7 +89,7 @@ Deno.serve(async (req) => {
       const { error } = await db.from('slack_alerts_sent').upsert(rows, { onConflict: 'key' })
       if (error) throw new Error(`slack_alerts_sent: ${error.message}`)
       for (const b of books) {
-        await post(WEBHOOK[b]!, `:wave: ${BOOK_NAME[b]} alerts are on. You'll get a push here only when something needs you today: a new lead, someone reaching out, a hot lead going cold, a file at risk, a closing within 3 days, or a failed sync. Everything else stays in the 7:30 AM briefing.`)
+        await post(WEBHOOK[b]!, `:wave: ${BOOK_NAME[b]} alerts are on. You'll get a push here only when something needs you today: a new lead, someone reaching out, a hot lead going cold, a file at risk, a closing or rate lock within 3 days, or a failed sync. Everything else stays in the 7:30 AM briefing.`)
       }
       await logSync(db, 'slack-alerts', 'ok', 0, `first run: ${rows.length - 1} existing alerts marked seen`)
       return Response.json({ ok: true, first_run: true, seen: rows.length - 1 })
