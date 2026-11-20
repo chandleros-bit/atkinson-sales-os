@@ -16,6 +16,7 @@ import BizBadge from '../components/BizBadge'
 import PersonLink from '../components/PersonLink'
 import Icon from '../components/Icon'
 import ForecastCard from '../components/ForecastCard'
+import WeeklyFocusCard from '../components/WeeklyFocusCard'
 import PageHeader from '../components/PageHeader'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useForecast } from '../lib/useForecastInputs'
@@ -693,6 +694,7 @@ export default function Overview() {
       {!loading && !error && view && (
         <>
           <AlertBanner alert={view.alert} />
+          <WeeklyFocusCard />
 
           <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-[18px] xl:grid-cols-4">
             {view.kpis.map((c) => (
