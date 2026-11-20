@@ -66,7 +66,7 @@ describe('monthValues and kpiCards', () => {
   it('builds commission, closed, calls and pipeline cards', () => {
     const cards = kpiCards({ biz: 'all', values: v, targets })
     expect(cards.map((c) => c.id)).toEqual(['commission', 'closed', 'calls', 'pipeline'])
-    expect(cards[0]).toMatchObject({ value: 9800, goal: 17500, pct: 56, tag: 'Entered' })
+    expect(cards[0]).toMatchObject({ value: 9800, goal: 7000, pct: 100, tag: 'Entered' })
     expect(cards[1]).toMatchObject({ value: 3, foot: 'Bayway 1 loans · MPG 2 merchants', delta: { text: '→ 0 vs Sep', tone: 'flat' } })
     expect(cards[2].delta).toEqual({ text: '↓ 43% vs Sep', tone: 'down' })
     expect(cards[2].foot).toBe('11 today')
@@ -118,8 +118,8 @@ describe('monthly goals', () => {
     const v = monthValues({ biz: 'all', metrics, deals, activities, pipeline, now: NOW })
     const g = monthlyGoals({ biz: 'all', values: v, targets, now: NOW })
     expect(g.goals.map((x) => x.id)).toEqual(['calls', 'closings', 'commission', 'applications', 'merchants'])
-    expect(g.counts).toEqual({ hit: 0, pace: 0, behind: 5 })
-    expect(g.onPace).toBe(0)
+    expect(g.counts).toEqual({ hit: 1, pace: 0, behind: 4 })
+    expect(g.onPace).toBe(20)
     expect(monthlyGoals({ biz: 'mpg', values: v, targets, now: NOW }).goals.map((x) => x.id)).toEqual(['calls', 'merchants', 'residual', 'proposals'])
   })
 
@@ -142,7 +142,7 @@ describe('pipeline mix, income, sprints', () => {
 
   it('income mix against the combined goal', () => {
     const i = incomeMix({ values: { commission: 9800, residual: 4200 }, targets })
-    expect(i).toMatchObject({ total: 14000, goal: 27500, pct: 51, annualized: 168000 })
+    expect(i).toMatchObject({ total: 14000, goal: 7750, pct: 100, annualized: 168000 })
   })
 
   it('sprint pace per book', () => {

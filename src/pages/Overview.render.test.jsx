@@ -145,7 +145,7 @@ describe('Overview dashboard', () => {
     expect(document.querySelector('[data-goal="merchants"]')).toBeNull()
     expect(document.querySelector('[data-kpi="commission"]').textContent).toContain('Est. from Arive')
     expect(document.querySelector('[data-kpi="closed"]').textContent).toMatch(/Closed this month\s*1/)
-    expect(document.querySelector('[data-goal="closings"]').textContent).toContain('1 / 5')
+    expect(document.querySelector('[data-goal="closings"]').textContent).toContain('1 / 2')
     expect(text).toContain('Estimated from Arive')
   })
 

@@ -5,7 +5,7 @@ import { buildQueue, resolveRules, reasonText } from './priorityQueue'
 import { buildDialList } from './dialList'
 import { buildAlerts } from './alerts'
 import { monthValues, monthlyGoals, prevMonthWindow, PRODUCTION_STAGES } from './overviewDash'
-import { DEFAULT_TARGETS, resolveTargets, monthWindow, sprintWindow } from './reports'
+import { targetsFor, monthWindow, sprintWindow } from './reports'
 import { loanStats, resolveRates, isOpen, isScenario } from './loans'
 import { resolveForecast, forecastLines, forecastByMonth, avgFundedLoan, mpgPerAccount, latestMpgMetrics, monthKeyOf } from './forecast'
 import { syncHealth } from './syncHealth'
@@ -32,7 +32,7 @@ function ratingsMap(rows) {
 //                        for latestMpgMetrics; falls back to `metrics` sorted newest first
 export function buildOwnerBriefing(data, now = Date.now()) {
   const rules = resolveRules(data.rules)
-  const targets = resolveTargets(DEFAULT_TARGETS, data.targets)
+  const targets = targetsFor(data.targets, 'all')
   const rates = resolveRates(data.rates)
   const fs = resolveForecast(data.forecastSettings)
 

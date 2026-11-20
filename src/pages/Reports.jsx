@@ -3,7 +3,7 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import {
-  DEFAULT_TARGETS, metricsForTab, resolveTargets, buildTabModel,
+  metricsForTab, targetsFor, resolveTargetsByBiz, mergeTargetEdits, appliesTo, formatValue, buildTabModel,
   weekStart, monthWindow, rollupMetrics, dailySeries,
   deriveStageCounts, periodDateFor,
   sprintRows, sprintWindow, MPG_SPRINT, callsByDay, callsSince,
@@ -166,27 +166,69 @@ function TrendStrip({ series }) {
   )
 }
 
-function EditTargets({ tab, biz, targets, onClose, onSave, saving }) {
+const BIZ_LABEL = { bay: 'Bayway', mpg: 'MPG' }
+
+// One column per business in view. A metric a business doesn't carry shows
+// "—" in that column. On the All view, shared metrics also show the combined
+// total the scoreboard uses.
+export function EditTargets({ tab, biz, savedTargets, onClose, onSave, saving }) {
+  const cols = biz === 'all' ? ['bay', 'mpg'] : [biz]
   const metrics = metricsForTab(tab, biz)
+  const byBiz = resolveTargetsByBiz(savedTargets)
   const [draft, setDraft] = useState(() =>
-    Object.fromEntries(metrics.map((m) => [m.key, targets[m.key] ?? ''])),
+    Object.fromEntries(cols.map((b) => [b, Object.fromEntries(
+      metrics.filter((m) => appliesTo(m.key, b)).map((m) => [m.key, byBiz[b][m.key] ?? '']),
+    )])),
   )
+  const set = (b, key, v) => setDraft((d) => ({ ...d, [b]: { ...d[b], [key]: v } }))
+  const showTotal = cols.length > 1
+  const total = (key) => cols.reduce((a, b) => a + (Number(draft[b]?.[key]) || 0), 0)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-card border border-line bg-panel2 p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 text-sm font-semibold">Edit targets — {tab}</div>
-        <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
-          {metrics.map((m) => (
-            <label key={m.key} className="flex items-center justify-between gap-3 text-xs text-muted">
-              {m.label}
-              <input
-                type="number" min="0"
-                value={draft[m.key]}
-                onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
-                className="w-28 rounded-md border border-line2 bg-panel px-2 py-1 text-sm text-[color:var(--text)]"
-              />
-            </label>
-          ))}
+      <div className="w-full max-w-xl rounded-card border border-line bg-panel2 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 text-sm font-semibold">Edit targets — {tab}</div>
+        <div className="mb-3 text-caption text-muted">
+          {showTotal ? 'Set each business on its own. Shared metrics add up to the All view.' : `${BIZ_LABEL[biz]} targets only.`}
+        </div>
+        <div className="max-h-[55vh] overflow-y-auto pr-1">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-muted">
+                <th className="pb-2 font-medium">Metric</th>
+                {cols.map((b) => (
+                  <th key={b} className="pb-2 font-medium" style={{ color: `var(--${b})` }}>{BIZ_LABEL[b]}</th>
+                ))}
+                {showTotal && <th className="pb-2 text-right font-medium">All</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {metrics.map((m) => (
+                <tr key={m.key}>
+                  <td className="py-1 pr-3 text-muted">{m.label}</td>
+                  {cols.map((b) => (
+                    <td key={b} className="py-1 pr-2">
+                      {appliesTo(m.key, b) ? (
+                        <input
+                          type="number" min="0"
+                          aria-label={`${BIZ_LABEL[b]} ${m.label}`}
+                          value={draft[b][m.key]}
+                          onChange={(e) => set(b, m.key, e.target.value)}
+                          className="w-28 rounded-md border border-line2 bg-panel px-2 py-1 text-sm text-[color:var(--text)]"
+                        />
+                      ) : (
+                        <span className="text-dim">—</span>
+                      )}
+                    </td>
+                  ))}
+                  {showTotal && (
+                    <td className="num py-1 text-right text-muted">
+                      {m.biz === 'both' ? formatValue(total(m.key), m.unit) : ''}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md border border-line2 px-3 py-1.5 text-body text-muted">Cancel</button>
@@ -270,7 +312,6 @@ export default function Reports() {
         sprint: sprintMetrics.data || [],
         series: series.data || [],
         savedTargets: settings.data?.value || {},
-        targets: resolveTargets(DEFAULT_TARGETS, settings.data?.value),
         callRows: callRows.data || [],
         loans: loanBundle.data?.loans || [],
         loanRates: loanBundle.data?.rates || DEFAULT_RATES,
@@ -302,16 +343,14 @@ export default function Reports() {
     await load()
   }
 
-  async function saveTargets(draft) {
+  async function saveTargets(edits) {
     setSaving(true)
-    const clean = Object.fromEntries(
-      Object.entries(draft).filter(([, v]) => v !== '' && v != null).map(([k, v]) => [k, Number(v)]),
-    )
-    const merged = { ...(data.savedTargets || {}), ...clean }
+    const value = mergeTargetEdits(data.savedTargets, edits)
     const { error: upErr } = await supabase
       .from('settings')
-      .upsert({ key: 'metric_targets', value: merged }, { onConflict: 'key' })
+      .upsert({ key: 'metric_targets', value }, { onConflict: 'key' })
     setSaving(false)
+    if (upErr) { setError(upErr.message); return }
     refreshForecastInputs().catch(() => {})
     setEditing(false)
     await load()
@@ -320,7 +359,7 @@ export default function Reports() {
   const cards = useMemo(() => {
     if (!data || activeTab === 'tracker') return []
     const values = computeValues(activeTab, biz, data)
-    return buildTabModel(metricsForTab(activeTab, biz), values, data.targets, ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
+    return buildTabModel(metricsForTab(activeTab, biz), values, targetsFor(data.savedTargets, biz), ariveNotes({ loans: data.loans, lastImport: data.lastLoanImport, biz }))
   }, [activeTab, biz, data])
 
   return (
@@ -403,7 +442,7 @@ export default function Reports() {
         <EditTargets
           tab={activeTab}
           biz={biz}
-          targets={data.targets}
+          savedTargets={data.savedTargets}
           onClose={() => setEditing(false)}
           onSave={saveTargets}
           saving={saving}
@@ -474,7 +513,7 @@ function demoReportsData() {
     sprint: sprintDemo,
     series: [...series, ...month, ...sprintDemo],
     savedTargets: {},
-    targets: resolveTargets(DEFAULT_TARGETS, null),
+    savedTargets: {},
     callRows: [
       { occurred_at: new Date().toISOString(), business_id: 'bay' },
       { occurred_at: new Date().toISOString(), business_id: 'bay' },
