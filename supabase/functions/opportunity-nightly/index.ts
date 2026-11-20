@@ -28,12 +28,17 @@ function anthropicAsk(apiKey: string, model: string) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      // 700 tokens cut the JSON off mid-object (Nov 20: every note fell back).
-      body: JSON.stringify({ model, max_tokens: 1500, system, messages: [{ role: 'user', content: user }] }),
+      // Haiku 5.5 thinks by default and thinking counts against max_tokens, so
+      // the JSON got cut off (Nov 20: every note fell back). A call note needs
+      // no thinking; turn it off and keep the ceiling well above the reply.
+      body: JSON.stringify({ model, max_tokens: 1500, thinking: { type: 'disabled' }, system, messages: [{ role: 'user', content: user }] }),
     })
     if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`)
     const j = await res.json()
-    if (j.stop_reason === 'max_tokens') throw new Error('reply cut off at max_tokens')
+    if (j.stop_reason === 'max_tokens') {
+      const kinds = (j.content ?? []).map((c: { type?: string }) => c.type).join(',')
+      throw new Error(`reply cut off at max_tokens (blocks: ${kinds})`)
+    }
     return (j.content ?? []).map((c: { text?: string }) => c.text ?? '').join('')
   }
 }
