@@ -275,3 +275,59 @@ export async function approveQueueRows(ids) {
   }
   return { results: data?.results || [], error: null }
 }
+
+// ------------------------------------------------------------------ settings
+
+const DEMO_SCRIPTS = () => [
+  { ...DEMO_SCRIPT, hours_guard: true },
+  { ...DEMO_SCRIPT, business_id: 'bay', body: '# Bayway call script', sms_template: 'Hi {first_name}, Chandler with Bayway Mortgage.', email_subject: 'Next steps', email_body: 'Hi {first_name},', hours_guard: true },
+]
+
+// This user's script and settings row per business ({ mpg, bay }).
+export async function fetchScripts() {
+  if (isDemoMode) return { data: Object.fromEntries(DEMO_SCRIPTS().map((s) => [s.business_id, s])), error: null }
+  // rowcap-ok: at most two rows, one per business
+  const { data, error } = await supabase.from('dialer_scripts').select('*')
+  if (error) return { data: null, error }
+  return { data: Object.fromEntries((data || []).map((s) => [s.business_id, s])), error: null }
+}
+
+export async function saveScript(business, fields) {
+  if (isDemoMode) return { error: null }
+  const { error } = await supabase
+    .from('dialer_scripts')
+    .upsert({ business_id: business, ...fields, updated_at: new Date().toISOString() }, { onConflict: 'user_id,business_id' })
+  return { error }
+}
+
+// Shared Do Not Call list, newest first; q filters by digits in the number.
+export async function fetchDnc(q = '') {
+  if (isDemoMode) return { data: [{ phone_e164: '+17135550199', reason: 'Asked not to be called', source: 'dialer', added_at: '2026-11-20T15:00:00Z' }], error: null }
+  const digits = String(q).replace(/\D/g, '')
+  let query = supabase.from('dnc_numbers').select('*').order('added_at', { ascending: false }).limit(200)
+  if (digits) query = query.like('phone_e164', `%${digits}%`)
+  const { data, error } = await query
+  return { data, error }
+}
+
+export async function addDnc(phone_e164, reason) {
+  if (isDemoMode) return { error: null }
+  const { error } = await supabase
+    .from('dnc_numbers')
+    .upsert({ phone_e164, reason: reason || null, source: 'manual' }, { onConflict: 'phone_e164', ignoreDuplicates: true })
+  return { error }
+}
+
+// Owner only (RLS). Removing a number does not reopen leads already marked dnc.
+export async function removeDnc(phone_e164) {
+  if (isDemoMode) return { error: null }
+  const { error } = await supabase.from('dnc_numbers').delete().eq('phone_e164', phone_e164)
+  return { error }
+}
+
+// Archive hides a list from the Lists screen; its calls stay for reporting.
+export async function setListStatus(id, status) {
+  if (isDemoMode) return { error: null }
+  const { error } = await supabase.from('dialer_lists').update({ status }).eq('id', id)
+  return { error }
+}

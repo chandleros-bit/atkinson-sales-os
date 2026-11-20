@@ -28,6 +28,7 @@ vi.mock('../lib/dialerData', () => ({
   fetchDncSet: async (phones) => { data.dncAsked = phones; return new Set(['+18325550199']) },
   saveList: async (args) => { data.saved = args; return { id: 'new-list', error: null } },
   queueCount: async () => 2,
+  setListStatus: async (id, status) => { data.status = { id, status }; return { error: null } },
   checkCrm: async (business, phones) => { data.crmAsked = { business, phones }; return { matches: data.crm, error: data.crmError ? new Error(data.crmError) : null } },
 }))
 
@@ -211,5 +212,22 @@ describe('Power Dialer upload, CRM check', () => {
     expect(n(host, 'crm')).toBe('?')
     await click(button(host, 'Save list'))
     expect(data.saved.leads.map((l) => l.status)).toEqual(['queued', 'queued', 'dnc'])
+  })
+})
+
+describe('archiving lists', () => {
+  it('archives a list and can show and unarchive it', async () => {
+    const host = await mount()
+    const card = host.querySelector('[data-list-id="l1"]')
+    await click([...card.querySelectorAll('button')].find((b) => b.textContent === 'Archive'))
+    expect(data.status).toEqual({ id: 'l1', status: 'archived' })
+    expect(host.querySelector('[data-list-id="l1"]')).toBeNull()
+    const toggle = host.querySelector('[data-show-archived]')
+    expect(toggle.textContent).toBe('Show archived lists (2)')
+    await click(toggle)
+    const back = host.querySelector('[data-list-id="l1"]')
+    expect(back.textContent).toContain('Archived')
+    await click([...back.querySelectorAll('button')].find((b) => b.textContent === 'Unarchive'))
+    expect(data.status).toEqual({ id: 'l1', status: 'active' })
   })
 })
