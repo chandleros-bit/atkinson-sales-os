@@ -1124,7 +1124,7 @@ function addBusinessDays(dateKey, n) {
 }
 
 // src/lib/locks.js
-var LOCK_WARN_DAYS = 7;
+var LOCK_WARN_DAYS = 10;
 var LOCK_EXPIRED_LOOKBACK = 30;
 var dayNum = (key) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 864e5;
 function locksExpiring(loans, now = Date.now()) {
@@ -1234,7 +1234,7 @@ function buildOwnerBriefing(data, now = Date.now()) {
     today: {
       meetings,
       closings: list(closingRows, (l) => ({ name: l.borrower_name || "(no name)", date: l.firm_closing_on })),
-      // Rate locks expiring in 7 days or expired without funding (locks.js).
+      // Rate locks expiring in 10 days or expired without funding (locks.js).
       locks: list(locksExpiring(data.loans, now), (r) => ({ name: r.name, detail: lockDetail(r), alert: r.expired || r.daysLeft <= 2 || r.closesAfterLock }))
     },
     callFirst,
