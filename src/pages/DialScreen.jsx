@@ -263,6 +263,13 @@ export default function DialScreen() {
                 <span data-attempt>{lead.attempt_count || 0} {lead.attempt_count === 1 ? 'attempt' : 'attempts'}</span>
               )}
             </div>
+            {lead.crm_match && (
+              <div data-crm-match className="rounded-md bg-panel2 px-2 py-1 text-body text-ink2">
+                Already in {lead.crm_match.crm === 'zoho' ? `Zoho (${lead.crm_match.module})` : 'FUB'}
+                {lead.crm_match.name && `: ${lead.crm_match.name}`}
+                {lead.crm_match.owner && `, owner ${lead.crm_match.owner}`}
+              </div>
+            )}
             {Object.keys(lead.extra || {}).length > 0 && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-body">
                 {Object.entries(lead.extra).map(([k, v]) => (

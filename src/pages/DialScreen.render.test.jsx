@@ -275,3 +275,11 @@ describe('follow-ups and callbacks', () => {
     expect(db.outcomes[0].workItem).toBeNull()
   })
 })
+
+describe('CRM match on the lead card', () => {
+  it('says which CRM record a dialed-anyway duplicate matches', async () => {
+    db.data.leads[0].crm_match = { crm: 'zoho', module: 'Leads', id: '11', name: 'Jane Smith', owner: 'Chandler Atkinson' }
+    const host = await mount()
+    expect(host.querySelector('[data-crm-match]').textContent).toBe('Already in Zoho (Leads): Jane Smith, owner Chandler Atkinson')
+  })
+})

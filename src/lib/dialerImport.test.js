@@ -139,3 +139,22 @@ describe('buildLeads', () => {
     expect(r.leads[0]).toMatchObject({ phone_raw: '8325550101', email: null, company: null })
   })
 })
+
+describe('buildLeads with the CRM check', () => {
+  const header = ['Phone']
+  const rows = [{ Phone: '8325550101' }, { Phone: '8325550102' }, { Phone: '8325550199' }]
+  const mapping = autoMap(header)
+  const crm = { '+18325550101': { crm: 'zoho', module: 'Leads', id: '11' }, '+18325550199': { crm: 'zoho', module: 'Leads', id: '12' } }
+  it('holds numbers already in the CRM back by default and keeps the match', () => {
+    const out = buildLeads({ header, rows, mapping, dnc: new Set(['+18325550199']), crm })
+    expect(out.leads.map((l) => l.status)).toEqual(['crm_duplicate', 'queued', 'dnc'])
+    expect(out.leads[0].crm_match).toEqual(crm['+18325550101'])
+    expect(out.leads[1].crm_match).toBeNull()
+    expect(out.summary).toMatchObject({ ready: 1, crm: 1, dnc: 1 })
+  })
+  it('dials them anyway when the list toggle is on', () => {
+    const out = buildLeads({ header, rows, mapping, dnc: new Set(), crm, includeCrm: true })
+    expect(out.leads.map((l) => l.status)).toEqual(['queued', 'queued', 'queued'])
+    expect(out.summary).toMatchObject({ ready: 3, crm: 2 })
+  })
+})

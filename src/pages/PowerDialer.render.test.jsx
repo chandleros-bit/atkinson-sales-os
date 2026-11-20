@@ -22,11 +22,12 @@ let biz = 'all'
 vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz }) }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ role: 'owner', session: { user: { id: 'u1' } } }) }))
 
-const data = { lists: [], saved: null, dncAsked: null }
+const data = { lists: [], saved: null, dncAsked: null, crm: {}, crmError: null, crmAsked: null }
 vi.mock('../lib/dialerData', () => ({
   fetchLists: async () => ({ data: data.lists, error: null }),
   fetchDncSet: async (phones) => { data.dncAsked = phones; return new Set(['+18325550199']) },
   saveList: async (args) => { data.saved = args; return { id: 'new-list', error: null } },
+  checkCrm: async (business, phones) => { data.crmAsked = { business, phones }; return { matches: data.crm, error: data.crmError ? new Error(data.crmError) : null } },
 }))
 
 const { default: PowerDialer } = await import('./PowerDialer')
@@ -59,6 +60,9 @@ beforeEach(() => {
   biz = 'all'
   data.lists = LISTS
   data.saved = null
+  data.crm = {}
+  data.crmError = null
+  data.crmAsked = null
 })
 
 describe('Power Dialer lists', () => {
@@ -152,5 +156,59 @@ describe('Power Dialer upload', () => {
     await click(button(host, 'Check list'))
     expect(host.querySelector('[role="alert"]').textContent).toMatch(/phone/i)
     expect(host.querySelector('[data-summary]')).toBeNull()
+  })
+})
+
+describe('Power Dialer upload, CRM check', () => {
+  const CSV = ['Name,Phone', 'Jane Smith,832-555-0101', 'Bob Jones,832-555-0102', 'Do Not,832-555-0199'].join(String.fromCharCode(10))
+  async function toReview(host) {
+    await click(button(host, 'Upload CSV'))
+    await pickFile(host, 'x.csv', CSV)
+    await click(button(host, 'Next'))
+    await click(button(host, 'Check list'))
+  }
+  const n = (host, k) => host.querySelector(`[data-summary="${k}"] .num`).textContent
+
+  it('flags numbers already in Zoho and holds them back unless the toggle is on', async () => {
+    biz = 'mpg'
+    data.crm = { '+18325550101': { crm: 'zoho', module: 'Leads', id: '11', name: 'Jane Smith', owner: 'Chandler Atkinson' } }
+    const host = await mount()
+    await toReview(host)
+    // DNC numbers are not sent to the CRM check.
+    expect(data.crmAsked).toEqual({ business: 'mpg', phones: ['+18325550101', '+18325550102'] })
+    expect([n(host, 'crm'), n(host, 'ready')]).toEqual(['1', '1'])
+    expect(host.querySelector('[data-summary="crm"]').textContent).toContain('Zoho, not dialed')
+    await click(button(host, 'Save list'))
+    expect(data.saved.leads.map((l) => l.status)).toEqual(['crm_duplicate', 'queued', 'dnc'])
+    expect(data.saved.leads[0].crm_match).toMatchObject({ id: '11' })
+    expect(data.saved.includeCrm).toBe(false)
+  })
+
+  it('dials them anyway with the list toggle', async () => {
+    biz = 'bay'
+    data.crm = { '+18325550101': { crm: 'fub', module: 'People', id: '501' } }
+    const host = await mount()
+    await click(button(host, 'Upload CSV'))
+    await click(button(host, 'Warm'))
+    await pickFile(host, 'x.csv', CSV)
+    await click(button(host, 'Next'))
+    await click(button(host, 'Check list'))
+    expect(host.querySelector('[data-summary="crm"]').textContent).toContain('FUB')
+    await click(host.querySelector('label input[type="checkbox"]'))
+    expect(n(host, 'ready')).toBe('2')
+    await click(button(host, 'Save list'))
+    expect(data.saved.leads.map((l) => l.status)).toEqual(['queued', 'queued', 'dnc'])
+    expect(data.saved.includeCrm).toBe(true)
+  })
+
+  it('lets the list save when the CRM check fails, and says so', async () => {
+    biz = 'mpg'
+    data.crmError = 'Zoho POST coql -> 401'
+    const host = await mount()
+    await toReview(host)
+    expect(host.querySelector('[data-crm-error]').textContent).toMatch(/Couldn't check Zoho: Zoho POST coql -> 401/)
+    expect(n(host, 'crm')).toBe('?')
+    await click(button(host, 'Save list'))
+    expect(data.saved.leads.map((l) => l.status)).toEqual(['queued', 'queued', 'dnc'])
   })
 })

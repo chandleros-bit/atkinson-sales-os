@@ -97,8 +97,10 @@ const clean = (v) => {
 // Rows -> leads ready to save, plus the upload summary. dnc: Set of E.164
 // numbers. A repeat of a number already in the file is left out (the first
 // row wins); every other row is saved, with a status the queue respects.
-// crm is filled by the CRM check (phase 6).
-export function buildLeads({ header, rows, mapping, dnc }) {
+// crm: { [e164]: match } from the CRM check. A number already in the CRM is
+// saved as crm_duplicate (never dialed) unless includeCrm is on; its match is
+// kept on the lead either way.
+export function buildLeads({ header, rows, mapping, dnc, crm = {}, includeCrm = false }) {
   const mapped = new Set(Object.values(mapping).filter(Boolean))
   const get = (row, key) => (mapping[key] ? clean(row[mapping[key]]) : null)
   const seen = new Set()
@@ -128,9 +130,14 @@ export function buildLeads({ header, rows, mapping, dnc }) {
     }
 
     let status = 'queued'
+    const match = e164 ? crm[e164] || null : null
     if (!e164) { status = 'invalid_phone'; summary.badPhone++ }
     else if (dnc.has(e164)) { status = 'dnc'; summary.dnc++ }
-    else summary.ready++
+    else {
+      if (match) summary.crm++
+      if (match && !includeCrm) status = 'crm_duplicate'
+      else summary.ready++
+    }
 
     leads.push({
       first_name: first,
@@ -145,6 +152,7 @@ export function buildLeads({ header, rows, mapping, dnc }) {
       zip: get(row, 'zip'),
       extra,
       status,
+      crm_match: match,
       position: leads.length + 1,
     })
   }

@@ -60,7 +60,7 @@ export async function fetchDncSet(phones) {
 
 // Saves a list and its leads. If any lead batch fails the list is deleted
 // (leads cascade), so a half-saved list never shows up.
-export async function saveList({ business, temperature, name, filename, mapping, leads, scrubbedBy }) {
+export async function saveList({ business, temperature, name, filename, mapping, leads, scrubbedBy, includeCrm = false }) {
   if (isDemoMode) return { id: null, error: new Error('Saving needs the database (demo mode).') }
   const cold = business === 'bay' && temperature === 'cold'
   const { data: list, error } = await supabase
@@ -71,6 +71,7 @@ export async function saveList({ business, temperature, name, filename, mapping,
       name,
       source_filename: filename || null,
       column_mapping: mapping,
+      include_crm_duplicates: includeCrm,
       dnc_scrub_confirmed_by: cold ? scrubbedBy : null,
       dnc_scrub_confirmed_at: cold ? new Date().toISOString() : null,
     })
@@ -193,4 +194,20 @@ export async function logOutcome({ callId, lead, outcomeKey, notes, callbackAt, 
   } catch (error) {
     return { error }
   }
+}
+
+// ------------------------------------------------------------------ CRM check
+
+// Which of these E.164 numbers are already in the business's CRM (read only,
+// dialer-crm-check). -> { matches: { [e164]: { crm, module, id, name, owner } } }
+export async function checkCrm(business, phones) {
+  if (isDemoMode) return { matches: {}, error: null }
+  const { data, error } = await supabase.functions.invoke('dialer-crm-check', { body: { business, phones } })
+  if (error) {
+    // invoke() hides the function's message in the response body.
+    let msg = error.message
+    try { msg = (await error.context?.json?.())?.error || msg } catch { /* keep the generic message */ }
+    return { matches: {}, error: new Error(msg) }
+  }
+  return { matches: data?.matches || {}, error: null }
 }

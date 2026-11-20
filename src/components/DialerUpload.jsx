@@ -5,7 +5,7 @@ import { useState } from 'react'
 import Segmented from './Segmented'
 import { parseCsv } from '../lib/csv'
 import { FIELDS, autoMap, buildLeads, listNameFrom, mappingError, normalizePhone } from '../lib/dialerImport'
-import { fetchDncSet, saveList } from '../lib/dialerData'
+import { fetchDncSet, saveList, checkCrm } from '../lib/dialerData'
 import { formatPhone } from '../lib/phone'
 
 const primary = 'min-h-[44px] flex-1 rounded-lg bg-[color:var(--text)] px-4 text-body font-semibold text-white disabled:opacity-40'
@@ -16,6 +16,7 @@ const SUMMARY = [
   ['total', 'Rows in the file'],
   ['ready', 'Ready to dial'],
   ['dnc', 'On the Do Not Call list (saved, never dialed)'],
+  ['crm', 'Already in the CRM'],
   ['badPhone', 'No valid phone (saved, never dialed)'],
   ['inFileDupes', 'Repeat numbers in the file (left out)'],
 ]
@@ -38,6 +39,8 @@ export default function DialerUpload({ defaultBiz, userId, onCancel, onSaved }) 
   const [file, setFile] = useState(null) // { filename, header, rows }
   const [mapping, setMapping] = useState(null)
   const [result, setResult] = useState(null) // { leads, summary }
+  const [checked, setChecked] = useState(null) // { dnc, crm, crmError } from the last check
+  const [includeCrm, setIncludeCrm] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -73,7 +76,13 @@ export default function DialerUpload({ defaultBiz, userId, onCancel, onSaved }) 
     try {
       const phones = file.rows.map((r) => normalizePhone(r[mapping.phone]))
       const dnc = await fetchDncSet(phones)
-      setResult(buildLeads({ header: file.header, rows: file.rows, mapping, dnc }))
+      // Read-only CRM check on the numbers that could be dialed. A failure
+      // doesn't block the list: Ready to Push checks again before any write.
+      const ask = [...new Set(phones.filter((p) => p && !dnc.has(p)))]
+      const { matches, error: crmErr } = ask.length ? await checkCrm(business, ask) : { matches: {}, error: null }
+      const next = { dnc, crm: matches, crmError: crmErr ? crmErr.message || String(crmErr) : null }
+      setChecked(next)
+      setResult(buildLeads({ header: file.header, rows: file.rows, mapping, dnc, crm: matches, includeCrm }))
       setStep('review')
     } catch (err) {
       setError(`Couldn't check the Do Not Call list: ${err?.message || err}`)
@@ -86,7 +95,7 @@ export default function DialerUpload({ defaultBiz, userId, onCancel, onSaved }) 
     setError(null)
     setBusy(true)
     const { id, error: err } = await saveList({
-      business, temperature, name: name.trim(), filename: file.filename, mapping, leads: result.leads, scrubbedBy: userId,
+      business, temperature, name: name.trim(), filename: file.filename, mapping, leads: result.leads, scrubbedBy: userId, includeCrm,
     })
     setBusy(false)
     if (err) { setError(err.message || String(err)); return }
@@ -180,14 +189,33 @@ export default function DialerUpload({ defaultBiz, userId, onCancel, onSaved }) 
       )}
 
       {step === 'review' && (
-        <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
-          {SUMMARY.map(([k, label]) => (
-            <li key={k} data-summary={k} className="flex items-center justify-between px-3 py-2 text-body">
-              <span>{label}</span>
-              <span className="num font-semibold">{result.summary[k]}</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
+            {SUMMARY.map(([k, label]) => (
+              <li key={k} data-summary={k} className="flex items-center justify-between px-3 py-2 text-body">
+                <span>
+                  {k === 'crm' ? `${label} (${business === 'mpg' ? 'Zoho' : 'FUB'}${includeCrm ? ', will be dialed' : ', not dialed'})` : label}
+                </span>
+                <span className="num font-semibold">{checked?.crmError && k === 'crm' ? '?' : result.summary[k]}</span>
+              </li>
+            ))}
+          </ul>
+          {checked?.crmError && (
+            <div role="status" data-crm-error className="rounded-lg border px-3 py-2 text-body" style={{ borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}>
+              Couldn't check {business === 'mpg' ? 'Zoho' : 'FUB'}: {checked.crmError}. You can save anyway; nothing reaches a CRM until Ready to Push checks again.
+            </div>
+          )}
+          {result.summary.crm > 0 && (
+            <label className="flex items-start gap-2 text-body">
+              <input type="checkbox" className="mt-1" checked={includeCrm}
+                onChange={(e) => {
+                  setIncludeCrm(e.target.checked)
+                  setResult(buildLeads({ header: file.header, rows: file.rows, mapping, dnc: checked.dnc, crm: checked.crm, includeCrm: e.target.checked }))
+                }} />
+              <span>Dial numbers already in the CRM anyway</span>
+            </label>
+          )}
+        </>
       )}
 
       {error && <div role="alert" className="rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-body text-neg-ink">{error}</div>}
