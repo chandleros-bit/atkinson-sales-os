@@ -155,8 +155,11 @@ export async function makeNote(
   if (!ask) return templateNote(pick, f)
   const user = JSON.stringify(buildModelInput(pick, f))
   for (let attempt = 0; attempt < 2; attempt++) {
-    let note: Partial<AiNote> | null = null
-    try { note = parseNote(await ask(SYSTEM_PROMPT, user)) } catch (e) { onReject([`model error: ${(e as Error).message}`]); continue }
+    let text = ''
+    try { text = await ask(SYSTEM_PROMPT, user) } catch (e) { onReject([`model error: ${(e as Error).message}`]); continue }
+    const note = parseNote(text)
+    // Keep the start of an unreadable reply so a bad run can be diagnosed.
+    if (!note) { onReject([`unreadable reply: ${text.slice(0, 200) || '(empty)'}`]); continue }
     const check = postCheck(note)
     if (check.ok) return { ...(note as AiNote), fallback: false }
     onReject(check.problems)

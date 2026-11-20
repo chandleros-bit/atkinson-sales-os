@@ -66,6 +66,17 @@ describe('model input', () => {
   })
 })
 
+describe('unreadable replies', () => {
+  it('records the start of a reply that is not JSON, then falls back', async () => {
+    const rejections: string[][] = []
+    const cut = '{"headline": "Rate gap worth a look", "why_now": ["Rate is well'
+    const note = await makeNote(pick, facts, async () => cut, (p) => rejections.push(p))
+    expect(note.fallback).toBe(true)
+    expect(rejections).toHaveLength(2)
+    expect(rejections[0][0]).toBe(`unreadable reply: ${cut}`)
+  })
+})
+
 describe('templates and parsing', () => {
   it('template note passes its own post-check for a check-in with no data', () => {
     const t = templateNote({ ...pick, kind: 'check_in', reasons: [] }, { ...facts, estimates: null, recentActivity: [], hasProperty: false })

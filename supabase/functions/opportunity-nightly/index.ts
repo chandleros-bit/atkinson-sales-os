@@ -28,16 +28,20 @@ function anthropicAsk(apiKey: string, model: string) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 700, system, messages: [{ role: 'user', content: user }] }),
+      // 700 tokens cut the JSON off mid-object (Nov 20: every note fell back).
+      body: JSON.stringify({ model, max_tokens: 1500, system, messages: [{ role: 'user', content: user }] }),
     })
-    if (!res.ok) throw new Error(`anthropic ${res.status}`)
+    if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`)
     const j = await res.json()
+    if (j.stop_reason === 'max_tokens') throw new Error('reply cut off at max_tokens')
     return (j.content ?? []).map((c: { text?: string }) => c.text ?? '').join('')
   }
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   const db = serviceClient()
+  // ?redo_notes=1 rewrites today's notes for picks still pending (after a fix).
+  const redoNotes = new URL(req.url).searchParams.get('redo_notes') === '1'
   try {
     const today = centralDate()
     const now = new Date()
@@ -154,6 +158,30 @@ Deno.serve(async () => {
       if (error) throw new Error(`opportunity_estimates write: ${error.message}`)
     }
 
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
+    const ask = cfg.ai_enabled !== false && apiKey ? anthropicAsk(apiKey, Deno.env.get('OPPORTUNITY_MODEL') ?? 'claude-haiku-5-5') : null
+
+    if (redoNotes) {
+      const { data: todays, error } = await db.from('opportunity_picks').select('id, contact_id, rank, score, kind, reason_codes')
+        .eq('pick_date', today).eq('status', 'pending').limit(50)
+      if (error) throw new Error(`opportunity_picks read: ${error.message}`)
+      let redone = 0, still = 0, rejections = 0
+      for (const r of todays ?? []) {
+        const f = facts.get(r.contact_id)
+        if (!f) continue
+        const rejected: string[][] = []
+        const pick = { contactId: r.contact_id, rank: r.rank, score: r.score, kind: r.kind, reasons: r.reason_codes ?? [] }
+        const note = await makeNote(pick as never, f, ask, (probs) => { rejections++; rejected.push(probs) })
+        if (note.fallback) still++
+        const { error: upErr } = await db.from('opportunity_picks')
+          .update({ ai_note: rejected.length ? { ...note, rejections: rejected } : note }).eq('id', r.id)
+        if (upErr) throw new Error(`opportunity_picks update: ${upErr.message}`)
+        redone++
+      }
+      await logSync(db, 'opportunity-nightly', 'ok', redone, `${today}: redid ${redone} notes, ${still} template, ${rejections} rejections`)
+      return Response.json({ ok: true, today, redone, template: still, rejections })
+    }
+
     const { count: existing } = await db.from('opportunity_picks').select('id', { count: 'exact', head: true }).eq('pick_date', today)
     if ((existing ?? 0) > 0) {
       await logSync(db, 'opportunity-nightly', 'ok', estimateRows.length, `estimates refreshed; ${existing} picks already set for ${today}`)
@@ -163,8 +191,6 @@ Deno.serve(async () => {
     const count = picksForDate(new Date(`${today}T12:00:00Z`), cfg.picks_per_day ?? 5, cfg.picks_by_weekday ?? {})
     const picks = selectPicks(candidates, { now, count, checkInEvery: cfg.check_in_every ?? 5, config })
 
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-    const ask = cfg.ai_enabled !== false && apiKey ? anthropicAsk(apiKey, Deno.env.get('OPPORTUNITY_MODEL') ?? 'claude-haiku-5-5') : null
     let rejections = 0, fallbacks = 0
     const rows = []
     for (const p of picks) {
