@@ -1,0 +1,36 @@
+# Deploys Supabase Edge Functions when their code changes on main, or by hand
+# (Actions > Deploy Supabase functions > Run workflow). Needs one repo secret:
+# SUPABASE_ACCESS_TOKEN (supabase.com/dashboard/account/tokens).
+name: Deploy Supabase functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: 'Function names, space-separated (blank = daily-briefing)'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/daily-briefing/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: cnmipfxwqnbtkohfixkf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy
+        run: |
+          names="${{ github.event.inputs.functions }}"
+          [ -z "$names" ] && names="daily-briefing"
+          for fn in $names; do
+            # Cron-called functions run without a user JWT.
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" --no-verify-jwt
+          done

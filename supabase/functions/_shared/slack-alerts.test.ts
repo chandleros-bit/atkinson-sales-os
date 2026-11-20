@@ -92,3 +92,18 @@ describe('planMessages', () => {
     expect(inSendWindow(new Date('2026-11-20T03:00:00Z').getTime())).toBe(false) // 9 PM
   })
 })
+
+describe('rate lock alerts', () => {
+  it('flags locks expiring within 3 days or expired without funding, and a closing after the lock', () => {
+    const a = run({ loans: [
+      { id: 'l1', borrower_name: 'Bo', lock_expires_on: '2026-11-21', firm_closing_on: '2026-11-25', stage_group: 'closing' },
+      { id: 'l2', borrower_name: 'Cy', lock_expires_on: '2026-11-10', stage_group: 'processing' },
+      { id: 'l3', borrower_name: 'Di', lock_expires_on: '2026-11-30', stage_group: 'processing' },
+      { id: 'l4', borrower_name: 'Ed', lock_expires_on: '2026-11-20', stage_group: 'funded' },
+      { id: 'l5', borrower_name: 'Fy', lock_expires_on: '2026-11-20', stage_group: 'processing', scenario: true },
+    ] })
+    expect(a.map((x) => x.key)).toEqual(['lock:l1:2026-11-21', 'lock:l2:2026-11-10'])
+    expect(a[0].text).toContain('Closing (2026-11-25) is after the lock')
+    expect(a[1].text).toContain('expired 2026-11-10')
+  })
+})

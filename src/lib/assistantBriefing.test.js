@@ -24,6 +24,23 @@ describe('buildAssistantBriefing', () => {
     expect(m.closingCount).toBe(1)
   })
 
+  it('lists rate locks expiring in 7 days and flags ones that need action now', () => {
+    const m = buildAssistantBriefing({
+      loans: [
+        { id: 'l1', borrower_name: 'Lock Lee', stage_group: 'processing', lock_expires_on: '2026-11-05', firm_closing_on: '2026-11-09' },
+        { id: 'l2', borrower_name: 'Calm Cal', stage_group: 'processing', lock_expires_on: '2026-11-10' },
+        { id: 'l3', borrower_name: 'Far Fay', stage_group: 'processing', lock_expires_on: '2026-11-30' },
+      ],
+      pipeline: [],
+      workItems: [],
+    }, NOW)
+    expect(m.locks.top).toEqual([
+      { name: 'Lock Lee', detail: 'expires in 1 day, closing is after the lock (2026-11-09)', alert: true },
+      { name: 'Calm Cal', detail: 'expires in 6 days', alert: false },
+    ])
+    expect(m.quiet).toBe(false)
+  })
+
   it('puts Application Received leads under Disclosures due with a 3-business-day deadline', () => {
     const m = buildAssistantBriefing({
       loans: [],

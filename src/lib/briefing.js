@@ -11,6 +11,7 @@ import { resolveForecast, forecastLines, forecastByMonth, avgFundedLoan, mpgPerA
 import { syncHealth } from './syncHealth'
 import { yesterdayScorecard, needPerDay } from './briefingScorecard'
 import { withRatings } from './leadRatings'
+import { locksExpiring, lockDetail } from './locks'
 import { businessDaysLeft, longDateLabel, chicagoDateKey, previousBusinessDateKey } from './briefingTime'
 
 const TOP = 5
@@ -126,7 +127,12 @@ export function buildOwnerBriefing(data, now = Date.now()) {
       forecast: { expected: f.bay.expected, funded: f.bay.funded, weighted: f.bay.weighted, mpgAccounts: f.mpg.accounts, mpgExpected: f.mpg.expected },
       scorecard,
     },
-    today: { meetings, closings: list(closingRows, (l) => ({ name: l.borrower_name || '(no name)', date: l.firm_closing_on })) },
+    today: {
+      meetings,
+      closings: list(closingRows, (l) => ({ name: l.borrower_name || '(no name)', date: l.firm_closing_on })),
+      // Rate locks expiring in 7 days or expired without funding (locks.js).
+      locks: list(locksExpiring(data.loans, now), (r) => ({ name: r.name, detail: lockDetail(r), alert: r.expired || r.daysLeft <= 2 || r.closesAfterLock })),
+    },
     callFirst,
     // Database Opportunity Agent: today's past-client picks (opportunity_picks).
     pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || '(no name)', detail: p.headline || '', reasons: p.reasons || [] })),

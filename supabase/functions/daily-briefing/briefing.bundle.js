@@ -1123,6 +1123,31 @@ function addBusinessDays(dateKey, n) {
   return d.toISOString().slice(0, 10);
 }
 
+// src/lib/locks.js
+var LOCK_WARN_DAYS = 7;
+var LOCK_EXPIRED_LOOKBACK = 30;
+var dayNum = (key) => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 864e5;
+function locksExpiring(loans, now = Date.now()) {
+  const today = chicagoDateKey(now);
+  const t = dayNum(today);
+  return (loans || []).filter((l) => l.lock_expires_on && !isScenario(l) && isOpen(l) && !l.funded_on).map((l) => {
+    const daysLeft = dayNum(l.lock_expires_on) - t;
+    return {
+      id: l.id,
+      name: l.borrower_name || "(no name)",
+      expiresOn: l.lock_expires_on,
+      daysLeft,
+      expired: daysLeft < 0,
+      closingOn: l.firm_closing_on || null,
+      closesAfterLock: !!(l.firm_closing_on && l.firm_closing_on > l.lock_expires_on)
+    };
+  }).filter((r) => r.daysLeft <= LOCK_WARN_DAYS && r.daysLeft >= -LOCK_EXPIRED_LOOKBACK).sort((a, b) => a.daysLeft - b.daysLeft);
+}
+function lockDetail(r) {
+  const when = r.expired ? `expired ${-r.daysLeft} day${r.daysLeft === -1 ? "" : "s"} ago` : r.daysLeft === 0 ? "expires today" : `expires in ${r.daysLeft} day${r.daysLeft === 1 ? "" : "s"}`;
+  return r.closesAfterLock ? `${when}, closing is after the lock (${r.closingOn})` : when;
+}
+
 // src/lib/briefing.js
 var TOP = 5;
 var GOAL_IDS = ["calls", "applications", "closings", "merchants", "proposals"];
@@ -1206,7 +1231,12 @@ function buildOwnerBriefing(data, now = Date.now()) {
       forecast: { expected: f.bay.expected, funded: f.bay.funded, weighted: f.bay.weighted, mpgAccounts: f.mpg.accounts, mpgExpected: f.mpg.expected },
       scorecard
     },
-    today: { meetings, closings: list(closingRows, (l) => ({ name: l.borrower_name || "(no name)", date: l.firm_closing_on })) },
+    today: {
+      meetings,
+      closings: list(closingRows, (l) => ({ name: l.borrower_name || "(no name)", date: l.firm_closing_on })),
+      // Rate locks expiring in 7 days or expired without funding (locks.js).
+      locks: list(locksExpiring(data.loans, now), (r) => ({ name: r.name, detail: lockDetail(r), alert: r.expired || r.daysLeft <= 2 || r.closesAfterLock }))
+    },
     callFirst,
     // Database Opportunity Agent: today's past-client picks (opportunity_picks).
     pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || "(no name)", detail: p.headline || "", reasons: p.reasons || [] })),
@@ -1239,6 +1269,7 @@ function buildAssistantBriefing(data, now = Date.now()) {
     buyerAgent: agent(l.buyer_agent_name, l.buyer_agent_phone),
     sellerAgent: agent(l.seller_agent_name, l.seller_agent_phone)
   }));
+  const locks = list2(locksExpiring(data.loans, now), (r) => ({ name: r.name, detail: lockDetail(r), alert: r.expired || r.daysLeft <= 2 || r.closesAfterLock }));
   const disclosureRows = pipeline.filter((r) => r.stage === APP_RECEIVED2 && r.stage_since).map((r) => ({ name: r.name || "(no name)", dueBy: addBusinessDays(dayOf(r.stage_since), 3) })).sort((a, b) => a.dueBy.localeCompare(b.dueBy)).map((r) => ({ ...r, due: today >= r.dueBy }));
   const disclosures = list2(disclosureRows, (r) => r);
   const docRows = pipeline.filter((r) => r.docs_tracked && (r.docs_outstanding_count || 0) > 0).sort((a, b) => String(a.docs_oldest_requested_at || "").localeCompare(String(b.docs_oldest_requested_at || ""))).map((r) => {
@@ -1258,13 +1289,14 @@ function buildAssistantBriefing(data, now = Date.now()) {
   return {
     dateLabel: longDateLabel(now),
     closing,
+    locks,
     disclosures,
     missingDocs,
     newApps,
     waiting,
     closingCount: closing.count,
     chaseCount,
-    quiet: !closing.count && !disclosures.count && !missingDocs.count && !newApps.count && !waiting.count
+    quiet: !closing.count && !locks.count && !disclosures.count && !missingDocs.count && !newApps.count && !waiting.count
   };
 }
 
@@ -1328,7 +1360,8 @@ function renderOwnerBriefing(m, { appUrl }) {
   ];
   const today = [
     ...m.today.meetings.length ? m.today.meetings.map((e) => `${timeLabel(e.time)} \xB7 ${e.title} (${BOOK[e.book]})`) : ["No meetings today"],
-    ...m.today.closings.count ? [`Closing this week (${m.today.closings.count}): ${m.today.closings.top.map((c) => `${c.name} ${dayLabel(c.date)}`).join(", ")}`] : []
+    ...m.today.closings.count ? [`Closing this week (${m.today.closings.count}): ${m.today.closings.top.map((c) => `${c.name} ${dayLabel(c.date)}`).join(", ")}`] : [],
+    ...(m.today.locks?.top || []).map((l) => `Lock: ${l.name} ${l.detail}`)
   ];
   const cf = m.callFirst;
   const callFirst = [
@@ -1379,9 +1412,9 @@ Open the dashboard: ${url("/")}
     [{ label: "Day", width: "28%" }, { label: "Calls", align: "right" }, { label: "Connects", align: "right" }, { label: "New apps", align: "right" }, { label: "Texts", align: "right" }],
     [{ cells: [esc(s.label || "Yesterday"), esc(s.calls), esc(s.connects), esc(s.applications), esc(s.texts)] }]
   );
-  const todayRows = m.today.meetings.map((e) => ({ cells: [esc(timeLabel(e.time)), esc(e.title), esc(BOOK[e.book] || "")] })).concat(blockRows(m.today.closings, (c) => [esc(dayLabel(c.date)), esc(`Closing: ${c.name}`), "Bayway"]));
+  const todayRows = m.today.meetings.map((e) => ({ cells: [esc(timeLabel(e.time)), esc(e.title), esc(BOOK[e.book] || "")] })).concat(blockRows(m.today.closings, (c) => [esc(dayLabel(c.date)), esc(`Closing: ${c.name}`), "Bayway"])).concat(blockRows(m.today.locks || { count: 0, top: [] }, (l) => [esc(l.alert ? "Act now" : "This week"), esc(`Lock: ${l.name} ${l.detail}`), "Bayway"], (l) => l.alert));
   const todayTable = table(
-    [{ label: "When", width: "20%" }, { label: "Meeting or closing" }, { label: "Book", width: "16%" }],
+    [{ label: "When", width: "20%" }, { label: "Meeting, closing or lock" }, { label: "Book", width: "16%" }],
     todayRows.length ? todayRows : [{ note: "No meetings or closings today" }]
   );
   const person = (why) => (p) => [esc(p.name), esc(why), esc(p.detail || ""), esc(BOOK[p.book] || "")];
@@ -1447,6 +1480,7 @@ function renderAssistantBriefing(m, { appUrl }) {
       ].filter(Boolean).join(" | "),
       alert: false
     })),
+    block("Locks expiring", m.locks || { count: 0, top: [] }, "/bayway/loans", (l) => ({ text: `${l.name} - lock ${l.detail}${l.alert ? " - ACT NOW" : ""}`, alert: l.alert })),
     block("Disclosures due", m.disclosures, "/pipeline", (d) => ({ text: `${d.name} - disclose by ${dayLabel(d.dueBy)}${d.due ? " (DUE)" : ""}`, alert: d.due })),
     block("Missing docs", m.missingDocs, "/pipeline", (d) => ({
       text: `${d.name} - ${d.docs.join(", ")}${d.days != null ? ` - ${d.days} days` : ""}${d.chase ? " - CHASE TODAY" : ""}`,
@@ -1467,6 +1501,10 @@ Open the OS: ${url("/workbench")}
     m.closing.count && heading(`Closing in 7 days (${m.closing.count})`, url("/pipeline")) + table(
       [{ label: "Borrower", width: "20%" }, { label: "Closes", width: "11%" }, { label: "Title", width: "20%" }, { label: "Agents", width: "27%" }, { label: "Docs needed" }],
       blockRows(m.closing, (c) => [esc(c.name), esc(dayLabel(c.date)), esc(c.title || "Not set"), agentHtml(c), esc(c.docs.length ? c.docs.join(", ") : "None")])
+    ),
+    m.locks?.count && heading(`Locks expiring (${m.locks.count})`, url("/bayway/loans")) + table(
+      [{ label: "Borrower", width: "34%" }, { label: "Lock" }, { label: "Action", width: "18%" }],
+      blockRows(m.locks, (l) => [esc(l.name), esc(l.detail), l.alert ? "<b>Act now</b>" : "Watch"], (l) => l.alert)
     ),
     m.disclosures.count && heading(`Disclosures due (${m.disclosures.count})`, url("/pipeline")) + table(
       [{ label: "Borrower", width: "40%" }, { label: "Disclose by", width: "30%" }, { label: "Status" }],
