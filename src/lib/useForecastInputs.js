@@ -118,6 +118,9 @@ export function useForecast(now = Date.now()) {
     return {
       lines,
       settings: snap.settings,
+      // The loans and rates behind the lines, for Workbench's hard dates and values.
+      loans: snap.loans,
+      rates: snap.rates,
       loading: (!snap.at && !isDemoMode) || ratingsStatus.loading,
       error: snap.error || ratingsStatus.error,
     }
