@@ -23,6 +23,32 @@ const model = (o = {}) => ({
 })
 
 describe('renderOwnerBriefing', () => {
+  it('shows the Lock Watch market note under Today', () => {
+    const market = { lines: ['The 10-year yield fell to 4.1% on Friday.', 'Jobs data is Thursday.'], source: { title: 'CNBC', url: 'https://cnbc.com/x' } }
+    const { text, html } = renderOwnerBriefing(model({ market }), { appUrl: 'https://x.app' })
+    expect(text).toContain('Market (Lock Watch)\n- The 10-year yield fell to 4.1% on Friday.\n- Jobs data is Thursday.\n  Source: https://cnbc.com/x')
+    expect(html).toContain('Market (Lock Watch)')
+    expect(html).toContain('href="https://cnbc.com/x"')
+    expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).text).not.toContain('Market (Lock Watch)')
+  })
+
+  it('shows partners due today and the weekly focus', () => {
+    const partnersDue = { count: 2, top: [
+      { name: 'Laura Hughes', detail: 'Invite: invite to AI follow-up on Dec 10' },
+      { name: 'Sam Lee', detail: 'Book a one-to-one: attended AI follow-up on Nov 12' },
+    ] }
+    const focus = { title: 'Book 3 applications', done: 1, total: 3 }
+    const { text, html } = renderOwnerBriefing(model({ partnersDue, focus }), { appUrl: 'https://x.app' })
+    expect(text).toContain('Partners due today (2)')
+    expect(text).toContain("This week's focus: Book 3 applications (1 of 3 done)")
+    expect(html).toContain('Partners due today (2)')
+    expect(html).toContain('href="https://x.app/bayway/partners"')
+    expect(html).toContain('Book 3 applications (1 of 3 done)')
+    const empty = renderOwnerBriefing(model(), { appUrl: 'https://x.app' })
+    expect(empty.text).not.toContain('Partners due today')
+    expect(empty.text).not.toContain("This week's focus")
+  })
+
   it('lists past clients to call with their headline and signals, and links to Opportunities', () => {
     const pastClients = { count: 2, top: [
       { name: 'Maria Lopez', detail: 'Rate looks high and equity has grown', reasons: ['RATE_GAP_HIGH', 'EQUITY_100K'] },

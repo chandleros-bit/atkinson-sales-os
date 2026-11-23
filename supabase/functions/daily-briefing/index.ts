@@ -89,6 +89,31 @@ async function ownerMail(db, cfg, now, ownerId) {
     .select('id', { count: 'exact', head: true })
     .eq('status', 'waiting')
     .then(({ count, error }) => (error ? 0 : count || 0), () => 0)
+  // Partners due today (migration 0074): follow-ups, Dream 20 invites to send,
+  // attendees to book for a one-to-one. Never fatal.
+  const partnersDue = await db
+    .from('v_partner_due_today')
+    .select('kind, name, detail')
+    .limit(200)
+    .then(({ data, error }) => (error ? [] : data || []), () => [])
+  // This week's focus from the Growth bot (migration 0071). Never fatal.
+  const todayKey = chicagoDateKey(now)
+  const dow = new Date(`${todayKey}T12:00:00Z`).getUTCDay()
+  const focusWeek = chicagoDateKey(now, -((dow + 6) % 7))
+  const focusItems = await db
+    .from('work_items')
+    .select('title, status, focus_role')
+    .eq('focus_week', focusWeek)
+    .limit(20)
+    .then(({ data, error }) => (error ? [] : data || []), () => [])
+  // Today's Lock Watch market note (migration 0070; Lock Watch runs 7:15 AM).
+  // Missing when Lock Watch hasn't run yet; never fatal.
+  const marketNote = await db
+    .from('market_notes')
+    .select('note, sources')
+    .eq('note_date', todayKey)
+    .limit(1)
+    .then(({ data, error }) => (error ? null : (data || [])[0] || null), () => null)
   const syncLatest = {}
   await Promise.all(
     CORE_SOURCES.map(async ({ source }) => {
@@ -98,7 +123,7 @@ async function ownerMail(db, cfg, now, ownerId) {
   )
   const model = buildOwnerBriefing({
     rules, targets, rates, forecastSettings, metrics, mpgMetricRows, deals, activities, yesterdayActivities, pipeline, loans, ratings, signals, dialRows,
-    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks, draftsWaiting,
+    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks, draftsWaiting, partnersDue, focusItems, marketNote,
   }, now)
   return renderOwnerBriefing(model, { appUrl: cfg.app_url || APP_URL })
 }

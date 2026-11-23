@@ -1274,6 +1274,21 @@ function lockDetail(r) {
 }
 
 // src/lib/briefing.js
+var PARTNER_DUE_LABEL = { follow_up: "Follow up", invite: "Invite", book_1on1: "Book a one-to-one" };
+function marketLines(note) {
+  const text = String(note?.note || "").trim();
+  if (!text) return null;
+  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()) || [text];
+  const src = Array.isArray(note.sources) ? note.sources.find((x) => x?.url) : null;
+  return { lines: sentences.slice(0, 3), source: src ? { title: src.title || src.url, url: src.url } : null };
+}
+function weeklyFocusLine(items) {
+  const list3 = items || [];
+  const focus = list3.find((r) => r.focus_role === "focus");
+  if (!focus) return null;
+  const tasks = list3.filter((r) => r.focus_role === "task");
+  return { title: focus.title, done: tasks.filter((t) => t.status === "done").length, total: tasks.length };
+}
 var TOP = 5;
 var GOAL_IDS = ["calls", "applications", "closings", "merchants", "proposals"];
 var WORK_STAGES = /* @__PURE__ */ new Set(["Contacted/Working", "Application Received", "Disclosed"]);
@@ -1367,6 +1382,12 @@ function buildOwnerBriefing(data, now = Date.now()) {
     pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || "(no name)", detail: p.headline || "", reasons: p.reasons || [] })),
     // Drafts inbox: how many bot drafts wait for review (count and link).
     draftsWaiting: Number(data.draftsWaiting || 0),
+    // Partners due today (v_partner_due_today): follow-ups, invites, one-to-ones to book.
+    partnersDue: list(data.partnersDue || [], (p) => ({ name: p.name || "(no name)", detail: `${PARTNER_DUE_LABEL[p.kind] || p.kind}: ${p.detail || ""}`.trim() })),
+    // This week's focus (Growth bot): title and tasks done.
+    focus: weeklyFocusLine(data.focusItems),
+    // Lock Watch market note, first 3 sentences (doc: "3 lines").
+    market: marketLines(data.marketNote),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length
@@ -1499,6 +1520,10 @@ function renderOwnerBriefing(m, { appUrl }) {
     section("Hot, going cold", cf.hotCold, "/workbench")
   ].filter(Boolean);
   const pc = m.pastClients || { count: 0, top: [] };
+  const pd = m.partnersDue || { count: 0, top: [] };
+  const partnersDue = section("Partners due today", pd, "/bayway/partners");
+  const mk = m.market;
+  const focusText = m.focus ? `This week's focus: ${m.focus.title} (${m.focus.done} of ${m.focus.total} done)` : null;
   const pastClients = section("Past clients to call", pc, "/bayway/opportunities");
   const sl = m.slipping;
   const slipping = m.nothingSlipping ? [] : [
@@ -1510,13 +1535,20 @@ function renderOwnerBriefing(m, { appUrl }) {
   const textBlocks = [
     `Numbers
 ${numbers.map((l) => `- ${l}`).join("\n")}`,
+    ...focusText ? [`Focus
+- ${focusText}
+  ${url("/")}`] : [],
     `Today
 ${today.map((l) => `- ${l}`).join("\n")}`,
+    ...mk ? [`Market (Lock Watch)
+${mk.lines.map((l) => `- ${l}`).join("\n")}${mk.source ? `
+  Source: ${mk.source.url}` : ""}`] : [],
     `Call first
 ${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "- Nobody waiting"}`,
     ...pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join("\n")] : [],
     ...m.draftsWaiting ? [`Drafts waiting: ${m.draftsWaiting} (review after 11)
   ${url("/bayway/drafts")}`] : [],
+    ...partnersDue ? [[partnersDue.title, ...partnersDue.rows.map((r) => `  - ${r}`), `  ${url(partnersDue.href)}`].join("\n")] : [],
     `Slipping
 ${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "Nothing slipping today."}`
   ];
@@ -1571,16 +1603,19 @@ Open the dashboard: ${url("/")}
   const html = [
     `<div style="max-width:640px;font-family:Arial,sans-serif;color:${C.text}">`,
     `<p style="font:13px Arial,sans-serif;color:${C.muted};margin:0">${esc(m.dateLabel)}</p>`,
+    ...focusText ? [`<p style="font:14px Arial,sans-serif;margin:12px 0 0"><b>${esc(focusText)}</b></p>`] : [],
     heading("Numbers, month to date"),
     goalsTable,
     forecastTable,
     dayTable,
     heading("Today"),
     todayTable,
+    ...mk ? [heading("Market (Lock Watch)"), `<p style="font:14px Arial,sans-serif;margin:0">${mk.lines.map(esc).join(" ")}${mk.source ? ` ${link(mk.source.url, "Source")}` : ""}</p>`] : [],
     heading(`Call first (${m.callFirstCount})`, url("/workbench")),
     callTable,
     ...pc.count ? [heading(`Past clients to call (${pc.count})`, url("/bayway/opportunities")), pastTable] : [],
     ...m.draftsWaiting ? [`<p style="font:14px Arial,sans-serif;margin:16px 0 0">${link(url("/bayway/drafts"), `Drafts waiting: ${m.draftsWaiting}`)} (review after 11)</p>`] : [],
+    ...pd.count ? [heading(`Partners due today (${pd.count})`, url("/bayway/partners")), table([{ label: "Partner", width: "34%" }, { label: "What to do" }], blockRows(pd, (r) => [esc(r.name), esc(r.detail)]))] : [],
     heading(m.nothingSlipping ? "Slipping" : `Slipping (${slipCount})`, url("/workbench")),
     slipTable,
     `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url("/"), "Open the dashboard")}</p>`,
