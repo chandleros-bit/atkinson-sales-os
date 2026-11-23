@@ -171,6 +171,39 @@ describe('Overview dashboard', () => {
     expect(q('[data-undated]')).toBeNull()
   })
 
+  it('shows loans and merchants in flight and book health', async () => {
+    const saved = TABLES.loans
+    TABLES.loans = [
+      ...saved,
+      { id: 'ln3', arive_loan_id: 'A-3', business_id: 'bay', role: 'primary', borrower_name: 'Marcus Lee', amount: 365000, stage: 'Submitted to UW', stage_group: 'processing', funded_on: null, firm_closing_on: '2099-01-15', lock_expires_on: null, contact_id: null, scenario_auto: false, scenario_override: null, comp_override: null },
+    ]
+    try {
+      await render('all')
+    } finally {
+      TABLES.loans = saved
+    }
+    const loans = q('[aria-label="Loans in flight"]')
+    expect(q('[data-count="funded"]').textContent).toContain('1')
+    expect(q('[data-count="underwriting"]').textContent).toContain('1')
+    expect(loans.querySelector('[data-loan="ln3"]').textContent).toContain('Marcus Lee')
+    expect(loans.querySelector('[data-loan="ln3"]').textContent).toContain('On track')
+    const merchants = q('[aria-label="Merchants in flight"]')
+    expect(merchants.querySelector('[data-merchant="m1"]').textContent).toContain('Riverside Deli')
+    expect(q('[data-count="open"]').textContent).toContain('1')
+    expect(q('[data-mpg-tile="walkins"]').textContent).toContain('0')
+    expect(q('[aria-label="Book health"]').textContent).toContain('Nothing slipping')
+  })
+
+  it('hides the other book in flight cards', async () => {
+    await render('bay')
+    expect(q('[aria-label="Loans in flight"]')).not.toBeNull()
+    expect(q('[aria-label="Merchants in flight"]')).toBeNull()
+    document.body.innerHTML = ''
+    await render('mpg')
+    expect(q('[aria-label="Loans in flight"]')).toBeNull()
+    expect(q('[aria-label="Merchants in flight"]')).not.toBeNull()
+  })
+
   it('notes an open loan with no closing date once', async () => {
     const saved = TABLES.loans
     TABLES.loans = [
