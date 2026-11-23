@@ -107,3 +107,13 @@ describe('rate lock alerts', () => {
     expect(a[1].text).toContain('expired 2026-11-10')
   })
 })
+
+describe('drafts waiting', () => {
+  it('pushes once a day after 11 AM Central when drafts wait', () => {
+    const at11 = new Date('2026-11-19T17:05:00Z').getTime() // 11:05 AM Central
+    const a = buildAlerts({ signals: [], pipeline: [], loans: [], syncs: [], hotColdDays: 3, useCrmActivity: true, link, now: at11, draftsWaiting: 3 })
+    expect(a).toEqual([{ key: 'drafts:2026-11-19', kind: 'drafts', book: 'bay', text: ':memo: 3 drafts waiting in <https://app.test/bayway/drafts|Drafts>.' }])
+    expect(run({ draftsWaiting: 3 })).toEqual([]) // 10 AM: still calls
+    expect(buildAlerts({ signals: [], pipeline: [], loans: [], syncs: [], hotColdDays: 3, useCrmActivity: true, link, now: at11, draftsWaiting: 0 })).toEqual([])
+  })
+})

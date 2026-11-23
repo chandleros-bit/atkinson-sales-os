@@ -1365,6 +1365,8 @@ function buildOwnerBriefing(data, now = Date.now()) {
     callFirst,
     // Database Opportunity Agent: today's past-client picks (opportunity_picks).
     pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || "(no name)", detail: p.headline || "", reasons: p.reasons || [] })),
+    // Drafts inbox: how many bot drafts wait for review (count and link).
+    draftsWaiting: Number(data.draftsWaiting || 0),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length
@@ -1513,6 +1515,8 @@ ${today.map((l) => `- ${l}`).join("\n")}`,
     `Call first
 ${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "- Nobody waiting"}`,
     ...pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join("\n")] : [],
+    ...m.draftsWaiting ? [`Drafts waiting: ${m.draftsWaiting} (review after 11)
+  ${url("/bayway/drafts")}`] : [],
     `Slipping
 ${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "Nothing slipping today."}`
   ];
@@ -1576,6 +1580,7 @@ Open the dashboard: ${url("/")}
     heading(`Call first (${m.callFirstCount})`, url("/workbench")),
     callTable,
     ...pc.count ? [heading(`Past clients to call (${pc.count})`, url("/bayway/opportunities")), pastTable] : [],
+    ...m.draftsWaiting ? [`<p style="font:14px Arial,sans-serif;margin:16px 0 0">${link(url("/bayway/drafts"), `Drafts waiting: ${m.draftsWaiting}`)} (review after 11)</p>`] : [],
     heading(m.nothingSlipping ? "Slipping" : `Slipping (${slipCount})`, url("/workbench")),
     slipTable,
     `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url("/"), "Open the dashboard")}</p>`,

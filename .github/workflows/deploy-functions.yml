@@ -7,13 +7,15 @@ on:
   workflow_dispatch:
     inputs:
       functions:
-        description: 'Function names, space-separated (blank = daily-briefing)'
+        description: 'Function names, space-separated (blank = daily-briefing slack-alerts)'
         required: false
         default: ''
   push:
     branches: [main]
     paths:
       - 'supabase/functions/daily-briefing/**'
+      - 'supabase/functions/slack-alerts/**'
+      - 'supabase/functions/_shared/slack-alerts.ts'
       - '.github/workflows/deploy-functions.yml'
 
 jobs:
@@ -30,7 +32,7 @@ jobs:
       - name: Deploy
         run: |
           names="${{ github.event.inputs.functions }}"
-          [ -z "$names" ] && names="daily-briefing"
+          [ -z "$names" ] && names="daily-briefing slack-alerts"
           for fn in $names; do
             # Cron-called functions run without a user JWT.
             supabase functions deploy "$fn" --remote="$PROJECT_REF" --no-verify-jwt --yes

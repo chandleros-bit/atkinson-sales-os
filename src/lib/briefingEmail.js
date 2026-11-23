@@ -110,6 +110,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     `Today\n${today.map((l) => `- ${l}`).join('\n')}`,
     `Call first\n${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : '- Nobody waiting'}`,
     ...(pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join('\n')] : []),
+    ...(m.draftsWaiting ? [`Drafts waiting: ${m.draftsWaiting} (review after 11)\n  ${url('/bayway/drafts')}`] : []),
     `Slipping\n${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : 'Nothing slipping today.'}`,
   ]
   const text = plainSeparators(`${subject}\n\n${textBlocks.join('\n\n')}\n\nOpen the dashboard: ${url('/')}\n`)
@@ -179,6 +180,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     heading('Today'), todayTable,
     heading(`Call first (${m.callFirstCount})`, url('/workbench')), callTable,
     ...(pc.count ? [heading(`Past clients to call (${pc.count})`, url('/bayway/opportunities')), pastTable] : []),
+    ...(m.draftsWaiting ? [`<p style="font:14px Arial,sans-serif;margin:16px 0 0">${link(url('/bayway/drafts'), `Drafts waiting: ${m.draftsWaiting}`)} (review after 11)</p>`] : []),
     heading(m.nothingSlipping ? 'Slipping' : `Slipping (${slipCount})`, url('/workbench')), slipTable,
     `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url('/'), 'Open the dashboard')}</p>`,
     `</div>`,

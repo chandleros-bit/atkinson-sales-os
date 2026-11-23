@@ -8,8 +8,8 @@
 //   closing      a Bayway loan closes within 3 days
 //   lock         a rate lock expires within 3 days, or expired without funding
 //   sync_fail    a sync's latest run failed
-// Everything else stays in the 7:30 AM briefing. The daily "drafts waiting"
-// message comes with the Drafts inbox.
+//   drafts       once a day after 11 AM: how many bot drafts are waiting
+// Everything else stays in the 7:30 AM briefing.
 // Pure: no I/O. Each alert has a dedupe key; the function sends a key once.
 // Keys include the timestamp that makes it new (a fresh inbound, a new touch),
 // so the same lead can alert again after the situation resets.
@@ -73,6 +73,7 @@ export const LOCK_EXPIRED_LOOKBACK = 30
 const OPEN_GROUPS = new Set(['prospect', 'processing', 'closing'])
 export const NEW_LEAD_HOURS = 24
 export const REACHED_OUT_HOURS = 24
+export const DRAFTS_HOUR = 11
 const APP_RECEIVED = 'Application Received'
 const LOST = ['lost', 'closed', 'dead', 'not qualified', 'non-compatible', 'nurture']
 
@@ -140,6 +141,7 @@ export interface Inputs {
   useCrmActivity: boolean
   link: (path: string) => string
   now: number
+  draftsWaiting?: number
 }
 
 const person = (link: Inputs['link'], id: string, name?: string | null) => `<${link(`/workbench?person=${id}`)}|${nameOf(name)}>`
@@ -218,6 +220,12 @@ export function buildAlerts(i: Inputs): Alert[] {
     }
   }
 
+  // Drafts in one batch (doc rule 6): one push a day, after the 9 to 11 calls.
+  if ((i.draftsWaiting || 0) > 0 && centralHour(now) >= DRAFTS_HOUR) {
+    const n = i.draftsWaiting!
+    out.push({ key: `drafts:${today}`, kind: 'drafts', book: 'bay', text: `:memo: ${n} draft${n === 1 ? '' : 's'} waiting in <${link('/bayway/drafts')}|Drafts>.` })
+  }
+
   for (const s of i.syncs) {
     const book = SYNC_BOOK[s.source]
     if (!book || s.status !== 'error') continue
@@ -230,7 +238,7 @@ export function buildAlerts(i: Inputs): Alert[] {
 }
 
 // Order inside a message: what to do first, first.
-const RANK: Record<string, number> = { reached_out: 0, new_lead: 1, lock: 2, closing: 3, hot_cold: 4, docs_aging: 5, quiet_app: 6, sync_fail: 7 }
+const RANK: Record<string, number> = { reached_out: 0, new_lead: 1, lock: 2, closing: 3, hot_cold: 4, docs_aging: 5, quiet_app: 6, drafts: 7, sync_fail: 8 }
 
 // Unsent alerts grouped into one Slack message per book, at most `cap` lines
 // each, with a pointer to the Workbench for the rest. Returns the keys that
