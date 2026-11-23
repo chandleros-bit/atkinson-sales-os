@@ -161,3 +161,171 @@ export function BookHealth({ rows, biz }) {
     </section>
   )
 }
+
+// ---- A8. Rate watch ---------------------------------------------------------------
+
+// model: rateWatch() output.
+export function RateWatch({ model }) {
+  const top = model.rows.slice(0, 4)
+  return (
+    <section aria-label="Rate watch" className="cc-card flex min-w-0 flex-col overflow-hidden">
+      <Head title="Rate watch" book="bay" sub="Today's Opportunities picks above the market" link={{ to: '/bayway/opportunities', label: 'Opportunities' }} />
+      <div className="flex items-baseline gap-2 border-b border-line px-5 py-3">
+        <span className="num text-title font-bold">{model.pmms != null ? `${model.pmms.toFixed(2)}%` : '—'}</span>
+        <span className="text-body text-muted">30-year PMMS{model.week ? ` · week of ${model.week.slice(5).replace('-', '/')}` : ''}</span>
+      </div>
+      {top.length === 0 && (
+        <div className="px-5 py-6 text-center text-body text-muted">
+          {model.pmms == null ? 'No PMMS rate loaded yet.' : 'No picks above today’s rate.'}
+        </div>
+      )}
+      <div className="flex flex-col">
+        {top.map((r) => (
+          <div key={r.id} data-rate-pick={r.id} className="flex items-center gap-3 border-b border-hoverbg px-5 py-2.5 last:border-b-0">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-ui font-semibold">{r.name}</div>
+              <div className="num text-body text-muted">
+                {r.rate.toFixed(2)}%{r.balance ? ` on ${kAmount(r.balance)}` : ''}
+              </div>
+            </div>
+            {r.saving != null && (
+              <div className="flex-none text-right">
+                <div className="num text-ui font-bold" style={{ color: 'var(--pos-ink)' }}>~{money(r.saving)}/mo</div>
+                <div className="text-caption text-dim">Estimate</div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {model.rows.length > top.length && <div className="mt-auto border-t border-line px-5 py-2.5 text-body text-muted">+{model.rows.length - top.length} more on Opportunities</div>}
+    </section>
+  )
+}
+
+// ---- A9. Source pull-through --------------------------------------------------------
+
+const STEP_COLORS = { bay: ['var(--bay-soft)', '#A4C97A', 'var(--bay-ink)'], mpg: ['var(--mpg-soft)', 'var(--mpg-line)', 'var(--mpg-ink)'] }
+
+// books: [{ book, rows }] from pullThrough.
+export function PullThrough({ books }) {
+  return (
+    <section aria-label="Source pull-through" className="cc-card flex min-w-0 flex-col overflow-hidden">
+      <Head title="Source pull-through" sub="Last 90 days · leads to the last step" link={{ to: '/analytics', label: 'Analytics' }} />
+      <div className="flex flex-col gap-4 px-5 py-4">
+        {books.map(({ book, rows }) => (
+          <div key={book} data-pull-book={book} className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-caption text-muted">
+              <BizBadge biz={book} />
+              {book === 'bay' ? 'Lead → app → funded' : 'Lead → submitted → approved'}
+            </div>
+            {rows.length === 0 && <div className="text-body text-muted">No leads in the last 90 days.</div>}
+            {rows.map((r) => {
+              const [c0, c1, c2] = STEP_COLORS[book]
+              const w = (n) => `${r.leads ? (n / r.leads) * 100 : 0}%`
+              return (
+                <div key={r.source} data-pull={r.source}>
+                  <div className="flex items-center gap-2 text-body">
+                    <span className="min-w-0 flex-1 truncate font-medium">{r.source}</span>
+                    <span className="num text-muted">
+                      {r.leads} → {r.mid} → {r.last}
+                    </span>
+                    <span className="num w-10 text-right font-semibold">{r.pct}%</span>
+                  </div>
+                  <div className="relative mt-1.5 h-2 overflow-hidden rounded-full" style={{ background: c0 }}>
+                    <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: w(r.mid), background: c1 }} />
+                    <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: w(r.last), background: c2 }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// ---- A10. Trends strip ----------------------------------------------------------------
+
+function Spark({ values }) {
+  const max = Math.max(1, ...values)
+  const n = values.length
+  const pts = values.map((v, i) => `${n > 1 ? (i / (n - 1)) * 260 : 0},${44 - (v / max) * 40}`).join(' ')
+  return (
+    <svg viewBox="0 0 260 48" preserveAspectRatio="none" className="mt-2 block h-12 w-full" role="img" aria-label="Touchpoints by day, last 30 days">
+      <polyline points={pts} fill="none" stroke="var(--chrome)" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
+// series: activitySeries(); sprint: sprintPace(); income: incomeMix(); biz: the book switch.
+export function Trends({ series, sprint, income, biz }) {
+  const now = series.totals.touch
+  const before = series.prev.touch
+  const pct = before ? Math.round(((now - before) / before) * 100) : null
+  const change = pct == null ? { text: now ? 'new' : '—', ink: 'var(--dim)' } : { text: `${pct >= 0 ? '↑' : '↓'} ${Math.abs(pct)}%`, ink: pct >= 0 ? 'var(--pos-ink)' : 'var(--neg-ink)' }
+  const items = sprint.items.filter((s) => biz === 'all' || s.book === biz)
+  const incomeRows = [biz !== 'mpg' && { key: 'bay', label: 'Bayway commission', value: income.commission }, biz !== 'bay' && { key: 'mpg', label: 'MPG residual', value: income.residual }].filter(Boolean)
+  const incomeMax = Math.max(1, ...incomeRows.map((r) => r.value))
+  return (
+    <section aria-label="Trends" className="cc-card grid min-w-0 grid-cols-1 divide-y divide-line overflow-hidden md:grid-cols-3 md:divide-x md:divide-y-0">
+      <div data-trend="touch" className="px-5 py-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-ui font-semibold">Touchpoints · 30 days</h2>
+          <Link to="/activity" className="text-body font-semibold text-[color:var(--chrome)]">Activity →</Link>
+        </div>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="num text-title font-bold">{now.toLocaleString()}</span>
+          <span className="text-body font-semibold" style={{ color: change.ink }} title="vs the 30 days before">{change.text}</span>
+        </div>
+        <Spark values={series.points.map((p) => p.touch)} />
+      </div>
+      <div data-trend="sprint" className="px-5 py-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-ui font-semibold">{sprint.ended ? 'Last 90-day sprint' : '90-day sprint'}</h2>
+          <span className="text-caption text-muted">{sprint.ended ? 'ended' : `${sprint.weeksLeft} wk left`}</span>
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {items.map((s) => {
+            const good = sprint.ended ? s.hit : s.onPace
+            return (
+              <div key={s.key} data-sprint={s.key}>
+                <div className="flex items-center gap-2 text-caption">
+                  <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                  <span className="num text-muted">{s.value} / {s.target}</span>
+                  <span className="font-semibold" style={{ color: good ? 'var(--pos-ink)' : 'var(--warn-ink)' }}>
+                    {sprint.ended ? (s.hit ? 'Hit' : 'Missed') : s.onPace ? 'On pace' : 'Behind'}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-hoverbg">
+                  <div className="h-full rounded-full" style={{ width: `${s.pct}%`, background: s.book === 'mpg' ? 'var(--mpg)' : 'var(--bay)' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div data-trend="income" className="px-5 py-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-ui font-semibold">Income this month</h2>
+          <Link to="/reports" className="text-body font-semibold text-[color:var(--chrome)]">Reports →</Link>
+        </div>
+        <div className="num mt-1 text-title font-bold">{money(incomeRows.reduce((s, r) => s + r.value, 0))}</div>
+        <div className="mt-2 flex flex-col gap-2">
+          {incomeRows.map((r) => (
+            <div key={r.key}>
+              <div className="flex items-center justify-between text-caption">
+                <span>{r.label}</span>
+                <span className="num font-semibold">{money(r.value)}</span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-hoverbg">
+                <div className="h-full rounded-full" style={{ width: `${(r.value / incomeMax) * 100}%`, background: r.key === 'mpg' ? 'var(--mpg)' : 'var(--bay)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 text-caption text-dim">{biz !== 'mpg' && income.fromArive ? 'Commission estimated from Arive' : 'Entered in Reports'}</div>
+      </div>
+    </section>
+  )
+}

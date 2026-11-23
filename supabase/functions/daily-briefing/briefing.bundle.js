@@ -146,7 +146,6 @@ for (const t of MPG_STAGE_TARGETS) {
 var BY_KEY = Object.fromEntries(MPG_STAGE_TARGETS.map((t) => [t.key, t]));
 
 // src/lib/pipeline.js
-var MPG_LEAD_FLOW = MPG_STAGES;
 var LOST_KEYWORDS = [
   "lost",
   "dead",
@@ -794,10 +793,6 @@ function countWon(deals, { from, to }) {
 function pipelineValue(deals) {
   return deals.filter((d) => d.status === "open").reduce((s, d) => s + Number(d.value || 0), 0);
 }
-
-// src/lib/analytics.js
-var BAY_STEP = Object.fromEntries(BAY_STAGES.map((s, i) => [s, i]));
-var MPG_STEP = Object.fromEntries(MPG_LEAD_FLOW.map((s, i) => [s, i]));
 
 // src/lib/ariveImport.js
 var STAGE_GROUPS = [

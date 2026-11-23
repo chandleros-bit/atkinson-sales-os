@@ -1,6 +1,6 @@
-// The Overview dashboard's numbers: the four month-to-date KPI cards, the
-// 30-day Activity & Production chart, monthly goal pace (the gauge), the
-// pipeline mix, lead sources, income mix and sprint pace. Pure, no React, no
+// The Overview dashboard's numbers: the month's values, the 30-day activity
+// series, month goals (goalRows; monthlyGoals feeds the briefing), MPG stage
+// counts, income mix and sprint pace. Pure, no React, no
 // I/O; Overview.jsx fetches and draws.
 //
 // Sources, as on Reports: commission, residual and merchant accounts are typed
@@ -11,9 +11,6 @@
 // plus won deals by close date.
 import { dayKey } from './calendar'
 import { rollupMetrics, monthWindow, countWon, pipelineValue, inWindow, sprintRows, sprintWindow, weeksRemaining } from './reports'
-import { niceMax, smoothPath } from './overviewCards'
-import { sourceTable } from './analytics'
-import { isLostStage } from './pipeline'
 import { isScenario } from './loans'
 
 export const CHART_DAYS = 30
@@ -74,8 +71,6 @@ export function pctOf(value, goal) {
   if (!goal) return 0
   return Math.max(0, Math.min(100, Math.round((Number(value || 0) / goal) * 100)))
 }
-const changePct = (now, before) => (before ? Math.round(((now - before) / before) * 100) : null)
-const signed = (n) => (n > 0 ? `↑ ${n}` : n < 0 ? `↓ ${Math.abs(n)}` : '→ 0')
 
 // The month's raw values every card reads, for the visible book(s).
 // activities: outbound call/text/email rows { occurred_at, type, business_id }.
@@ -113,88 +108,6 @@ export function monthValues({ biz, metrics, deals = [], activities = [], pipelin
     openLoans: arive ? arive.open : bay ? deals.filter((d) => d.status === 'open').length : 0,
     prevMonthLabel: MONTHS[Number(prev.from.slice(5, 7)) - 1],
   }
-}
-
-// The four KPI cards. Money cards are entered in Reports ("Entered"); the
-// rest are live. mpg-only swaps commission for residual and pipeline value
-// for open leads.
-export function kpiCards({ biz, values: v, targets, mpgRows = [] }) {
-  const bay = biz !== 'mpg'
-  const mpg = biz !== 'bay'
-  const money = bay
-    ? { id: 'commission', label: 'Gross commission (MTD)', value: v.commission, unit: 'currency', goal: targets.rev_gross_commission, tag: v.commissionFromArive ? 'Est. from Arive' : 'Entered', icon: 'money', tone: 'bay' }
-    : { id: 'residual', label: 'MPG residual (MTD)', value: v.residual, unit: 'currency', goal: targets.rev_monthly_residual, tag: 'Entered', icon: 'money', tone: 'mpg' }
-  money.pct = pctOf(money.value, money.goal)
-  money.delta = { text: `${money.pct}% of goal`, tone: 'flat' }
-  money.foot = `Goal ${fmtMoney(money.goal)}${bay && biz === 'bay' ? '' : bay ? ' · Bayway' : ''}`
-
-  const closed = v.loansClosed + v.merchants
-  const closedPrev = v.loansClosedPrev + v.merchantsPrev
-  const closedGoal = (bay ? targets.loans_closed : 0) + (mpg ? targets.new_merchant_accounts : 0)
-  const diff = closed - closedPrev
-  const closedCard = {
-    id: 'closed',
-    label: 'Closed this month',
-    value: closed,
-    unit: 'count',
-    goal: closedGoal,
-    pct: pctOf(closed, closedGoal),
-    tag: biz === 'mpg' ? 'Entered' : biz === 'bay' ? 'Live' : null,
-    icon: 'key',
-    tone: 'chrome',
-    delta: { text: `${signed(diff)} vs ${v.prevMonthLabel}`, tone: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat' },
-    foot: biz === 'all' ? `Bayway ${v.loansClosed} loans · MPG ${v.merchants} merchants` : biz === 'bay' ? `Goal ${closedGoal} loans` : `Goal ${closedGoal} merchant accounts`,
-  }
-
-  const callChange = changePct(v.calls, v.callsPrevSoFar)
-  const calls = {
-    id: 'calls',
-    label: 'Calls this month',
-    value: v.calls,
-    unit: 'count',
-    goal: targets.calls_monthly,
-    pct: pctOf(v.calls, targets.calls_monthly),
-    tag: 'Live',
-    icon: 'phone',
-    tone: 'mpg',
-    delta: callChange == null ? { text: `${v.calls ? '↑' : '→'} new`, tone: 'flat' } : { text: `${callChange >= 0 ? '↑' : '↓'} ${Math.abs(callChange)}% vs ${v.prevMonthLabel}`, tone: callChange >= 0 ? 'up' : 'down' },
-    foot: `${v.callsToday} today`,
-  }
-
-  let fourth
-  if (bay) {
-    fourth = {
-      id: 'pipeline',
-      label: 'Pipeline value (open)',
-      value: v.pipelineValue,
-      unit: 'currency',
-      goal: targets.pipeline_value,
-      pct: pctOf(v.pipelineValue, targets.pipeline_value),
-      tag: 'Live',
-      icon: 'pipeline',
-      tone: 'neutral',
-      delta: { text: `${pctOf(v.pipelineValue, targets.pipeline_value)}% of goal`, tone: 'flat' },
-      foot: `${v.openLoans} open ${v.openLoans === 1 ? 'loan' : 'loans'}${biz === 'all' ? ' · Bayway' : ''}`,
-    }
-  } else {
-    const open = mpgRows.filter((r) => !isLostStage(r.stage))
-    // Submitted or further (mpg-stages.ts): the application is in.
-    const submitted = open.filter((r) => r.stage === 'Submitted' || r.stage === 'Approved').length
-    fourth = {
-      id: 'open_leads',
-      label: 'Open MPG leads',
-      value: open.length,
-      unit: 'count',
-      goal: 0,
-      pct: open.length ? Math.round((submitted / open.length) * 100) : 0,
-      tag: 'Live',
-      icon: 'pipeline',
-      tone: 'neutral',
-      delta: { text: `${submitted} submitted`, tone: 'flat' },
-      foot: 'Zoho leads not lost',
-    }
-  }
-  return [money, closedCard, calls, fourth]
 }
 
 export function fmtMoney(n) {
@@ -249,17 +162,6 @@ export function activitySeries({ activities = [], pipeline = [], deals = [], day
   return { points, totals: totals(from, to), prev: totals(prevFrom, from) }
 }
 
-export const ACT_CHART = { x0: 40, x1: 760, top: 14, bottom: 214, width: 760, height: 236 }
-
-// smoothPath, with control points held inside the plot: spiky days (0, 17, 0)
-// would otherwise curve below the zero line.
-function clampedSmooth(pts, c) {
-  return smoothPath(pts).replace(/C ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+)/g, (_, x1, y1, x2, y2) => {
-    const clamp = (y) => Math.min(c.bottom, Math.max(c.top, Number(y))).toFixed(1)
-    return `C ${x1} ${clamp(y1)} ${x2} ${clamp(y2)}`
-  })
-}
-
 // Funded Arive loans in the deal shape activitySeries reads, so the chart's
 // closings follow the loans once they are imported. Scenario files never count.
 export function fundedLoanDeals(loans) {
@@ -268,26 +170,7 @@ export function fundedLoanDeals(loans) {
     .map((l) => ({ status: 'won', value: Number(l.amount || 0), expected_close: l.funded_on, business_id: 'bay' }))
 }
 
-// SVG geometry for the chart: both lines share one y scale (production is a
-// handful a day, touchpoints dozens, so production sits low, as in the mock).
-export function activityChart(points, c = ACT_CHART) {
-  const max = niceMax(points.flatMap((p) => [p.touch, p.prod]))
-  const n = points.length
-  const x = (i) => (n <= 1 ? c.x0 : c.x0 + (i * (c.x1 - c.x0)) / (n - 1))
-  const y = (v) => c.bottom - (v / max) * (c.bottom - c.top)
-  const act = points.map((p, i) => [x(i), y(p.touch)])
-  const prod = points.map((p, i) => [x(i), y(p.prod)])
-  const actPath = clampedSmooth(act, c)
-  const fill = n ? `${actPath} L ${x(n - 1).toFixed(1)} ${c.bottom} L ${c.x0} ${c.bottom} Z` : ''
-  const ticks = [0, 1, 2, 3, 4].map((i) => ({ y: c.bottom - (i / 4) * (c.bottom - c.top), label: Math.round((max * i) / 4) }))
-  const every = Math.max(1, Math.round((n - 1) / 4))
-  const labels = points
-    .map((p, i) => ({ i, x: x(i), label: i === n - 1 ? 'Today' : `${MONTHS[Number(p.key.slice(5, 7)) - 1]} ${Number(p.key.slice(8, 10))}` }))
-    .filter((l) => l.i === n - 1 || (l.i % every === 0 && n - 1 - l.i >= every / 2))
-  return { max, act: actPath, prod: clampedSmooth(prod, c), fill, ticks, labels, x, y, points: act.map((a, i) => ({ x: a[0], ay: a[1], py: prod[i][1] })) }
-}
-
-// ---- Monthly goals (the gauge) ---------------------------------------------------
+// ---- Monthly goals ---------------------------------------------------
 
 // hit: at or past target. pace: on track for the month so far. behind: neither.
 export function goalStatus(value, target, elapsed) {
@@ -362,51 +245,6 @@ export function goalRows({ biz, values: v, targets, extra = {}, now = Date.now()
     })
   const behind = rows.filter((g) => g.status === 'behind' && !g.covered).sort((a, b) => a.gap - b.gap)[0] || null
   return { rows, behind, daysLeft }
-}
-
-// Half-circle segments as pathLength-100 dashes: [{ status, dash, offset }].
-export function gaugeSegments(counts, gap = 1.5) {
-  const order = ['hit', 'pace', 'behind']
-  const total = order.reduce((s, k) => s + counts[k], 0)
-  if (!total) return []
-  const live = order.filter((k) => counts[k] > 0)
-  const room = 100 - gap * (live.length - 1)
-  let at = 0
-  return live.map((k) => {
-    const len = (counts[k] / total) * room
-    const seg = { status: k, dash: `${len.toFixed(2)} ${(100 - len).toFixed(2)}`, offset: (-at).toFixed(2) }
-    at += len + gap
-    return seg
-  })
-}
-
-// ---- Pipeline mix, sources, income, sprints ---------------------------------------
-
-// rows with .stage, counted in `stages` order; stages with nobody are dropped.
-export function pipelineMix(rows, stages) {
-  const counts = Object.fromEntries(stages.map((s) => [s, 0]))
-  for (const r of rows) if (r.stage in counts) counts[r.stage] += 1
-  const total = Object.values(counts).reduce((s, n) => s + n, 0)
-  let at = 0
-  const slices = stages
-    .filter((s) => counts[s] > 0)
-    .map((s) => {
-      const pct = (counts[s] / total) * 100
-      const slice = { stage: s, n: counts[s], pct, offset: -at }
-      at += pct
-      return slice
-    })
-  return { total, slices }
-}
-
-// The biggest lead sources this month across the visible books, with the
-// share that reached an application (Bayway) or was approved (MPG).
-export function topSources(leads, biz, fromMs, n = 5) {
-  const books = biz === 'all' ? ['bay', 'mpg'] : [biz]
-  return books
-    .flatMap((b) => sourceTable(leads, b, fromMs).rows.map((r) => ({ book: b, source: r.source, leads: r.leads, rate: r.rate })))
-    .sort((a, b) => b.leads - a.leads || a.source.localeCompare(b.source))
-    .slice(0, n)
 }
 
 export function incomeMix({ values: v, targets }) {
