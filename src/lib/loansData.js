@@ -11,7 +11,7 @@ export const LOAN_COLUMNS = [
   'id', 'arive_loan_id', 'business_id', 'loan_officer', 'role', 'borrower_name', 'borrower_first',
   'borrower_last', 'borrower_email', 'borrower_phone', 'co_borrower_name', 'co_borrower_email', 'contact_id',
   'amount', 'purpose', 'stage', 'stage_group', 'property_address', 'property_state', 'lender', 'title_company',
-  'closed_on', 'funded_on', 'firm_closing_on', 'application_on', 'rate', 'loan_type', 'term_months',
+  'closed_on', 'funded_on', 'firm_closing_on', 'lock_expires_on', 'application_on', 'rate', 'loan_type', 'term_months',
   'buyer_agent_name', 'buyer_agent_company', 'buyer_agent_email', 'buyer_agent_phone', 'seller_agent_name',
   'seller_agent_company', 'seller_agent_email', 'seller_agent_phone', 'scenario_auto', 'scenario_override',
   'comp_override', 'first_imported_at', 'last_seen_at', 'updated_at',

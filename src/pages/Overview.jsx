@@ -16,6 +16,8 @@ import BizBadge from '../components/BizBadge'
 import WeeklyFocusCard from '../components/WeeklyFocusCard'
 import PageHeader, { SyncDot } from '../components/PageHeader'
 import { YourDay, MonthGoals, ForecastBoth, kMoney } from '../components/OverviewTop'
+import { LoansInFlight, MerchantsInFlight, BookHealth } from '../components/OverviewBook'
+import { loansInFlight, merchantsInFlight, bookHealth } from '../lib/bookFlags'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useForecast } from '../lib/useForecastInputs'
 import { forecastLayers, forecastByMonth, monthKeyOf } from '../lib/forecast'
@@ -394,7 +396,7 @@ function useOverviewData(biz) {
             .limit(1)
             .maybeSingle(),
           tasks: fetchAllSettled(() => {
-            const t = supabase.from('v_tasks').select('id, business_id, due_at').order('id')
+            const t = supabase.from('v_tasks').select('id, business_id, due_at, contact_id').order('id')
             return biz === 'all' ? t : t.eq('business_id', biz)
           }),
           // Outbound calls, texts and emails: two months across both books passes 1,000.
@@ -416,15 +418,19 @@ function useOverviewData(biz) {
         }
         if (wantsBay) {
           q.bayPipe = fetchAllSettled(() =>
-            supabase.from('v_active_pipeline').select(`id, business_id, name, stage, last_touch_at${HEALTH_COLUMNS}`).eq('business_id', 'bay').order('id'),
+            supabase.from('v_active_pipeline').select(`id, business_id, name, stage, last_touch_at${HEALTH_COLUMNS}, docs_outstanding_count, docs_oldest_requested_at`).eq('business_id', 'bay').order('id'),
           )
           q.deals = fetchAllSettled(() =>
             supabase.from('deals').select('status, value, expected_close, business_id').eq('business_id', 'bay').order('id'),
           )
           q.loans = fetchLoanBundle()
+          q.partners = fetchAllSettled(() => supabase.from('v_partners').select('id, name, email, last_touch_at, next_touch_due').order('id'))
         }
         if (wantsMpg) {
           q.mpgRows = fetchAllSettled(() => supabase.from('v_mpg_contacts').select(`id, name, company, stage, last_touch_at${HEALTH_COLUMNS}`).order('id'))
+          q.walkIns = fetchAllSettled(() =>
+            supabase.from('mpg_touches').select('id, occurred_at').eq('channel', 'walk_in').gte('occurred_at', new Date(`${monthWindow().from}T00:00:00`).toISOString()).order('id'),
+          )
         }
 
         const keys = Object.keys(q)
@@ -433,8 +439,10 @@ function useOverviewData(biz) {
         const res = Object.fromEntries(keys.map((k, i) => [k, settled[i]]))
         // Loans are not fatal: without them the cards keep their FUB and
         // entered sources, as before the first Arive import.
-        if (res.loans?.error) console.warn('Overview: loans failed to load', res.loans.error)
-        const err = keys.filter((k) => k !== 'loans').map((k) => res[k].error).find(Boolean)
+        // Partners and walk-ins only feed counts; a failure leaves them out.
+        const OPTIONAL = new Set(['loans', 'partners', 'walkIns'])
+        for (const k of OPTIONAL) if (res[k]?.error) console.warn(`Overview: ${k} failed to load`, res[k].error)
+        const err = keys.filter((k) => !OPTIONAL.has(k)).map((k) => res[k].error).find(Boolean)
         if (err) {
           setError(err.message)
           return
@@ -450,6 +458,8 @@ function useOverviewData(biz) {
           deals: res.deals?.data || [],
           loanBundle: res.loans?.data || null,
           mpgRows: (res.mpgRows?.data || []).map((r) => ({ ...r, business_id: 'mpg' })),
+          partners: res.partners?.error ? [] : res.partners?.data || [],
+          walkIns: !res.walkIns || res.walkIns.error ? null : (res.walkIns.data || []).length,
         })
       } catch (e) {
         if (alive) setError(friendlyError(e))
@@ -465,7 +475,14 @@ function useOverviewData(biz) {
   return { data, loading, error }
 }
 
-function buildView(biz, data, now = Date.now()) {
+// Latest active-merchant count entered in Reports, or null.
+function activeMerchants(metrics) {
+  const rows = metrics.filter((m) => m.business_id === 'mpg' && m.metric_key === 'rev_active_merchants' && m.value != null)
+  if (!rows.length) return null
+  return rows.reduce((a, b) => (String(b.date) > String(a.date) ? b : a)).value
+}
+
+function buildView(biz, data, rules, now = Date.now()) {
   const inBook = (b) => biz === 'all' || b === biz
   const activities = data.activities.filter((a) => inBook(a.business_id))
   const lb = data.loanBundle
@@ -481,6 +498,14 @@ function buildView(biz, data, now = Date.now()) {
     series: activitySeries({ activities, pipeline: biz === 'mpg' ? [] : data.bayPipe, deals: biz === 'mpg' ? [] : stats ? fundedLoanDeals(lb.loans) : data.deals, now }),
     sources: topSources(data.leads, biz, new Date(`${monthWindow(now).from}T00:00:00`).getTime()),
     sprint: sprintPace({ biz, metrics: data.metrics, targets: data.targets, now, measured: stats ? { bay_funded_loans: stats.sprintFunded } : {} }),
+    loans: lb ? loansInFlight({ loans: lb.loans, pipeline: data.bayPipe, partners: data.partners || [], now }) : null,
+    merchants: merchantsInFlight({ mpgRows: data.mpgRows, tasks: data.tasks, rules, approvedThisMonth: approvedIds.length, now }),
+    mpgTiles: [
+      { key: 'active', label: 'Active accounts', value: activeMerchants(data.metrics) ?? '—' },
+      { key: 'residual', label: 'Residual / month', value: values.residual ? `$${Math.round(values.residual).toLocaleString('en-US')}` : '—' },
+      { key: 'walkins', label: 'Walk-ins this month', value: data.walkIns ?? '—' },
+    ],
+    health: bookHealth({ biz, pipeline: data.bayPipe, mpgRows: data.mpgRows, tasks: data.tasks, partners: data.partners || [], rules, now }),
   }
 }
 
@@ -506,7 +531,7 @@ export default function Overview() {
   const forecast = useForecast()
   const today = useTodayLists(biz, pq.rules)
   const now = Date.now()
-  const view = useMemo(() => (data ? buildView(biz, data) : null), [biz, data])
+  const view = useMemo(() => (data ? buildView(biz, data, pq.rules) : null), [biz, data, pq.rules])
   const layers = useMemo(() => {
     if (!view) return null
     const opts = { activated: view.values.merchants, approved: view.approvedIds.size, approvedIds: view.approvedIds }
@@ -577,14 +602,20 @@ export default function Overview() {
             />
           </div>
 
+          <div className={`mt-[18px] grid grid-cols-1 items-stretch gap-[18px] ${biz === 'all' ? 'xl:grid-cols-2' : ''}`}>
+            {biz !== 'mpg' && view.loans && <LoansInFlight model={view.loans} now={now} />}
+            {biz !== 'bay' && <MerchantsInFlight model={view.merchants} tiles={view.mpgTiles} />}
+          </div>
+
+          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2 xl:grid-cols-3">
+            <BookHealth rows={view.health} biz={biz} />
+            <PipelineMixCard biz={biz} rows={biz === 'mpg' ? data.mpgRows : data.bayPipe} rules={pq.rules} />
+            <SourcesCard biz={biz} sources={view.sources} />
+          </div>
+
           <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] xl:grid-cols-3">
             <ActivityCard series={view.series} showProduction={biz !== 'mpg'} />
             <SprintCard model={view.sprint} />
-          </div>
-
-          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2">
-            <PipelineMixCard biz={biz} rows={biz === 'mpg' ? data.mpgRows : data.bayPipe} rules={pq.rules} />
-            <SourcesCard biz={biz} sources={view.sources} />
           </div>
         </>
       )}
