@@ -105,6 +105,9 @@ async function render(biz) {
   return host.textContent
 }
 
+const MONTH = new Date().toLocaleString('en-US', { month: 'long' })
+const q = (sel) => document.querySelector(sel)
+
 describe('Overview dashboard', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -112,70 +115,63 @@ describe('Overview dashboard', () => {
     __resetForecastForTest()
   })
 
-  it('renders every card in the combined view', async () => {
+  it('opens on Your day, the focus, the month goals and the forecast', async () => {
     const text = await render('all')
-    for (const t of ['Gross commission (MTD)', 'Closed this month', 'Calls this month', 'Pipeline value (open)',
-      'Activity & Production', 'Monthly Goals', "Today's Events", 'Pipeline Mix', 'Lead Sources', 'Income Mix', 'Up Next', '90-Day Sprint']) {
+    for (const t of ['Your day', "Today's work", 'Meetings', "This week's focus", `${MONTH} goals`, `${MONTH} forecast`, 'Open Workbench',
+      'Activity & Production', '90-Day Sprint', 'Pipeline Mix', 'Lead Sources']) {
       expect(text).toContain(t)
     }
-    // MPG residual entered in Reports reaches the income card.
-    expect(text).toContain('$8,400')
-    // Today's calendar event, with its location.
-    expect(text).toContain('Closing')
-    expect(text).toContain('Title Co.')
-    // One Arive loan funded this month.
-    expect(document.querySelector('[data-kpi="closed"]').textContent).toContain('Bayway 1 loans · MPG 0 merchants')
-    // Commission is estimated from that loan: 400,000 × 1.25%.
-    const commission = document.querySelector('[data-kpi="commission"]').textContent
-    expect(commission).toContain('Est. from Arive')
-    expect(commission).toContain('$5,000')
-    expect(text).toContain('Commission estimated from Arive')
-    expect(text).not.toContain('Entered in Reports')
-    // Old command-center cards are gone.
-    expect(text).not.toContain('Priority Leads')
-    expect(text).not.toContain('Bayway Sprint')
+    // The three untimed work lists.
+    expect([...document.querySelectorAll('[data-work-list]')].map((e) => e.dataset.workList)).toEqual(['calls', 'files', 'partners'])
+    // Today's calendar event, with its location, inside Your day.
+    const day = q('[aria-label="Your day"]').textContent
+    expect(day).toContain('Closing')
+    expect(day).toContain('Title Co.')
+    // The summary line names both books and the Workbench count.
+    expect(text).toContain('Bayway is tracking')
+    expect(text).toContain('MPG expects')
+    expect(text).toMatch(/\d+ items? in Workbench/)
+    // Five goals; the funded loan counts toward Loans funded.
+    expect([...document.querySelectorAll('[data-goal]')].map((e) => e.dataset.goal)).toEqual(['calls', 'applications', 'funded', 'proposals', 'accounts'])
+    expect(q('[data-goal="funded"]').textContent).toContain('1 / 2')
+    // Replaced cards are gone.
+    for (const t of ['Gross commission (MTD)', 'Monthly Goals', 'Income Mix', 'Up Next', "Today's Events"]) expect(text).not.toContain(t)
   })
 
   it('scopes the Bayway view', async () => {
     const text = await render('bay')
-    expect(text).toContain('Bayway view')
-    expect(text).toContain('Gross commission (MTD)')
+    expect(q('[data-forecast="bay"]')).not.toBeNull()
+    expect(q('[data-forecast="mpg"]')).toBeNull()
+    expect(q('[data-goal="proposals"]')).toBeNull()
+    expect(text).not.toContain('MPG expects')
     expect(text).toContain('Apps & estimates')
-    expect(text).not.toContain('MPG residual')
-    expect(document.querySelector('[data-goal="merchants"]')).toBeNull()
-    expect(document.querySelector('[data-kpi="commission"]').textContent).toContain('Est. from Arive')
-    expect(document.querySelector('[data-kpi="closed"]').textContent).toMatch(/Closed this month\s*1/)
-    expect(document.querySelector('[data-goal="closings"]').textContent).toContain('1 / 2')
-    expect(text).toContain('Estimated from Arive')
   })
 
-  it('swaps in MPG cards in the MPG view', async () => {
+  it('scopes the MPG view', async () => {
     const text = await render('mpg')
-    expect(text).toContain('MPG view')
-    expect(text).toContain('MPG residual (MTD)')
-    expect(text).toContain('Open MPG leads')
+    expect(q('[data-forecast="bay"]')).toBeNull()
+    expect(q('[data-forecast="mpg"]').textContent).toContain('accounts')
+    expect([...document.querySelectorAll('[data-goal]')].map((e) => e.dataset.goal)).toEqual(['calls', 'proposals', 'accounts'])
+    expect(text).not.toContain('Bayway is tracking')
     expect(text).toContain('MPG leads by stage')
-    expect(text).not.toContain('Pipeline value')
     expect(text).not.toContain('Apps & estimates')
-    // No Bayway commission on the MPG view, and its income note stays manual.
-    expect(text).not.toContain('Arive')
-    expect(text).toContain('Entered in Reports')
   })
 
-  it('shows the forecast card with this month and next', async () => {
+  it('splits the Bayway forecast into funded, closing and leads, this month and next', async () => {
     await render('all')
-    const card = document.querySelector('[data-card="forecast"]')
-    expect(card.textContent).toContain('Forecast')
-    expect(card.textContent).toContain('This month')
-    expect(card.textContent).toContain('Next month')
+    const bay = () => q('[data-forecast="bay"]').textContent
+    // 400,000 x 1.25% funded this month.
+    expect(bay()).toContain('Funded')
+    expect(bay()).toContain('$5,000')
+    const next = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Next month')
+    await act(async () => next.click())
     // Hot at 60% of 400,000 x 1.25% = 3,000, due next month by default.
-    expect(card.textContent).toContain('$3,000')
-    // The funded loan is already paid this month; nothing is undated yet.
-    expect(card.textContent).toContain('$5,000')
-    expect(card.textContent).not.toContain('no closing date')
+    expect(bay()).toContain('$3K')
+    expect(bay()).toContain('1 rated')
+    expect(q('[data-undated]')).toBeNull()
   })
 
-  it('counts an open loan with no closing date once, under the months', async () => {
+  it('notes an open loan with no closing date once', async () => {
     const saved = TABLES.loans
     TABLES.loans = [
       ...saved,
@@ -186,8 +182,6 @@ describe('Overview dashboard', () => {
     } finally {
       TABLES.loans = saved
     }
-    const card = document.querySelector('[data-card="forecast"]')
-    expect(card.textContent.match(/no closing date/g)).toHaveLength(1)
-    expect(card.textContent).toContain('1 open loan with no closing date')
+    expect(q('[data-undated]').textContent).toContain('1 open loan with no closing date')
   })
 })

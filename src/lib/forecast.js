@@ -172,6 +172,60 @@ export function forecastByMonth(lines, month) {
   }
 }
 
+const round1 = (n) => Math.round(n * 10) / 10
+
+// The Overview forecast card (spec 2026-11-22, A4) for one 'YYYY-MM', split
+// into layers. Bayway in dollars: funded (exact), closing (open Arive loans ×
+// stage odds) and rated leads as a range, low = Hot only, high = every rating.
+// MPG in new accounts: activated + approved (counted by the caller, from
+// metrics and Zoho) plus rated MPG leads × odds, low = Hot only; ratings for
+// contacts in approvedIds are already in `approved`, so they are skipped.
+// mpg.dollarsLow/High fill in once every MPG line has a per-account payout.
+// Returns { month, funded, closing, closingNames, leadsLow, leadsHigh, low, high,
+//   leadCount, mpg: { activated, approved, low, high, dollarsLow, dollarsHigh } }.
+export function forecastLayers(lines, month, { activated = 0, approved = 0, approvedIds = new Set() } = {}) {
+  const inMonth = (lines || []).filter((l) => l.month === month)
+  const bay = inMonth.filter((l) => l.book === 'bay')
+  const sum = (ls, f) => ls.reduce((s, l) => s + f(l), 0)
+  const funded = Math.round(sum(bay.filter((l) => l.funded), (l) => l.payout ?? 0))
+  const closingLines = bay.filter((l) => !l.funded && l.source === 'arive')
+  const closing = Math.round(sum(closingLines, weighted))
+  const leads = bay.filter((l) => l.source === 'rating')
+  const leadsLow = Math.round(sum(leads.filter((l) => l.temperature === 'hot'), weighted))
+  const leadsHigh = Math.round(sum(leads, weighted))
+  const closingNames = closingLines
+    .slice()
+    .sort((a, b) => String(a.payDate || '9999').localeCompare(String(b.payDate || '9999')))
+    .map((l) => l.name)
+    .filter(Boolean)
+
+  const mpgLeads = inMonth.filter((l) => l.book === 'mpg' && !(l.contactId && approvedIds.has(l.contactId)))
+  const hot = mpgLeads.filter((l) => l.temperature === 'hot')
+  const odds = (ls) => sum(ls, (l) => l.odds / 100)
+  const base = Number(activated || 0) + Number(approved || 0)
+  const priced = mpgLeads.every((l) => l.payout != null)
+  const perAccount = priced && mpgLeads.length ? mpgLeads[0].payout : null
+  return {
+    month,
+    funded,
+    closing,
+    closingNames,
+    leadsLow,
+    leadsHigh,
+    leadCount: leads.length,
+    low: funded + closing + leadsLow,
+    high: funded + closing + leadsHigh,
+    mpg: {
+      activated: Number(activated || 0),
+      approved: Number(approved || 0),
+      low: round1(base + odds(hot)),
+      high: round1(base + odds(mpgLeads)),
+      dollarsLow: perAccount == null ? null : Math.round(base * perAccount + sum(hot, weighted)),
+      dollarsHigh: perAccount == null ? null : Math.round(base * perAccount + sum(mpgLeads, weighted)),
+    },
+  }
+}
+
 // Pipeline "Pays first": earliest expected pay date, then bigger expected
 // payout; funded lines (already paid) don't count. Rows with no open
 // forecast line keep their order at the end.

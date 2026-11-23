@@ -6,6 +6,9 @@ import {
   activityChart,
   goalStatus,
   monthlyGoals,
+  goalRows,
+  mpgSubmittedThisMonth,
+  mpgApprovedThisMonth,
   gaugeSegments,
   pipelineMix,
   incomeMix,
@@ -217,5 +220,46 @@ describe('Arive loans on the activity chart and income card', () => {
     expect(incomeMix({ values: fromArive, targets }).fromArive).toBe(true)
     const entered = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW })
     expect(incomeMix({ values: entered, targets }).fromArive).toBe(false)
+  })
+})
+
+describe('November goals (redesign A3)', () => {
+  // Nov 15 of 30: half the month gone.
+  const NOW15 = new Date('2026-11-15T10:00:00').getTime()
+  const targets = { calls_monthly: 500, applications: 12, loans_closed: 5, merchant_proposals_delivered: 10, new_merchant_accounts: 3 }
+  const values = { calls: 300, applications: 4, loansClosed: 1, merchants: 0 }
+
+  it('shows five rows in All, with pace words and facts', () => {
+    const g = goalRows({ biz: 'all', values, targets, extra: { proposals: 5, closing: 2, approved: 0 }, now: NOW15 })
+    expect(g.rows.map((r) => r.id)).toEqual(['calls', 'applications', 'funded', 'proposals', 'accounts'])
+    const by = Object.fromEntries(g.rows.map((r) => [r.id, r]))
+    expect(by.calls.word).toBe('On pace')
+    expect(by.proposals.word).toBe('On pace')
+    expect(by.applications.word).toBe('Behind')
+    // 1 funded + 2 closing covers 2.5 expected by mid-month.
+    expect(by.funded.word).toBe('2 closing')
+    expect(by.accounts.word).toBe('Behind')
+    // Accounts (0 of 1.5 expected) is further behind than apps (4 of 6).
+    expect(g.behind.id).toBe('accounts')
+    expect(g.daysLeft).toBe(15)
+  })
+
+  it('drops the other book and says Hit at target', () => {
+    const bay = goalRows({ biz: 'bay', values: { ...values, applications: 12 }, targets, now: NOW15 })
+    expect(bay.rows.map((r) => r.id)).toEqual(['calls', 'applications', 'funded'])
+    expect(bay.rows[1].word).toBe('Hit')
+    const mpg = goalRows({ biz: 'mpg', values, targets, extra: { proposals: 5 }, now: NOW15 })
+    expect(mpg.rows.map((r) => r.id)).toEqual(['calls', 'proposals', 'accounts'])
+  })
+
+  it('counts MPG submitted and approved this month from Zoho stages', () => {
+    const rows = [
+      { id: 1, stage: 'Submitted', stage_since: '2026-11-03T15:00:00Z' },
+      { id: 2, stage: 'Approved', stage_since: '2026-11-10T15:00:00Z' },
+      { id: 3, stage: 'Submitted', stage_since: '2026-10-28T15:00:00Z' },
+      { id: 4, stage: 'Open', stage_since: '2026-11-05T15:00:00Z' },
+    ]
+    expect(mpgSubmittedThisMonth(rows, NOW15)).toBe(2)
+    expect(mpgApprovedThisMonth(rows, NOW15)).toEqual([2])
   })
 })

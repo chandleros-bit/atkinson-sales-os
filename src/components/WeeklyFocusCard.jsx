@@ -9,7 +9,7 @@ import { friendlyError } from '../lib/friendlyError'
 
 const BOOK = { bay: 'Bayway', mpg: 'MPG' }
 
-export default function WeeklyFocusCard() {
+export default function WeeklyFocusCard({ className = 'mt-4' }) {
   const [m, setM] = useState(null)
   const [busy, setBusy] = useState(null)
 
@@ -39,7 +39,7 @@ export default function WeeklyFocusCard() {
   }
 
   return (
-    <section aria-label="This week's focus" className="cc-card mt-4 flex min-w-0 flex-col overflow-hidden">
+    <section aria-label="This week's focus" className={`cc-card flex min-w-0 flex-col overflow-hidden ${className}`}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div className="min-w-0">
           <h3 className="text-lead font-semibold tracking-[-0.2px]">This week's focus</h3>

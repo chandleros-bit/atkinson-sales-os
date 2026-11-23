@@ -317,6 +317,53 @@ export function monthlyGoals({ biz, values: v, targets, now = Date.now() }) {
   return { goals: list, counts, onPace }
 }
 
+// MPG proposals this month (spec 2026-11-22, decision 4): merchants moved to
+// Zoho Submitted this month. A merchant that went on to Approved this month
+// was submitted this month too, so both stages count when stage_since is in
+// the month. mpgRows: v_mpg_contacts rows { stage, stage_since }.
+export function mpgSubmittedThisMonth(mpgRows, now = Date.now()) {
+  const win = monthWindow(now)
+  return (mpgRows || []).filter((r) => (r.stage === 'Submitted' || r.stage === 'Approved') && r.stage_since && inWindow(dayKey(r.stage_since), win.from, win.to)).length
+}
+
+// MPG merchants approved this month, by id: they count as accounts coming.
+export function mpgApprovedThisMonth(mpgRows, now = Date.now()) {
+  const win = monthWindow(now)
+  return (mpgRows || []).filter((r) => r.stage === 'Approved' && r.stage_since && inWindow(dayKey(r.stage_since), win.from, win.to)).map((r) => r.id)
+}
+
+// November goals (spec 2026-11-22, A3): five rows, the briefing goals, for the
+// visible book(s). pace: 'hit' | 'pace' | 'behind'. word: what the row says;
+// when a goal is behind but work in hand covers it ("2 closing"), the fact
+// replaces "Behind". behind: the most behind row (lowest value / expected so
+// far), or null. extra: { proposals, closing, approved }.
+export function goalRows({ biz, values: v, targets, extra = {}, now = Date.now() }) {
+  const elapsed = monthElapsed(now)
+  const d = new Date(now)
+  const daysLeft = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() - d.getDate()
+  const bay = biz !== 'mpg'
+  const mpg = biz !== 'bay'
+  const rows = [
+    { id: 'calls', label: 'Calls', book: null, value: v.calls, target: targets.calls_monthly },
+    bay && { id: 'applications', label: 'Bayway apps', book: 'bay', value: v.applications, target: targets.applications },
+    bay && { id: 'funded', label: 'Loans funded', book: 'bay', value: v.loansClosed, target: targets.loans_closed, inHand: extra.closing || 0, inHandWord: 'closing' },
+    mpg && { id: 'proposals', label: 'MPG proposals', book: 'mpg', value: extra.proposals || 0, target: targets.merchant_proposals_delivered },
+    mpg && { id: 'accounts', label: 'MPG accounts', book: 'mpg', value: v.merchants, target: targets.new_merchant_accounts, inHand: extra.approved || 0, inHandWord: 'approved' },
+  ]
+    .filter(Boolean)
+    .map((g) => {
+      const value = Number(g.value || 0)
+      const target = Number(g.target || 0)
+      const status = goalStatus(value, target, elapsed)
+      const covered = status === 'behind' && g.inHand > 0 && value + g.inHand >= target * elapsed
+      const word = status === 'hit' ? 'Hit' : status === 'pace' ? 'On pace' : covered ? `${g.inHand} ${g.inHandWord}` : 'Behind'
+      const gap = target ? value / (target * Math.max(elapsed, 1e-9)) : 1
+      return { ...g, value, target, pct: pctOf(value, target), status, word, gap, covered }
+    })
+  const behind = rows.filter((g) => g.status === 'behind' && !g.covered).sort((a, b) => a.gap - b.gap)[0] || null
+  return { rows, behind, daysLeft }
+}
+
 // Half-circle segments as pathLength-100 dashes: [{ status, dash, offset }].
 export function gaugeSegments(counts, gap = 1.5) {
   const order = ['hit', 'pace', 'behind']
