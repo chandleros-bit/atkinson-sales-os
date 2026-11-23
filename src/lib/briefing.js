@@ -136,6 +136,8 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     callFirst,
     // Database Opportunity Agent: today's past-client picks (opportunity_picks).
     pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || '(no name)', detail: p.headline || '', reasons: p.reasons || [] })),
+    // Drafts inbox: how many bot drafts wait for review (count and link).
+    draftsWaiting: Number(data.draftsWaiting || 0),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length,

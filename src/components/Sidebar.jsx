@@ -31,6 +31,7 @@ const LINKS = [
     { to: '/bayway/opportunities', icon: 'star', label: 'Opportunities', on: /^\/bayway\/opportunities/ },
     { to: '/contacts', icon: 'users', label: 'Contacts', on: /^\/((mpg|bayway)\/)?contacts/ },
     { to: '/bayway/partners', icon: 'user', label: 'Partners', on: /^\/bayway\/partners/ },
+    { to: '/bayway/drafts', icon: 'doc', label: 'Drafts', on: /^\/bayway\/drafts/ },
     { to: '/activity', icon: 'activity', label: 'Activity', on: /^\/((mpg|bayway)\/)?activity/ },
   ] },
   { group: 'Insights', items: [

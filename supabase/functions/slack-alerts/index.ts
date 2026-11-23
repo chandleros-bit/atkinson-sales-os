@@ -68,6 +68,8 @@ Deno.serve(async (req) => {
     if (loanErr) throw new Error(`loans: ${loanErr.message}`)
     const loans = (loanRows || []).map((l) => ({ ...l, scenario: l.scenario_override ?? !!l.scenario_auto }))
 
+    const { count: draftsWaiting } = await db.from('bot_drafts').select('id', { count: 'exact', head: true }).eq('status', 'waiting')
+
     const { data: logRows, error: logErr } = await db.from('sync_log').select('source, status, ran_at, message')
       .gte('ran_at', new Date(now - 2 * 3_600_000).toISOString()).order('ran_at', { ascending: false }).limit(1000)
     if (logErr) throw new Error(`sync_log: ${logErr.message}`)
@@ -78,7 +80,7 @@ Deno.serve(async (req) => {
       signals, pipeline, loans, syncs: [...latest.values()],
       hotColdDays: Number(rules.hot_cold_days ?? 3),
       useCrmActivity: rules.use_crm_last_activity_fallback !== false,
-      link, now,
+      link, now, draftsWaiting: draftsWaiting || 0,
     }).filter((a) => books.includes(a.book))
 
     const { count } = await db.from('slack_alerts_sent').select('key', { count: 'exact', head: true })
@@ -89,7 +91,7 @@ Deno.serve(async (req) => {
       const { error } = await db.from('slack_alerts_sent').upsert(rows, { onConflict: 'key' })
       if (error) throw new Error(`slack_alerts_sent: ${error.message}`)
       for (const b of books) {
-        await post(WEBHOOK[b]!, `:wave: ${BOOK_NAME[b]} alerts are on. You'll get a push here only when something needs you today: a new lead, someone reaching out, a hot lead going cold, a file at risk, a closing or rate lock within 3 days, or a failed sync. Everything else stays in the 7:30 AM briefing.`)
+        await post(WEBHOOK[b]!, `:wave: ${BOOK_NAME[b]} alerts are on. You'll get a push here only when something needs you today: a new lead, someone reaching out, a hot lead going cold, a file at risk, a closing or rate lock within 3 days, drafts waiting (once a day after 11), or a failed sync. Everything else stays in the 7:30 AM briefing.`)
       }
       await logSync(db, 'slack-alerts', 'ok', 0, `first run: ${rows.length - 1} existing alerts marked seen`)
       return Response.json({ ok: true, first_run: true, seen: rows.length - 1 })

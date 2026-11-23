@@ -83,6 +83,12 @@ async function ownerMail(db, cfg, now, ownerId) {
     .limit(20)
     .then(({ data, error }) => (error ? [] : (data || []).map((p) => ({ name: p.contact?.name, headline: p.ai_note?.headline, reasons: p.reason_codes }))),
       () => [])
+  // Drafts waiting in the Drafts inbox (migration 0072). Never fatal either.
+  const draftsWaiting = await db
+    .from('bot_drafts')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'waiting')
+    .then(({ count, error }) => (error ? 0 : count || 0), () => 0)
   const syncLatest = {}
   await Promise.all(
     CORE_SOURCES.map(async ({ source }) => {
@@ -92,7 +98,7 @@ async function ownerMail(db, cfg, now, ownerId) {
   )
   const model = buildOwnerBriefing({
     rules, targets, rates, forecastSettings, metrics, mpgMetricRows, deals, activities, yesterdayActivities, pipeline, loans, ratings, signals, dialRows,
-    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks,
+    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks, draftsWaiting,
   }, now)
   return renderOwnerBriefing(model, { appUrl: cfg.app_url || APP_URL })
 }
