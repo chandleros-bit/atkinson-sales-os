@@ -118,7 +118,7 @@ describe('Overview dashboard', () => {
   it('opens on Your day, the focus, the month goals and the forecast', async () => {
     const text = await render('all')
     for (const t of ['Your day', "Today's work", 'Meetings', "This week's focus", `${MONTH} goals`, `${MONTH} forecast`, 'Open Workbench',
-      'Activity & Production', '90-Day Sprint', 'Pipeline Mix', 'Lead Sources']) {
+      'Book health', 'Rate watch', 'Source pull-through', 'Touchpoints · 30 days', 'Income this month']) {
       expect(text).toContain(t)
     }
     // The three untimed work lists.
@@ -135,7 +135,15 @@ describe('Overview dashboard', () => {
     expect([...document.querySelectorAll('[data-goal]')].map((e) => e.dataset.goal)).toEqual(['calls', 'applications', 'funded', 'proposals', 'accounts'])
     expect(q('[data-goal="funded"]').textContent).toContain('1 / 2')
     // Replaced cards are gone.
-    for (const t of ['Gross commission (MTD)', 'Monthly Goals', 'Income Mix', 'Up Next', "Today's Events"]) expect(text).not.toContain(t)
+    for (const t of ['Gross commission (MTD)', 'Monthly Goals', 'Income Mix', 'Up Next', "Today's Events", 'Activity & Production', 'Pipeline Mix', 'Lead Sources']) {
+      expect(text).not.toContain(t)
+    }
+    // Pull-through covers both books; the funded loan's commission reaches income.
+    expect([...document.querySelectorAll('[data-pull-book]')].map((e) => e.dataset.pullBook)).toEqual(['bay', 'mpg'])
+    expect(q('[data-trend="income"]').textContent).toContain('$5,000')
+    expect(q('[data-trend="income"]').textContent).toContain('$8,400')
+    // No PMMS rate in the fixtures.
+    expect(q('[aria-label="Rate watch"]').textContent).toContain('No PMMS rate loaded yet')
   })
 
   it('scopes the Bayway view', async () => {
@@ -144,7 +152,9 @@ describe('Overview dashboard', () => {
     expect(q('[data-forecast="mpg"]')).toBeNull()
     expect(q('[data-goal="proposals"]')).toBeNull()
     expect(text).not.toContain('MPG expects')
-    expect(text).toContain('Apps & estimates')
+    expect(q('[aria-label="Rate watch"]')).not.toBeNull()
+    expect([...document.querySelectorAll('[data-pull-book]')].map((e) => e.dataset.pullBook)).toEqual(['bay'])
+    expect(q('[data-trend="income"]').textContent).not.toContain('MPG residual')
   })
 
   it('scopes the MPG view', async () => {
@@ -153,8 +163,10 @@ describe('Overview dashboard', () => {
     expect(q('[data-forecast="mpg"]').textContent).toContain('accounts')
     expect([...document.querySelectorAll('[data-goal]')].map((e) => e.dataset.goal)).toEqual(['calls', 'proposals', 'accounts'])
     expect(text).not.toContain('Bayway is tracking')
-    expect(text).toContain('MPG leads by stage')
-    expect(text).not.toContain('Apps & estimates')
+    // Rate watch is Bayway only.
+    expect(q('[aria-label="Rate watch"]')).toBeNull()
+    expect([...document.querySelectorAll('[data-pull-book]')].map((e) => e.dataset.pullBook)).toEqual(['mpg'])
+    expect(q('[data-trend="income"]').textContent).not.toContain('Bayway commission')
   })
 
   it('splits the Bayway forecast into funded, closing and leads, this month and next', async () => {

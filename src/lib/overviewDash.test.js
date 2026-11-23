@@ -1,16 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   monthValues,
-  kpiCards,
   activitySeries,
-  activityChart,
   goalStatus,
   monthlyGoals,
   goalRows,
   mpgSubmittedThisMonth,
   mpgApprovedThisMonth,
-  gaugeSegments,
-  pipelineMix,
   incomeMix,
   sprintPace,
   monthElapsed,
@@ -52,7 +48,7 @@ const pipeline = [
   { stage: 'Application Received', stage_since: at('2026-09-02') },
 ]
 
-describe('monthValues and kpiCards', () => {
+describe('monthValues', () => {
   const v = monthValues({ biz: 'all', metrics, deals, activities, pipeline, now: NOW })
 
   it('adds up the month for both books', () => {
@@ -66,23 +62,10 @@ describe('monthValues and kpiCards', () => {
     expect(v.callsToday).toBe(11)
   })
 
-  it('builds commission, closed, calls and pipeline cards', () => {
-    const cards = kpiCards({ biz: 'all', values: v, targets })
-    expect(cards.map((c) => c.id)).toEqual(['commission', 'closed', 'calls', 'pipeline'])
-    expect(cards[0]).toMatchObject({ value: 9800, goal: 7000, pct: 100, tag: 'Entered' })
-    expect(cards[1]).toMatchObject({ value: 3, foot: 'Bayway 1 loans · MPG 2 merchants', delta: { text: '→ 0 vs Sep', tone: 'flat' } })
-    expect(cards[2].delta).toEqual({ text: '↓ 43% vs Sep', tone: 'down' })
-    expect(cards[2].foot).toBe('11 today')
-    expect(cards[3]).toMatchObject({ value: 400000, foot: '1 open loan · Bayway' })
-  })
-
-  it('MPG view swaps in residual and open leads', () => {
+  it('MPG view leaves Bayway out', () => {
     const mv = monthValues({ biz: 'mpg', metrics, deals, activities, pipeline, now: NOW })
     expect(mv.loansClosed).toBe(0)
     expect(mv.calls).toBe(1)
-    const cards = kpiCards({ biz: 'mpg', values: mv, targets, mpgRows: [{ stage: 'Open' }, { stage: 'Submitted' }, { stage: 'Closed Non-Compatible' }] })
-    expect(cards.map((c) => c.id)).toEqual(['residual', 'closed', 'calls', 'open_leads'])
-    expect(cards[3]).toMatchObject({ value: 2, delta: { text: '1 submitted' } })
   })
 })
 
@@ -96,16 +79,6 @@ describe('activity and production', () => {
     expect(s.points.find((p) => p.key === '2026-10-09')).toMatchObject({ closings: 1, prod: 1 })
     expect(s.totals).toEqual({ touch: 4, calls: 3, apps: 2, closings: 1 })
     expect(s.prev).toEqual({ touch: 1, calls: 1, apps: 1, closings: 2 })
-  })
-
-  it('draws both lines on one scale with dated ticks', () => {
-    const s = activitySeries({ activities, pipeline, deals, days: 30, now: NOW })
-    const c = activityChart(s.points)
-    expect(c.max).toBe(20)
-    expect(c.act.startsWith('M 40 ')).toBe(true)
-    expect(c.labels.at(-1).label).toBe('Today')
-    expect(c.labels[0].label).toBe('Sep 28')
-    expect(c.points).toHaveLength(30)
   })
 })
 
@@ -125,24 +98,9 @@ describe('monthly goals', () => {
     expect(g.onPace).toBe(20)
     expect(monthlyGoals({ biz: 'mpg', values: v, targets, now: NOW }).goals.map((x) => x.id)).toEqual(['calls', 'merchants', 'residual', 'proposals'])
   })
-
-  it('splits the gauge by status with gaps', () => {
-    const segs = gaugeSegments({ hit: 1, pace: 1, behind: 2 })
-    expect(segs.map((s) => s.status)).toEqual(['hit', 'pace', 'behind'])
-    expect(segs[0].dash).toBe('24.25 75.75')
-    expect(segs[1].offset).toBe('-25.75')
-    expect(gaugeSegments({ hit: 0, pace: 0, behind: 0 })).toEqual([])
-  })
 })
 
-describe('pipeline mix, income, sprints', () => {
-  it('counts stages in order and drops empty ones', () => {
-    const m = pipelineMix([{ stage: 'Attempted' }, { stage: 'New Lead' }, { stage: 'New Lead' }, { stage: 'Other' }], ['New Lead', 'Attempted', 'Contacted/Working'])
-    expect(m.total).toBe(3)
-    expect(m.slices.map((s) => [s.stage, s.n])).toEqual([['New Lead', 2], ['Attempted', 1]])
-    expect(m.slices[1].offset).toBeCloseTo(-66.67, 1)
-  })
-
+describe('income, sprints', () => {
   it('income mix against the combined goal', () => {
     const i = incomeMix({ values: { commission: 9800, residual: 4200 }, targets })
     expect(i).toMatchObject({ total: 14000, goal: 7750, pct: 100, annualized: 168000 })
@@ -178,14 +136,11 @@ describe('Arive loan stats on Overview', () => {
   it('uses the loan stats instead of FUB deals and entered commission', () => {
     const v = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW, loanStats })
     expect(v).toMatchObject({ commission: 13800, loansClosed: 3, loansClosedPrev: 1, pipelineValue: 900000, openLoans: 4, commissionFromArive: true })
-    const cards = kpiCards({ biz: 'bay', values: v, targets })
-    expect(cards[0]).toMatchObject({ value: 13800, tag: 'Est. from Arive' })
   })
 
   it('falls back to the old sources without an import', () => {
     const v = monthValues({ biz: 'bay', metrics, deals, activities, pipeline, now: NOW, loanStats: null })
     expect(v).toMatchObject({ commission: 9800, commissionFromArive: false })
-    expect(kpiCards({ biz: 'bay', values: v, targets })[0].tag).toBe('Entered')
   })
 
   it('sprint pace takes measured funded loans', () => {
