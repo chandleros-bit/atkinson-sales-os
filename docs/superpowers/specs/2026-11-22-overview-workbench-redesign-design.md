@@ -32,7 +32,7 @@ Both pages follow the All / Bayway / MPG switch (`useBusiness`). Colors use the 
 
 ## Part A: Overview
 
-Order, top to bottom. On a phone everything stacks in this order, with the new-lead strip and **Open Workbench** above Your day.
+Order, top to bottom. On a phone everything stacks in this order, with the new-lead strip and **Open Workbench** above Your day, and This week's focus directly above November goals.
 
 ### A1. Header
 
@@ -48,6 +48,11 @@ Order, top to bottom. On a phone everything stacks in this order, with the new-l
 - Footer link: Calendar.
 
 **A2a. Where the counts come from.** Workbench (B2) owns the work lists. Overview calls the same pure function, `workLists(...)`, so both pages show identical counts.
+
+### A2b. This week's focus
+
+- Its own card at the top of the right-hand column, above November goals (the two stack in the column beside Your day). Keeps today's `WeeklyFocusCard` content (`loadWeeklyFocus`, `setFocusTaskDone`): the focus title and note the Growth bot sets Monday, its 3 tasks as checkboxes with due days, "N of 3 done" and the book, the Friday check-in line when there is one, and a **Workbench →** link.
+- When no focus is set, one muted line: "No focus set for this week yet."
 
 ### A3. November goals
 
