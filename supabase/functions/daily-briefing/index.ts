@@ -106,6 +106,14 @@ async function ownerMail(db, cfg, now, ownerId) {
     .eq('focus_week', focusWeek)
     .limit(20)
     .then(({ data, error }) => (error ? [] : data || []), () => [])
+  // Today's Lock Watch market note (migration 0070; Lock Watch runs 7:15 AM).
+  // Missing when Lock Watch hasn't run yet; never fatal.
+  const marketNote = await db
+    .from('market_notes')
+    .select('note, sources')
+    .eq('note_date', todayKey)
+    .limit(1)
+    .then(({ data, error }) => (error ? null : (data || [])[0] || null), () => null)
   const syncLatest = {}
   await Promise.all(
     CORE_SOURCES.map(async ({ source }) => {
@@ -115,7 +123,7 @@ async function ownerMail(db, cfg, now, ownerId) {
   )
   const model = buildOwnerBriefing({
     rules, targets, rates, forecastSettings, metrics, mpgMetricRows, deals, activities, yesterdayActivities, pipeline, loans, ratings, signals, dialRows,
-    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks, draftsWaiting, partnersDue, focusItems,
+    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks, draftsWaiting, partnersDue, focusItems, marketNote,
   }, now)
   return renderOwnerBriefing(model, { appUrl: cfg.app_url || APP_URL })
 }

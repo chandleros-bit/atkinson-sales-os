@@ -95,6 +95,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
   const pc = m.pastClients || { count: 0, top: [] }
   const pd = m.partnersDue || { count: 0, top: [] }
   const partnersDue = section('Partners due today', pd, '/bayway/partners')
+  const mk = m.market
   const focusText = m.focus ? `This week's focus: ${m.focus.title} (${m.focus.done} of ${m.focus.total} done)` : null
   const pastClients = section('Past clients to call', pc, '/bayway/opportunities')
   const sl = m.slipping
@@ -112,6 +113,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     `Numbers\n${numbers.map((l) => `- ${l}`).join('\n')}`,
     ...(focusText ? [`Focus\n- ${focusText}\n  ${url('/')}`] : []),
     `Today\n${today.map((l) => `- ${l}`).join('\n')}`,
+    ...(mk ? [`Market (Lock Watch)\n${mk.lines.map((l) => `- ${l}`).join('\n')}${mk.source ? `\n  Source: ${mk.source.url}` : ''}`] : []),
     `Call first\n${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : '- Nobody waiting'}`,
     ...(pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join('\n')] : []),
     ...(m.draftsWaiting ? [`Drafts waiting: ${m.draftsWaiting} (review after 11)\n  ${url('/bayway/drafts')}`] : []),
@@ -184,6 +186,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     ...(focusText ? [`<p style="font:14px Arial,sans-serif;margin:12px 0 0"><b>${esc(focusText)}</b></p>`] : []),
     heading('Numbers, month to date'), goalsTable, forecastTable, dayTable,
     heading('Today'), todayTable,
+    ...(mk ? [heading('Market (Lock Watch)'), `<p style="font:14px Arial,sans-serif;margin:0">${mk.lines.map(esc).join(' ')}${mk.source ? ` ${link(mk.source.url, 'Source')}` : ''}</p>`] : []),
     heading(`Call first (${m.callFirstCount})`, url('/workbench')), callTable,
     ...(pc.count ? [heading(`Past clients to call (${pc.count})`, url('/bayway/opportunities')), pastTable] : []),
     ...(m.draftsWaiting ? [`<p style="font:14px Arial,sans-serif;margin:16px 0 0">${link(url('/bayway/drafts'), `Drafts waiting: ${m.draftsWaiting}`)} (review after 11)</p>`] : []),

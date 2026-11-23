@@ -1275,6 +1275,13 @@ function lockDetail(r) {
 
 // src/lib/briefing.js
 var PARTNER_DUE_LABEL = { follow_up: "Follow up", invite: "Invite", book_1on1: "Book a one-to-one" };
+function marketLines(note) {
+  const text = String(note?.note || "").trim();
+  if (!text) return null;
+  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()) || [text];
+  const src = Array.isArray(note.sources) ? note.sources.find((x) => x?.url) : null;
+  return { lines: sentences.slice(0, 3), source: src ? { title: src.title || src.url, url: src.url } : null };
+}
 function weeklyFocusLine(items) {
   const list3 = items || [];
   const focus = list3.find((r) => r.focus_role === "focus");
@@ -1379,6 +1386,8 @@ function buildOwnerBriefing(data, now = Date.now()) {
     partnersDue: list(data.partnersDue || [], (p) => ({ name: p.name || "(no name)", detail: `${PARTNER_DUE_LABEL[p.kind] || p.kind}: ${p.detail || ""}`.trim() })),
     // This week's focus (Growth bot): title and tasks done.
     focus: weeklyFocusLine(data.focusItems),
+    // Lock Watch market note, first 3 sentences (doc: "3 lines").
+    market: marketLines(data.marketNote),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length
@@ -1513,6 +1522,7 @@ function renderOwnerBriefing(m, { appUrl }) {
   const pc = m.pastClients || { count: 0, top: [] };
   const pd = m.partnersDue || { count: 0, top: [] };
   const partnersDue = section("Partners due today", pd, "/bayway/partners");
+  const mk = m.market;
   const focusText = m.focus ? `This week's focus: ${m.focus.title} (${m.focus.done} of ${m.focus.total} done)` : null;
   const pastClients = section("Past clients to call", pc, "/bayway/opportunities");
   const sl = m.slipping;
@@ -1530,6 +1540,9 @@ ${numbers.map((l) => `- ${l}`).join("\n")}`,
   ${url("/")}`] : [],
     `Today
 ${today.map((l) => `- ${l}`).join("\n")}`,
+    ...mk ? [`Market (Lock Watch)
+${mk.lines.map((l) => `- ${l}`).join("\n")}${mk.source ? `
+  Source: ${mk.source.url}` : ""}`] : [],
     `Call first
 ${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join("\n")).join("\n") : "- Nobody waiting"}`,
     ...pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join("\n")] : [],
@@ -1597,6 +1610,7 @@ Open the dashboard: ${url("/")}
     dayTable,
     heading("Today"),
     todayTable,
+    ...mk ? [heading("Market (Lock Watch)"), `<p style="font:14px Arial,sans-serif;margin:0">${mk.lines.map(esc).join(" ")}${mk.source ? ` ${link(mk.source.url, "Source")}` : ""}</p>`] : [],
     heading(`Call first (${m.callFirstCount})`, url("/workbench")),
     callTable,
     ...pc.count ? [heading(`Past clients to call (${pc.count})`, url("/bayway/opportunities")), pastTable] : [],

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { advanceStage, funnelSteps, rosterCounts, newClassRow } from './classes'
-import { weeklyFocusLine } from './briefing'
+import { weeklyFocusLine, marketLines } from './briefing'
 
 describe('class tracker', () => {
   it('moves a partner forward only', () => {
@@ -25,6 +25,12 @@ describe('class tracker', () => {
     expect(() => newClassRow({ topic: 'AI' })).toThrow('Pick a date')
     expect(() => newClassRow({ class_date: '2026-12-10', topic: ' ' })).toThrow('Topic is required')
     expect(newClassRow({ class_date: '2026-12-10', topic: ' AI follow-up ', host_brokerage: '' })).toEqual({ class_date: '2026-12-10', topic: 'AI follow-up', host_brokerage: null, location: null })
+  })
+
+  it('keeps the first 3 sentences of the market note and its first source', () => {
+    const m = marketLines({ note: 'One. Two? Three. Four.', sources: [{ title: 'A' }, { title: 'B', url: 'https://b.com' }] })
+    expect(m).toEqual({ lines: ['One.', 'Two?', 'Three.'], source: { title: 'B', url: 'https://b.com' } })
+    expect(marketLines(null)).toBeNull()
   })
 
   it('summarizes the weekly focus for the briefing', () => {

@@ -15,6 +15,15 @@ import { locksExpiring, lockDetail } from './locks'
 
 const PARTNER_DUE_LABEL = { follow_up: 'Follow up', invite: 'Invite', book_1on1: 'Book a one-to-one' }
 
+// { lines: [up to 3 sentences], source: { title, url } | null } or null.
+export function marketLines(note) {
+  const text = String(note?.note || '').trim()
+  if (!text) return null
+  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()) || [text]
+  const src = Array.isArray(note.sources) ? note.sources.find((x) => x?.url) : null
+  return { lines: sentences.slice(0, 3), source: src ? { title: src.title || src.url, url: src.url } : null }
+}
+
 // { title, done, total } from this week's focus work items, or null.
 export function weeklyFocusLine(items) {
   const list = items || []
@@ -153,6 +162,8 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     partnersDue: list(data.partnersDue || [], (p) => ({ name: p.name || '(no name)', detail: `${PARTNER_DUE_LABEL[p.kind] || p.kind}: ${p.detail || ''}`.trim() })),
     // This week's focus (Growth bot): title and tasks done.
     focus: weeklyFocusLine(data.focusItems),
+    // Lock Watch market note, first 3 sentences (doc: "3 lines").
+    market: marketLines(data.marketNote),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length,
