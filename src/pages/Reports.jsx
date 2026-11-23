@@ -16,6 +16,7 @@ import { prevMonthWindow } from '../lib/overviewDash'
 import PageHeader from '../components/PageHeader'
 import DailyTracker from '../components/DailyTracker'
 import { friendlyError } from '../lib/friendlyError'
+import PartnerFunnelCard from '../components/PartnerFunnelCard'
 
 const TABS = [
   { key: 'daily', label: 'Daily' },
@@ -406,6 +407,7 @@ export default function Reports() {
       )}
       {loading && <div className="mt-6 text-sm text-muted">Loading scoreboard…</div>}
       {!loading && !error && <CardGrid cards={cards} />}
+      {!loading && !error && !isDemoMode && biz !== 'mpg' && (activeTab === 'weekly' || activeTab === 'monthly') && <PartnerFunnelCard />}
       {!loading && !error && data && activeTab === 'daily' && (() => {
         const manualSeries = dailySeries(
           biz === 'all' ? data.series : data.series.filter((r) => r.business_id === biz),

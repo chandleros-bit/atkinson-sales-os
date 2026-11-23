@@ -93,6 +93,9 @@ export function renderOwnerBriefing(m, { appUrl }) {
     section('Hot, going cold', cf.hotCold, '/workbench'),
   ].filter(Boolean)
   const pc = m.pastClients || { count: 0, top: [] }
+  const pd = m.partnersDue || { count: 0, top: [] }
+  const partnersDue = section('Partners due today', pd, '/bayway/partners')
+  const focusText = m.focus ? `This week's focus: ${m.focus.title} (${m.focus.done} of ${m.focus.total} done)` : null
   const pastClients = section('Past clients to call', pc, '/bayway/opportunities')
   const sl = m.slipping
   const slipping = m.nothingSlipping
@@ -107,10 +110,12 @@ export function renderOwnerBriefing(m, { appUrl }) {
   // ---- Plain text ---------------------------------------------------------
   const textBlocks = [
     `Numbers\n${numbers.map((l) => `- ${l}`).join('\n')}`,
+    ...(focusText ? [`Focus\n- ${focusText}\n  ${url('/')}`] : []),
     `Today\n${today.map((l) => `- ${l}`).join('\n')}`,
     `Call first\n${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : '- Nobody waiting'}`,
     ...(pastClients ? [[pastClients.title, ...pastClients.rows.map((r) => `  - ${r}`), `  ${url(pastClients.href)}`].join('\n')] : []),
     ...(m.draftsWaiting ? [`Drafts waiting: ${m.draftsWaiting} (review after 11)\n  ${url('/bayway/drafts')}`] : []),
+    ...(partnersDue ? [[partnersDue.title, ...partnersDue.rows.map((r) => `  - ${r}`), `  ${url(partnersDue.href)}`].join('\n')] : []),
     `Slipping\n${slipping.length ? slipping.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : 'Nothing slipping today.'}`,
   ]
   const text = plainSeparators(`${subject}\n\n${textBlocks.join('\n\n')}\n\nOpen the dashboard: ${url('/')}\n`)
@@ -176,11 +181,13 @@ export function renderOwnerBriefing(m, { appUrl }) {
   const html = [
     `<div style="max-width:640px;font-family:Arial,sans-serif;color:${C.text}">`,
     `<p style="font:13px Arial,sans-serif;color:${C.muted};margin:0">${esc(m.dateLabel)}</p>`,
+    ...(focusText ? [`<p style="font:14px Arial,sans-serif;margin:12px 0 0"><b>${esc(focusText)}</b></p>`] : []),
     heading('Numbers, month to date'), goalsTable, forecastTable, dayTable,
     heading('Today'), todayTable,
     heading(`Call first (${m.callFirstCount})`, url('/workbench')), callTable,
     ...(pc.count ? [heading(`Past clients to call (${pc.count})`, url('/bayway/opportunities')), pastTable] : []),
     ...(m.draftsWaiting ? [`<p style="font:14px Arial,sans-serif;margin:16px 0 0">${link(url('/bayway/drafts'), `Drafts waiting: ${m.draftsWaiting}`)} (review after 11)</p>`] : []),
+    ...(pd.count ? [heading(`Partners due today (${pd.count})`, url('/bayway/partners')), table([{ label: 'Partner', width: '34%' }, { label: 'What to do' }], blockRows(pd, (r) => [esc(r.name), esc(r.detail)]))] : []),
     heading(m.nothingSlipping ? 'Slipping' : `Slipping (${slipCount})`, url('/workbench')), slipTable,
     `<p style="font:13px Arial,sans-serif;margin-top:24px">${link(url('/'), 'Open the dashboard')}</p>`,
     `</div>`,

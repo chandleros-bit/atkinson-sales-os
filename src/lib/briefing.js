@@ -12,6 +12,17 @@ import { syncHealth } from './syncHealth'
 import { yesterdayScorecard, needPerDay } from './briefingScorecard'
 import { withRatings } from './leadRatings'
 import { locksExpiring, lockDetail } from './locks'
+
+const PARTNER_DUE_LABEL = { follow_up: 'Follow up', invite: 'Invite', book_1on1: 'Book a one-to-one' }
+
+// { title, done, total } from this week's focus work items, or null.
+export function weeklyFocusLine(items) {
+  const list = items || []
+  const focus = list.find((r) => r.focus_role === 'focus')
+  if (!focus) return null
+  const tasks = list.filter((r) => r.focus_role === 'task')
+  return { title: focus.title, done: tasks.filter((t) => t.status === 'done').length, total: tasks.length }
+}
 import { businessDaysLeft, longDateLabel, chicagoDateKey, previousBusinessDateKey } from './briefingTime'
 
 const TOP = 5
@@ -138,6 +149,10 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     pastClients: list(data.pastClientPicks || [], (p) => ({ name: p.name || '(no name)', detail: p.headline || '', reasons: p.reasons || [] })),
     // Drafts inbox: how many bot drafts wait for review (count and link).
     draftsWaiting: Number(data.draftsWaiting || 0),
+    // Partners due today (v_partner_due_today): follow-ups, invites, one-to-ones to book.
+    partnersDue: list(data.partnersDue || [], (p) => ({ name: p.name || '(no name)', detail: `${PARTNER_DUE_LABEL[p.kind] || p.kind}: ${p.detail || ''}`.trim() })),
+    // This week's focus (Growth bot): title and tasks done.
+    focus: weeklyFocusLine(data.focusItems),
     slipping,
     callFirstCount: callFirst.replied.count + callFirst.newLeads.count + callFirst.overdue.count + callFirst.hotCold.count,
     nothingSlipping: !slipping.quietApps.count && !slipping.docsAging.count && !slipping.statementsLate.count && !syncProblems.length,

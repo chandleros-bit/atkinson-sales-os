@@ -16,6 +16,7 @@ import {
 } from '../lib/partners'
 import { tierFor } from '../lib/harImport'
 import HarImport from '../components/HarImport'
+import PartnerClasses from '../components/PartnerClasses'
 
 const SEL = 'rounded-lg border border-line2 bg-transparent px-2 py-1 text-body'
 const fubUrl = (id) => (id ? `https://baywayhtx.followupboss.com/2/people/view/${id}` : null)
@@ -126,6 +127,7 @@ export default function Partners() {
   const [due, setDue] = useState(false)
   const [sortBy, setSortBy] = useState('stage')
   const [importing, setImporting] = useState(false)
+  const [view, setView] = useState('list')
 
   const reload = useCallback(async ({ sync = false } = {}) => {
     try {
@@ -155,6 +157,17 @@ export default function Partners() {
       {isDemoMode && <p className="text-body text-muted">Connect Supabase to see partners.</p>}
       {!isDemoMode && rows === null && <p className="text-body text-muted">Loading…</p>}
       {!isDemoMode && rows && (
+        <div role="tablist" className="flex gap-2">
+          {[['list', 'Partners'], ['classes', 'Classes']].map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={view === k} data-view={k} onClick={() => setView(k)}
+              className={`min-h-[32px] rounded-full border px-3 text-body ${view === k ? 'border-[color:var(--text)] font-semibold' : 'border-line2 text-muted hover:bg-hoverbg'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {!isDemoMode && rows && view === 'classes' && <PartnerClasses partners={rows} onPartnersChanged={() => reload()} />}
+      {!isDemoMode && rows && view === 'list' && (
         <>
           <StageStrip counts={counts} total={rows.length} value={stage} onChange={setStage} />
           <div className="flex flex-wrap items-center gap-2">
