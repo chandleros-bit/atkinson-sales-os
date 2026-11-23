@@ -32,7 +32,7 @@ Both pages follow the All / Bayway / MPG switch (`useBusiness`). Colors use the 
 
 ## Part A: Overview
 
-Order, top to bottom. On a phone everything stacks in this order, with the new-lead strip and **Open Workbench** above Your day.
+Order, top to bottom. On a phone everything stacks in this order, with the new-lead strip, This week's focus and **Open Workbench** above Your day.
 
 ### A1. Header
 
@@ -43,6 +43,7 @@ Order, top to bottom. On a phone everything stacks in this order, with the new-l
 ### A2. Your day
 
 - At the top, a strip for the newest uncalled new lead under 30 minutes old (the same rule Workbench uses for its banner): name, source, loan type, **Call in Workbench →**. Hidden when there is none.
+- **This week's focus:** under the new-lead strip and above Today's work. Keeps today's `WeeklyFocusCard` content (`loadWeeklyFocus`, `setFocusTaskDone`): the focus title and note the Growth bot sets Monday, its 3 tasks as checkboxes with due days, "N of 3 done" and the book, and the Friday check-in line when there is one. Restyled to sit inside Your day as a compact block, not a separate card. When no focus is set, one muted line: "No focus set for this week yet."
 - **Today's work:** three tiles, one per work list (Calls, Files, Partners), each with its count, a flagged count when any are flagged ("3 flagged"), and **Start**, which opens `/workbench?list=<key>`. No times: you work them when the day allows.
 - **Meetings:** today's Outlook events (what `TodayAgenda` reads) as a timeline sorted by start time, each with a Bayway or MPG mark the way `TodayAgenda` assigns them.
 - Footer link: Calendar.
