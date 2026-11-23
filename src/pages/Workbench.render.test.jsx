@@ -142,34 +142,38 @@ const button = (root, text) => [...root.querySelectorAll('button')].find((b) => 
 const workItem = (title) => [...document.querySelectorAll('[data-work-item]')].find((e) => e.textContent.includes(title))
 
 describe('Workbench', () => {
-  it('shows the Calls and Work lanes with counts', async () => {
+  it('shows the three work lists with counts', async () => {
     mobile = false
     const host = await render()
     expect(host.querySelector('header h1').textContent).toBe('Workbench')
+    expect([...host.querySelectorAll('[data-list]')].map((e) => e.dataset.list)).toEqual(['calls', 'files', 'partners'])
     expect(host.querySelector('[aria-label="Calls"]').textContent).toContain('Ana Inbound')
-    const work = host.querySelector('[aria-label="Work"]')
-    expect(work.textContent).toContain('Estimates to Work')
-    expect(work.textContent).toContain('Applications to Review')
-    expect(work.textContent).toContain('Statement/Proposal Review')
+    const files = host.querySelector('[aria-label="Files"]')
+    expect(files.querySelector('h2').textContent).toContain('Files · 3')
+    expect(files.textContent).toContain('Estimates to Work')
+    expect(files.textContent).toContain('Applications to Review')
+    expect(files.textContent).toContain('Statement/Proposal Review')
     expect(workItem('Gil Estimate').textContent).toContain('Working 8 days')
     expect(workItem('Ivy Application').textContent).toContain('2 docs missing')
     expect(workItem('3 Statements FU').textContent).toContain('Lending Flow · David')
-    expect(host.querySelector('header').textContent).toContain('0 / 3')
+    expect(host.querySelector('[data-today-count="files"]').textContent).toContain('0 / 3')
+    // The gap card links to the forecast on Overview.
+    expect(host.querySelector('[data-gap]').getAttribute('href')).toBe('/#forecast')
   })
 
-  it('boxes the Calls sections in order: theme, overdue, lead cadence, then More with They reached out inside', async () => {
+  it('orders Calls: they reached out first, then overdue and the lead cadence; the theme sits by its kind', async () => {
     mobile = false
     const host = await render()
     const calls = host.querySelector('[aria-label="Calls"]')
     const titles = [...calls.querySelectorAll('h3')].map((h) => h.textContent)
-    const at = (pred) => titles.findIndex(pred)
-    const theme = at((t) => t.startsWith("Today's theme") || t === 'Theme of the day')
-    expect(theme).toBe(0)
-    expect(at((t) => t === 'Lead cadence')).toBeGreaterThan(theme)
-    expect(titles.at(-1)).toBe('More from Up Next')
-    const more = calls.querySelector('details')
-    expect(more.querySelector('summary').textContent).toContain('incl. 1 reached out')
-    expect(more.textContent).toContain('Ana Inbound')
+    expect(titles[0]).toContain('They reached out')
+    expect(titles.findIndex((t) => t === 'Lead cadence')).toBeGreaterThan(0)
+    expect(calls.textContent).not.toContain('More from Up Next')
+    // Monday and Friday's realtor themes sit in Partners; the borrower days lead Calls.
+    const day = new Date().getDay()
+    const themeIn = (sel) => !!host.querySelector(sel).querySelector('[aria-label="Theme of the day"]')
+    if (day === 1 || day === 5) expect(themeIn('[aria-label="Partners"]')).toBe(true)
+    else expect(themeIn('[aria-label="Calls"]')).toBe(true)
   })
 
   it('shows the alerts rail: what is slipping, with names', async () => {
@@ -281,21 +285,19 @@ describe('Workbench', () => {
     expect(button(workItem('Ivy Application'), 'Mark reviewed')).not.toBe(undefined)
   })
 
-  it('shows one lane at a time on a phone', async () => {
+  it('stacks the lists on a phone, with no lane tabs', async () => {
     mobile = true
     const host = await render()
     expect(host.querySelector('[aria-label="Calls"]')).not.toBe(null)
-    expect(host.querySelector('[aria-label="Work"]')).toBe(null)
-    await act(async () => button(host, 'Work · 3').click())
-    expect(host.querySelector('[aria-label="Calls"]')).toBe(null)
-    expect(host.querySelector('[aria-label="Work"]')).not.toBe(null)
+    expect(host.querySelector('[aria-label="Files"]')).not.toBe(null)
+    expect(host.querySelector('[role="tablist"][aria-label="Lane"]')).toBe(null)
   })
 
-  it('shows Work done today in the header', async () => {
+  it("shows today's Files done in the side panel", async () => {
     mobile = false
     DATA.workItems = [{ id: 'w9', kind: 'custom', business_id: 'bay', title: 'Old one', status: 'done', done_at: new Date().toISOString(), created_at: iso(1) }]
     const host = await render()
-    expect(host.querySelector('header').textContent).toContain('1 / 4')
+    expect(host.querySelector('[data-today-count="files"]').textContent).toContain('1 / 4')
   })
 
   it('parks an estimate as waiting on the lender with a check-back day and a note', async () => {
@@ -357,7 +359,7 @@ describe('Workbench', () => {
     DATA.workItems = [{ id: 'w1', source_key: 'estimate:e1', kind: 'estimate', business_id: 'bay', status: 'waiting', waiting_on: 'Borrower', check_back_on: later.toISOString().slice(0, 10) }]
     const host = await render()
     expect(workItem('Gil Estimate')).toBe(undefined)
-    const bar = host.querySelector('[aria-label="Work"] button[aria-expanded]')
+    const bar = host.querySelector('[aria-label="Files"] button[aria-expanded]')
     expect(bar.textContent).toContain('Waiting on others · 1')
     await act(async () => bar.click())
     expect(workItem('Gil Estimate').textContent).toContain('Waiting on Borrower')

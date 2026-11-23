@@ -300,7 +300,7 @@ function buildView(biz, data, rules, now = Date.now()) {
 }
 
 // Today's work lists, from the same builders and data Workbench uses.
-function useTodayLists(biz, rules) {
+function useTodayLists(biz, rules, queue) {
   const dial = useDialList()
   const work = useWorkLane()
   const ratings = useLeadRatings()
@@ -311,7 +311,7 @@ function useTodayLists(biz, rules) {
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now: dial.now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
-  return { lists: workLists({ dial: dialDue, groups, theme, now: dial.now }), lead: freshLead(dialDue, dial.now), now: dial.now }
+  return { lists: workLists({ dial: dialDue, groups, theme, queue, now: dial.now }), lead: freshLead(dialDue, dial.now), now: dial.now }
 }
 
 export default function Overview() {
@@ -319,7 +319,7 @@ export default function Overview() {
   const { data, loading, error } = useOverviewData(biz)
   const pq = usePriorityQueue(biz)
   const forecast = useForecast()
-  const today = useTodayLists(biz, pq.rules)
+  const today = useTodayLists(biz, pq.rules, pq.queue)
   const now = Date.now()
   const view = useMemo(() => (data ? buildView(biz, data, pq.rules) : null), [biz, data, pq.rules])
   const layers = useMemo(() => {

@@ -1,17 +1,19 @@
-// Workbench: the day's calls and file work, side by side (one at a time on a
-// phone). Calls = the Up Next queue (Priority, embedded); Work = estimates,
-// applications and MPG tasks from CRM state plus your own work items, with
-// the app's status and notes on top (workbench.js, work_items).
-// Spec: docs/superpowers/specs/2026-10-22-workbench-design.md
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+// Workbench v2, step 1 (spec docs/superpowers/specs/2026-11-23-workbench-v2-design.md):
+// today's work as three untimed lists, Calls, Files and Partners (workLists.js),
+// with the new-lead banner and hard dates above them and a side panel with the
+// gap to goal, At risk and today's counts. Each list still uses its existing
+// rows and actions (Up Next, the weekday theme, the dial cadence, the Work
+// lane); Next up, the fixed daily order and the Slipping strip come in later
+// steps. The assistant sees hard dates and Files only, with no dollars.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useWorkLane } from '../lib/useWorkLane'
 import { buildWorkGroups, workProgress } from '../lib/workbench'
 import { buildAlerts } from '../lib/alerts'
 import AlertsRail from '../components/AlertsRail'
-import { useIsMobile } from '../components/UpNextRow'
 import WorkLane from '../components/WorkLane'
 import AddWorkItem from '../components/AddWorkItem'
 import VoiceTask from '../components/VoiceTask'
@@ -22,109 +24,248 @@ import { useLoanAgents } from '../lib/loanAgents'
 import { buildDialList } from '../lib/dialList'
 import { buildThemeList } from '../lib/dialThemes'
 import ThemeList from '../components/ThemeList'
-import { CallBox, SECTION_HEAD, SectionTitle } from '../components/CallSection'
+import { CallBox } from '../components/CallSection'
 import DialList from '../components/DialList'
 import Dialer from '../components/Dialer'
 import { useLeadRatings } from '../lib/useLeadRatings'
 import { withRatings } from '../lib/leadRatings'
 import { useAuth } from '../context/AuthContext'
+import { workLists, freshLead, isRealtorTheme } from '../lib/workLists'
+import { valueIndex, atRisk } from '../lib/workValue'
+import { hardDates, shortDay } from '../lib/bookFlags'
+import { useForecast } from '../lib/useForecastInputs'
+import { forecastLayers, monthKeyOf } from '../lib/forecast'
+import { targetsFor } from '../lib/reports'
+import { noteFacts } from '../lib/noteFacts'
+import { openPerson } from '../components/PersonSheet'
 
-function Progress({ label, value, pct }) {
-  return (
-    <div className="flex w-[180px] flex-col gap-1.5">
-      <div className="flex justify-between text-body font-semibold">
-        <span>{label}</span>
-        <span className="num">{value}</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-line">
-        <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.round(pct * 100))}%`, background: 'var(--chrome)' }} />
-      </div>
-    </div>
-  )
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const money = (n) => `$${Math.round(Number(n || 0)).toLocaleString('en-US')}`
+
+// The Bayway commission target from Reports' saved targets.
+function useCommissionTarget() {
+  const [target, setTarget] = useState(() => targetsFor(null, 'bay').rev_gross_commission)
+  useEffect(() => {
+    if (isDemoMode) return
+    let live = true
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'metric_targets')
+      .maybeSingle()
+      .then(({ data }) => live && setTarget(targetsFor(data?.value, 'bay').rev_gross_commission))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  return target
 }
 
-// One lane as a card: a gray header with its count (the phone's tabs carry the
-// counts there), then the body, which scrolls on its own once the lanes sit
-// side by side (xl+).
-const MORE_BUCKETS = ['reached_out', 'new_lead', 'hot_cold', 'no_next_step', 'stuck', 'quiet']
+// ---- Pieces -----------------------------------------------------------------------
 
-function Lane({ label, count, mobile, children }) {
+function NewLeadBanner({ lead, now, onCall }) {
+  if (!lead) return null
+  const mins = Math.max(0, Math.round((now - lead.dueAt) / 60_000))
+  const row = lead.row || {}
+  const facts = noteFacts(row.first_note || '').facts
+  const fact = (k) => facts.find((f) => f.k === k)?.v
+  const extra = [row.source, fact('Loan type'), fact('State'), fact('Amount')].filter(Boolean).join(' · ')
   return (
-    <section aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-card border border-line bg-panel shadow-[0_1px_2px_rgba(16,24,40,.05)]">
-      {!mobile && (
-        <div className="flex flex-none items-center border-b border-line bg-panel2 px-4 py-3">
-          <h2 className="text-lead font-semibold">
-            {label} <span className="num font-medium text-muted">· {count}</span>
-          </h2>
-        </div>
-      )}
-      <div className="min-h-0 flex-1 xl:overflow-y-auto">{children}</div>
+    <section
+      aria-label="New lead"
+      data-new-lead={lead.id}
+      className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3"
+      style={{ borderColor: 'var(--warn-line)', background: 'var(--warn-bg)' }}
+    >
+      <span className="rounded-md px-2 py-1 text-caption font-bold text-white" style={{ background: 'var(--warn-ink)' }}>
+        New lead · {mins} min
+      </span>
+      <span className="min-w-0 flex-1 text-body" style={{ color: 'var(--warn-ink)' }}>
+        <b className="font-semibold">{row.name || 'New lead'}</b>
+        {extra && ` · ${extra}`}. Call inside 30 minutes.
+      </span>
+      <button type="button" onClick={onCall} className="min-h-[44px] rounded-lg px-4 text-body font-semibold text-white" style={{ background: 'var(--warn-ink)' }}>
+        Call now
+      </button>
     </section>
   )
 }
+
+const HARD_TEXT = {
+  cd: (h) => `closing disclosure due ${h.days < 0 ? `(was ${shortDay(h.on)})` : shortDay(h.on)}, 3 business days before closing`,
+  lock: (h) => (h.days < 0 ? `rate lock expired ${shortDay(h.on)}` : `rate lock ends ${shortDay(h.on)}`),
+}
+
+function HardDates({ items, loansById }) {
+  if (!items.length) return null
+  return (
+    <section aria-label="Hard dates" className="cc-card overflow-hidden">
+      <div className="flex flex-wrap items-baseline gap-2 border-b border-line px-4 py-3">
+        <h2 className="text-ui font-bold">Hard dates</h2>
+        <span className="text-body text-muted">Pinned above everything, whatever the dollars</span>
+      </div>
+      {items.map((h) => {
+        const contactId = loansById.get(h.loanId)?.contact_id
+        const label = h.days < 0 ? 'Overdue' : h.days === 0 ? 'Today' : h.days < 7 ? `Due ${shortDay(h.on)}` : shortDay(h.on)
+        return (
+          <div key={`${h.kind}:${h.loanId}`} data-hard-date={h.kind} className="flex items-center gap-3 border-b border-hoverbg px-4 py-2.5 last:border-b-0">
+            <span className="w-[76px] flex-none text-caption font-bold" style={{ color: h.days <= 3 ? 'var(--neg-ink)' : 'var(--muted)' }}>
+              {label}
+            </span>
+            <span className="min-w-0 flex-1 text-body">
+              <b className="font-semibold">{h.name}</b> · {HARD_TEXT[h.kind](h)}
+            </span>
+            {contactId && (
+              <button type="button" onClick={() => openPerson(contactId)} className="min-h-[36px] flex-none rounded-lg border border-line2 px-3 text-body font-semibold">
+                Open
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </section>
+  )
+}
+
+// One work list as a card: name, count, one line, the start button, then the rows.
+function ListCard({ list, action, children, refFn, empty }) {
+  return (
+    <section ref={refFn} id={`list-${list.key}`} aria-label={list.label} data-list={list.key} className="cc-card flex min-w-0 flex-col overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-panel2 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lead font-semibold">
+            {list.label} <span className="num font-medium text-muted">· {list.count}</span>
+            {list.flagged > 0 && <span className="ml-2 text-body font-semibold" style={{ color: 'var(--warn-ink)' }}>{list.flagged} flagged</span>}
+          </h2>
+          <div className="text-body text-muted">{list.sub}</div>
+        </div>
+        {action}
+      </div>
+      {list.count === 0 && empty ? <div className="px-4 py-6 text-center text-body text-muted">{empty}</div> : children}
+    </section>
+  )
+}
+
+function StartButton({ onClick, children }) {
+  return (
+    <button type="button" data-list-start onClick={onClick} className="min-h-[38px] flex-none rounded-lg px-3.5 text-body font-semibold text-white" style={{ background: 'var(--chrome)' }}>
+      {children}
+    </button>
+  )
+}
+
+function SidePanel({ gap, monthLabel, risk, counts }) {
+  return (
+    <aside aria-label="Today" className="flex min-w-0 flex-col gap-3">
+      {gap != null && (
+        <Link to="/#forecast" data-gap className="cc-card flex items-center gap-3 px-4 py-3.5 hover:bg-hoverbg">
+          <div className="min-w-0 flex-1">
+            <div className="text-body text-muted">{monthLabel} · Bayway</div>
+            <div className="text-lead font-bold">{gap > 0 ? `Gap to goal ${money(gap)}` : 'Goal covered'}</div>
+          </div>
+          <span className="flex-none text-body font-semibold text-[color:var(--chrome)]">Forecast on Overview →</span>
+        </Link>
+      )}
+      {risk.count > 0 && (
+        <div data-at-risk className="cc-card flex items-center gap-3 px-4 py-3">
+          <span className="rounded-md px-2 py-0.5 text-caption font-semibold" style={{ background: 'var(--warn-bg)', color: 'var(--warn-ink)' }}>
+            At risk
+          </span>
+          <span className="min-w-0 flex-1 text-body text-muted">
+            {risk.count} {risk.count === 1 ? 'item' : 'items'} flagged in today&apos;s lists
+          </span>
+          {risk.amount > 0 && <span className="num text-ui font-bold">~{money(risk.amount)}</span>}
+        </div>
+      )}
+      <div className="grid grid-cols-3 gap-2">
+        {counts.map((c) => (
+          <div key={c.label} data-today-count={c.key} className="cc-card px-3 py-2.5">
+            <div className="text-caption text-muted">{c.label}</div>
+            <div className="num text-lead font-bold">{c.value}</div>
+          </div>
+        ))}
+      </div>
+      <p className="text-caption text-muted">No set times: work the lists in whatever order the day allows.</p>
+    </aside>
+  )
+}
+
+// ---- Page ------------------------------------------------------------------------
 
 export default function Workbench() {
   const { biz } = useBusiness() || { biz: 'all' }
   const { queue, signals, rules, touchedToday } = usePriorityQueue(biz)
   const work = useWorkLane()
-  const mobile = useIsMobile()
   const { role } = useAuth() || {}
-  // The assistant doesn't make calls from the OS: Work lane only.
   const assistant = role === 'assistant'
-  const [lane, setLane] = useState('calls')
   const [adding, setAdding] = useState(false)
-  // The Calls lane, each section in its own box: the weekday theme
-  // (dialThemes.js), Up Next's overdue follow-ups, the lead cadence
-  // (dialList.js), then the rest of Up Next (They reached out first) under
-  // More. dialRun is the
-  // list the dialer is walking, null while closed; themeDay previews another
-  // weekday's theme (null = today).
   const dial = useDialList()
   const [dialRun, setDialRun] = useState(null)
   const [themeDay, setThemeDay] = useState(null)
+  const forecast = useForecast()
+  const target = useCommissionTarget()
+  const [params] = useSearchParams()
+  const cards = useRef({})
 
   const cap = rules.daily_cap || 15
-  const toGo = Math.min(queue.length, cap)
   const inBook = (book) => biz === 'all' || book === biz
-  const now = Date.now()
+  const now = dial.now || Date.now()
   const ratings = useLeadRatings()
   const dialRows = useMemo(() => withRatings(dial.rows, ratings), [dial.rows, ratings])
-  const dialDue = buildDialList(dialRows, { now: dial.now, skips: dial.skips, inBook })
+  const dialDue = buildDialList(dialRows, { now, skips: dial.skips, inBook })
   const dialItems = [...dialDue.dueNow, ...dialDue.laterToday]
-  const themeList = buildThemeList(dial.rows, { now: dial.now, day: themeDay, skips: dial.skips, inBook })
-  const dialIds = new Set([...dialItems, ...themeList.items].map((i) => i.id))
-  const callsToGo = toGo + dialDue.dueNow.length + (themeDay == null ? themeList.items.length : 0)
-  // More from Up Next: everyone in Up Next not in a section above.
-  const more = queue.filter((r) => !dialIds.has(r.id) && MORE_BUCKETS.includes(r.bucket))
-  const reachedOut = more.filter((r) => r.bucket === 'reached_out').length
-  // Tuesday loans: their buyer's / seller's agents. While dialing, the list
-  // being walked, so a borrower just called keeps their agents on screen.
-  const loanAgents = useLoanAgents((dialRun ? dialRun.items : themeList.items).filter((i) => i.kind === 'loan_status').map((i) => i.id))
+  // Today's theme feeds the lists; the picker previews another weekday in place.
+  const themeToday = buildThemeList(dial.rows, { now, skips: dial.skips, inBook })
+  const themeShown = themeDay == null ? themeToday : buildThemeList(dial.rows, { now, day: themeDay, skips: dial.skips, inBook })
+  const themeInPartners = isRealtorTheme(themeShown.theme)
+  const listIds = new Set([...dialItems, ...themeToday.items].map((i) => i.id))
+  const loanAgents = useLoanAgents((dialRun ? dialRun.items : themeShown.items).filter((i) => i.kind === 'loan_status').map((i) => i.id))
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
-  // Open = what's in front of you; waiting items are parked, not counted.
-  const openWork = groups.reduce((n, g) => n + (g.id === 'waiting' ? 0 : g.items.length), 0)
+  const lists = workLists({ dial: dialDue, groups, theme: themeToday, queue, now })
+  const [calls, files, partners] = lists
+  const openWork = files.count
   const progress = workProgress(work.workItems.filter((w) => inBook(w.business_id)), openWork, now)
   const alerts = buildAlerts({ queue, signals, pipeline: work.pipeline, tasks: work.tasks, workItems: work.workItems, rules, inBook, now })
-  const showCalls = !assistant && (!mobile || lane === 'calls')
-  const showWork = assistant || !mobile || lane === 'work'
+  const lead = assistant ? null : freshLead(dialDue, now)
+
+  const loans = forecast.loans || []
+  const loansById = useMemo(() => new Map(loans.map((l) => [l.id, l])), [loans])
+  const hard = biz === 'mpg' ? [] : hardDates(loans, now)
+  const index = useMemo(() => valueIndex(forecast), [forecast])
+  const risk = atRisk(lists, index)
+  const layers = forecastLayers(forecast.lines, monthKeyOf(now))
+  const gap = biz === 'mpg' || forecast.loading ? null : target - (layers.funded + layers.closing + layers.leadsLow)
+  const d = new Date(now)
+
+  // ?list=calls|files|partners (Overview's Start buttons) scrolls to that list.
+  const wanted = params.get('list')
+  useEffect(() => {
+    const el = wanted && cards.current[wanted]
+    if (el?.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [wanted])
+
+  const themeBox = (
+    <CallBox>
+      <ThemeList list={themeShown} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeShown.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
+    </CallBox>
+  )
+  const callsDialable = [...(themeInPartners ? [] : themeShown.items), ...dialItems]
 
   return (
-    // xl+: the page fits the window (top bar 88px + bottom padding 48px) and
-    // each lane scrolls by itself. Narrower, the lanes stack and the page scrolls.
-    <div className="flex flex-col gap-4 xl:h-[calc(100dvh-136px)] xl:min-h-[600px]">
-      {/* One compact row: the page name, today's progress, the page's actions. */}
-      <header className="flex flex-none flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-3">
-          <h1 className="sr-only text-title font-semibold tracking-[-0.6px] sm:not-sr-only">Workbench</h1>
-          <Progress label="Calls" value={`${touchedToday} / ${cap}`} pct={touchedToday / cap} />
-          <Progress label="Work" value={`${progress.done} / ${progress.total}`} pct={progress.total ? progress.done / progress.total : 0} />
-          <SyncDot />
-        </div>
-        <div className="flex gap-2">
+    <div className="flex flex-col gap-4">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <h1 className="text-title font-semibold tracking-[-0.6px]">Workbench</h1>
+        <span className="text-body text-muted">
+          {DAYS[d.getDay()]}, {MONTHS[d.getMonth()].slice(0, 3)} {d.getDate()}
+        </span>
+        <SyncDot />
+        <div className="ml-auto flex gap-2">
           {/* Priority Leads (FUB score tiers) left the nav; it opens from here. */}
-          {biz !== 'mpg' && (
+          {!assistant && biz !== 'mpg' && (
             <Link to="/bayway/priority-leads" className="flex min-h-[38px] items-center rounded-lg border border-line2 px-3.5 text-body font-semibold text-ink2 hover:bg-hoverbg">
               Priority Leads
             </Link>
@@ -136,62 +277,64 @@ export default function Workbench() {
         </div>
       </header>
 
+      <NewLeadBanner lead={lead} now={now} onCall={() => setDialRun({ items: [lead], start: 0 })} />
+      <HardDates items={hard} loansById={loansById} />
       <AlertsRail alerts={alerts} showBook={biz === 'all'} />
 
-      {mobile && !assistant && (
-        <div role="tablist" aria-label="Lane" className="grid grid-cols-2 rounded-lg bg-panel2 p-1">
-          {[
-            ['calls', `Calls · ${callsToGo}`],
-            ['work', `Work · ${openWork}`],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={lane === id}
-              onClick={() => setLane(id)}
-              className={`min-h-[40px] rounded-lg text-ui font-semibold ${lane === id ? 'bg-panel text-[color:var(--text)]' : 'text-muted'}`}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+        <div className="flex min-w-0 flex-col gap-4">
+          {!assistant && (
+            <ListCard
+              list={calls}
+              refFn={(el) => (cards.current.calls = el)}
+              action={callsDialable.length > 0 && <StartButton onClick={() => setDialRun({ items: callsDialable, start: 0 })}>Start dialer</StartButton>}
             >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+              {dial.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{dial.error}</div>}
+              <div className="flex flex-col gap-3 p-3">
+                <CallBox>
+                  <Priority embedded section hideIds={listIds} buckets={['reached_out']} />
+                </CallBox>
+                {!themeInPartners && themeBox}
+                <CallBox>
+                  <Priority embedded section hideIds={listIds} buckets={['overdue']} />
+                </CallBox>
+                <CallBox>
+                  <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={now} onDial={(i) => setDialRun({ items: dialItems, start: i })} />
+                </CallBox>
+              </div>
+            </ListCard>
+          )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        {showCalls && (
-          <Lane label="Calls" count={`${callsToGo} to go`} mobile={mobile}>
-            {dial.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{dial.error}</div>}
-            <div className="flex flex-col gap-3 p-3">
-              <CallBox>
-                <ThemeList list={themeList} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeList.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
-              </CallBox>
-              <CallBox>
-                <Priority embedded section hideIds={dialIds} buckets={['overdue']} />
-              </CallBox>
-              <CallBox>
-                <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={dial.now} onDial={(i) => setDialRun({ items: dialItems, start: i })} />
-              </CallBox>
-              <CallBox>
-                <details className="group">
-                  <summary className={`${SECTION_HEAD} cursor-pointer list-none border-b-0 group-open:border-b [&::-webkit-details-marker]:hidden`}>
-                    <SectionTitle icon="list" count={more.length}>More from Up Next</SectionTitle>
-                    {reachedOut > 0 && <span className="flex-none text-body font-semibold text-[color:var(--neg-ink)]">incl. {reachedOut} reached out</span>}
-                    <span aria-hidden="true" className="ml-auto text-caption text-muted transition-transform group-open:rotate-180">▾</span>
-                  </summary>
-                  <Priority embedded hideIds={dialIds} buckets={MORE_BUCKETS} />
-                </details>
-              </CallBox>
-            </div>
-          </Lane>
-        )}
-        {showWork && (
-          <Lane label="Work" count={`${openWork} open`} mobile={mobile}>
+          <ListCard list={files} refFn={(el) => (cards.current.files = el)}>
             {work.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{work.error}</div>}
             <WorkLane groups={groups} onChanged={work.reload} />
-          </Lane>
+          </ListCard>
+
+          {!assistant && (
+            <ListCard
+              list={partners}
+              refFn={(el) => (cards.current.partners = el)}
+              action={themeInPartners && themeShown.items.length > 0 && <StartButton onClick={() => setDialRun({ items: themeShown.items, start: 0 })}>Start dialer</StartButton>}
+            >
+              {themeInPartners ? <div className="p-3">{themeBox}</div> : <div className="px-4 py-4 text-body text-muted">{partners.sub}</div>}
+            </ListCard>
+          )}
+        </div>
+
+        {!assistant && (
+          <SidePanel
+            gap={gap}
+            monthLabel={MONTHS[d.getMonth()]}
+            risk={risk}
+            counts={[
+              { key: 'calls', label: 'Calls', value: `${touchedToday} / ${cap}` },
+              { key: 'files', label: 'Files', value: `${progress.done} / ${progress.total}` },
+              { key: 'partners', label: 'Partners', value: themeInPartners || partners.count ? `${partners.count} left` : '—' },
+            ]}
+          />
         )}
       </div>
+
       {dialRun && (
         <Dialer
           items={dialRun.items}
