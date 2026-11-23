@@ -70,6 +70,9 @@ describe('Reference', () => {
     await type(host, 'Rate %', '7.5')
     await type(host, 'Monthly rent', '2500')
     expect(out(host, 'ratio')).toMatch(/^\d\.\d\d$/)
+    expect(out(host, 'cashFlow')).toMatch(/^-?\$/)
+    expect(out(host, 'band')).toMatch(/DSCR|lenders/)
+    expect(out(host, 'fit')).toMatch(/Best fit: DSCR/)
   })
 
   it('TRID dates from the application date', async () => {
