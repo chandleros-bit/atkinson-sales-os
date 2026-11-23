@@ -22,6 +22,7 @@ import Loans from './pages/Loans'
 import Opportunities from './pages/Opportunities'
 import Partners from './pages/Partners'
 import Drafts from './pages/Drafts'
+import TuneUp from './pages/TuneUp'
 import PowerDialer from './pages/PowerDialer'
 import DialScreen from './pages/DialScreen'
 import PushQueue from './pages/PushQueue'
@@ -111,6 +112,7 @@ export default function App() {
               <Route path="/bayway/opportunities" element={<Opportunities />} />
               <Route path="/bayway/partners" element={<Partners />} />
               <Route path="/bayway/drafts" element={<Drafts />} />
+              <Route path="/bayway/tune-up" element={<TuneUp />} />
               <Route path="/bayway/priority-leads" element={<PriorityLeads />} />
               <Route path="/bayway/activity" element={<Activity biz="bay" />} />
               <Route path="/bayway/contacts" element={<Contacts biz="bay" />} />
