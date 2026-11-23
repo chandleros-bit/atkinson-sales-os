@@ -46,5 +46,15 @@ export function useDialList() {
     await supabase.from('dial_skips').upsert({ contact_id: contactId, until_date: tomorrow }, { onConflict: 'user_id,contact_id' })
   }, [])
 
-  return { ...state, reload: load, skipToday }
+  // Undo a "Not today" (Workbench's Z).
+  const unskip = useCallback(async (contactId) => {
+    setState((st) => {
+      const skips = new Set(st.skips)
+      skips.delete(contactId)
+      return { ...st, skips }
+    })
+    await supabase.from('dial_skips').delete().eq('contact_id', contactId)
+  }, [])
+
+  return { ...state, reload: load, skipToday, unskip }
 }

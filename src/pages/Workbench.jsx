@@ -31,7 +31,11 @@ import { useLeadRatings } from '../lib/useLeadRatings'
 import { withRatings } from '../lib/leadRatings'
 import { useAuth } from '../context/AuthContext'
 import { workLists, freshLead, isRealtorTheme } from '../lib/workLists'
-import { valueIndex, atRisk } from '../lib/workValue'
+import { valueIndex, atRisk, itemValue } from '../lib/workValue'
+import { pickNext, nextUpModel } from '../lib/workNext'
+import { saveWorkItem } from '../lib/workItems'
+import { localDateKey } from '../lib/crmActions'
+import NextUpCard from '../components/NextUpCard'
 import { hardDates, shortDay } from '../lib/bookFlags'
 import { useForecast } from '../lib/useForecastInputs'
 import { forecastLayers, monthKeyOf } from '../lib/forecast'
@@ -225,7 +229,8 @@ export default function Workbench() {
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
-  const lists = workLists({ dial: dialDue, groups, theme: themeToday, queue, now })
+  // A call snoozed with Not today leaves the Up Next rows too.
+  const lists = workLists({ dial: dialDue, groups, theme: themeToday, queue: queue.filter((r) => !dial.skips.has(r.id)), now })
   const [calls, files, partners] = lists
   const openWork = files.count
   const progress = workProgress(work.workItems.filter((w) => inBook(w.business_id)), openWork, now)
@@ -241,12 +246,88 @@ export default function Workbench() {
   const gap = biz === 'mpg' || forecast.loading ? null : target - (layers.funded + layers.closing + layers.leadsLow)
   const d = new Date(now)
 
+  // ---- Next up: the first open item of the list being worked (workNext.js).
+  const [activeList, setActiveList] = useState('calls')
+  const [passed, setPassed] = useState(() => new Set())
+  const [undo, setUndo] = useState([])
+  const [logging, setLogging] = useState(false)
+  const pick = assistant ? null : pickNext(lists, activeList, passed)
+  const loanByContact = useMemo(() => {
+    const m = new Map()
+    for (const l of loans) if (l.contact_id && ['prospect', 'processing', 'closing'].includes(l.stage_group)) m.set(l.contact_id, l)
+    return m
+  }, [loans])
+  const nextItem = pick?.item
+  const model = nextItem ? nextUpModel(nextItem, { loan: loanByContact.get(nextItem.contactId ?? nextItem.id) || null }) : null
+  const value = nextItem ? itemValue(nextItem, index) : null
+  const pass = (key) => setPassed((s) => new Set([...s, key]))
+  const nextDone = () => {
+    if (!model) return
+    if (model.kind === 'call') return setLogging(true)
+    const row = document.querySelector(`[data-work-item="${CSS.escape(model.key)}"]`)
+    row?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    row?.querySelector('button')?.focus()
+  }
+  const nextSnooze = async () => {
+    if (!model) return
+    if (model.kind === 'call') {
+      setUndo((u) => [...u, { type: 'skip', contactId: model.contactId }])
+      await dial.skipToday(model.contactId)
+    } else {
+      setUndo((u) => [...u, { type: 'file', item: nextItem }])
+      await saveWorkItem(nextItem, { status: 'waiting', check_back_on: localDateKey(new Date(Date.now() + 86_400_000)) })
+      work.reload()
+    }
+  }
+  const nextPass = () => {
+    if (!model) return
+    setUndo((u) => [...u, { type: 'pass', key: model.key }])
+    pass(model.key)
+  }
+  const undoLast = async () => {
+    const last = undo.at(-1)
+    if (!last) return
+    setUndo((u) => u.slice(0, -1))
+    if (last.type === 'pass') setPassed((s) => new Set([...s].filter((k) => k !== last.key)))
+    if (last.type === 'skip') await dial.unskip(last.contactId)
+    if (last.type === 'file') {
+      await saveWorkItem(last.item, { status: 'open' })
+      work.reload()
+    }
+  }
+  // Shift+D done, Shift+S snooze, J next, Z undo; never while typing or with a sheet open.
+  const keys = useRef({})
+  keys.current = { nextDone, nextSnooze, nextPass, undoLast }
+  useEffect(() => {
+    if (assistant) return
+    const onKey = (e) => {
+      const t = e.target
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (t?.closest?.('input, textarea, select, [contenteditable="true"]') || document.querySelector('[role="dialog"]')) return
+      const k = e.key.toLowerCase()
+      if (e.shiftKey && k === 'd') keys.current.nextDone()
+      else if (e.shiftKey && k === 's') keys.current.nextSnooze()
+      else if (!e.shiftKey && k === 'j') keys.current.nextPass()
+      else if (!e.shiftKey && k === 'z') keys.current.undoLast()
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [assistant])
+
   // ?list=calls|files|partners (Overview's Start buttons) scrolls to that list.
   const wanted = params.get('list')
   useEffect(() => {
+    if (['calls', 'files', 'partners'].includes(wanted)) setActiveList(wanted)
     const el = wanted && cards.current[wanted]
     if (el?.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [wanted])
+  // Starting a list makes it the one Next up works through.
+  const startList = (key, run) => {
+    setActiveList(key)
+    if (run) setDialRun(run)
+  }
 
   const themeBox = (
     <CallBox>
@@ -284,10 +365,25 @@ export default function Workbench() {
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           {!assistant && (
+            <NextUpCard
+              pick={pick}
+              model={model}
+              value={value}
+              logging={logging}
+              onDone={nextDone}
+              onLogged={() => model && pass(model.key)}
+              onLogClose={() => setLogging(false)}
+              onSnooze={nextSnooze}
+              onNext={nextPass}
+              onUndo={undoLast}
+              canUndo={undo.length > 0}
+            />
+          )}
+          {!assistant && (
             <ListCard
               list={calls}
               refFn={(el) => (cards.current.calls = el)}
-              action={callsDialable.length > 0 && <StartButton onClick={() => setDialRun({ items: callsDialable, start: 0 })}>Start dialer</StartButton>}
+              action={callsDialable.length > 0 && <StartButton onClick={() => startList('calls', { items: callsDialable, start: 0 })}>Start dialer</StartButton>}
             >
               {dial.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{dial.error}</div>}
               <div className="flex flex-col gap-3 p-3">
@@ -305,7 +401,11 @@ export default function Workbench() {
             </ListCard>
           )}
 
-          <ListCard list={files} refFn={(el) => (cards.current.files = el)}>
+          <ListCard
+            list={files}
+            refFn={(el) => (cards.current.files = el)}
+            action={!assistant && files.count > 0 && activeList !== 'files' && <StartButton onClick={() => startList('files')}>Work files next</StartButton>}
+          >
             {work.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{work.error}</div>}
             <WorkLane groups={groups} onChanged={work.reload} />
           </ListCard>
@@ -314,7 +414,7 @@ export default function Workbench() {
             <ListCard
               list={partners}
               refFn={(el) => (cards.current.partners = el)}
-              action={themeInPartners && themeShown.items.length > 0 && <StartButton onClick={() => setDialRun({ items: themeShown.items, start: 0 })}>Start dialer</StartButton>}
+              action={themeInPartners && themeShown.items.length > 0 && <StartButton onClick={() => startList('partners', { items: themeShown.items, start: 0 })}>Start dialer</StartButton>}
             >
               {themeInPartners ? <div className="p-3">{themeBox}</div> : <div className="px-4 py-4 text-body text-muted">{partners.sub}</div>}
             </ListCard>

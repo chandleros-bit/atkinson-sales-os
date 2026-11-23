@@ -161,6 +161,44 @@ describe('Workbench', () => {
     expect(host.querySelector('[data-gap]').getAttribute('href')).toBe('/#forecast')
   })
 
+  it('shows Next up: the first call, then the next list when J passes it over', async () => {
+    mobile = false
+    const host = await render()
+    const card = () => host.querySelector('[aria-label="Next up"]')
+    expect(card().textContent).toContain('Next up · Calls')
+    expect(card().textContent).toContain('Ana Inbound')
+    expect(card().textContent).toContain('Called you')
+    expect(card().querySelector('a[href^="tel:"]').textContent).toContain('Call Ana')
+    // J passes it over; Calls is then empty, so Next up moves to Files.
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' })))
+    expect(card().textContent).toContain('Next up · Files')
+    expect(card().textContent).toContain('Gil Estimate')
+    // Z brings it back.
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z' })))
+    expect(card().textContent).toContain('Ana Inbound')
+  })
+
+  it('snoozes a file to tomorrow from Next up, and undoes it', async () => {
+    mobile = false
+    const host = await render()
+    await act(async () => button(host, 'Work files next').click())
+    const card = host.querySelector('[aria-label="Next up"]')
+    expect(card.textContent).toContain('Gil Estimate')
+    await act(async () => card.querySelector('[data-next-snooze]').click())
+    expect(writes[0]).toMatchObject({ table: 'work_items', op: 'upsert', body: { source_key: 'estimate:e1', status: 'waiting' } })
+    expect(writes[0].body.check_back_on).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    await act(async () => host.querySelector('[data-next-undo]').click())
+    expect(writes.at(-1)).toMatchObject({ table: 'work_items', op: 'upsert', body: { source_key: 'estimate:e1', status: 'open' } })
+  })
+
+  it("opens the Log call sheet from Next up's Done", async () => {
+    mobile = false
+    const host = await render()
+    await act(async () => host.querySelector('[data-next-done]').click())
+    await act(async () => {})
+    expect(dialog()?.textContent || '').toContain('Ana Inbound')
+  })
+
   it('orders Calls: they reached out first, then overdue and the lead cadence; the theme sits by its kind', async () => {
     mobile = false
     const host = await render()
