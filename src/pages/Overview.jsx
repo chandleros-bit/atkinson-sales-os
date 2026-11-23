@@ -311,7 +311,7 @@ function useTodayLists(biz, rules, queue) {
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now: dial.now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
-  return { lists: workLists({ dial: dialDue, groups, theme, queue, now: dial.now }), lead: freshLead(dialDue, dial.now), now: dial.now }
+  return { lists: workLists({ dial: dialDue, groups, theme, queue: (queue || []).filter((r) => !dial.skips.has(r.id)), now: dial.now }), lead: freshLead(dialDue, dial.now), now: dial.now }
 }
 
 export default function Overview() {
