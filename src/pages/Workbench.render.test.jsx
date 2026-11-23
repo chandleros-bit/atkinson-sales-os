@@ -26,6 +26,12 @@ function query(table) {
   const q = {}
   let id = null
   for (const m of ['select', 'in', 'order', 'range', 'gte', 'or', 'limit', 'gt', 'lte']) q[m] = () => q
+  // The day's order (workbench_days) only exists in the tests that turn it on.
+  let before = false
+  q.lt = () => {
+    before = true
+    return q
+  }
   q.eq = (c, v) => {
     if (c === 'id') id = v
     return q
@@ -39,6 +45,11 @@ function query(table) {
   q.maybeSingle = async () => {
     if (table === 'settings') return { data: { value: { bay: true, mpg: true, daily_cap: 15 } }, error: null }
     if (table === 'v_people') return { data: DATA.people[id] ?? null, error: null }
+    if (table === 'workbench_days') {
+      // Off: reads like the table isn't there yet, so the lists stay live.
+      if (!DATA.dayOn) return { data: null, error: { code: '42P01', message: 'relation "workbench_days" does not exist' } }
+      return { data: before ? null : DATA.day, error: null }
+    }
     return { data: null, error: null }
   }
   q.then = (resolve) =>
@@ -89,6 +100,8 @@ beforeEach(() => {
   DATA.workItems = []
   DATA.contacts = []
   DATA.searchPeople = []
+  DATA.dayOn = false
+  DATA.day = null
   window.webkitSpeechRecognition = FakeSpeech
   FakeSpeech.last = null
   window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
@@ -197,6 +210,57 @@ describe('Workbench', () => {
     await act(async () => host.querySelector('[data-next-done]').click())
     await act(async () => {})
     expect(dialog()?.textContent || '').toContain('Ana Inbound')
+  })
+
+  it("holds the day's order: a file that arrived later waits in New since until pulled in", async () => {
+    mobile = false
+    DATA.dayOn = true
+    DATA.day = {
+      day: 'today',
+      set_at: new Date().toISOString(),
+      lists: { calls: ['contact:c1'], files: ['mpg_task:t1', 'estimate:e1'], partners: [] },
+      pulled_in: [],
+    }
+    const host = await render()
+    expect(host.querySelector('[data-order-set]').textContent).toContain('order set at')
+    const files = host.querySelector('[aria-label="Files"]')
+    expect(files.querySelector('h2').textContent).toContain('Files · 2')
+    // Saved order: the MPG task first, then the estimate; the new application isn't drawn.
+    const rows = [...files.querySelectorAll('[data-work-item]')].map((e) => e.getAttribute('data-work-item'))
+    expect(rows.sort()).toEqual(['estimate:e1', 'mpg_task:t1'])
+    // Next up follows the saved order across groups: the MPG task comes first.
+    await act(async () => button(host, 'Work files next').click())
+    expect(host.querySelector('[aria-label="Next up"]').textContent).toContain('3 Statements FU')
+    const strip = host.querySelector('[data-new-since]')
+    expect(strip.textContent).toContain('New since')
+    expect(strip.textContent).toContain('Ivy Application')
+    await act(async () => button(strip, 'Pull in').click())
+    expect(writes.at(-1)).toMatchObject({ table: 'workbench_days', op: 'update', body: { pulled_in: ['application:a1'] } })
+    expect(host.querySelector('[data-new-since]')).toBeNull()
+    expect(files.querySelector('h2').textContent).toContain('Files · 3')
+  })
+
+  it("saves the day's order on the first load after 6 AM", async () => {
+    mobile = false
+    DATA.dayOn = true
+    DATA.day = null
+    const { isOrderTime } = await import('../lib/dayOrder')
+    await render()
+    await act(async () => {})
+    const save = writes.find((w) => w.table === 'workbench_days' && w.op === 'upsert')
+    if (!isOrderTime()) return expect(save).toBeUndefined()
+    expect(save.opts).toMatchObject({ onConflict: 'user_id,day', ignoreDuplicates: true })
+    expect(save.body.lists.files.sort()).toEqual(['application:a1', 'estimate:e1', 'mpg_task:t1'])
+    expect(save.body.lists.calls).toEqual(['contact:c1'])
+  })
+
+  it('collapses the alerts and slipping groups into one Slipping strip', async () => {
+    mobile = false
+    const host = await render()
+    const strip = host.querySelector('[data-slipping]')
+    expect(strip.tagName).toBe('DETAILS')
+    expect(strip.open).toBe(false)
+    expect(strip.querySelector('summary').textContent).toMatch(/Slipping · \d+/)
   })
 
   it('orders Calls: they reached out first, then overdue and the lead cadence; the theme sits by its kind', async () => {

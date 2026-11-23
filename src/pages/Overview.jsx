@@ -35,6 +35,8 @@ import { buildDialList } from '../lib/dialList'
 import { buildThemeList } from '../lib/dialThemes'
 import { buildWorkGroups } from '../lib/workbench'
 import { workLists, freshLead } from '../lib/workLists'
+import { useWorkbenchDay } from '../lib/useWorkbenchDay'
+import { applyDayOrder } from '../lib/dayOrder'
 import { deriveAlert } from '../lib/overview'
 import { targetsFor, monthWindow, sprintWindow, MPG_SPRINT } from '../lib/reports'
 import { fetchLoanBundle } from '../lib/loansData'
@@ -301,6 +303,7 @@ function buildView(biz, data, rules, now = Date.now()) {
 
 // Today's work lists, from the same builders and data Workbench uses.
 function useTodayLists(biz, rules, queue) {
+  const day = useWorkbenchDay()
   const dial = useDialList()
   const work = useWorkLane()
   const ratings = useLeadRatings()
@@ -311,7 +314,10 @@ function useTodayLists(biz, rules, queue) {
   const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now: dial.now })
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
-  return { lists: workLists({ dial: dialDue, groups, theme, queue: (queue || []).filter((r) => !dial.skips.has(r.id)), now: dial.now }), lead: freshLead(dialDue, dial.now), now: dial.now }
+  const built = workLists({ dial: dialDue, groups, theme, queue: (queue || []).filter((r) => !dial.skips.has(r.id)), now: dial.now })
+  // Workbench's saved order for today (read only), so the tiles count what Workbench shows.
+  const { lists } = applyDayOrder(built, day.saved)
+  return { lists, lead: freshLead(dialDue, dial.now), now: dial.now }
 }
 
 export default function Overview() {

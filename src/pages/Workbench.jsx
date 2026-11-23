@@ -14,6 +14,9 @@ import { useWorkLane } from '../lib/useWorkLane'
 import { buildWorkGroups, workProgress } from '../lib/workbench'
 import { buildAlerts } from '../lib/alerts'
 import AlertsRail from '../components/AlertsRail'
+import { useWorkbenchDay } from '../lib/useWorkbenchDay'
+import { applyDayOrder, itemName } from '../lib/dayOrder'
+import { BUCKET_LABEL } from '../lib/priorityQueue'
 import WorkLane from '../components/WorkLane'
 import AddWorkItem from '../components/AddWorkItem'
 import VoiceTask from '../components/VoiceTask'
@@ -32,7 +35,7 @@ import { withRatings } from '../lib/leadRatings'
 import { useAuth } from '../context/AuthContext'
 import { workLists, freshLead, isRealtorTheme } from '../lib/workLists'
 import { valueIndex, atRisk, itemValue } from '../lib/workValue'
-import { pickNext, nextUpModel } from '../lib/workNext'
+import { pickNext, nextUpModel, itemKey } from '../lib/workNext'
 import { saveWorkItem } from '../lib/workItems'
 import { localDateKey } from '../lib/crmActions'
 import NextUpCard from '../components/NextUpCard'
@@ -196,11 +199,78 @@ function SidePanel({ gap, monthLabel, risk, counts }) {
   )
 }
 
+const clock = (iso) => {
+  const d = new Date(iso)
+  const h = d.getHours() % 12 || 12
+  return `${h}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// Items that arrived after the day's order was set (§7).
+function NewSinceStrip({ items, setAt, onPullIn }) {
+  if (!items.length) return null
+  const names = items.slice(0, 4).map((n) => itemName(n.item))
+  return (
+    <section aria-label="New since" data-new-since className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-line2 bg-panel px-4 py-3">
+      <span className="text-ui font-semibold">
+        New since {clock(setAt)} · {items.length}
+      </span>
+      <span className="min-w-0 flex-1 text-body text-muted">
+        {names.join(' · ')}
+        {items.length > names.length && ` · +${items.length - names.length} more`}. They wait here until you pull them in.
+      </span>
+      <button type="button" onClick={onPullIn} className="min-h-[38px] rounded-lg border border-line2 bg-panel px-3 text-body font-semibold hover:bg-hoverbg">
+        Pull in
+      </button>
+    </section>
+  )
+}
+
+// Waiting work and cold leads, by reason (§7). Each returns on its check-back day.
+function ParkedStrip({ waiting, cold }) {
+  const by = new Map()
+  for (const it of waiting) by.set(it.waitingOn || 'others', (by.get(it.waitingOn || 'others') || 0) + 1)
+  const total = waiting.length + cold
+  if (!total) return null
+  const parts = [...[...by].map(([who, n]) => `waiting on ${who.toLowerCase()} ${n}`), cold && `cold leads ${cold}`].filter(Boolean)
+  return (
+    <section aria-label="Parked" data-parked className="flex flex-wrap items-center gap-2.5 rounded-xl bg-panel2 px-4 py-3">
+      <span className="text-ui font-semibold">Parked · {total}</span>
+      <span className="text-body text-muted">{parts.join(' · ')} · each returns on its check-back day</span>
+    </section>
+  )
+}
+
+const SLIP_BUCKETS = ['hot_cold', 'no_next_step', 'stuck', 'quiet']
+
+// Decision 3: the alerts rail and Up Next's slipping groups, collapsed into one strip.
+function SlippingStrip({ alerts, slipping, showBook, hideIds }) {
+  const groups = [...alerts.map((a) => ({ id: a.id, label: a.title, count: a.count })), ...slipping]
+  const total = groups.reduce((n, g) => n + g.count, 0)
+  if (!total) return null
+  return (
+    <details aria-label="Slipping" data-slipping className="group cc-card overflow-hidden">
+      <summary className="flex min-h-[48px] cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="text-ui font-semibold">Slipping · {total}</span>
+        <span className="min-w-0 flex-1 text-body text-muted">{groups.filter((g) => g.count).map((g) => `${g.label} ${g.count}`).join(' · ')}</span>
+        <span aria-hidden="true" className="text-caption text-muted transition-transform group-open:rotate-180">▾</span>
+      </summary>
+      <div className="flex flex-col gap-3 border-t border-line p-3">
+        <AlertsRail alerts={alerts} showBook={showBook} />
+        {slipping.some((g) => g.count) && (
+          <CallBox>
+            <Priority embedded hideIds={hideIds} buckets={SLIP_BUCKETS} />
+          </CallBox>
+        )}
+      </div>
+    </details>
+  )
+}
+
 // ---- Page ------------------------------------------------------------------------
 
 export default function Workbench() {
   const { biz } = useBusiness() || { biz: 'all' }
-  const { queue, signals, rules, touchedToday } = usePriorityQueue(biz)
+  const { queue, signals, rules, touchedToday, loading: queueLoading } = usePriorityQueue(biz)
   const work = useWorkLane()
   const { role } = useAuth() || {}
   const assistant = role === 'assistant'
@@ -230,12 +300,27 @@ export default function Workbench() {
     .filter((g) => g.book == null || inBook(g.book))
     .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
   // A call snoozed with Not today leaves the Up Next rows too.
-  const lists = workLists({ dial: dialDue, groups, theme: themeToday, queue: queue.filter((r) => !dial.skips.has(r.id)), now })
+  const built = workLists({ dial: dialDue, groups, theme: themeToday, queue: queue.filter((r) => !dial.skips.has(r.id)), now })
+  // The day's order (decision 1): saved on the first load after 6 AM, held all day.
+  const ready = !dial.loading && !work.loading && !queueLoading && !dial.error && !work.error
+  const day = useWorkbenchDay({ lists: built, ready, create: !assistant })
+  const { lists, newSince } = applyDayOrder(built, day.saved)
   const [calls, files, partners] = lists
+  // The rows each card draws follow the same order: New since items stay out,
+  // the rest sort by their place in the day's order.
+  const waitingKeys = new Set(newSince.map((n) => n.key))
+  const placeOf = new Map(lists.flatMap((l) => l.items.map((it, i) => [itemKey(it), i])))
+  const inDay = (items) => items.filter((it) => !waitingKeys.has(itemKey(it))).sort((a, b) => (placeOf.get(itemKey(a)) ?? 1e9) - (placeOf.get(itemKey(b)) ?? 1e9))
+  const dialShown = { dueNow: inDay(dialDue.dueNow), laterToday: dialDue.laterToday.filter((it) => !waitingKeys.has(itemKey(it))) }
+  const hideInCalls = new Set([...listIds, ...newSince.filter((n) => !n.item.key).map((n) => n.item.id)])
+  const groupsShown = groups.map((g) => (g.id === 'waiting' ? g : { ...g, items: inDay(g.items) }))
   const openWork = files.count
   const progress = workProgress(work.workItems.filter((w) => inBook(w.business_id)), openWork, now)
   const alerts = buildAlerts({ queue, signals, pipeline: work.pipeline, tasks: work.tasks, workItems: work.workItems, rules, inBook, now })
   const lead = assistant ? null : freshLead(dialDue, now)
+  // Parked leads (Nurture / Credit Repair) and Up Next's slipping groups, for the strips.
+  const coldLeads = (dial.rows || []).filter((r) => r.business_id === 'bay' && r.stage === 'Nurture / Credit Repair' && inBook('bay') && !listIds.has(r.id)).length
+  const slipping = SLIP_BUCKETS.map((b) => ({ id: b, label: BUCKET_LABEL[b], count: queue.filter((r) => r.bucket === b && !listIds.has(r.id)).length }))
 
   const loans = forecast.loans || []
   const loansById = useMemo(() => new Map(loans.map((l) => [l.id, l])), [loans])
@@ -329,12 +414,14 @@ export default function Workbench() {
     if (run) setDialRun(run)
   }
 
+  const themeDrawn = themeDay == null ? { ...themeShown, items: inDay(themeShown.items) } : themeShown
+  const dialDrawn = [...dialShown.dueNow, ...dialShown.laterToday]
   const themeBox = (
     <CallBox>
-      <ThemeList list={themeShown} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeShown.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
+      <ThemeList list={themeDrawn} pickedDay={themeDay} onPickDay={setThemeDay} onDial={(i) => setDialRun({ items: themeDrawn.items, start: i })} agents={loanAgents.byContact} agentsChecked={loanAgents.checked} />
     </CallBox>
   )
-  const callsDialable = [...(themeInPartners ? [] : themeShown.items), ...dialItems]
+  const callsDialable = [...(themeInPartners ? [] : themeDrawn.items), ...dialDrawn]
 
   return (
     <div className="flex flex-col gap-4">
@@ -342,6 +429,7 @@ export default function Workbench() {
         <h1 className="text-title font-semibold tracking-[-0.6px]">Workbench</h1>
         <span className="text-body text-muted">
           {DAYS[d.getDay()]}, {MONTHS[d.getMonth()].slice(0, 3)} {d.getDate()}
+          {day.saved?.set_at && <span data-order-set> · order set at {clock(day.saved.set_at)}</span>}
         </span>
         <SyncDot />
         <div className="ml-auto flex gap-2">
@@ -360,7 +448,6 @@ export default function Workbench() {
 
       <NewLeadBanner lead={lead} now={now} onCall={() => setDialRun({ items: [lead], start: 0 })} />
       <HardDates items={hard} loansById={loansById} />
-      <AlertsRail alerts={alerts} showBook={biz === 'all'} />
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -388,14 +475,14 @@ export default function Workbench() {
               {dial.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{dial.error}</div>}
               <div className="flex flex-col gap-3 p-3">
                 <CallBox>
-                  <Priority embedded section hideIds={listIds} buckets={['reached_out']} />
+                  <Priority embedded section hideIds={hideInCalls} buckets={['reached_out']} />
                 </CallBox>
                 {!themeInPartners && themeBox}
                 <CallBox>
-                  <Priority embedded section hideIds={listIds} buckets={['overdue']} />
+                  <Priority embedded section hideIds={hideInCalls} buckets={['overdue']} />
                 </CallBox>
                 <CallBox>
-                  <DialList dueNow={dialDue.dueNow} laterToday={dialDue.laterToday} now={now} onDial={(i) => setDialRun({ items: dialItems, start: i })} />
+                  <DialList dueNow={dialShown.dueNow} laterToday={dialShown.laterToday} now={now} onDial={(i) => setDialRun({ items: dialDrawn, start: i })} />
                 </CallBox>
               </div>
             </ListCard>
@@ -407,18 +494,22 @@ export default function Workbench() {
             action={!assistant && files.count > 0 && activeList !== 'files' && <StartButton onClick={() => startList('files')}>Work files next</StartButton>}
           >
             {work.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{work.error}</div>}
-            <WorkLane groups={groups} onChanged={work.reload} />
+            <WorkLane groups={groupsShown} onChanged={work.reload} />
           </ListCard>
 
           {!assistant && (
             <ListCard
               list={partners}
               refFn={(el) => (cards.current.partners = el)}
-              action={themeInPartners && themeShown.items.length > 0 && <StartButton onClick={() => startList('partners', { items: themeShown.items, start: 0 })}>Start dialer</StartButton>}
+              action={themeInPartners && themeDrawn.items.length > 0 && <StartButton onClick={() => startList('partners', { items: themeDrawn.items, start: 0 })}>Start dialer</StartButton>}
             >
               {themeInPartners ? <div className="p-3">{themeBox}</div> : <div className="px-4 py-4 text-body text-muted">{partners.sub}</div>}
             </ListCard>
           )}
+
+          {!assistant && day.saved && <NewSinceStrip items={newSince} setAt={day.saved.set_at} onPullIn={() => day.pullIn(newSince.map((n) => n.key))} />}
+          <ParkedStrip waiting={groups.find((g) => g.id === 'waiting')?.items || []} cold={assistant ? 0 : coldLeads} />
+          {!assistant && <SlippingStrip alerts={alerts} slipping={slipping} showBook={biz === 'all'} hideIds={listIds} />}
         </div>
 
         {!assistant && (
