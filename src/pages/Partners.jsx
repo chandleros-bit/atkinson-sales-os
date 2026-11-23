@@ -12,8 +12,10 @@ import { friendlyError } from '../lib/friendlyError'
 import {
   PARTNER_STAGES, PARTNER_TYPES, STAGE_LABEL, SOURCE_LABEL, QUIET_DAYS,
   stageCounts, filterPartners, sortPartners, lastTouchText, touchStatus,
-  syncPartners, loadPartners, updatePartner, addPartner,
+  syncPartners, loadPartners, updatePartner, addPartner, scoreRanks, sortByScore,
 } from '../lib/partners'
+import { tierFor } from '../lib/harImport'
+import HarImport from '../components/HarImport'
 
 const SEL = 'rounded-lg border border-line2 bg-transparent px-2 py-1 text-body'
 const fubUrl = (id) => (id ? `https://baywayhtx.followupboss.com/2/people/view/${id}` : null)
@@ -69,7 +71,7 @@ function AddBox({ onAdded }) {
   )
 }
 
-function Row({ p, onSaved }) {
+function Row({ p, rank, onSaved }) {
   const [busy, setBusy] = useState(false)
   const save = async (field, value) => {
     setBusy(true)
@@ -90,6 +92,11 @@ function Row({ p, onSaved }) {
         <div className="text-xs text-dim">{SOURCE_LABEL[p.source] || p.source}</div>
       </td>
       <td className="pr-3 text-muted">{p.brokerage || ''}</td>
+      <td data-score className="num pr-3 text-right">
+        {p.score != null ? Number(p.score).toFixed(1) : ''}
+        {tierFor(rank) && <div className="text-xs text-dim">{tierFor(rank)} #{rank}</div>}
+      </td>
+      <td className="num pr-3 text-right">{p.closings_12mo ?? ''}</td>
       <td className="pr-3">
         <select aria-label="Type" value={p.partner_type} disabled={busy} onChange={(e) => save('partner_type', e.target.value)} className={SEL}>
           {PARTNER_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
@@ -117,6 +124,8 @@ export default function Partners() {
   const [type, setType] = useState('all')
   const [q, setQ] = useState('')
   const [due, setDue] = useState(false)
+  const [sortBy, setSortBy] = useState('stage')
+  const [importing, setImporting] = useState(false)
 
   const reload = useCallback(async ({ sync = false } = {}) => {
     try {
@@ -134,7 +143,11 @@ export default function Partners() {
 
   const onSaved = (id, patch) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)))
   const counts = useMemo(() => stageCounts(rows), [rows])
-  const shown = useMemo(() => sortPartners(filterPartners(rows, { stage, type, q, due })), [rows, stage, type, q, due])
+  const ranks = useMemo(() => scoreRanks(rows), [rows])
+  const shown = useMemo(() => {
+    const list = filterPartners(rows, { stage, type, q, due })
+    return sortBy === 'score' ? sortByScore(list) : sortPartners(list)
+  }, [rows, stage, type, q, due, sortBy])
 
   return (
     <div className="flex flex-col gap-4 pt-4">
@@ -154,7 +167,12 @@ export default function Partners() {
               <input type="checkbox" checked={due} onChange={(e) => setDue(e.target.checked)} />
               Due or quiet {QUIET_DAYS}+ days
             </label>
+            <select aria-label="Sort" value={sortBy} onChange={(e) => setSortBy(e.target.value)} className={SEL}>
+              <option value="stage">Sort: stage</option>
+              <option value="score">Sort: score</option>
+            </select>
             <span className="flex-1" />
+            <button type="button" data-har-import onClick={() => setImporting(true)} className="min-h-[36px] rounded-lg border border-line2 px-3 font-medium hover:bg-hoverbg">Import HAR CSV</button>
             <AddBox onAdded={() => reload()} />
           </div>
           {!shown.length ? (
@@ -164,14 +182,18 @@ export default function Partners() {
               <table className="w-full text-body">
                 <thead>
                   <tr className="text-left text-xs text-dim">
-                    <th className="py-1 pr-3">Name</th><th className="pr-3">Brokerage</th><th className="pr-3">Type</th>
+                    <th className="py-1 pr-3">Name</th><th className="pr-3">Brokerage</th><th className="pr-3 text-right">Score</th><th className="pr-3 text-right">12-mo closings</th><th className="pr-3">Type</th>
                     <th className="pr-3">Stage</th><th className="pr-3">Last touch</th><th className="pr-3">Next touch</th>
                     <th className="text-right">Loans</th>
                   </tr>
                 </thead>
-                <tbody>{shown.map((p) => <Row key={p.id} p={p} onSaved={onSaved} />)}</tbody>
+                <tbody>{shown.map((p) => <Row key={p.id} p={p} rank={ranks.get(p.id)} onSaved={onSaved} />)}</tbody>
               </table>
             </div>
+          )}
+          {importing && (
+            <HarImport partners={rows} onClose={() => setImporting(false)}
+              onImported={(c) => { setImporting(false); setSortBy('score'); showToast({ tone: 'ok', text: `${c.new} added, ${c.updated} updated from HAR` }); reload() }} />
           )}
           <p className="text-xs text-dim">{shown.length} of {rows.length} shown. {STAGE_LABEL.dream_20} and {STAGE_LABEL.top_partner} start from your FUB tags.</p>
         </>

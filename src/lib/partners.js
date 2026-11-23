@@ -135,3 +135,19 @@ export async function addPartner(fields) {
   const { error } = await supabase.from('partner_profiles').insert(row)
   if (error) throw error
 }
+
+// Rank among scored partners, best first: id -> 1..n (HAR import scores).
+export function scoreRanks(rows) {
+  const scored = (rows || []).filter((r) => r.score != null).sort((a, b) => b.score - a.score || String(a.name).localeCompare(String(b.name)))
+  return new Map(scored.map((r, i) => [r.id, i + 1]))
+}
+
+// Highest score first; unscored last, then by name.
+export function sortByScore(rows) {
+  return [...(rows || [])].sort((a, b) => {
+    if (a.score == null && b.score == null) return String(a.name).localeCompare(String(b.name))
+    if (a.score == null) return 1
+    if (b.score == null) return -1
+    return b.score - a.score || String(a.name).localeCompare(String(b.name))
+  })
+}
