@@ -27,7 +27,9 @@ function todayLabel(now = new Date()) {
 // The Overview "Today's Events" card: a compact, read-only agenda of the rep's events
 // for the current day, scoped by the active business filter. Sibling of the
 // full Calendar page — it reuses the same calendar_events source and helpers.
-export default function TodayAgenda({ className = '' }) {
+// bare: just the event rows, for a parent card that draws its own heading
+// (the redesigned Overview's Your day).
+export default function TodayAgenda({ className = '', bare = false }) {
   const { matches } = useBusiness()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(!isDemoMode)
@@ -84,8 +86,10 @@ export default function TodayAgenda({ className = '' }) {
     ? `${agenda.length} ${agenda.length === 1 ? 'event' : 'events'}${next ? ` · next in ${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`}` : ''}`
     : todayLabel()
 
+  const Wrap = bare ? 'div' : 'section'
   return (
-    <section className={`cc-card flex flex-col overflow-hidden ${className}`}>
+    <Wrap data-agenda className={bare ? className : `cc-card flex flex-col overflow-hidden ${className}`}>
+      {!bare && (
       <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div className="min-w-0">
           <h3 className="text-lead font-semibold tracking-[-0.2px]">Today&apos;s Events</h3>
@@ -95,19 +99,20 @@ export default function TodayAgenda({ className = '' }) {
           Calendar →
         </Link>
       </div>
+      )}
 
       {error && (
         <div className="m-4 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">
           {error}
         </div>
       )}
-      {loading && <div className="px-5 py-8 text-center text-sm text-muted">Loading agenda…</div>}
+      {loading && <div className={bare ? 'py-3 text-sm text-muted' : 'px-5 py-8 text-center text-sm text-muted'}>Loading agenda…</div>}
       {!loading && !error && agenda.length === 0 && (
-        <div className="px-5 py-8 text-center text-sm text-muted">Nothing on the calendar today.</div>
+        <div className={bare ? 'py-3 text-sm text-muted' : 'px-5 py-8 text-center text-sm text-muted'}>Nothing on the calendar today.</div>
       )}
 
       {!loading && !error && agenda.length > 0 && (
-        <div className="flex flex-col px-5 pb-3 pt-1">
+        <div className={bare ? 'flex flex-col pt-1' : 'flex flex-col px-5 pb-3 pt-1'}>
           {agenda.map((e) => {
             const biz = sourceToBiz(e.source_account)
             const color = biz === 'mpg' ? 'var(--mpg)' : biz === 'bay' ? 'var(--bay)' : 'var(--dim)'
@@ -144,6 +149,6 @@ export default function TodayAgenda({ className = '' }) {
           })}
         </div>
       )}
-    </section>
+    </Wrap>
   )
 }

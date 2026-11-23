@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  DEFAULT_FORECAST, resolveForecast, monthKeyOf, avgFundedLoan, mpgPerAccount, forecastLines, forecastByMonth, sortPaysFirst, latestMpgMetrics,
+  DEFAULT_FORECAST, resolveForecast, monthKeyOf, avgFundedLoan, mpgPerAccount, forecastLines, forecastByMonth, forecastLayers, sortPaysFirst, latestMpgMetrics,
 } from './forecast'
 
 const NOW = new Date('2026-11-03T09:00:00').getTime()
@@ -250,5 +250,50 @@ describe('latestMpgMetrics', () => {
   })
   it('is null/null with no shared date', () => {
     expect(latestMpgMetrics([{ date: '2026-11-01', metric_key: 'rev_monthly_residual', value: 1 }])).toEqual({ residual: null, merchants: null })
+  })
+})
+
+describe('forecastLayers', () => {
+  const line = (o) => ({ key: o.key, book: 'bay', source: 'arive', contactId: null, name: null, payout: 1000, odds: 100, month: '2026-11', payDate: '2026-11-20', est: false, funded: false, ...o })
+  const lines = [
+    line({ key: 'f', funded: true, payout: 4000, name: 'Funded' }),
+    line({ key: 'c1', odds: 95, payout: 2000, name: 'Wells', payDate: '2026-11-25' }),
+    line({ key: 'c2', odds: 75, payout: 4000, name: 'Grant', payDate: '2026-11-18' }),
+    line({ key: 'h', source: 'rating', temperature: 'hot', odds: 60, payout: 1000 }),
+    line({ key: 'w', source: 'rating', temperature: 'warm', odds: 30, payout: 1000 }),
+    line({ key: 'c', source: 'rating', temperature: 'cold', odds: 10, payout: 1000 }),
+    line({ key: 'next', funded: true, payout: 9999, month: '2026-12' }),
+    line({ key: 'm1', book: 'mpg', source: 'rating', contactId: 'a', temperature: 'hot', odds: 60, payout: null }),
+    line({ key: 'm2', book: 'mpg', source: 'rating', contactId: 'b', temperature: 'warm', odds: 30, payout: null }),
+    line({ key: 'm3', book: 'mpg', source: 'rating', contactId: 'z', temperature: 'hot', odds: 60, payout: null }),
+  ]
+
+  it('splits Bayway into funded, closing and a lead range', () => {
+    const f = forecastLayers(lines, '2026-11')
+    expect(f.funded).toBe(4000)
+    expect(f.closing).toBe(1900 + 3000)
+    expect(f.closingNames).toEqual(['Grant', 'Wells'])
+    expect(f.leadsLow).toBe(600)
+    expect(f.leadsHigh).toBe(1000)
+    expect(f.leadCount).toBe(3)
+    expect(f.low).toBe(4000 + 4900 + 600)
+    expect(f.high).toBe(4000 + 4900 + 1000)
+  })
+
+  it('counts MPG in accounts, skipping ratings already approved', () => {
+    const f = forecastLayers(lines, '2026-11', { activated: 1, approved: 1, approvedIds: new Set(['z']) })
+    expect(f.mpg).toMatchObject({ activated: 1, approved: 1, low: 2.6, high: 2.9, dollarsLow: null, dollarsHigh: null })
+  })
+
+  it('prices MPG once every line has a payout', () => {
+    const priced = lines.map((l) => (l.book === 'mpg' ? { ...l, payout: 200 } : l))
+    const f = forecastLayers(priced, '2026-11', { activated: 1 })
+    expect(f.mpg.dollarsLow).toBe(200 + 120 + 120)
+    expect(f.mpg.dollarsHigh).toBe(200 + 120 + 60 + 120)
+  })
+
+  it('reads only the month asked for, and handles nothing', () => {
+    expect(forecastLayers(lines, '2026-12').funded).toBe(9999)
+    expect(forecastLayers([], '2026-11')).toMatchObject({ funded: 0, closing: 0, low: 0, high: 0, closingNames: [], mpg: { low: 0, high: 0 } })
   })
 })

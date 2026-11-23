@@ -1,32 +1,36 @@
-// The Overview dashboard: this month at a glance across MPG and Bayway.
-//   Row 1  KPI cards: gross commission (MPG view: residual), closed this
-//          month, calls this month, pipeline value (MPG view: open leads)
-//   Row 2  Activity & Production (30 days) · Monthly goals gauge
-//   Row 3  Today's events · Pipeline mix · Lead sources
-//   Row 4  Income mix · Up Next · 90-day sprints
-// Numbers come from overviewDash.js; this file fetches and draws.
+// The Overview dashboard (redesign, spec 2026-11-22): the month and the
+// whole book. Workbench owns today's order of work; Overview shows its counts.
+//   Top     Header with the summary line, sync and Open Workbench
+//           Your day (work lists, meetings) · This week's focus + month goals
+//           The forecast for both books
+//   Below   Activity, pipeline mix, lead sources and sprints, until the
+//           later build steps replace them (A5–A10)
+// Numbers come from overviewDash.js, forecast.js and workLists.js.
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, isDemoMode } from '../lib/supabase'
 import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
-import TodayAgenda from '../components/TodayAgenda'
 import { demoBayPipeline, demoMpgLeads } from '../lib/demoData'
 import BizBadge from '../components/BizBadge'
-import PersonLink from '../components/PersonLink'
-import Icon from '../components/Icon'
-import ForecastCard from '../components/ForecastCard'
 import WeeklyFocusCard from '../components/WeeklyFocusCard'
-import PageHeader from '../components/PageHeader'
+import PageHeader, { SyncDot } from '../components/PageHeader'
+import { YourDay, MonthGoals, ForecastBoth, kMoney } from '../components/OverviewTop'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useForecast } from '../lib/useForecastInputs'
-import { urgentCount, reasonText } from '../lib/priorityQueue'
+import { forecastLayers, forecastByMonth, monthKeyOf } from '../lib/forecast'
+import { useDialList } from '../lib/useDialList'
+import { useWorkLane } from '../lib/useWorkLane'
+import { useLeadRatings } from '../lib/useLeadRatings'
+import { withRatings } from '../lib/leadRatings'
+import { buildDialList } from '../lib/dialList'
+import { buildThemeList } from '../lib/dialThemes'
+import { buildWorkGroups } from '../lib/workbench'
+import { workLists, freshLead } from '../lib/workLists'
 import { deriveAlert } from '../lib/overview'
 import { MPG_LEAD_FLOW } from '../lib/pipeline'
 import { pipelineKpis } from '../lib/pipelineView'
-import { formatPhone, telHref } from '../lib/phone'
-import { callAttrs } from '../lib/pendingCall'
-import { targetsFor, monthWindow, sprintWindow, formatValue, MPG_SPRINT } from '../lib/reports'
+import { targetsFor, monthWindow, sprintWindow, MPG_SPRINT } from '../lib/reports'
 import { fetchLoanBundle } from '../lib/loansData'
 import { loanStats } from '../lib/loans'
 import { todayKey } from '../lib/overviewCards'
@@ -36,15 +40,14 @@ import {
   ACT_CHART,
   prevMonthWindow,
   monthValues,
-  kpiCards,
   activitySeries,
   activityChart,
-  monthlyGoals,
+  goalRows,
+  mpgSubmittedThisMonth,
+  mpgApprovedThisMonth,
   pipelineMix,
   topSources,
-  incomeMix,
   sprintPace,
-  fmtMoney,
   fundedLoanDeals,
 } from '../lib/overviewDash'
 import { friendlyError } from '../lib/friendlyError'
@@ -56,11 +59,6 @@ const SHORT_STAGE = { 'Application/Estimate Sent': 'App/Estimate Sent', 'Applica
 // MPG's working stages, Not Contacted to Approved (Closed and Nurture are off the mix).
 const MPG_MIX_STAGES = MPG_LEAD_FLOW.slice(0, 5)
 const MPG_MIX_COLORS = ['#CDEBF8', '#7CCBEB', '#26ABE0', '#0F7AA8', '#1F2A5C']
-const STATUS_COLOR = { hit: 'var(--chrome)', pace: 'var(--bay)', behind: '#F79009' }
-const STATUS_LABEL = { hit: 'Hit', pace: 'On pace', behind: 'Behind' }
-const DELTA_INK = { up: 'var(--pos-ink)', down: 'var(--neg-ink)', flat: 'var(--text)' }
-const KPI_INK = { bay: 'var(--bay-ink)', mpg: 'var(--mpg-ink)', chrome: 'var(--chrome)', neutral: '#344054' }
-const KPI_BAR = { bay: 'var(--bay)', mpg: 'var(--mpg)', chrome: 'var(--chrome)', neutral: 'var(--muted)' }
 const HEALTH_COLUMNS = ', stage_since, crm_created_at, last_outbound_call_at, open_task_count, oldest_open_due_at'
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -132,43 +130,6 @@ function AlertBanner({ alert }) {
     >
       {alert.text}
     </div>
-  )
-}
-
-// ---- Row 1: KPI cards ------------------------------------------------------------
-
-function KpiCard({ card }) {
-  const value = card.unit === 'currency' ? formatValue(card.value, 'currency') : Number(card.value || 0).toLocaleString()
-  return (
-    <section data-kpi={card.id} className="cc-card flex min-w-0 flex-col overflow-hidden">
-      <div className="px-3.5 pb-3 pt-3 sm:px-[18px] sm:pb-3.5 sm:pt-4">
-        <div className="hidden items-center justify-between sm:flex">
-          <span className="grid h-10 w-10 place-items-center rounded-lg border border-line" style={{ color: KPI_INK[card.tone] }}>
-            <Icon name={card.icon} size={20} />
-          </span>
-          {card.tag && (
-            <span
-              className="rounded-md border px-[7px] py-px text-micro font-semibold"
-              title={card.tag === 'Entered' ? 'Typed into Reports' : card.tag === 'Est. from Arive' ? 'Estimated from the Arive loan import' : 'From synced CRM data'}
-              style={card.tag === 'Entered' ? { borderColor: 'var(--warn-line)', background: 'var(--warn-bg)', color: 'var(--warn-ink)' } : { borderColor: 'var(--line2)', background: 'var(--panel2)', color: 'var(--muted)' }}
-            >
-              {card.tag}
-            </span>
-          )}
-        </div>
-        <div className="line-clamp-2 text-body text-muted sm:mt-3.5 sm:text-ui">{card.label}</div>
-        <div className="num mt-1 text-lead font-semibold tracking-[-0.4px] sm:text-title sm:tracking-[-0.6px]">{value}</div>
-        <div className="mt-2.5">
-          <Bar pct={card.pct} color={KPI_BAR[card.tone]} />
-        </div>
-      </div>
-      <div className="mt-auto flex items-center justify-between gap-2 border-t border-line bg-panel2 px-3.5 py-2 text-caption sm:px-[18px] sm:py-2.5 sm:text-body">
-        <span className="flex-none font-semibold" style={{ color: DELTA_INK[card.delta.tone] }}>
-          {card.delta.text}
-        </span>
-        <span className="hidden truncate text-muted sm:inline">{card.foot}</span>
-      </div>
-    </section>
   )
 }
 
@@ -270,64 +231,6 @@ function ActivityCard({ series, showProduction }) {
   )
 }
 
-// The arc fills to the share of goals hit or on pace, so 0% reads empty and
-// 100% reads full. Behind goals stay grey track; the legend counts them.
-function goalArc(counts) {
-  const total = counts.hit + counts.pace + counts.behind
-  if (!total) return []
-  let at = 0
-  return ['hit', 'pace']
-    .filter((k) => counts[k] > 0)
-    .map((k) => {
-      const len = (counts[k] / total) * 100
-      const seg = { status: k, dash: `${len.toFixed(2)} ${(100 - len).toFixed(2)}`, offset: (-at).toFixed(2) }
-      at += len
-      return seg
-    })
-}
-
-function GoalsCard({ model }) {
-  const segs = goalArc(model.counts)
-  return (
-    <Card title="Monthly Goals" link={{ to: '/reports', label: 'Reports' }}>
-      <div className="flex justify-center px-5 pt-4">
-        <svg width="260" height="146" viewBox="0 0 260 146" role="img" aria-label={`Monthly goals: ${model.onPace}% on pace`}>
-          <path d="M20 130 A110 110 0 0 1 240 130" pathLength="100" fill="none" stroke="#F2F4F7" strokeWidth="26" />
-          {segs.map((s) => (
-            <path key={s.status} d="M20 130 A110 110 0 0 1 240 130" pathLength="100" fill="none" stroke={STATUS_COLOR[s.status]} strokeWidth="26" strokeDasharray={s.dash} strokeDashoffset={s.offset} />
-          ))}
-          <text x="130" y="108" textAnchor="middle" fontSize="30" fontWeight="600" fill="#101828">{model.onPace}%</text>
-          <text x="130" y="130" textAnchor="middle" fontSize="12.5" fill="#475467">of monthly goals on pace</text>
-        </svg>
-      </div>
-      <div className="flex flex-col gap-[11px] px-5 pb-4 pt-2.5">
-        {model.goals.map((g) => (
-          <div key={g.id} data-goal={g.id} data-status={g.status}>
-            <div className="flex items-center gap-2 text-body">
-              <span className="h-[9px] w-[9px] flex-none rounded-full" style={{ background: STATUS_COLOR[g.status] }} title={STATUS_LABEL[g.status]} />
-              <span className="flex-1 font-medium">{g.label}</span>
-              <span className="num text-muted">
-                {g.unit === 'currency' ? `${fmtMoney(g.value)} / ${fmtMoney(g.target)}` : `${g.value.toLocaleString()} / ${g.target.toLocaleString()}`}
-              </span>
-            </div>
-            <div className="ml-[17px] mt-[5px]">
-              <Bar pct={g.pct} color={STATUS_COLOR[g.status]} h={5} />
-            </div>
-          </div>
-        ))}
-        <div className="mt-0.5 flex gap-3.5 text-caption text-dim">
-          {['hit', 'pace', 'behind'].map((s) => (
-            <span key={s} className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[s] }} />
-              {STATUS_LABEL[s]} {model.counts[s]}
-            </span>
-          ))}
-        </div>
-      </div>
-    </Card>
-  )
-}
-
 // ---- Row 3: Pipeline mix, Lead sources ---------------------------------------------
 
 function Donut({ slices, size = 150, center, sub, label }) {
@@ -414,89 +317,7 @@ function SourcesCard({ biz, sources }) {
   )
 }
 
-// ---- Row 4: Income mix, Up Next, Sprints --------------------------------------------
-
-function IncomeCard({ model, biz }) {
-  const slices = []
-  if (model.total > 0) {
-    if (model.commission > 0) slices.push({ key: 'bay', pct: model.share * 100, offset: 0, color: 'var(--bay)' })
-    if (model.residual > 0) slices.push({ key: 'mpg', pct: (1 - model.share) * 100, offset: -model.share * 100, color: 'var(--mpg)' })
-  }
-  const rows = [
-    biz !== 'mpg' && { key: 'bay', label: 'Bayway commission', value: model.commission, color: 'var(--bay)' },
-    biz !== 'bay' && { key: 'mpg', label: 'MPG residual', value: model.residual, color: 'var(--mpg)' },
-  ].filter(Boolean)
-  return (
-    <Card title="Income Mix" sub={`This month · ${model.pct}% of ${fmtMoney(model.goal)} goal`} link={{ to: '/reports', label: 'Reports' }}>
-      <div className="flex items-center gap-5 px-5 py-[18px]">
-        {slices.length > 1 ? (
-          <Donut slices={slices} size={130} center={fmtMoney(model.total)} label="Income by book" />
-        ) : (
-          <div className="flex w-[130px] flex-none flex-col gap-2">
-            <div className="num text-title font-semibold tracking-[-0.6px]">{fmtMoney(model.total)}</div>
-            <Bar pct={model.pct} color={biz === 'mpg' ? 'var(--mpg)' : biz === 'bay' ? 'var(--bay)' : 'var(--chrome)'} />
-            <div className="num text-body text-muted">{model.pct}% of goal</div>
-          </div>
-        )}
-        <div className="flex flex-1 flex-col gap-3 text-body">
-          {rows.map((r) => (
-            <div key={r.key}>
-              <div className="flex items-center gap-2">
-                <span className="h-[9px] w-[9px] rounded-sm" style={{ background: r.color }} />
-                {r.label}
-              </div>
-              <div className="num ml-[17px] mt-0.5 text-lead font-semibold">{formatValue(r.value, 'currency')}</div>
-            </div>
-          ))}
-          <div className="text-body text-muted">Annualized {fmtMoney(model.annualized)}</div>
-        </div>
-      </div>
-      <div className="mx-5 mb-4 mt-auto text-caption text-dim">
-        {!model.fromArive ? 'Entered in Reports' : biz === 'all' ? 'Commission estimated from Arive · residual entered in Reports' : 'Estimated from Arive'}
-      </div>
-    </Card>
-  )
-}
-
-function UpNextCard({ queue, loading, error }) {
-  const top = queue.slice(0, 4)
-  return (
-    <Card
-      title="Up Next"
-      sub={loading ? 'Loading…' : `${queue.length} to work · ${urgentCount(queue)} need action now`}
-      link={{ to: '/workbench', label: 'Workbench' }}
-    >
-      {error && <div className="px-5 py-6 text-center text-body text-muted">{error}</div>}
-      {!loading && !error && top.length === 0 && <div className="px-5 py-8 text-center text-body text-muted">Nobody slipping. Nice work.</div>}
-      <div className="pb-2 pt-1">
-        {top.map((r) => {
-          const tel = telHref(r.phone)
-          const urgent = r.bucket === 'reached_out' || r.bucket === 'new_lead'
-          return (
-            <div key={r.id} data-up-next className="flex items-center gap-2.5 border-b border-hoverbg px-5 py-[9px] last:border-b-0">
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <BizBadge biz={r.business_id} />
-                  <PersonLink id={r.id} url={r.crm_profile_url} className="min-w-0 truncate text-ui font-semibold">
-                    {r.name || '(no name)'}
-                  </PersonLink>
-                </div>
-                <div className="mt-0.5 truncate text-body font-semibold" style={{ color: urgent ? 'var(--neg-ink)' : 'var(--text)' }}>
-                  {reasonText(r)}
-                </div>
-              </div>
-              {tel && (
-                <a href={tel} {...callAttrs({ id: r.id, book: r.business_id, name: r.name })} aria-label={`Call ${r.name || 'lead'}`} title={`Call ${formatPhone(r.phone)}`} className="grid h-[34px] w-[34px] flex-none place-items-center rounded-lg bg-[color:var(--chrome)] text-white hover:opacity-90">
-                  <Icon name="phone" size={15} strokeWidth={1.9} />
-                </a>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </Card>
-  )
-}
+// ---- Sprints ---------------------------------------------------------------------
 
 function SprintCard({ model }) {
   const sub = model.ended
@@ -644,23 +465,38 @@ function useOverviewData(biz) {
   return { data, loading, error }
 }
 
-function buildView(biz, data) {
+function buildView(biz, data, now = Date.now()) {
   const inBook = (b) => biz === 'all' || b === biz
-  const now = Date.now()
   const activities = data.activities.filter((a) => inBook(a.business_id))
   const lb = data.loanBundle
   const stats = lb ? loanStats(lb.loans, lb.rates, { month: monthWindow(now), prev: prevMonthWindow(now), sprint: sprintWindow() }) : null
   const values = monthValues({ biz, metrics: data.metrics, deals: data.deals, activities: data.activities, pipeline: data.bayPipe, now, loanStats: stats })
+  const approvedIds = mpgApprovedThisMonth(data.mpgRows, now)
   return {
     alert: deriveAlert({ latestSync: data.latestSync, tasks: data.tasks, now }),
-    kpis: kpiCards({ biz, values, targets: data.targets, mpgRows: data.mpgRows }),
-    // Once loans are imported, chart closings are funded loans, like the KPI cards.
+    values,
+    approvedIds: new Set(approvedIds),
+    proposals: mpgSubmittedThisMonth(data.mpgRows, now),
+    // Once loans are imported, chart closings are funded loans, like the goals.
     series: activitySeries({ activities, pipeline: biz === 'mpg' ? [] : data.bayPipe, deals: biz === 'mpg' ? [] : stats ? fundedLoanDeals(lb.loans) : data.deals, now }),
-    goals: monthlyGoals({ biz, values, targets: data.targets, now }),
     sources: topSources(data.leads, biz, new Date(`${monthWindow(now).from}T00:00:00`).getTime()),
-    income: incomeMix({ values, targets: data.targets }),
     sprint: sprintPace({ biz, metrics: data.metrics, targets: data.targets, now, measured: stats ? { bay_funded_loans: stats.sprintFunded } : {} }),
   }
+}
+
+// Today's work lists, from the same builders and data Workbench uses.
+function useTodayLists(biz, rules) {
+  const dial = useDialList()
+  const work = useWorkLane()
+  const ratings = useLeadRatings()
+  const inBook = (book) => biz === 'all' || book === biz
+  const dialRows = useMemo(() => withRatings(dial.rows, ratings), [dial.rows, ratings])
+  const dialDue = buildDialList(dialRows, { now: dial.now, skips: dial.skips, inBook })
+  const theme = buildThemeList(dial.rows, { now: dial.now, skips: dial.skips, inBook })
+  const groups = buildWorkGroups({ pipeline: work.pipeline, mpgTasks: work.tasks, workItems: work.workItems, rules, now: dial.now })
+    .filter((g) => g.book == null || inBook(g.book))
+    .map((g) => ({ ...g, items: g.items.filter((it) => inBook(it.book)) }))
+  return { lists: workLists({ dial: dialDue, groups, theme, now: dial.now }), lead: freshLead(dialDue, dial.now), now: dial.now }
 }
 
 export default function Overview() {
@@ -668,23 +504,49 @@ export default function Overview() {
   const { data, loading, error } = useOverviewData(biz)
   const pq = usePriorityQueue(biz)
   const forecast = useForecast()
+  const today = useTodayLists(biz, pq.rules)
+  const now = Date.now()
   const view = useMemo(() => (data ? buildView(biz, data) : null), [biz, data])
+  const layers = useMemo(() => {
+    if (!view) return null
+    const opts = { activated: view.values.merchants, approved: view.approvedIds.size, approvedIds: view.approvedIds }
+    return {
+      this: forecastLayers(forecast.lines, monthKeyOf(now), opts),
+      next: forecastLayers(forecast.lines, monthKeyOf(now, 1)),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, forecast.lines])
+  const goals = useMemo(
+    () =>
+      view && layers
+        ? goalRows({ biz, values: view.values, targets: data.targets, extra: { proposals: view.proposals, closing: layers.this.closingNames.length, approved: view.approvedIds.size } })
+        : null,
+    [biz, view, layers, data],
+  )
+  const workCount = today.lists.reduce((n, l) => n + l.count, 0)
 
-  const subtitle =
-    biz === 'bay' ? 'Bayway view — mortgage only.'
-    : biz === 'mpg' ? 'MPG view — merchant services only.'
-    : 'This month across MPG and Bayway.'
+  const summary = layers
+    ? [
+        biz !== 'mpg' && `Bayway is tracking ${layers.this.low === layers.this.high ? kMoney(layers.this.low) : `${kMoney(layers.this.low)}–${kMoney(layers.this.high)}`}${data.targets.rev_gross_commission ? ` of ${kMoney(data.targets.rev_gross_commission)}` : ''}`,
+        biz !== 'bay' && `MPG expects ${layers.this.mpg.low === layers.this.mpg.high ? layers.this.mpg.low : `${layers.this.mpg.low}–${layers.this.mpg.high}`}${data.targets.new_merchant_accounts ? ` of ${data.targets.new_merchant_accounts}` : ''} new accounts`,
+        `${workCount} ${workCount === 1 ? 'item' : 'items'} in Workbench`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null
 
   return (
     <div>
       <PageHeader
         eyebrow={dateLine()}
         title={`${greeting()}, Chandler`}
-        subtitle={subtitle}
+        subtitle={summary}
         actions={
-          <span className="flex min-h-[36px] items-center gap-2 rounded-lg border border-line2 px-3 text-body font-medium text-ink2">
-            <Icon name="calendar" size={16} />
-            {MONTH_NAMES[new Date().getMonth()]}
+          <span className="flex items-center gap-3">
+            <SyncDot />
+            <Link to="/workbench" className="inline-flex min-h-[40px] items-center rounded-lg bg-[color:var(--chrome)] px-4 text-body font-semibold text-white hover:opacity-90">
+              Open Workbench →
+            </Link>
           </span>
         }
       />
@@ -694,30 +556,35 @@ export default function Overview() {
       {!loading && !error && view && (
         <>
           <AlertBanner alert={view.alert} />
-          <WeeklyFocusCard />
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-[18px] xl:grid-cols-4">
-            {view.kpis.map((c) => (
-              <KpiCard key={c.id} card={c} />
-            ))}
+          <div className="mt-5 grid grid-cols-1 items-start gap-[18px] xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+            <YourDay lists={today.lists} lead={today.lead} now={today.now} />
+            <div className="flex min-w-0 flex-col gap-[18px]">
+              <WeeklyFocusCard className="" />
+              {goals && <MonthGoals model={goals} now={now} />}
+            </div>
+          </div>
+
+          <div className="mt-[18px]">
+            <ForecastBoth
+              layers={layers}
+              goals={{ bay: data.targets.rev_gross_commission, mpg: data.targets.new_merchant_accounts }}
+              biz={biz}
+              loading={forecast.loading}
+              error={forecast.error}
+              undated={forecastByMonth(forecast.lines, monthKeyOf(now)).undated.count}
+              now={now}
+            />
           </div>
 
           <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] xl:grid-cols-3">
             <ActivityCard series={view.series} showProduction={biz !== 'mpg'} />
-            <GoalsCard model={view.goals} />
+            <SprintCard model={view.sprint} />
           </div>
 
-          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2 xl:grid-cols-3">
-            <TodayAgenda />
+          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2">
             <PipelineMixCard biz={biz} rows={biz === 'mpg' ? data.mpgRows : data.bayPipe} rules={pq.rules} />
             <SourcesCard biz={biz} sources={view.sources} />
-          </div>
-
-          <div className="mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2 xl:grid-cols-3">
-            <ForecastCard forecast={forecast} biz={biz} />
-            <IncomeCard model={view.income} biz={biz} />
-            <UpNextCard queue={pq.queue} loading={pq.loading} error={pq.error} />
-            <SprintCard model={view.sprint} />
           </div>
         </>
       )}
