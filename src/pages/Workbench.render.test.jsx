@@ -331,6 +331,34 @@ describe('Workbench', () => {
     expect(files.textContent).not.toMatch(/\$\d/)
   })
 
+  it('wraps up the day: counts, what rolls to tomorrow, and Close the day saves it', async () => {
+    mobile = false
+    DATA.dayOn = true
+    DATA.day = {
+      day: 'today',
+      set_at: new Date().toISOString(),
+      lists: { calls: ['contact:c1'], files: ['mpg_task:t1', 'estimate:e1', 'application:a1'], partners: [] },
+      pulled_in: [],
+      wrap: { morning: { gap: 2640 } },
+    }
+    const host = await render()
+    await act(async () => host.querySelector('[data-wrap-open]').click())
+    const sheet = dialog()
+    expect(sheet.querySelector('[data-wrap]')).not.toBeNull()
+    expect(sheet.querySelector('[data-wrap-count="files"]').textContent).toContain('0 / 3')
+    expect(sheet.querySelector('[data-wrap-count="files"]').textContent).toContain('3 rolled')
+    const rolled = sheet.querySelector('[aria-label="Rolled to tomorrow"]').textContent
+    expect(rolled).toContain('Ana Inbound')
+    expect(rolled).toContain('Gil Estimate')
+    expect(sheet.querySelector('[aria-label="Tomorrow"]').textContent).toContain('first up: Ana Inbound')
+    await act(async () => button(sheet, 'Close the day').click())
+    const save = writes.find((w) => w.table === 'workbench_days' && w.op === 'update')
+    expect(save.body.closed_at).toMatch(/^\d{4}-/)
+    expect(save.body.wrap.morning).toEqual({ gap: 2640 })
+    expect(save.body.wrap.closed.rolled.map((r) => r.key)).toContain('estimate:e1')
+    expect(host.querySelector('[data-wrap-open]').textContent).toBe('Day closed')
+  })
+
   it('collapses the alerts and slipping groups into one Slipping strip', async () => {
     mobile = false
     const host = await render()

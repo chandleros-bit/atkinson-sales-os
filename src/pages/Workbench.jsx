@@ -37,6 +37,9 @@ import { workLists, freshLead, isRealtorTheme } from '../lib/workLists'
 import { valueIndex, atRisk, itemValue } from '../lib/workValue'
 import { pickNext, nextUpModel, itemKey } from '../lib/workNext'
 import { saveWorkItem } from '../lib/workItems'
+import { buildWrap, movedToday, wrapDue } from '../lib/dayWrap'
+import { Sheet, quickActionTone } from '../components/QuickActions'
+import { showToast } from '../components/Toaster'
 import { localDateKey } from '../lib/crmActions'
 import NextUpCard from '../components/NextUpCard'
 import { hardDates, hardDateTask, shortDay } from '../lib/bookFlags'
@@ -283,6 +286,89 @@ function SlippingStrip({ alerts, slipping, showBook, hideIds }) {
   )
 }
 
+// The end-of-day wrap (§14): today's counts, what moved, the month's gap
+// against this morning, what rolls to tomorrow, and a look at tomorrow.
+function WrapSheet({ model, closedAt, canClose, onClose, onCloseDay }) {
+  const [busy, setBusy] = useState(false)
+  const g = model.gap
+  return (
+    <Sheet title={`${DAYS[new Date().getDay()]} wrap`} subtitle={closedAt ? `Day closed at ${clock(closedAt)}` : 'Close the day when you are done'} t={quickActionTone('bay')} onClose={onClose}>
+      <div data-wrap className="flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {model.counts.map((c) => (
+            <div key={c.key} data-wrap-count={c.key} className="rounded-lg border border-line px-3 py-2">
+              <div className="text-caption text-muted">{c.label}</div>
+              <div className="num text-lead font-bold">{c.done == null ? c.total : `${c.done} / ${c.total}`}</div>
+              <div className="text-caption text-muted">{c.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <section aria-label="Moved a stage today">
+          <div className="mb-1.5 text-caption font-semibold text-muted">Moved a stage today · {model.moved.length}</div>
+          {model.moved.length === 0 && <div className="text-body text-muted">Nobody changed stage today.</div>}
+          {model.moved.map((m) => (
+            <div key={m.id} className="flex gap-2 border-b border-hoverbg py-1.5 text-body last:border-b-0">
+              <span className="min-w-0 flex-1 truncate">
+                <b className="font-semibold">{m.name}</b> · now {m.stage}
+              </span>
+              {m.value && <span className="num font-semibold">{m.value}</span>}
+            </div>
+          ))}
+        </section>
+
+        {g.now != null && (
+          <div data-wrap-gap className="rounded-lg bg-panel2 px-3 py-2 text-body">
+            {g.now > 0 ? `Gap to goal ${money(g.now)}` : 'Goal covered'}
+            {g.morning != null && g.morning !== g.now && <span className="text-muted"> · was {g.morning > 0 ? money(g.morning) : 'covered'} this morning</span>}
+          </div>
+        )}
+
+        <section aria-label="Rolled to tomorrow">
+          <div className="mb-1.5 text-caption font-semibold text-muted">Rolled to tomorrow · {model.rolled.length} · they go first in their list</div>
+          {model.rolled.length === 0 && <div className="text-body text-muted">Everything got done.</div>}
+          {model.rolled.slice(0, 8).map((r) => (
+            <div key={r.key} className="flex gap-2 border-b border-hoverbg py-1.5 text-body last:border-b-0">
+              <span className="min-w-0 flex-1 truncate font-semibold">{r.name}</span>
+              <span className="text-muted">{r.list}</span>
+            </div>
+          ))}
+          {model.rolled.length > 8 && <div className="pt-1 text-caption text-muted">+{model.rolled.length - 8} more</div>}
+        </section>
+
+        <section aria-label="Tomorrow" className="rounded-lg bg-[#14171F] px-4 py-3 text-white">
+          <div className="text-ui font-bold">{model.tomorrow.weekday || 'Tomorrow'}</div>
+          <div className="mt-1 text-body text-[#DDE1E8]">
+            {model.tomorrow.theme ? `${model.tomorrow.theme} day. ` : ''}
+            {model.tomorrow.rolled ? `${model.tomorrow.rolled} rolled over` : 'Nothing rolled over'}
+            {model.tomorrow.first.length ? `; first up: ${model.tomorrow.first.join(', then ')}.` : '.'}
+          </div>
+        </section>
+
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="min-h-[44px] flex-1 rounded-lg border border-line2 text-body font-semibold">
+            Back to Workbench
+          </button>
+          <button
+            type="button"
+            disabled={busy || !canClose}
+            onClick={async () => {
+              setBusy(true)
+              await onCloseDay(model)
+              setBusy(false)
+            }}
+            className="min-h-[44px] flex-1 rounded-lg text-body font-semibold text-white disabled:opacity-50"
+            style={{ background: 'var(--text)' }}
+          >
+            {closedAt ? 'Close the day again' : 'Close the day'}
+          </button>
+        </div>
+        {!canClose && <div className="text-caption text-muted">The day&apos;s order isn&apos;t saved yet, so there&apos;s nothing to close.</div>}
+      </div>
+    </Sheet>
+  )
+}
+
 // ---- Page ------------------------------------------------------------------------
 
 export default function Workbench() {
@@ -319,8 +405,11 @@ export default function Workbench() {
   // A call snoozed with Not today leaves the Up Next rows too.
   const built = workLists({ dial: dialDue, groups, theme: themeToday, queue: queue.filter((r) => !dial.skips.has(r.id)), now })
   // The day's order (decision 1): saved on the first load after 6 AM, held all day.
-  const ready = !dial.loading && !work.loading && !queueLoading && !dial.error && !work.error
-  const day = useWorkbenchDay({ lists: built, ready, create: !assistant })
+  const layers = forecastLayers(forecast.lines, monthKeyOf(now))
+  const gap = biz === 'mpg' || forecast.loading ? null : target - (layers.funded + layers.closing + layers.leadsLow)
+  // Wait for the forecast too, so the morning gap is saved with the order.
+  const ready = !dial.loading && !work.loading && !queueLoading && !forecast.loading && !dial.error && !work.error
+  const day = useWorkbenchDay({ lists: built, ready, create: !assistant, morning: gap != null ? { gap } : null })
   const { lists, newSince } = applyDayOrder(built, day.saved)
   const [calls, files, partners] = lists
   // The rows each card draws follow the same order: New since items stay out,
@@ -350,8 +439,19 @@ export default function Workbench() {
   const hard = biz === 'mpg' ? [] : hardDates(loans, now)
   const index = useMemo(() => valueIndex(forecast), [forecast])
   const risk = atRisk(lists, index)
-  const layers = forecastLayers(forecast.lines, monthKeyOf(now))
-  const gap = biz === 'mpg' || forecast.loading ? null : target - (layers.funded + layers.closing + layers.leadsLow)
+  const [wrapping, setWrapping] = useState(false)
+  const wrapModel = wrapping
+    ? buildWrap({
+        saved: day.saved,
+        lists,
+        filesDone: progress.done,
+        callsLogged: touchedToday,
+        moved: movedToday([...(dial.rows || []), ...(work.pipeline || [])], { now, valueOf: (id) => itemValue({ id }, index) }),
+        hardOpen: hard.length,
+        gapNow: gap,
+        now,
+      })
+    : null
   const d = new Date(now)
 
   // ---- Next up: the first open item of the list being worked (workNext.js).
@@ -466,6 +566,17 @@ export default function Workbench() {
               Priority Leads
             </Link>
           )}
+          {!assistant && (
+            <button
+              type="button"
+              data-wrap-open
+              onClick={() => setWrapping(true)}
+              className={`min-h-[38px] rounded-lg px-3.5 text-body font-semibold ${wrapDue(lists, now) && !day.saved?.closed_at ? 'text-white' : 'border border-line2 text-ink2'}`}
+              style={wrapDue(lists, now) && !day.saved?.closed_at ? { background: 'var(--chrome)' } : undefined}
+            >
+              {day.saved?.closed_at ? 'Day closed' : 'Wrap up the day'}
+            </button>
+          )}
           <VoiceTask defaultBook={biz === 'mpg' ? 'mpg' : 'bay'} onAdded={work.reload} />
           <button type="button" onClick={() => setAdding(true)} className="min-h-[38px] rounded-lg border border-line2 px-3.5 text-body font-semibold text-ink2">
             + Work item
@@ -563,6 +674,22 @@ export default function Workbench() {
           onClose={() => {
             setDialRun(null)
             dial.reload()
+          }}
+        />
+      )}
+      {wrapping && wrapModel && (
+        <WrapSheet
+          model={wrapModel}
+          closedAt={day.saved?.closed_at || null}
+          canClose={!!day.saved}
+          onClose={() => setWrapping(false)}
+          onCloseDay={async (m) => {
+            const { error } = await day.closeDay(m)
+            if (error) showToast({ tone: 'error', text: `Couldn't close the day: ${error.message}` })
+            else {
+              showToast({ tone: 'ok', text: 'Day closed. Unfinished items go first tomorrow.' })
+              setWrapping(false)
+            }
           }}
         />
       )}

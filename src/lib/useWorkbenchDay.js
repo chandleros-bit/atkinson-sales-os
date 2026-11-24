@@ -9,9 +9,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase, isDemoMode } from './supabase'
 import { initialOrder, isOrderTime, dayKeyOf } from './dayOrder'
 
-const COLS = 'day, set_at, lists, pulled_in, closed_at'
+const COLS = 'day, set_at, lists, pulled_in, closed_at, wrap'
 
-export function useWorkbenchDay({ lists = null, ready = false, create = false } = {}) {
+// morning: { gap } saved with the order, for the wrap's "was $X this morning".
+export function useWorkbenchDay({ lists = null, ready = false, create = false, morning = null } = {}) {
   const [state, setState] = useState({ today: null, last: null, loaded: isDemoMode, error: null })
   const creating = useRef(false)
   const day = dayKeyOf()
@@ -42,7 +43,7 @@ export function useWorkbenchDay({ lists = null, ready = false, create = false } 
     if (!create || !ready || !lists || !state.loaded || state.error || state.today || creating.current || isDemoMode) return
     if (!isOrderTime()) return
     creating.current = true
-    const row = { day, lists: initialOrder(lists, state.last), pulled_in: [] }
+    const row = { day, lists: initialOrder(lists, state.last), pulled_in: [], wrap: morning ? { morning } : null }
     ;(async () => {
       try {
         // Another tab may have set it first: keep theirs and read it back.
@@ -53,6 +54,7 @@ export function useWorkbenchDay({ lists = null, ready = false, create = false } 
         creating.current = false
       }
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [create, ready, lists, state, day])
 
   // Pull New since items into today's lists, after the saved order.
@@ -66,5 +68,18 @@ export function useWorkbenchDay({ lists = null, ready = false, create = false } 
     [state.today, day],
   )
 
-  return { saved: state.today, loaded: state.loaded, pullIn }
+  // Close the day (step 7): save the wrap beside the morning numbers.
+  const closeDay = useCallback(
+    async (closed) => {
+      if (!state.today) return { error: { message: "Today's order isn't saved yet." } }
+      const wrap = { ...(state.today.wrap || {}), closed }
+      const closed_at = new Date().toISOString()
+      const res = await supabase.from('workbench_days').update({ closed_at, wrap }).eq('day', day)
+      if (!res?.error) setState((s) => ({ ...s, today: { ...s.today, closed_at, wrap } }))
+      return { error: res?.error || null }
+    },
+    [state.today, day],
+  )
+
+  return { saved: state.today, loaded: state.loaded, pullIn, closeDay }
 }
