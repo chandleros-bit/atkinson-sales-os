@@ -12,10 +12,14 @@
 //                Trash (Lost)
 //   custom       Done
 // A CRM Done is also recorded in work_items, for the Work progress bar.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase, isDemoMode } from '../lib/supabase'
+import { useBorrowerDocs } from '../lib/useBorrowerDocs'
+import { docRows } from '../lib/docChecklist'
+import { TAG, REVIEW_STEPS, reviewDone, reminderLinks, fileChips, doneChoices } from '../lib/fileSheet'
 import { invokeCrmAction, useWritebackFlags } from '../lib/writeback'
 import { buildActionRequest, followUpDate, summarizeResult, LOST_REASONS, LOST_WARNING } from '../lib/crmActions'
-import { saveWorkItem, WAITING_ON } from '../lib/workItems'
+import { saveWorkItem, loadChecklist, saveChecklist, WAITING_ON } from '../lib/workItems'
 import BizBadge from './BizBadge'
 import { Pill } from './HealthPills'
 import { useContactTasks } from '../lib/useContactTasks'
@@ -61,15 +65,15 @@ function StatusPill({ status }) {
   )
 }
 
-// canReview: write-back to FUB is on (Review complete writes there).
-// onReview(outcome, reason, notes): runs the CRM step; the lane records done.
-function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
-  const { role } = useAuth() || {}
+// The open-file sheet (Workbench v2 spec §11): one Files item with everything
+// to work it. canReview: write-back to FUB is on (stage outcomes write there).
+// info: { loan, value } from Workbench (value hidden for the assistant).
+// onFinish(choice, reason, notes, next): runs a "When done" choice; the lane
+// records it done, and with next opens the next file.
+function FileSheet({ item, info, canReview, assistant, onFinish, onClose, onSaved, hasNext }) {
   const [status, setStatus] = useState(item.status === 'waiting' || item.status === 'working' ? item.status : 'open')
-  const [outcome, setOutcome] = useState(null)
+  const [choice, setChoice] = useState(null)
   const [reason, setReason] = useState(null)
-  const reviewable = item.kind === 'application'
-  const statuses = reviewable ? [...STATUS, ['review', 'Review complete']] : STATUS
   const [who, setWho] = useState(item.waitingOn || '')
   const [back, setBack] = useState(item.checkBackOn ? 'pick' : 'tomorrow')
   const [picked, setPicked] = useState(item.checkBackOn || '')
@@ -78,16 +82,44 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('update')
   const tasks = useContactTasks(item.contactId)
+  const bay = item.book === 'bay' && !!item.contactId
+  const docs = useBorrowerDocs(bay ? item.contactId : null)
+  const needed = docRows(docs.docs || []).filter((d) => d.status === 'needed')
+  const person = usePersonContact(item.contactId)
+  const links = reminderLinks({ name: item.name, phone: person?.phone, email: person?.email, docs: needed.map((d) => d.name) })
+  const [checks, setChecks] = useState({})
+  useEffect(() => {
+    if (item.kind !== 'application') return
+    let live = true
+    loadChecklist(item).then((c) => live && setChecks(c || {}))
+    return () => {
+      live = false
+    }
+  }, [item])
+  const toggleStep = async (key) => {
+    const next = { ...checks, [key]: !checks[key] }
+    setChecks(next)
+    const { error: err } = await saveChecklist(item, next)
+    if (err) setError(`Couldn't save the step: ${err.message}`)
+  }
+
+  const choices = [
+    ...doneChoices(item),
+    ...(item.kind === 'application' ? OUTCOMES.filter((o) => !['pre_approved', 'disclosed'].includes(o.key)).map((o) => ({ key: o.key, label: o.label, action: 'stage', target: o.key, explain: o.done(item.name) + '.' })) : []),
+  ]
+  const picked_ = choices.find((c) => c.key === choice)
+  const needsCrm = picked_ && (picked_.action === 'stage' || picked_.action === 'complete')
+
+  const finish = (next) => {
+    if (!picked_) return setError('Pick what happened under When done.')
+    if (picked_.target === 'lost' && !reason) return setError('Pick why it goes to the trash.')
+    if (needsCrm && !canReview) return setError(assistant ? 'Chandler sends this to the CRM.' : "Write-back is off, so this can't be sent.")
+    setError(null)
+    onFinish(picked_, reason, notes.trim() || null, next)
+  }
 
   const save = async () => {
     if (busy) return
-    if (status === 'review') {
-      if (!outcome) return setError('Pick the review outcome.')
-      if (outcome === 'lost' && !reason) return setError('Pick why it goes to the trash.')
-      setError(null)
-      onReview(OUTCOMES.find((o) => o.key === outcome), reason, notes.trim() || null)
-      return
-    }
     let patch = { status, notes: notes.trim() || null }
     if (status === 'waiting') {
       let day
@@ -111,14 +143,37 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
     onSaved()
   }
 
+  const chips = fileChips(item, info?.loan)
+  const value = !assistant ? info?.value : null
   return (
-    <Sheet title="Update work item" subtitle={[item.title, item.name].filter(Boolean).join(' · ')} t={quickActionTone(item.book)} onClose={onClose}>
+    <Sheet title={[item.name, item.title].filter(Boolean).join(' · ') || 'Work item'} subtitle={[TAG[item.kind] || 'Task', 'Files', item.book === 'mpg' ? 'MPG' : 'Bayway', item.minutes && `~${item.minutes} min`].filter(Boolean).join(' · ')} t={quickActionTone(item.book)} onClose={onClose}>
+      <div data-file-sheet={item.key} className="-mt-2 mb-3 flex flex-col gap-2">
+        {value && (
+          <div className="text-body text-muted">
+            {value.exact ? 'Est. commission' : 'Est. value'} <b className="num text-ui text-[color:var(--text)]">{value.text}</b>
+          </div>
+        )}
+        {chips.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 text-caption">
+            {chips.map((c) => (
+              <span key={c} className="rounded-md bg-panel2 px-2 py-1">
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+        {person?.crm_profile_url && (
+          <a href={person.crm_profile_url} target="_blank" rel="noreferrer" className="text-body font-semibold text-[color:var(--chrome)]">
+            Open in {item.book === 'mpg' ? 'Zoho' : 'FUB'}
+          </a>
+        )}
+      </div>
       {item.contactId && (
-        <div className="-mt-3 mb-3">
+        <div className="mb-3">
           <PopupTabs
             label="Work item"
             tabs={[
-              ['update', 'Update', null],
+              ['update', 'File', null],
               ['tasks', 'Tasks', taskCount(tasks)],
             ]}
             tab={tab}
@@ -127,13 +182,16 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
         </div>
       )}
       {tab === 'tasks' && <ContactTasks businessId={item.book} contactId={item.contactId} contactName={item.name} tasks={tasks} />}
-      <div className={`flex flex-col gap-3 ${tab === 'update' ? '' : 'hidden'}`}>
-        <div className={`grid gap-2 ${reviewable ? 'grid-cols-2' : 'grid-cols-3'}`}>
-          {statuses.map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)} className="min-h-[40px] rounded-lg border text-body font-semibold" style={chip(status === k)}>
-              {label}
-            </button>
-          ))}
+      <div className={`flex flex-col gap-4 ${tab === 'update' ? '' : 'hidden'}`}>
+        <div>
+          <div className="mb-1.5 text-caption font-semibold text-muted">Status</div>
+          <div className="grid grid-cols-3 gap-2">
+            {STATUS.map(([k, label]) => (
+              <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)} className="min-h-[40px] rounded-lg border text-body font-semibold" style={chip(status === k)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         {status === 'waiting' && (
           <>
@@ -157,43 +215,53 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
                 ))}
               </div>
               {back === 'pick' && (
-                <input
-                  type="date"
-                  aria-label="Check back on"
-                  value={picked}
-                  onChange={(e) => setPicked(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body"
-                />
+                <input type="date" aria-label="Check back on" value={picked} onChange={(e) => setPicked(e.target.value)} className="mt-2 w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body" />
               )}
             </div>
           </>
         )}
-        {status === 'review' && (
-          <div>
-            <div className="mb-1.5 text-caption font-semibold text-muted">Outcome</div>
-            <div className="grid grid-cols-2 gap-2">
-              {OUTCOMES.map((o) => (
-                <button key={o.key} type="button" aria-pressed={outcome === o.key} onClick={() => setOutcome(o.key)} className="min-h-[40px] rounded-lg border text-body font-semibold" style={chip(outcome === o.key)}>
-                  {o.label}
-                </button>
-              ))}
+
+        {bay && needed.length > 0 && (
+          <section aria-label="Missing documents" data-missing-docs className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--warn-line)' }}>
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2" style={{ background: 'var(--warn-bg)' }}>
+              <span className="text-body font-bold">Missing documents · {needed.length}</span>
+              <span className="flex-1 text-caption" style={{ color: 'var(--warn-ink)' }}>
+                {needed[0].days != null ? `oldest asked for ${needed[0].days} days ago` : ''}
+              </span>
+              {links.sms && (
+                <a href={links.sms} className="rounded-lg px-2.5 py-1.5 text-caption font-semibold text-white" style={{ background: 'var(--warn-ink)' }}>
+                  Text a reminder for all {needed.length}
+                </a>
+              )}
+              {links.email && (
+                <a href={links.email} className="rounded-lg border px-2.5 py-1.5 text-caption font-semibold" style={{ borderColor: 'var(--warn-line)', color: 'var(--warn-ink)' }}>
+                  Email it
+                </a>
+              )}
             </div>
-            {outcome === 'lost' && (
-              <div className="mt-3">
-                <div className="mb-1.5 text-caption font-semibold text-muted">Why?</div>
-                <div className="flex flex-wrap gap-2">
-                  {LOST_REASONS.map((r) => (
-                    <button key={r} type="button" aria-pressed={reason === r} onClick={() => setReason(r)} className="min-h-[36px] rounded-lg border px-3 text-body font-semibold" style={chip(reason === r)}>
-                      {r}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-2 text-caption text-muted">{LOST_WARNING}</div>
+            {needed.map((d) => (
+              <div key={d.id} className="flex gap-2 border-t px-3 py-1.5 text-body" style={{ borderColor: 'var(--warn-line)' }}>
+                <span className="flex-1">{d.name}</span>
+                <span className="text-caption" style={{ color: d.chase ? 'var(--warn-ink)' : 'var(--muted)' }}>{d.label}</span>
               </div>
-            )}
-            {!canReview && <div className="mt-2 text-caption text-[color:var(--neg-ink)]">{role === 'assistant' ? 'Chandler sends review outcomes to FollowUpBoss.' : "Write-back to FollowUpBoss is off, so the outcome can't be sent."}</div>}
-          </div>
+            ))}
+          </section>
         )}
+
+        {item.kind === 'application' && (
+          <section aria-label="Review steps" data-review-steps>
+            <div className="mb-1.5 text-caption font-semibold text-muted">
+              Review · {reviewDone(checks)} of {REVIEW_STEPS.length}
+            </div>
+            {REVIEW_STEPS.map((s) => (
+              <label key={s.key} className="flex min-h-[34px] items-center gap-2.5 text-body">
+                <input type="checkbox" checked={!!checks[s.key]} onChange={() => toggleStep(s.key)} className="h-4 w-4" />
+                <span className={checks[s.key] ? 'text-muted line-through' : ''}>{s.label}</span>
+              </label>
+            ))}
+          </section>
+        )}
+
         <textarea
           aria-label="Work notes"
           placeholder="Notes: what's done, what's next"
@@ -202,22 +270,67 @@ function UpdateSheet({ item, canReview, onReview, onClose, onSaved }) {
           onChange={(e) => setNotes(e.target.value)}
           className="w-full rounded-lg border border-line2 bg-panel px-3 py-2 text-body"
         />
-        <div className="text-caption text-muted">
-          {status === 'review' ? 'The outcome goes to FollowUpBoss; notes stay in the dashboard.' : `Saved in the dashboard only, not in ${item.book === 'mpg' ? 'Zoho' : 'FollowUpBoss'}.`}
-        </div>
+        <div className="text-caption text-muted">Notes and status stay in the dashboard, not in {item.book === 'mpg' ? 'Zoho' : 'FollowUpBoss'}.</div>
+
+        <section aria-label="When done" className="flex flex-col gap-2 border-t border-line pt-3">
+          <div className="text-caption font-semibold text-muted">When done</div>
+          <div className="flex flex-wrap gap-2">
+            {choices.map((c) => (
+              <button key={c.key} type="button" aria-pressed={choice === c.key} onClick={() => setChoice(c.key)} className="min-h-[38px] rounded-lg border px-3 text-body font-semibold" style={chip(choice === c.key)}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+          {picked_ && <p className="rounded-lg bg-panel2 px-3 py-2 text-body text-muted">{picked_.explain}</p>}
+          {picked_?.target === 'lost' && (
+            <div>
+              <div className="mb-1.5 text-caption font-semibold text-muted">Why?</div>
+              <div className="flex flex-wrap gap-2">
+                {LOST_REASONS.map((r) => (
+                  <button key={r} type="button" aria-pressed={reason === r} onClick={() => setReason(r)} className="min-h-[36px] rounded-lg border px-3 text-body font-semibold" style={chip(reason === r)}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-caption text-muted">{LOST_WARNING}</div>
+            </div>
+          )}
+        </section>
+
         {error && <div className="text-caption text-[color:var(--neg-ink)]">{error}</div>}
-        <button
-          type="button"
-          disabled={busy || (status === 'review' && !canReview)}
-          onClick={save}
-          className="min-h-[44px] rounded-lg text-body font-semibold text-white disabled:opacity-50"
-          style={{ background: 'var(--text)' }}
-        >
-          Save
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={busy} onClick={save} className="min-h-[44px] flex-1 rounded-lg border border-line2 px-3 text-body font-semibold disabled:opacity-50">
+            Save
+          </button>
+          <button type="button" disabled={!choice} onClick={() => finish(false)} className="min-h-[44px] flex-1 rounded-lg border border-line2 px-3 text-body font-semibold disabled:opacity-50">
+            Done
+          </button>
+          {hasNext && (
+            <button type="button" disabled={!choice} onClick={() => finish(true)} className="min-h-[44px] flex-1 rounded-lg px-3 text-body font-semibold text-white disabled:opacity-50" style={{ background: 'var(--text)' }}>
+              Done and next file
+            </button>
+          )}
+        </div>
       </div>
     </Sheet>
   )
+}
+
+// The person's phone, email and CRM link, for the reminder links and Open in FUB.
+function usePersonContact(id) {
+  const [p, setP] = useState(null)
+  useEffect(() => {
+    setP(null)
+    if (!id || isDemoMode) return
+    let live = true
+    Promise.resolve(supabase.from('v_people').select('id, phone, email, crm_profile_url').eq('id', id).maybeSingle())
+      .then((res) => live && setP(res?.data || null))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [id])
+  return p
 }
 
 // Two lines: what (title, status, rough time); who (the name opens the person
@@ -257,7 +370,7 @@ function WorkItemRow({ it, showBook, canDone, busy, onOpen, onUpdate, onFinish }
       </div>
       <div className="flex flex-none gap-1.5">
         <button type="button" onClick={onUpdate} className="min-h-[32px] rounded-lg border border-line2 px-2.5 text-body font-semibold text-ink2">
-          Update
+          Open
         </button>
         {finish && (
           <button
@@ -288,14 +401,27 @@ function GroupTitle({ g, count, children }) {
   )
 }
 
-export default function WorkLane({ groups, onChanged }) {
+// info(item) -> { loan, value } (Workbench). openKey / onOpenKey: Workbench can
+// open a file (Next up, Start first file); order: the Files items in the day's
+// order, for Done and next file.
+export default function WorkLane({ groups, onChanged, info = null, openKey = null, onOpenKey = null, order = null }) {
   const flags = useWritebackFlags()
   // The assistant login can't move stages (estimate sent, review outcomes).
   const { role } = useAuth() || {}
   const assistant = role === 'assistant'
   const [personId, setPersonId] = useState(null)
   const [picking, setPicking] = useState(null)
-  const [updating, setUpdating] = useState(null)
+  const [localOpen, setLocalOpen] = useState(null)
+  const openKeyNow = onOpenKey ? openKey : localOpen
+  const setOpen = (key) => (onOpenKey ? onOpenKey(key) : setLocalOpen(key))
+  const allItems = groups.flatMap((g) => g.items)
+  const updating = openKeyNow ? allItems.find((it) => it.key === openKeyNow) || null : null
+  const setUpdating = (it) => setOpen(it ? it.key : null)
+  const fileOrder = order || groups.filter((g) => g.id !== 'waiting').flatMap((g) => g.items)
+  const nextAfter = (key) => {
+    const i = fileOrder.findIndex((it) => it.key === key)
+    return fileOrder[i + 1] || null
+  }
   const [busy, setBusy] = useState(null)
   const [showWaiting, setShowWaiting] = useState(false)
 
@@ -403,18 +529,30 @@ export default function WorkLane({ groups, onChanged }) {
         </Sheet>
       )}
       {updating && (
-        <UpdateSheet
+        <FileSheet
+          key={updating.key}
           item={updating}
-          canReview={flags.bay === true && !assistant}
-          onReview={(outcome, reason, notes) => {
+          info={info ? info(updating) : null}
+          assistant={assistant}
+          canReview={flags[updating.book] === true && !assistant}
+          hasNext={!!nextAfter(updating.key)}
+          onFinish={async (choice, reason, notes, next) => {
             const item = updating
+            const following = next ? nextAfter(item.key) : null
             setUpdating(null)
-            run(
-              item,
-              buildActionRequest({ action: 'set_stage', contactId: item.contactId, target: outcome.key, reason }),
-              outcome.done(item.name),
-              notes ? { notes } : undefined,
-            )
+            const extra = notes ? { notes } : undefined
+            if (choice.action === 'stage') {
+              const label = choice.target === 'estimate_sent' || choice.target === 'application_sent' ? `${item.name} moved to ${choice.label} in FollowUpBoss` : OUTCOMES.find((o) => o.key === choice.target)?.done(item.name)
+              await run(item, buildActionRequest({ action: 'set_stage', contactId: item.contactId, target: choice.target, reason }), label, extra)
+            } else if (choice.action === 'complete') {
+              await run(item, buildActionRequest({ action: 'complete_task', taskId: item.taskId }), null, extra)
+            } else {
+              setBusy(item.key)
+              await record(item, choice.action === 'reviewed' ? `${item.name} reviewed. Back in 3 days, or sooner if docs change.` : `Done: ${item.title}`, extra)
+              setBusy(null)
+              onChanged?.()
+            }
+            if (following) setUpdating(following)
           }}
           onClose={() => setUpdating(null)}
           onSaved={() => {

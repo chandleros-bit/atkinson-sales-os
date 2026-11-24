@@ -36,6 +36,19 @@ export async function saveWorkItem(item, patch) {
   )
 }
 
+// The open file's review steps (work_items.checklist, migration 0077). Read
+// and written apart from the rest of the row: before 0077 these fail alone
+// and the Files list is untouched.
+export async function loadChecklist(item) {
+  const q = supabase.from('work_items').select('checklist').limit(1)
+  const { data, error } = await (item.kind === 'custom' ? q.eq('id', item.rowId) : q.eq('source_key', item.key)).maybeSingle()
+  return error ? {} : data?.checklist || {}
+}
+
+export async function saveChecklist(item, checklist) {
+  return saveWorkItem(item, { checklist })
+}
+
 // "+ Work item" and the voice quick-add: a custom row. contactId and dueOn
 // ('YYYY-MM-DD', migration 0043) are optional.
 export async function addWorkItem({ book, title, contactId = null, notes = null, dueOn = null }) {

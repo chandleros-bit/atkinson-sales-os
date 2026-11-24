@@ -3,7 +3,7 @@
 // last three touches, and hands the actions back to Workbench.
 //   Call        tel: link with callAttrs, so the after-call sheet asks how it went
 //   Call agent  the buyer's agent on a loan file
-//   Done        calls: the Log call sheet (crm-action); files: jump to the row
+//   Done        calls: the Log call sheet (crm-action); files: the open-file sheet
 //   Snooze      calls: Not today; files: check back tomorrow
 // Keys: Shift+D done, Shift+S snooze, J next, Z undo (Workbench listens).
 import { useEffect, useState } from 'react'
@@ -128,7 +128,7 @@ export default function NextUpCard({ pick, model, value, logging, onDone, onLogg
           </a>
         )}
         <button type="button" data-next-done onClick={onDone} className={OUTLINE}>
-          {model.kind === 'file' ? 'Open in Files' : 'Done'}
+          {model.kind === 'file' ? 'Open file' : 'Done'}
         </button>
         <button type="button" data-next-snooze onClick={onSnooze} className="min-h-[44px] rounded-lg px-3 text-ui font-semibold text-[#B9BFCC] hover:bg-white/10">
           Snooze
