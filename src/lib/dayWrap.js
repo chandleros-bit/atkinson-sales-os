@@ -1,7 +1,8 @@
 // The end-of-day wrap (Workbench v2 spec 2026-11-23, §14). Pure: Workbench
 // passes the day's saved order, what's still in the lists and what moved, and
 // this builds the wrap. It's shown on screen and saved to
-// workbench_days.wrap on Close the day; the 7:30 briefing doesn't read it yet.
+// workbench_days.wrap on Close the day; the 7:30 briefing reads it the next
+// business morning (briefing.js wrapLines).
 import { itemKey } from './workNext'
 import { itemName } from './dayOrder'
 import { THEMES } from './dialThemes'

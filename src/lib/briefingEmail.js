@@ -97,6 +97,13 @@ export function renderOwnerBriefing(m, { appUrl }) {
   const partnersDue = section('Partners due today', pd, '/bayway/partners')
   const mk = m.market
   const focusText = m.focus ? `This week's focus: ${m.focus.title} (${m.focus.done} of ${m.focus.total} done)` : null
+  const lw = m.lastWrap
+  const wrapText = lw
+    ? [
+        lw.rolled ? `${lw.rolled} rolled over from yesterday and go first today${lw.first.length ? `: ${lw.first.join(', ')}` : ''}.` : 'Everything got done yesterday.',
+        lw.gap != null ? (lw.gap > 0 ? `Bayway gap to goal at close: ${money(lw.gap)}.` : 'Bayway goal covered at close.') : null,
+      ].filter(Boolean)
+    : null
   const pastClients = section('Past clients to call', pc, '/bayway/opportunities')
   const sl = m.slipping
   const slipping = m.nothingSlipping
@@ -112,6 +119,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
   const textBlocks = [
     `Numbers\n${numbers.map((l) => `- ${l}`).join('\n')}`,
     ...(focusText ? [`Focus\n- ${focusText}\n  ${url('/')}`] : []),
+    ...(wrapText ? [`Yesterday's wrap\n${wrapText.map((l) => `- ${l}`).join('\n')}\n  ${url('/workbench')}`] : []),
     `Today\n${today.map((l) => `- ${l}`).join('\n')}`,
     ...(mk ? [`Market (Lock Watch)\n${mk.lines.map((l) => `- ${l}`).join('\n')}${mk.source ? `\n  Source: ${mk.source.url}` : ''}`] : []),
     `Call first\n${callFirst.length ? callFirst.map((b) => [b.title, ...b.rows.map((r) => `  - ${r}`), `  ${url(b.href)}`].join('\n')).join('\n') : '- Nobody waiting'}`,
@@ -184,6 +192,7 @@ export function renderOwnerBriefing(m, { appUrl }) {
     `<div style="max-width:640px;font-family:Arial,sans-serif;color:${C.text}">`,
     `<p style="font:13px Arial,sans-serif;color:${C.muted};margin:0">${esc(m.dateLabel)}</p>`,
     ...(focusText ? [`<p style="font:14px Arial,sans-serif;margin:12px 0 0"><b>${esc(focusText)}</b></p>`] : []),
+    ...(wrapText ? [`<p style="font:14px Arial,sans-serif;margin:8px 0 0">${link(url('/workbench'), "Yesterday's wrap")}: ${wrapText.map(esc).join(' ')}</p>`] : []),
     heading('Numbers, month to date'), goalsTable, forecastTable, dayTable,
     heading('Today'), todayTable,
     ...(mk ? [heading('Market (Lock Watch)'), `<p style="font:14px Arial,sans-serif;margin:0">${mk.lines.map(esc).join(' ')}${mk.source ? ` ${link(mk.source.url, 'Source')}` : ''}</p>`] : []),

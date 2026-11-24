@@ -114,6 +114,17 @@ async function ownerMail(db, cfg, now, ownerId) {
     .eq('note_date', todayKey)
     .limit(1)
     .then(({ data, error }) => (error ? null : (data || [])[0] || null), () => null)
+  // Last night's end-of-day wrap (Workbench v2, migration 0076): what rolled
+  // over. Never fatal; the model keeps it only when it's yesterday's.
+  const lastWrap = await db
+    .from('workbench_days')
+    .select('day, closed_at, wrap')
+    .eq('user_id', ownerId)
+    .lt('day', todayKey)
+    .not('closed_at', 'is', null)
+    .order('day', { ascending: false })
+    .limit(1)
+    .then(({ data, error }) => (error ? null : (data || [])[0] || null), () => null)
   const syncLatest = {}
   await Promise.all(
     CORE_SOURCES.map(async ({ source }) => {
@@ -123,7 +134,7 @@ async function ownerMail(db, cfg, now, ownerId) {
   )
   const model = buildOwnerBriefing({
     rules, targets, rates, forecastSettings, metrics, mpgMetricRows, deals, activities, yesterdayActivities, pipeline, loans, ratings, signals, dialRows,
-    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks, draftsWaiting, partnersDue, focusItems, marketNote,
+    dialSkips: dialSkips.map((r) => r.contact_id), mpgTasks, workItems: flatWorkItems(workItems), events, syncLatest, pastClientPicks, draftsWaiting, partnersDue, focusItems, marketNote, lastWrap,
   }, now)
   return renderOwnerBriefing(model, { appUrl: cfg.app_url || APP_URL })
 }

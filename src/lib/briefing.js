@@ -24,6 +24,21 @@ export function marketLines(note) {
   return { lines: sentences.slice(0, 3), source: src ? { title: src.title || src.url, url: src.url } : null }
 }
 
+// Last night's end-of-day wrap (Workbench v2, workbench_days.wrap.closed):
+// what rolled over and goes first today, and the gap it closed on. Only the
+// previous business day's wrap counts; null when it wasn't closed.
+// -> { rolled, first: [names, up to 3], gap: number | null } or null.
+export function wrapLines(lastWrap, now = Date.now()) {
+  const closed = lastWrap?.wrap?.closed
+  if (!lastWrap?.closed_at || !closed || String(lastWrap.day).slice(0, 10) !== previousBusinessDateKey(now)) return null
+  const rolled = Array.isArray(closed.rolled) ? closed.rolled : []
+  return {
+    rolled: rolled.length,
+    first: rolled.slice(0, 3).map((r) => r.name).filter(Boolean),
+    gap: closed.gap?.now ?? null,
+  }
+}
+
 // { title, done, total } from this week's focus work items, or null.
 export function weeklyFocusLine(items) {
   const list = items || []
@@ -162,6 +177,8 @@ export function buildOwnerBriefing(data, now = Date.now()) {
     partnersDue: list(data.partnersDue || [], (p) => ({ name: p.name || '(no name)', detail: `${PARTNER_DUE_LABEL[p.kind] || p.kind}: ${p.detail || ''}`.trim() })),
     // This week's focus (Growth bot): title and tasks done.
     focus: weeklyFocusLine(data.focusItems),
+    // Last night's wrap: what rolled over and goes first today.
+    lastWrap: wrapLines(data.lastWrap, now),
     // Lock Watch market note, first 3 sentences (doc: "3 lines").
     market: marketLines(data.marketNote),
     slipping,
