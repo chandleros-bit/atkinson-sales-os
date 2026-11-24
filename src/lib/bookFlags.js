@@ -56,6 +56,14 @@ export function hardDates(loans, now = Date.now(), withinDays = 14) {
   return out.filter((h) => h.days <= withinDays).sort((a, b) => a.days - b.days)
 }
 
+// The assistant's wording for a hard date (Workbench v2 §13): the task, not the rule.
+export function hardDateTask(h, now = Date.now()) {
+  if (h.kind === 'cd') {
+    return h.days < 0 ? `the closing disclosure is overdue (was due ${shortDay(h.on, now)}): get the packet out` : 'prepare the closing disclosure packet'
+  }
+  return h.days < 0 ? `the rate lock expired ${shortDay(h.on, now)}: tell Chandler` : 'rate lock ends: confirm the closing date with title'
+}
+
 // ---- A5. Loans in flight ------------------------------------------------------
 
 const UW_STAGES = new Set(['submitted to uw', 'approved w/ conditions', 're-submittal'])

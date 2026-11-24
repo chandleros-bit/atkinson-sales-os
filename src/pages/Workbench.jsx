@@ -11,7 +11,7 @@ import { supabase, isDemoMode } from '../lib/supabase'
 import { useBusiness } from '../context/BusinessContext'
 import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { useWorkLane } from '../lib/useWorkLane'
-import { buildWorkGroups, workProgress } from '../lib/workbench'
+import { buildWorkGroups, workProgress, assistantOrder } from '../lib/workbench'
 import { buildAlerts } from '../lib/alerts'
 import AlertsRail from '../components/AlertsRail'
 import { useWorkbenchDay } from '../lib/useWorkbenchDay'
@@ -39,7 +39,7 @@ import { pickNext, nextUpModel, itemKey } from '../lib/workNext'
 import { saveWorkItem } from '../lib/workItems'
 import { localDateKey } from '../lib/crmActions'
 import NextUpCard from '../components/NextUpCard'
-import { hardDates, shortDay } from '../lib/bookFlags'
+import { hardDates, hardDateTask, shortDay } from '../lib/bookFlags'
 import { useForecast } from '../lib/useForecastInputs'
 import { forecastLayers, monthKeyOf } from '../lib/forecast'
 import { targetsFor } from '../lib/reports'
@@ -105,7 +105,24 @@ const HARD_TEXT = {
   lock: (h) => (h.days < 0 ? `rate lock expired ${shortDay(h.on)}` : `rate lock ends ${shortDay(h.on)}`),
 }
 
-function HardDates({ items, loansById }) {
+// The assistant reads loans through workbench_hard_dates (migration 0078):
+// loans is owner-only, and she needs only the dates.
+function useAssistantHardDateLoans(on) {
+  const [rows, setRows] = useState([])
+  useEffect(() => {
+    if (!on || isDemoMode) return
+    let live = true
+    Promise.resolve(supabase.rpc('workbench_hard_dates'))
+      .then((res) => live && setRows(res?.error ? [] : res?.data || []))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [on])
+  return rows
+}
+
+function HardDates({ items, loansById, assistant = false }) {
   if (!items.length) return null
   return (
     <section aria-label="Hard dates" className="cc-card overflow-hidden">
@@ -122,7 +139,7 @@ function HardDates({ items, loansById }) {
               {label}
             </span>
             <span className="min-w-0 flex-1 text-body">
-              <b className="font-semibold">{h.name}</b> · {HARD_TEXT[h.kind](h)}
+              <b className="font-semibold">{h.name}</b> · {assistant ? hardDateTask(h) : HARD_TEXT[h.kind](h)}
             </span>
             {contactId && (
               <button type="button" onClick={() => openPerson(contactId)} className="min-h-[36px] flex-none rounded-lg border border-line2 px-3 text-body font-semibold">
@@ -314,6 +331,11 @@ export default function Workbench() {
   const dialShown = { dueNow: inDay(dialDue.dueNow), laterToday: dialDue.laterToday.filter((it) => !waitingKeys.has(itemKey(it))) }
   const hideInCalls = new Set([...listIds, ...newSince.filter((n) => !n.item.key).map((n) => n.item.id)])
   const groupsShown = groups.map((g) => (g.id === 'waiting' ? g : { ...g, items: inDay(g.items) }))
+  // The assistant's Files (§13): one list by deadline then age, and the waiting bar.
+  const assistantGroups = [
+    { id: 'files', title: 'Files', book: null, items: assistantOrder(groups) },
+    groups.find((g) => g.id === 'waiting') || { id: 'waiting', title: 'Waiting on others', book: null, items: [] },
+  ]
   const openWork = files.count
   const progress = workProgress(work.workItems.filter((w) => inBook(w.business_id)), openWork, now)
   const alerts = buildAlerts({ queue, signals, pipeline: work.pipeline, tasks: work.tasks, workItems: work.workItems, rules, inBook, now })
@@ -322,7 +344,8 @@ export default function Workbench() {
   const coldLeads = (dial.rows || []).filter((r) => r.business_id === 'bay' && r.stage === 'Nurture / Credit Repair' && inBook('bay') && !listIds.has(r.id)).length
   const slipping = SLIP_BUCKETS.map((b) => ({ id: b, label: BUCKET_LABEL[b], count: queue.filter((r) => r.bucket === b && !listIds.has(r.id)).length }))
 
-  const loans = forecast.loans || []
+  const assistantLoans = useAssistantHardDateLoans(assistant)
+  const loans = assistant ? assistantLoans : forecast.loans || []
   const loansById = useMemo(() => new Map(loans.map((l) => [l.id, l])), [loans])
   const hard = biz === 'mpg' ? [] : hardDates(loans, now)
   const index = useMemo(() => valueIndex(forecast), [forecast])
@@ -433,7 +456,7 @@ export default function Workbench() {
         <h1 className="text-title font-semibold tracking-[-0.6px]">Workbench</h1>
         <span className="text-body text-muted">
           {DAYS[d.getDay()]}, {MONTHS[d.getMonth()].slice(0, 3)} {d.getDate()}
-          {day.saved?.set_at && <span data-order-set> · order set at {clock(day.saved.set_at)}</span>}
+          {assistant ? <span data-assistant-view> · Assistant view, sorted by deadline, then age</span> : day.saved?.set_at && <span data-order-set> · order set at {clock(day.saved.set_at)}</span>}
         </span>
         <SyncDot />
         <div className="ml-auto flex gap-2">
@@ -451,7 +474,7 @@ export default function Workbench() {
       </header>
 
       <NewLeadBanner lead={lead} now={now} onCall={() => setDialRun({ items: [lead], start: 0 })} />
-      <HardDates items={hard} loansById={loansById} />
+      <HardDates items={hard} loansById={loansById} assistant={assistant} />
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -498,7 +521,7 @@ export default function Workbench() {
             action={files.count > 0 && <StartButton onClick={() => { startList('files'); setOpenFile(files.items[0].key) }}>Start first file</StartButton>}
           >
             {work.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{work.error}</div>}
-            <WorkLane groups={groupsShown} onChanged={work.reload} info={fileInfo} openKey={openFile} onOpenKey={setOpenFile} order={files.items} />
+            <WorkLane groups={assistant ? assistantGroups : groupsShown} onChanged={work.reload} info={fileInfo} openKey={openFile} onOpenKey={setOpenFile} order={assistant ? assistantGroups[0].items : files.items} />
           </ListCard>
 
           {!assistant && (
@@ -512,7 +535,7 @@ export default function Workbench() {
           )}
 
           {!assistant && day.saved && <NewSinceStrip items={newSince} setAt={day.saved.set_at} onPullIn={() => day.pullIn(newSince.map((n) => n.key))} />}
-          <ParkedStrip waiting={groups.find((g) => g.id === 'waiting')?.items || []} cold={assistant ? 0 : coldLeads} />
+          {!assistant && <ParkedStrip waiting={groups.find((g) => g.id === 'waiting')?.items || []} cold={coldLeads} />}
           {!assistant && <SlippingStrip alerts={alerts} slipping={slipping} showBook={biz === 'all'} hideIds={listIds} />}
         </div>
 

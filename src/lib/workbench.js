@@ -56,6 +56,7 @@ function estimateItem(row, rules, now) {
     kind: 'estimate',
     book: 'bay',
     contactId: row.id,
+    since: row.stage_since || null,
     name: row.name || '(no name)',
     title: 'Work estimate',
     why: overdue ? next.text : days == null ? `In ${row.stage}` : `Working ${plural(days, 'day')}`,
@@ -73,6 +74,7 @@ function applicationItem(row, rules, now) {
     kind: 'application',
     book: 'bay',
     contactId: row.id,
+    since: row.stage_since || null,
     name: row.name || '(no name)',
     title: 'Review application',
     why: docs > 0 ? `${plural(docs, 'doc')} missing` : days == null ? `In ${row.stage}` : `In ${row.stage} ${plural(days, 'day')}`,
@@ -89,6 +91,7 @@ function disclosedItem(row, now) {
     kind: 'disclosed',
     book: 'bay',
     contactId: row.id,
+    since: row.stage_since || null,
     name: row.name || '(no name)',
     title: 'Track to closing',
     why: days == null ? 'Disclosed' : `Disclosed ${plural(days, 'day')}`,
@@ -104,6 +107,7 @@ function mpgTaskItem(task, now) {
     kind: 'mpg_task',
     book: 'mpg',
     taskId: task.id,
+    dueOn: task.due_at || null,
     contactId: task.contact_id || null,
     name: [task.company, task.contact_name].filter(Boolean).join(' · ') || '(no lead)',
     title: task.title || 'Zoho task',
@@ -122,6 +126,8 @@ function customItem(row, now) {
     kind: 'custom',
     book: row.business_id,
     contactId: row.contact_id || null,
+    dueOn: row.due_on || null,
+    since: row.created_at || null,
     name: row.contact_name || '',
     title: row.title,
     why: due || (days == null || days === 0 ? 'Added today' : `Added ${plural(days, 'day')} ago`),
@@ -223,6 +229,18 @@ export function buildWorkGroups({ pipeline = [], mpgTasks = [], workItems = [], 
   ]
   waiting.sort((a, b) => time(a.checkBackOn) - time(b.checkBackOn))
   return [...groups, { id: 'waiting', title: 'Waiting on others', book: null, items: waiting }]
+}
+
+// The assistant's Files (Workbench v2 spec §13): one list, soonest deadline
+// first (a due date, or a check-back day), then the oldest. Waiting items stay
+// out; they're in the Waiting on others summary.
+export function assistantOrder(groups) {
+  const t = (v) => (v ? Date.parse(String(v).length === 10 ? `${v}T12:00:00` : v) : null)
+  const items = (groups || []).filter((g) => g.id !== 'waiting').flatMap((g) => g.items || [])
+  return items
+    .map((it, i) => ({ it, i, due: t(it.dueOn || it.checkBackOn), since: t(it.since) }))
+    .sort((a, b) => (a.due ?? Infinity) - (b.due ?? Infinity) || (a.since ?? Infinity) - (b.since ?? Infinity) || a.i - b.i)
+    .map((x) => x.it)
 }
 
 // Header "Work done / total": rows done today versus open items plus those.

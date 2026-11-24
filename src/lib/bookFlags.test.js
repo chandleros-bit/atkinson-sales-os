@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cdDueOn, hardDates, loanStep, loanFlag, loansInFlight, merchantsInFlight, bookHealth, shortDay } from './bookFlags'
+import { cdDueOn, hardDates, loanStep, loanFlag, loansInFlight, merchantsInFlight, bookHealth, shortDay, hardDateTask } from './bookFlags'
 
 // Monday, Nov 23 2026, 10 AM local. Thanksgiving is Thursday Nov 26.
 const NOW = new Date('2026-11-23T10:00:00').getTime()
@@ -122,5 +122,14 @@ describe('shortDay', () => {
     expect(shortDay('2026-11-24', NOW)).toBe('tomorrow')
     expect(shortDay('2026-11-26', NOW)).toBe('Thu')
     expect(shortDay('2026-12-04', NOW)).toBe('Dec 4')
+  })
+})
+
+describe('hardDateTask', () => {
+  it("words a hard date as the assistant's task", () => {
+    expect(hardDateTask({ kind: 'cd', on: '2026-11-24', days: 1 }, NOW)).toBe('prepare the closing disclosure packet')
+    expect(hardDateTask({ kind: 'cd', on: '2026-11-20', days: -3 }, NOW)).toBe('the closing disclosure is overdue (was due Nov 20): get the packet out')
+    expect(hardDateTask({ kind: 'lock', on: '2026-12-02', days: 9 }, NOW)).toBe('rate lock ends: confirm the closing date with title')
+    expect(hardDateTask({ kind: 'lock', on: '2026-11-21', days: -2 }, NOW)).toBe('the rate lock expired Nov 21: tell Chandler')
   })
 })

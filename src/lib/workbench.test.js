@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildWorkGroups, workProgress } from './workbench'
+import { buildWorkGroups, workProgress, assistantOrder } from './workbench'
 import { DEFAULT_RULES } from './priorityQueue'
 
 // Local times (no Z), as the other day-math tests. 2026-10-22 is a Thursday.
@@ -208,5 +208,18 @@ describe('workProgress', () => {
       { status: 'working' },
     ]
     expect(workProgress(rows, 4, NOW)).toEqual({ done: 1, total: 5 })
+  })
+})
+
+describe("the assistant's Files order", () => {
+  it('puts the soonest deadline first, then the oldest, and leaves waiting items out', () => {
+    const groups = [
+      { id: 'estimates', items: [{ key: 'e-old', since: '2026-11-01T10:00:00Z' }, { key: 'e-new', since: '2026-11-20T10:00:00Z' }] },
+      { id: 'statements', items: [{ key: 'm-due', dueOn: '2026-11-25T15:00:00Z' }] },
+      { id: 'custom', items: [{ key: 'c-due', dueOn: '2026-11-24', since: '2026-11-23T10:00:00Z' }, { key: 'c-back', checkBackOn: '2026-11-26' }] },
+      { id: 'waiting', items: [{ key: 'w', dueOn: '2026-11-01' }] },
+    ]
+    expect(assistantOrder(groups).map((i) => i.key)).toEqual(['c-due', 'm-due', 'c-back', 'e-old', 'e-new'])
+    expect(assistantOrder(null)).toEqual([])
   })
 })

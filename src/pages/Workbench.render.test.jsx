@@ -74,11 +74,13 @@ vi.mock('../lib/supabase', () => ({
   isDemoMode: false,
   supabase: {
     from: (t) => query(t),
-    rpc: vi.fn(async (fn) => ({ data: fn === 'search_people' ? DATA.searchPeople : [], error: null })),
+    rpc: vi.fn(async (fn) => ({ data: fn === 'search_people' ? DATA.searchPeople : fn === 'workbench_hard_dates' ? DATA.hard : [], error: null })),
     functions: { invoke: (...a) => invoke(...a) },
   },
 }))
 vi.mock('../context/BusinessContext', () => ({ useBusiness: () => ({ biz: 'all', matches: () => true }) }))
+// The login's role: the owner unless a test signs in as the assistant.
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ role: globalThis.__role || 'owner' }) }))
 
 // Stands in for the browser's speech recognition: say() delivers a final result.
 class FakeSpeech {
@@ -107,6 +109,8 @@ beforeEach(() => {
   DATA.dayOn = false
   DATA.day = null
   DATA.docs = null
+  DATA.hard = []
+  globalThis.__role = 'owner'
   window.webkitSpeechRecognition = FakeSpeech
   FakeSpeech.last = null
   window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
@@ -302,6 +306,29 @@ describe('Workbench', () => {
     await act(async () => {})
     expect(invoke.mock.calls.at(-1)[1].body).toMatchObject({ action: 'set_stage', contact_id: 'e1', payload: { target: 'application_sent' } })
     expect(dialog().querySelector('[data-file-sheet="application:a1"]')).not.toBeNull()
+  })
+
+  it("gives the assistant hard dates as tasks and one Files list, with no calls or dollars", async () => {
+    mobile = false
+    globalThis.__role = 'assistant'
+    const close = new Date()
+    close.setDate(close.getDate() + 10)
+    const key = `${close.getFullYear()}-${String(close.getMonth() + 1).padStart(2, '0')}-${String(close.getDate()).padStart(2, '0')}`
+    DATA.hard = [{ id: 'L1', contact_id: 'e1', borrower_name: 'Marcus Lee', stage: 'Loan Setup', stage_group: 'processing', firm_closing_on: key, lock_expires_on: null }]
+    const host = await render()
+    expect(host.querySelector('[data-assistant-view]').textContent).toContain('Assistant view')
+    expect(host.querySelector('[aria-label="Calls"]')).toBeNull()
+    expect(host.querySelector('[aria-label="Partners"]')).toBeNull()
+    expect(host.querySelector('[aria-label="Next up"]')).toBeNull()
+    expect(host.querySelector('[data-gap]')).toBeNull()
+    expect(host.querySelector('[data-slipping]')).toBeNull()
+    expect(host.querySelector('[aria-label="Hard dates"]').textContent).toContain('Marcus Lee · prepare the closing disclosure packet')
+    // One Files list: the MPG task due 5 days ago first, then the oldest files.
+    const files = host.querySelector('[aria-label="Files"]')
+    const rows = [...files.querySelectorAll('[data-work-item]')].map((e) => e.getAttribute('data-work-item'))
+    expect(rows).toEqual(['mpg_task:t1', 'estimate:e1', 'application:a1'])
+    expect(files.textContent).not.toContain('Estimates to Work')
+    expect(files.textContent).not.toMatch(/\$\d/)
   })
 
   it('collapses the alerts and slipping groups into one Slipping strip', async () => {
