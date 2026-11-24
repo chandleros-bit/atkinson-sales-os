@@ -152,6 +152,7 @@ export default function NextUpCard({ pick, model, value, logging, onDone, onLogg
           hasPhone={!!model.phone}
           stage={model.stage}
           cadence={model.cadence}
+          agent={model.agent}
           only={[]}
           autoOpen="call"
           onDone={onLogged}
