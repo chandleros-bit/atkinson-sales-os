@@ -234,11 +234,12 @@ function NewSinceStrip({ items, setAt, onPullIn }) {
       <span className="text-ui font-semibold">
         New since {clock(setAt)} · {items.length}
       </span>
-      <span className="min-w-0 flex-1 text-body text-muted">
+      {/* Phone: title and Pull in on one line, the names full width below. */}
+      <span className="order-last min-w-0 basis-full text-body text-muted sm:order-none sm:basis-0 sm:flex-1">
         {names.join(' · ')}
         {items.length > names.length && ` · +${items.length - names.length} more`}. They wait here until you pull them in.
       </span>
-      <button type="button" onClick={onPullIn} className="min-h-[38px] rounded-lg border border-line2 bg-panel px-3 text-body font-semibold hover:bg-hoverbg">
+      <button type="button" onClick={onPullIn} className="ml-auto min-h-[38px] rounded-lg border border-line2 bg-panel px-3 text-body font-semibold hover:bg-hoverbg">
         Pull in
       </button>
     </section>
@@ -271,8 +272,8 @@ function SlippingStrip({ alerts, slipping, showBook, hideIds }) {
     <details aria-label="Slipping" data-slipping className="group cc-card overflow-hidden">
       <summary className="flex min-h-[48px] cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 [&::-webkit-details-marker]:hidden">
         <span className="text-ui font-semibold">Slipping · {total}</span>
-        <span className="min-w-0 flex-1 text-body text-muted">{groups.filter((g) => g.count).map((g) => `${g.label} ${g.count}`).join(' · ')}</span>
-        <span aria-hidden="true" className="text-caption text-muted transition-transform group-open:rotate-180">▾</span>
+        <span className="order-last min-w-0 basis-full text-body text-muted sm:order-none sm:basis-0 sm:flex-1">{groups.filter((g) => g.count).map((g) => `${g.label} ${g.count}`).join(' · ')}</span>
+        <span aria-hidden="true" className="ml-auto text-caption text-muted transition-transform group-open:rotate-180">▾</span>
       </summary>
       <div className="flex flex-col gap-3 border-t border-line p-3">
         <AlertsRail alerts={alerts} showBook={showBook} />
