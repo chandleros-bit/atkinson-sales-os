@@ -59,10 +59,13 @@ const { resetWritebackFlags } = await import('../lib/writeback')
 const { default: Toaster } = await import('./Toaster')
 const { __resetRatingsForTest } = await import('../lib/useLeadRatings')
 
+// Unmounted before each test: the log form listens for keys on window.
+const roots = []
 async function mount(props) {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
+  roots.push(root)
   await act(async () => {
     root.render(React.createElement(React.Fragment, null, React.createElement(QuickActions, props), React.createElement(Toaster)))
   })
@@ -82,6 +85,7 @@ const type = async (el, value) =>
 const bay = { businessId: 'bay', contactId: 'c1', contactName: 'Jo Ramirez', hasPhone: true }
 
 beforeEach(() => {
+  act(() => roots.splice(0).forEach((r) => r.unmount()))
   document.body.innerHTML = ''
   invoke.mockReset()
   openTasks.rows = []
@@ -669,5 +673,63 @@ describe('QuickActions: MPG stages (Zoho Lead Status)', () => {
     await click(byText('Moving to Nurture'))
     await click(save())
     expect(invoke.mock.calls[0][1].body.payload).toMatchObject({ no_next_step_reason: 'Moving to Nurture', set_stage: 'nurture' })
+  })
+
+  describe('after the call (Workbench v2 §12)', () => {
+    const key = async (k, target = window) =>
+      act(async () => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })))
+    const pressed = (text) => byText(text)?.getAttribute('aria-pressed')
+
+    it('picks the outcome with number keys, but not while typing', async () => {
+      await mount(bay)
+      await click(byLabel('Log call'))
+      await key('4')
+      expect(pressed('No Answer')).toBe('true')
+      const note = document.querySelector('textarea')
+      await key('1', note)
+      expect(pressed('No Answer')).toBe('true')
+      expect(pressed('Interested')).toBe('false')
+    })
+
+    it('turns a date in the note into a one-tap follow-up', async () => {
+      invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'log_call', ok: true }] }, error: null })
+      await mount(bay)
+      await click(byLabel('Log call'))
+      await click(byText('Interested'))
+      await type(document.querySelector('textarea'), 'Waiting on the gift letter, she expects it tomorrow.')
+      await click(byText('Check back Tomorrow'))
+      await click(byText('Log call'))
+      const d = new Date()
+      d.setDate(d.getDate() + 1)
+      const tomorrow = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      expect(invoke.mock.calls[0][1].body.payload).toMatchObject({
+        next_step: 'follow_up',
+        follow_up: { due_date: tomorrow, title: 'Check back · Waiting on the gift letter, she expects it tomorrow' },
+      })
+    })
+
+    it('saves with Enter once the form is ready', async () => {
+      invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'log_call', ok: true }] }, error: null })
+      await mount(bay)
+      await click(byLabel('Log call'))
+      await key('Enter')
+      expect(invoke).not.toHaveBeenCalled()
+      await key('5')
+      await key('Enter')
+      expect(invoke).toHaveBeenCalledTimes(1)
+      expect(invoke.mock.calls[0][1].body.payload.outcome).toBe('Busy')
+    })
+
+    it("drafts the update for a loan's buyer's agent from the note", async () => {
+      await mount({ ...bay, agent: { name: 'Jenna Kim', phone: '7045550190' } })
+      await click(byLabel('Log call'))
+      expect(document.querySelector('[data-agent-text]')).toBeNull()
+      await type(document.querySelector('textarea'), 'UW cleared 2 of 3 conditions')
+      const box = document.querySelector('[data-agent-text]')
+      expect(box.textContent).toContain('Hi Jenna, quick update on Jo Ramirez: UW cleared 2 of 3 conditions. - Chandler')
+      const link = box.querySelector('a')
+      expect(link.textContent).toBe('Text Jenna the update')
+      expect(link.getAttribute('href').startsWith('sms:7045550190?&body=')).toBe(true)
+    })
   })
 })

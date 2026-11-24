@@ -67,6 +67,9 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
   }
 
   const r = it.row
+  // A loan's buyer's agent: the log form drafts them the update.
+  const buyer = agents?.get(it.id)?.find((a) => a.kind === 'buyer_agent')
+  const buyerAgent = buyer ? { name: buyer.name, phone: buyer.phone || buyer.matched_phone } : null
   const text = textFor(it.book, it.textKey, r.name)
   const isLead = LEAD_KINDS.has(it.kind)
   const parkPrompt = isLead && it.book === 'bay' && (it.kind === 'move_nurture' || (it.kind === 'attempt' && it.step === 6))
@@ -115,6 +118,7 @@ export default function Dialer({ items, start = 0, onClose, skipToday, agents = 
           hasPhone={!!r.phone}
           stage={r.stage}
           cadence={it.kind === 'attempt'}
+          agent={buyerAgent}
           only={[]}
           autoOpen="call"
           onDone={() => setStats((s) => ({ ...s, calls: s.calls + 1, connected: s.connected + 1 }))}

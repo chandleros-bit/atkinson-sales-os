@@ -38,6 +38,9 @@ import { TEMPERATURES, TEMP_LABEL } from '../lib/leadRatings'
 import { saveRating } from '../lib/useLeadRatings'
 import { followUpEventRow, insertContactEvent, notifyContactEventsChanged } from '../lib/contactEvents'
 import { useAuth } from '../context/AuthContext'
+import { noteDate, agentUpdateText, outcomeForKey } from '../lib/afterCall'
+import { smsHref } from '../lib/dialTexts'
+import { speechSupported, useSpeech } from '../lib/useSpeech'
 import { quickActionsFor } from '../lib/roles'
 
 const FUB_TASK_TYPES = ['Follow Up', 'Call', 'Text', 'Email', 'Appointment', 'Showing', 'Closing', 'Open House', 'Thank You']
@@ -317,7 +320,9 @@ async function saveRatingWithToast(args) {
 // Also used by the post-call pop-up (PostCallHost): noteSuffix is added under
 // the typed note on save (the text he opened in Messages), and children render
 // just above the Log call button (the pop-up's text templates).
-export function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, onSuccess, noteSuffix = '', children }) {
+// agent ({ name, phone }): a loan's buyer's agent; the form drafts them the update.
+// Keys (Workbench v2 spec §12): 1-6 pick the outcome; Enter saves (Ctrl/Cmd+Enter in the note).
+export function LogCallForm({ businessId, contactId, contactName, stage, onCadence, t, onSuccess, noteSuffix = '', agent = null, children }) {
   const [outcome, setOutcome] = useState(null)
   const [note, setNote] = useState('')
   const [duration, setDuration] = useState('')
@@ -384,6 +389,19 @@ export function LogCallForm({ businessId, contactId, contactName, stage, onCaden
   const nextReady =
     nextStep === 'follow_up' ? !!safeDate(preset, picked) : nextStep === 'scheduled' ? !!futureTask : nextStep === 'cadence' ? true : nextStep === 'none' ? !!reason : false
 
+  // A date named in the note becomes a one-tap follow-up ("Check back Wed").
+  const suggestion = noteDate(note)
+  const suggestionOn = !!suggestion && nextStep === 'follow_up' && preset === 'pick' && picked === suggestion.date
+  const takeSuggestion = () => {
+    chooseNext('follow_up')
+    setPreset('pick')
+    setPicked(suggestion.date)
+    setTitle(suggestion.title)
+  }
+  const agentText = agent?.phone ? agentUpdateText({ agentName: agent.name, borrowerName: contactName, note }) : null
+  const speech = useSpeech({ onFinal: (heard) => setNote((n) => (n.trim() ? `${n.trim()} ${heard}` : heard)) })
+  const canSave = !!outcome && nextReady && !(businessId === 'mpg' && !(Number(duration) > 0))
+
   const submit = async () => {
     let request
     try {
@@ -416,6 +434,29 @@ export function LogCallForm({ businessId, contactId, contactName, stage, onCaden
     await saveRatingWithToast({ contactId, businessId, temperature: temp, estAmount: typed ? Number(estAmount) : undefined })
   }
 
+  const keys = useRef({})
+  keys.current = { pickOutcome, submit, canSave, busy }
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.defaultPrevented || e.altKey) return
+      const inText = e.target?.closest?.('input, textarea, select')
+      const pick = !inText && !e.metaKey && !e.ctrlKey ? outcomeForKey(e.key, OUTCOMES) : null
+      if (pick) {
+        e.preventDefault()
+        keys.current.pickOutcome(pick)
+        return
+      }
+      const inNote = e.target?.tagName === 'TEXTAREA'
+      const enterOk = inNote ? e.metaKey || e.ctrlKey : !inText || e.target?.type === 'checkbox'
+      if (e.key === 'Enter' && enterOk && keys.current.canSave && !keys.current.busy) {
+        e.preventDefault()
+        keys.current.submit()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <>
       <div className="mb-1.5 text-caption font-semibold text-muted">Outcome</div>
@@ -426,6 +467,7 @@ export function LogCallForm({ businessId, contactId, contactName, stage, onCaden
           </Chip>
         ))}
       </div>
+      <div className="mt-1 hidden text-caption text-dim sm:block">Keys: 1 to {OUTCOMES.length} pick the outcome · Enter saves</div>
 
       {isConversation(outcome) && (
         <>
@@ -452,9 +494,34 @@ export function LogCallForm({ businessId, contactId, contactName, stage, onCaden
       )}
 
       <label className="mt-3 block text-caption font-semibold text-muted">
-        Note
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={`${inputCls} mt-1`} placeholder="Optional" />
+        <span className="flex items-center justify-between gap-2">
+          Note
+          {speechSupported() && (
+            <button
+              type="button"
+              aria-label={speech.listening ? 'Stop dictating' : 'Dictate note'}
+              onClick={(e) => {
+                e.preventDefault()
+                if (speech.listening) speech.stop()
+                else speech.start()
+              }}
+              className="min-h-[32px] rounded-lg border border-line2 px-2.5 text-caption font-semibold text-[color:var(--text)]"
+            >
+              {speech.listening ? 'Listening, tap to stop' : 'Dictate'}
+            </button>
+          )}
+        </span>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className={`${inputCls} mt-1`} placeholder={speech.listening ? speech.interim || 'Listening' : 'Optional'} />
       </label>
+      {speech.error && <div className="mt-1 text-caption text-[color:var(--neg-ink)]">{speech.error}</div>}
+      {agentText && (
+        <div data-agent-text className="mt-2 rounded-lg bg-panel2 px-3 py-2 text-body">
+          <div className="text-muted">{agentText}</div>
+          <a href={smsHref(agent.phone, agentText)} className="mt-1.5 inline-block font-semibold text-[color:var(--chrome)]">
+            Text {String(agent.name || 'the agent').split(' ')[0]} the update
+          </a>
+        </div>
+      )}
 
       <label className="mt-3 flex items-center justify-between gap-3 text-caption font-semibold text-muted">
         Duration (minutes){businessId === 'mpg' ? '' : ' · optional'}
@@ -472,6 +539,11 @@ export function LogCallForm({ businessId, contactId, contactName, stage, onCaden
 
       <div className="mb-1.5 mt-3 text-caption font-semibold text-muted">Next step</div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Next step">
+        {suggestion && (
+          <Chip t={t} active={suggestionOn} onClick={takeSuggestion}>
+            Check back {suggestion.label}
+          </Chip>
+        )}
         {onCadence && (
           <Chip t={t} active={nextStep === 'cadence'} onClick={() => chooseNext('cadence')}>
             Next call attempt
@@ -534,7 +606,7 @@ export function LogCallForm({ businessId, contactId, contactName, stage, onCaden
       <SubmitButton
         t={t}
         busy={busy}
-        disabled={!outcome || !nextReady || (businessId === 'mpg' && !(Number(duration) > 0))}
+        disabled={!canSave}
         onClick={submit}
       >
         Log call
@@ -759,7 +831,7 @@ export function NextStepPrompt({ businessId, contactId, contactName, onClose, on
  *   size        'sm': small outlined buttons stacked two to a row (Workbench)
  *               'xs': the same small buttons in one wrapping row (Pipeline board)
  */
-export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, cadence, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only: onlyProp, autoOpen = null, onSheetClose, size, className = '' }) {
+export default function QuickActions({ businessId, contactId, contactName, hasPhone = true, task, stage, cadence, openTaskCount, onNeedsNextStep, onDone, onPending, onFailed, only: onlyProp, autoOpen = null, onSheetClose, size, className = '', agent = null }) {
   // The assistant login gets note, follow-up and complete only (crm-action refuses the rest).
   const { role } = useAuth() || {}
   const only = quickActionsFor(role, onlyProp)
@@ -850,7 +922,7 @@ export default function QuickActions({ businessId, contactId, contactName, hasPh
 
       {open === 'call' && (
         <Sheet title="Log call" subtitle={subtitle} t={t} onClose={() => setOpen(null)}>
-          <LogCallForm businessId={businessId} contactId={contactId} contactName={contactName} stage={stage} onCadence={cadence ?? isCadenceStage(stage, businessId)} t={t} onSuccess={success} />
+          <LogCallForm businessId={businessId} contactId={contactId} contactName={contactName} stage={stage} onCadence={cadence ?? isCadenceStage(stage, businessId)} t={t} onSuccess={success} agent={agent} />
         </Sheet>
       )}
       {open === 'note' && (
