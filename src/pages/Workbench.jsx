@@ -346,12 +346,16 @@ export default function Workbench() {
   const model = nextItem ? nextUpModel(nextItem, { loan: loanByContact.get(nextItem.contactId ?? nextItem.id) || null }) : null
   const value = nextItem ? itemValue(nextItem, index) : null
   const pass = (key) => setPassed((s) => new Set([...s, key]))
+  // The open file (§11): Next up's Open file, Start first file, or a row's Open.
+  const [openFile, setOpenFile] = useState(null)
   const nextDone = () => {
     if (!model) return
     if (model.kind === 'call') return setLogging(true)
-    const row = document.querySelector(`[data-work-item="${CSS.escape(model.key)}"]`)
-    row?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
-    row?.querySelector('button')?.focus()
+    setOpenFile(model.key)
+  }
+  const fileInfo = (item) => {
+    const loan = item.contactId ? loanByContact.get(item.contactId) || null : null
+    return { loan, value: itemValue(item, index) }
   }
   const nextSnooze = async () => {
     if (!model) return
@@ -491,10 +495,10 @@ export default function Workbench() {
           <ListCard
             list={files}
             refFn={(el) => (cards.current.files = el)}
-            action={!assistant && files.count > 0 && activeList !== 'files' && <StartButton onClick={() => startList('files')}>Work files next</StartButton>}
+            action={files.count > 0 && <StartButton onClick={() => { startList('files'); setOpenFile(files.items[0].key) }}>Start first file</StartButton>}
           >
             {work.error && <div className="m-3 rounded-lg border border-neg-line bg-neg-bg px-3 py-2 text-xs text-neg-ink">{work.error}</div>}
-            <WorkLane groups={groupsShown} onChanged={work.reload} />
+            <WorkLane groups={groupsShown} onChanged={work.reload} info={fileInfo} openKey={openFile} onOpenKey={setOpenFile} order={files.items} />
           </ListCard>
 
           {!assistant && (

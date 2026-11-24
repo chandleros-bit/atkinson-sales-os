@@ -25,7 +25,7 @@ const writes = []
 function query(table) {
   const q = {}
   let id = null
-  for (const m of ['select', 'in', 'order', 'range', 'gte', 'or', 'limit', 'gt', 'lte']) q[m] = () => q
+  for (const m of ['select', 'in', 'order', 'range', 'gte', 'or', 'limit', 'gt', 'lte', 'is', 'delete']) q[m] = () => q
   // The day's order (workbench_days) only exists in the tests that turn it on.
   let before = false
   q.lt = () => {
@@ -45,6 +45,9 @@ function query(table) {
   q.maybeSingle = async () => {
     if (table === 'settings') return { data: { value: { bay: true, mpg: true, daily_cap: 15 } }, error: null }
     if (table === 'v_people') return { data: DATA.people[id] ?? null, error: null }
+    // Borrower docs: contact -> tracking -> docs (useBorrowerDocs).
+    if (table === 'contacts' && DATA.docs) return { data: { external_id: '9' }, error: null }
+    if (table === 'borrower_doc_tracking' && DATA.docs) return { data: { id: 'track1', notes: null }, error: null }
     if (table === 'workbench_days') {
       // Off: reads like the table isn't there yet, so the lists stay live.
       if (!DATA.dayOn) return { data: null, error: { code: '42P01', message: 'relation "workbench_days" does not exist' } }
@@ -60,6 +63,7 @@ function query(table) {
             : table === 'v_tasks' ? DATA.tasks
               : table === 'work_items' ? DATA.workItems
                 : table === 'contacts' ? DATA.contacts
+                  : table === 'borrower_docs' ? DATA.docs || []
                   : [],
       error: null,
     })
@@ -102,6 +106,7 @@ beforeEach(() => {
   DATA.searchPeople = []
   DATA.dayOn = false
   DATA.day = null
+  DATA.docs = null
   window.webkitSpeechRecognition = FakeSpeech
   FakeSpeech.last = null
   window.matchMedia = (q) => ({ matches: mobile && q.includes('max-width'), addEventListener() {}, removeEventListener() {} })
@@ -194,7 +199,7 @@ describe('Workbench', () => {
   it('snoozes a file to tomorrow from Next up, and undoes it', async () => {
     mobile = false
     const host = await render()
-    await act(async () => button(host, 'Work files next').click())
+    await act(async () => button(host, 'Start first file').click())
     const card = host.querySelector('[aria-label="Next up"]')
     expect(card.textContent).toContain('Gil Estimate')
     await act(async () => card.querySelector('[data-next-snooze]').click())
@@ -229,7 +234,7 @@ describe('Workbench', () => {
     const rows = [...files.querySelectorAll('[data-work-item]')].map((e) => e.getAttribute('data-work-item'))
     expect(rows.sort()).toEqual(['estimate:e1', 'mpg_task:t1'])
     // Next up follows the saved order across groups: the MPG task comes first.
-    await act(async () => button(host, 'Work files next').click())
+    await act(async () => button(host, 'Start first file').click())
     expect(host.querySelector('[aria-label="Next up"]').textContent).toContain('3 Statements FU')
     const strip = host.querySelector('[data-new-since]')
     expect(strip.textContent).toContain('New since')
@@ -252,6 +257,51 @@ describe('Workbench', () => {
     expect(save.opts).toMatchObject({ onConflict: 'user_id,day', ignoreDuplicates: true })
     expect(save.body.lists.files.sort()).toEqual(['application:a1', 'estimate:e1', 'mpg_task:t1'])
     expect(save.body.lists.calls).toEqual(['contact:c1'])
+  })
+
+  it('opens an application with its missing docs, a drafted reminder and the review steps', async () => {
+    mobile = false
+    DATA.docs = [
+      { id: 'd1', doc_type: '2025 W-2s', status: 'needed', first_requested_at: iso(6) },
+      { id: 'd2', doc_type: 'October bank statement', status: 'needed', first_requested_at: iso(6) },
+      { id: 'd3', doc_type: 'Pay stubs', status: 'received', received_at: iso(1) },
+    ]
+    DATA.people.a1 = { id: 'a1', name: 'Ivy Application', phone: '7135550101', email: 'ivy@x.com', crm_profile_url: 'https://fub.example/9' }
+    await render()
+    await act(async () => button(workItem('Ivy Application'), 'Open').click())
+    await act(async () => {})
+    await act(async () => {})
+    const sheet = dialog()
+    expect(sheet.querySelector('[data-file-sheet="application:a1"]')).not.toBeNull()
+    const docs = sheet.querySelector('[data-missing-docs]')
+    expect(docs.textContent).toContain('Missing documents · 2')
+    expect(docs.textContent).toContain('2025 W-2s')
+    expect(docs.textContent).not.toContain('Pay stubs')
+    const text = [...docs.querySelectorAll('a')].find((a) => a.getAttribute('href').startsWith('sms:'))
+    expect(text.textContent).toBe('Text a reminder for all 2')
+    expect(decodeURIComponent(text.getAttribute('href'))).toContain('2025 W-2s and October bank statement')
+    expect([...sheet.querySelectorAll('a')].find((a) => a.textContent === 'Open in FUB').getAttribute('href')).toBe('https://fub.example/9')
+    // Review steps save on the work item as they're checked.
+    const steps = sheet.querySelector('[data-review-steps]')
+    expect(steps.textContent).toContain('Review · 0 of 5')
+    await act(async () => steps.querySelector('input[type="checkbox"]').click())
+    expect(steps.textContent).toContain('Review · 1 of 5')
+    expect(writes.at(-1)).toMatchObject({ table: 'work_items', op: 'upsert', body: { source_key: 'application:a1', checklist: { credit: true } } })
+  })
+
+  it('finishes a file and opens the next with Done and next file', async () => {
+    mobile = false
+    await render()
+    await act(async () => button(document.body, 'Start first file').click())
+    expect(dialog().querySelector('[data-file-sheet="estimate:e1"]')).not.toBeNull()
+    // Done needs a choice first.
+    expect(button(dialog(), 'Done and next file').disabled).toBe(true)
+    await act(async () => button(dialog(), 'Application sent').click())
+    invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
+    await act(async () => button(dialog(), 'Done and next file').click())
+    await act(async () => {})
+    expect(invoke.mock.calls.at(-1)[1].body).toMatchObject({ action: 'set_stage', contact_id: 'e1', payload: { target: 'application_sent' } })
+    expect(dialog().querySelector('[data-file-sheet="application:a1"]')).not.toBeNull()
   })
 
   it('collapses the alerts and slipping groups into one Slipping strip', async () => {
@@ -405,7 +455,7 @@ describe('Workbench', () => {
   it('parks an estimate as waiting on the lender with a check-back day and a note', async () => {
     mobile = false
     await render()
-    await act(async () => button(workItem('Gil Estimate'), 'Update').click())
+    await act(async () => button(workItem('Gil Estimate'), 'Open').click())
     await act(async () => button(dialog(), 'Waiting on…').click())
     await act(async () => button(dialog(), 'Lender').click())
     await act(async () => button(dialog(), 'Next Monday').click())
@@ -424,7 +474,7 @@ describe('Workbench', () => {
   it("lists the lead's open tasks in the work item's Tasks tab", async () => {
     mobile = false
     await render()
-    await act(async () => button(workItem('Gil Estimate'), 'Update').click())
+    await act(async () => button(workItem('Gil Estimate'), 'Open').click())
     await act(async () => {})
     const tab = [...dialog().querySelectorAll('[role="tab"]')].find((t) => t.textContent.startsWith('Tasks'))
     expect(tab.textContent).toBe('Tasks1')
@@ -471,14 +521,16 @@ describe('Workbench', () => {
     mobile = false
     invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }] }, error: null })
     await render()
-    await act(async () => button(workItem('Gil Estimate'), 'Update').click())
-    expect(button(dialog(), 'Review complete')).toBe(undefined) // applications only
+    await act(async () => button(workItem('Gil Estimate'), 'Open').click())
+    // An estimate's choices are what was sent; review outcomes are applications only.
+    expect(button(dialog(), 'Pre-approved')).toBe(undefined)
+    expect(button(dialog(), 'Estimate sent')).not.toBe(undefined)
     await act(async () => dialog().querySelector('[aria-label="Close"]').click())
-    await act(async () => button(workItem('Ivy Application'), 'Update').click())
-    await act(async () => button(dialog(), 'Review complete').click())
-    await act(async () => button(dialog(), 'Pre-Approved').click())
+    await act(async () => button(workItem('Ivy Application'), 'Open').click())
+    await act(async () => button(dialog(), 'Pre-approved').click())
+    expect(dialog().textContent).toContain('Moves Ivy Application to Pre-Approved in FollowUpBoss')
     await type('Work notes', 'Sent PA letter')
-    await act(async () => button(dialog(), 'Save').click())
+    await act(async () => button(dialog(), 'Done').click())
     await act(async () => {})
     expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a1', payload: { target: 'pre_approved' } })
     expect(document.body.textContent).toContain('Ivy Application moved to Pre-Approved in FollowUpBoss')
@@ -489,15 +541,14 @@ describe('Workbench', () => {
     mobile = false
     invoke.mockResolvedValue({ data: { status: 'ok', results: [{ step: 'set_stage', ok: true }, { step: 'add_note', ok: true }] }, error: null })
     await render()
-    await act(async () => button(workItem('Ivy Application'), 'Update').click())
-    await act(async () => button(dialog(), 'Review complete').click())
+    await act(async () => button(workItem('Ivy Application'), 'Open').click())
     await act(async () => button(dialog(), 'Trash').click())
     expect(dialog().textContent).toContain('Only the FUB account owner can move it back')
-    await act(async () => button(dialog(), 'Save').click())
+    await act(async () => button(dialog(), 'Done').click())
     expect(invoke).not.toHaveBeenCalled()
     expect(dialog().textContent).toContain('Pick why it goes to the trash.')
     await act(async () => button(dialog(), 'Not qualified').click())
-    await act(async () => button(dialog(), 'Save').click())
+    await act(async () => button(dialog(), 'Done').click())
     await act(async () => {})
     expect(invoke.mock.calls[0][1].body).toMatchObject({ action: 'set_stage', contact_id: 'a1', payload: { target: 'lost', reason: 'Not qualified' } })
     expect(document.body.textContent).toContain('Ivy Application marked Lost in FollowUpBoss')
