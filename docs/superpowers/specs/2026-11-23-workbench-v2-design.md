@@ -210,7 +210,7 @@ The End of day mockup. Opens from **Wrap up the day** in the header. Workbench o
   - the theme and how many meetings;
   - the list sizes;
   - the first two items.
-- **Close the day:** saves the wrap to `workbench_days.wrap`. The 7:30 briefing doesn't read it yet (decision 4); that's a follow-up.
+- **Close the day:** saves the wrap to `workbench_days.wrap`. The next business morning's 7:30 briefing reads it (`briefing.js` `wrapLines`): what rolled over and goes first, and the gap at close. Shipped as the follow-up to decision 4 (PR #140).
 
 ---
 
@@ -268,6 +268,7 @@ The primary key is `(user_id, day)`. An item's key is the one each builder alrea
   - the assistant view (no Calls, no dollars);
   - the phone layout.
 - **Manual:** Overview's Your day counts match Workbench's lists; the keyboard shortcuts; 390 px.
+  - Done 2026-11-23 on production: Your day and Workbench both showed Calls 5 (5 flagged), Files 0, Partners 0. J, Z, Shift+D (opens the log, Esc closes it unsaved) and Shift+S then Z (the `dial_skips` row was removed) all worked. At 390 px nothing ran past the screen; the New since and Slipping strips now put their names on their own line under the title on phones.
 
 ## Build order (one PR each)
 
@@ -285,7 +286,6 @@ The primary key is `(user_id, day)`. An item's key is the one each builder alrea
 - Anniversary and birthday touches.
 - Sending any text or email without Chandler tapping send.
 - Changes to the Power Dialer's own screens.
-- The 7:30 briefing reading the saved wrap (a follow-up after step 7).
 
 ---
 
@@ -294,4 +294,4 @@ The primary key is `(user_id, day)`. An item's key is the one each builder alrea
 1. **Fixed order.** Each list's order is set at the first load after 6 AM and held all day. Later arrivals wait in New since 8:00, except new leads, hard dates and people who reached out. Unfinished items go first tomorrow. Adds the `workbench_days` table (§4, Data).
 2. **Borrower theme days go to the top of Calls.** Tuesday (loan status), Wednesday (past clients) and Thursday (pre-approved) lead Calls on their day. Partners holds only the realtor days, Monday (new realtors) and Friday (top partners), and is empty Tuesday to Thursday (§6).
 3. **The alerts rail becomes a collapsed "Slipping · N" strip** under Parked. It holds Up Next's hot going cold, no next step, stuck in stage and gone quiet groups (§7).
-4. **The wrap doesn't feed the briefing yet.** It ships on screen first; the 7:30 briefing reads it in a follow-up (§14).
+4. **The wrap ships on screen first.** The 7:30 briefing reads it in a follow-up (§14), shipped 2026-11-23 in PR #140.
