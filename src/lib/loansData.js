@@ -7,11 +7,13 @@ import { IMPORT_FIELDS } from './ariveImport'
 
 // Every loans column (supabase/migrations/0052_loans.sql) except `raw`, the
 // whole CSV row, which no page reads and which would bloat every load.
+// firm_closing_on is the effective closing date: close_override when set,
+// else arive_closing_on (kept by a trigger, migration 0079).
 export const LOAN_COLUMNS = [
   'id', 'arive_loan_id', 'business_id', 'loan_officer', 'role', 'borrower_name', 'borrower_first',
   'borrower_last', 'borrower_email', 'borrower_phone', 'co_borrower_name', 'co_borrower_email', 'contact_id',
   'amount', 'purpose', 'stage', 'stage_group', 'property_address', 'property_state', 'lender', 'title_company',
-  'closed_on', 'funded_on', 'firm_closing_on', 'lock_expires_on', 'application_on', 'rate', 'loan_type', 'term_months',
+  'closed_on', 'funded_on', 'firm_closing_on', 'arive_closing_on', 'close_override', 'lock_expires_on', 'application_on', 'rate', 'loan_type', 'term_months',
   'buyer_agent_name', 'buyer_agent_company', 'buyer_agent_email', 'buyer_agent_phone', 'seller_agent_name',
   'seller_agent_company', 'seller_agent_email', 'seller_agent_phone', 'scenario_auto', 'scenario_override',
   'comp_override', 'first_imported_at', 'last_seen_at', 'updated_at',
@@ -56,9 +58,11 @@ export function fetchBayContacts() {
 // fails, so that comes back as a warning, not an error.
 export async function saveImport(preview) {
   const now = new Date().toISOString()
+  // Arive's closing date goes to arive_closing_on; the trigger (migration
+  // 0079) derives firm_closing_on, so a date set in the OS survives imports.
   const payload = preview.loans.map((l) => ({
     arive_loan_id: l.arive_loan_id,
-    ...Object.fromEntries(IMPORT_FIELDS.map((f) => [f, l[f] ?? null])),
+    ...Object.fromEntries(IMPORT_FIELDS.map((f) => (f === 'firm_closing_on' ? ['arive_closing_on', l[f] ?? null] : [f, l[f] ?? null]))),
     raw: l.raw,
     last_seen_at: now,
     updated_at: now,
@@ -80,7 +84,8 @@ export function saveRates(rates) {
   return supabase.from('settings').upsert({ key: 'arive', value: rates }, { onConflict: 'key' })
 }
 
-// patch: { comp_override } and/or { scenario_override }.
+// patch: { comp_override }, { scenario_override } and/or { close_override }
+// ('YYYY-MM-DD', or null to go back to Arive's date).
 export function saveLoanPatch(id, patch) {
   return supabase.from('loans').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
 }

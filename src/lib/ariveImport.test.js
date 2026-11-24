@@ -160,6 +160,14 @@ describe('buildPreview', () => {
     expect(p.loans[0].contact_id).toBe('c1')
   })
 
+  it("compares Arive's closing date, not one set in the OS", () => {
+    const first = buildPreview({ header, rows: [rows[0]], existing: [], contacts, loName: LO }).loans[0]
+    const stored = { ...first, arive_closing_on: first.firm_closing_on, firm_closing_on: '2031-01-15', close_override: '2031-01-15' }
+    expect(buildPreview({ header, rows: [rows[0]], existing: [stored], contacts, loName: LO }).counts).toMatchObject({ unchanged: 1, updated: 0 })
+    const moved = { ...stored, arive_closing_on: '2030-12-01' }
+    expect(buildPreview({ header, rows: [rows[0]], existing: [moved], contacts, loName: LO }).counts).toMatchObject({ unchanged: 0, updated: 1 })
+  })
+
   it('treats a numeric string amount from PostgREST as unchanged', () => {
     const first = buildPreview({ header, rows: [rows[0]], existing: [], contacts, loName: LO }).loans[0]
     const p = buildPreview({ header, rows: [rows[0]], existing: [{ ...first, amount: '410000.00' }], contacts, loName: LO })

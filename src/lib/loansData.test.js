@@ -85,6 +85,14 @@ describe('saveImport', () => {
     expect(writes.map((w) => w.table)).toEqual(['loans', 'sync_log'])
   })
 
+  it("sends Arive's closing date as arive_closing_on, never firm_closing_on or close_override", async () => {
+    await saveImport({ ...preview, loans: [{ arive_loan_id: '1', firm_closing_on: '2026-12-05', raw: {} }] })
+    const row = writes.find((w) => w.table === 'loans').body[0]
+    expect(row.arive_closing_on).toBe('2026-12-05')
+    expect(row).not.toHaveProperty('firm_closing_on')
+    expect(row).not.toHaveProperty('close_override')
+  })
+
   it('warns, not fails, when only the log insert fails', async () => {
     responses.sync_log = { data: null, error: { message: 'new row violates row-level security policy' } }
     expect(await saveImport(preview)).toEqual({

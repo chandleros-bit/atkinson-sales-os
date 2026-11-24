@@ -252,6 +252,41 @@ describe('Loans page', () => {
     expect(DATA.updates).toHaveLength(0)
   })
 
+  it('sets a closing date, marks it and refreshes the forecast', async () => {
+    const host = await render()
+    const cell = () => host.querySelector('[data-loan="2"] td:nth-child(6)')
+    await act(async () => cell().querySelector('button').click())
+    const input = cell().querySelector('input[type="date"]')
+    expect(input.getAttribute('aria-label')).toBe('Closing date for Omar Vale')
+    await typeInto(input, '2026-12-18')
+    await press(input, 'Enter')
+    expect(DATA.updates).toHaveLength(1)
+    expect(DATA.updates[0]).toMatchObject({ close_override: '2026-12-18' })
+    expect(DATA.updates[0]).not.toHaveProperty('firm_closing_on')
+    expect(cell().textContent).toBe('Dec 18 *')
+    await settle()
+    expect(refreshSpy).toHaveBeenCalled()
+  })
+
+  it("goes back to Arive's closing date", async () => {
+    DATA.loans = BASE_LOANS.map((l) => (l.arive_loan_id === '2' ? { ...l, arive_closing_on: '2026-12-05', close_override: '2026-12-18', firm_closing_on: '2026-12-18' } : l))
+    const host = await render()
+    const cell = () => host.querySelector('[data-loan="2"] td:nth-child(6)')
+    expect(cell().textContent).toBe('Dec 18 *')
+    await act(async () => cell().querySelector('button').click())
+    await act(async () => buttonNamed(cell(), 'Use Arive (Dec 5)').click())
+    expect(DATA.updates).toEqual([expect.objectContaining({ close_override: null })])
+    expect(cell().textContent).toBe('Dec 5')
+  })
+
+  it('does not save when the date is unchanged', async () => {
+    const host = await render()
+    const cell = () => host.querySelector('[data-loan="2"] td:nth-child(6)')
+    await act(async () => cell().querySelector('button').click())
+    await press(cell().querySelector('input'), 'Enter')
+    expect(DATA.updates).toHaveLength(0)
+  })
+
   it('restores a scenario toggle when the save fails', async () => {
     DATA.updateError = { message: 'network down' }
     const host = await render()
