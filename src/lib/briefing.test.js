@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildOwnerBriefing } from './briefing'
+import { buildOwnerBriefing, wrapLines } from './briefing'
 
 // Wed Nov 4 2026, 7:30 AM CST. Data timestamps sit mid-day UTC so the test
 // passes in any TZ.
@@ -233,5 +233,30 @@ describe('buildOwnerBriefing: review fixes', () => {
       ]
       expect(buildOwnerBriefing(d, NOW).numbers.forecast.mpgExpected).toBe(120) // 200 x 60%
     })
+  })
+})
+
+describe("last night's wrap", () => {
+  // Tuesday Nov 24 2026, 7:30 AM Central: the previous business day is Monday the 23rd.
+  const TUE = Date.parse('2026-11-24T13:30:00Z')
+  const closed = { rolled: [{ name: 'Nina Ford' }, { name: 'Luis Park' }, { name: 'Kayla Moss' }, { name: 'Ben Ortiz' }], gap: { now: 1980 } }
+
+  it("reads yesterday's closed wrap: what rolled over and the gap", () => {
+    expect(wrapLines({ day: '2026-11-23', closed_at: '2026-11-23T23:42:00Z', wrap: { closed } }, TUE)).toEqual({
+      rolled: 4,
+      first: ['Nina Ford', 'Luis Park', 'Kayla Moss'],
+      gap: 1980,
+    })
+  })
+
+  it("ignores an older wrap, a day that wasn't closed, and no wrap", () => {
+    expect(wrapLines({ day: '2026-11-20', closed_at: '2026-11-20T23:00:00Z', wrap: { closed } }, TUE)).toBe(null)
+    expect(wrapLines({ day: '2026-11-23', closed_at: null, wrap: { closed } }, TUE)).toBe(null)
+    expect(wrapLines(null, TUE)).toBe(null)
+  })
+
+  it("on Monday, reads Friday's wrap", () => {
+    const MON = Date.parse('2026-11-30T13:30:00Z')
+    expect(wrapLines({ day: '2026-11-27', closed_at: '2026-11-27T23:00:00Z', wrap: { closed } }, MON).rolled).toBe(4)
   })
 })

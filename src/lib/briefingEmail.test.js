@@ -32,6 +32,17 @@ describe('renderOwnerBriefing', () => {
     expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).text).not.toContain('Market (Lock Watch)')
   })
 
+  it("shows yesterday's wrap near the top, and nothing without one", () => {
+    const lastWrap = { rolled: 3, first: ['Nina Ford', 'Luis Park', 'Kayla Moss'], gap: 1980 }
+    const { text, html } = renderOwnerBriefing(model({ lastWrap }), { appUrl: 'https://x.app' })
+    expect(text).toContain("Yesterday's wrap\n- 3 rolled over from yesterday and go first today: Nina Ford, Luis Park, Kayla Moss.\n- Bayway gap to goal at close: $1,980.\n  https://x.app/workbench")
+    expect(html).toContain("Yesterday's wrap</a>: 3 rolled over")
+    expect(html).toContain('href="https://x.app/workbench"')
+    const done = renderOwnerBriefing(model({ lastWrap: { rolled: 0, first: [], gap: -50 } }), { appUrl: 'https://x.app' })
+    expect(done.text).toContain('- Everything got done yesterday.\n- Bayway goal covered at close.')
+    expect(renderOwnerBriefing(model(), { appUrl: 'https://x.app' }).text).not.toContain("Yesterday's wrap")
+  })
+
   it('shows partners due today and the weekly focus', () => {
     const partnersDue = { count: 2, top: [
       { name: 'Laura Hughes', detail: 'Invite: invite to AI follow-up on Dec 10' },

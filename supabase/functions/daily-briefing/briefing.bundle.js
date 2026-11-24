@@ -1277,6 +1277,16 @@ function marketLines(note) {
   const src = Array.isArray(note.sources) ? note.sources.find((x) => x?.url) : null;
   return { lines: sentences.slice(0, 3), source: src ? { title: src.title || src.url, url: src.url } : null };
 }
+function wrapLines(lastWrap, now = Date.now()) {
+  const closed = lastWrap?.wrap?.closed;
+  if (!lastWrap?.closed_at || !closed || String(lastWrap.day).slice(0, 10) !== previousBusinessDateKey(now)) return null;
+  const rolled = Array.isArray(closed.rolled) ? closed.rolled : [];
+  return {
+    rolled: rolled.length,
+    first: rolled.slice(0, 3).map((r) => r.name).filter(Boolean),
+    gap: closed.gap?.now ?? null
+  };
+}
 function weeklyFocusLine(items) {
   const list3 = items || [];
   const focus = list3.find((r) => r.focus_role === "focus");
@@ -1381,6 +1391,8 @@ function buildOwnerBriefing(data, now = Date.now()) {
     partnersDue: list(data.partnersDue || [], (p) => ({ name: p.name || "(no name)", detail: `${PARTNER_DUE_LABEL[p.kind] || p.kind}: ${p.detail || ""}`.trim() })),
     // This week's focus (Growth bot): title and tasks done.
     focus: weeklyFocusLine(data.focusItems),
+    // Last night's wrap: what rolled over and goes first today.
+    lastWrap: wrapLines(data.lastWrap, now),
     // Lock Watch market note, first 3 sentences (doc: "3 lines").
     market: marketLines(data.marketNote),
     slipping,
@@ -1519,6 +1531,11 @@ function renderOwnerBriefing(m, { appUrl }) {
   const partnersDue = section("Partners due today", pd, "/bayway/partners");
   const mk = m.market;
   const focusText = m.focus ? `This week's focus: ${m.focus.title} (${m.focus.done} of ${m.focus.total} done)` : null;
+  const lw = m.lastWrap;
+  const wrapText = lw ? [
+    lw.rolled ? `${lw.rolled} rolled over from yesterday and go first today${lw.first.length ? `: ${lw.first.join(", ")}` : ""}.` : "Everything got done yesterday.",
+    lw.gap != null ? lw.gap > 0 ? `Bayway gap to goal at close: ${money(lw.gap)}.` : "Bayway goal covered at close." : null
+  ].filter(Boolean) : null;
   const pastClients = section("Past clients to call", pc, "/bayway/opportunities");
   const sl = m.slipping;
   const slipping = m.nothingSlipping ? [] : [
@@ -1533,6 +1550,9 @@ ${numbers.map((l) => `- ${l}`).join("\n")}`,
     ...focusText ? [`Focus
 - ${focusText}
   ${url("/")}`] : [],
+    ...wrapText ? [`Yesterday's wrap
+${wrapText.map((l) => `- ${l}`).join("\n")}
+  ${url("/workbench")}`] : [],
     `Today
 ${today.map((l) => `- ${l}`).join("\n")}`,
     ...mk ? [`Market (Lock Watch)
@@ -1599,6 +1619,7 @@ Open the dashboard: ${url("/")}
     `<div style="max-width:640px;font-family:Arial,sans-serif;color:${C.text}">`,
     `<p style="font:13px Arial,sans-serif;color:${C.muted};margin:0">${esc(m.dateLabel)}</p>`,
     ...focusText ? [`<p style="font:14px Arial,sans-serif;margin:12px 0 0"><b>${esc(focusText)}</b></p>`] : [],
+    ...wrapText ? [`<p style="font:14px Arial,sans-serif;margin:8px 0 0">${link(url("/workbench"), "Yesterday's wrap")}: ${wrapText.map(esc).join(" ")}</p>`] : [],
     heading("Numbers, month to date"),
     goalsTable,
     forecastTable,
