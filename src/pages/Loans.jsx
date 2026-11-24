@@ -253,6 +253,56 @@ function CompCell({ loan, rates, onSave }) {
   )
 }
 
+// Closing date for an unfunded loan: Arive's date unless one was set here.
+// onSave('YYYY-MM-DD' | null); null goes back to Arive's date.
+function CloseDateCell({ loan, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const closed = useRef(false)
+  const overridden = loan.close_override != null
+  const arive = loan.arive_closing_on ?? null
+  if (!editing) {
+    const title = overridden
+      ? `Set in the OS. Arive says ${arive ? shortDate(arive) : 'no date'}. Click to change.`
+      : "Click to set this loan's closing date"
+    return (
+      <button type="button" className="num underline decoration-dotted" title={title}
+        aria-label={`Closing date for ${loan.borrower_name}: ${loan.firm_closing_on ? shortDate(loan.firm_closing_on) : 'none'}${overridden ? ' (set in the OS)' : ''}`}
+        onClick={() => { closed.current = false; setEditing(true) }}>
+        {shortDate(loan.firm_closing_on)}{overridden ? ' *' : ''}
+      </button>
+    )
+  }
+  const close = () => { closed.current = true; setEditing(false) }
+  const save = (v) => {
+    if (closed.current) return
+    close()
+    const next = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
+    // Picking Arive's own date is the same as going back to it.
+    const override = next && next === arive ? null : next
+    if (override === (loan.close_override ?? null)) return
+    onSave(override)
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        type="date"
+        autoFocus
+        aria-label={`Closing date for ${loan.borrower_name}`}
+        className="num rounded border border-line2 px-1"
+        defaultValue={loan.firm_closing_on ? String(loan.firm_closing_on).slice(0, 10) : ''}
+        onBlur={(e) => save(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') save(e.currentTarget.value); if (e.key === 'Escape') close() }}
+      />
+      {overridden && (
+        <button type="button" className="text-caption text-muted underline" onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { closed.current = false; save('') }}>
+          Use Arive{arive ? ` (${shortDate(arive)})` : ''}
+        </button>
+      )}
+    </span>
+  )
+}
+
 // onSave(rates) -> Promise<{ error }>; the parent closes the editor on success.
 function RatesEditor({ rates, onSave, onClose }) {
   const [d, setD] = useState({ lo_name: rates.lo_name ?? '', primary_pct: String(rates.primary_pct ?? ''), assisted_pct: String(rates.assisted_pct ?? '') })
@@ -330,15 +380,17 @@ export default function Loans() {
   const slice = pageSlice(shown, page)
 
   // Optimistic: the row changes at once and goes back if the save fails.
-  async function patch(loan, p) {
-    const prev = Object.fromEntries(Object.keys(p).map((k) => [k, loan[k] ?? null]))
+  // derived: fields the database works out from p (shown at once, never sent).
+  async function patch(loan, p, derived = {}) {
+    const shown = { ...p, ...derived }
+    const prev = Object.fromEntries(Object.keys(shown).map((k) => [k, loan[k] ?? null]))
     const apply = (fields) => setBundle((b) => ({ ...b, loans: b.loans.map((l) => (l.id === loan.id ? { ...l, ...fields } : l)) }))
-    apply(p)
+    apply(shown)
     if (isDemoMode) return
     const { error: err } = await saveLoanPatch(loan.id, p)
     if (!err) { refreshForecastInputs().catch(() => {}); return }
     apply(prev)
-    showToast({ tone: 'error', text: `Couldn't save ${loan.borrower_name || 'this loan'}: ${err.message}`, retry: () => patch(loan, p) })
+    showToast({ tone: 'error', text: `Couldn't save ${loan.borrower_name || 'this loan'}: ${err.message}`, retry: () => patch(loan, p, derived) })
   }
 
   // Writes first; local state changes only once the save worked.
@@ -412,7 +464,11 @@ export default function Loans() {
                     <td className="num px-3 py-2">{money(l.amount)}</td>
                     <td className="px-3 py-2">{l.lender || '—'}</td>
                     <td className="px-3 py-2">{l.role === 'assisted' ? (l.loan_officer ? `Assisted (${l.loan_officer})` : 'Assisted') : 'Mine'}</td>
-                    <td className="px-3 py-2">{l.funded_on ? `Funded ${shortDate(l.funded_on)}` : shortDate(l.firm_closing_on)}</td>
+                    <td className="px-3 py-2">
+                      {l.funded_on
+                        ? `Funded ${shortDate(l.funded_on)}`
+                        : <CloseDateCell loan={l} onSave={(v) => patch(l, { close_override: v }, { firm_closing_on: v ?? l.arive_closing_on ?? null })} />}
+                    </td>
                     <td className="px-3 py-2"><CompCell loan={l} rates={bundle.rates} onSave={(v) => patch(l, { comp_override: v })} /></td>
                     <td className="px-3 py-2">
                       <input type="checkbox" name="scenario" aria-label={`Scenario file: ${l.borrower_name}`} checked={isScenario(l)} onChange={(e) => patch(l, { scenario_override: e.target.checked })} />

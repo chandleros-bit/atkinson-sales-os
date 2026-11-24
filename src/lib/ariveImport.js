@@ -159,6 +159,10 @@ const same = (a, b) => {
   return String(a) === String(b)
 }
 
+// A stored row's value for an import field. Its firm_closing_on may be a date
+// set in the OS (migration 0079); Arive's own date is arive_closing_on.
+const storedImportValue = (prev, f) => (f === 'firm_closing_on' && 'arive_closing_on' in prev ? prev.arive_closing_on : prev[f])
+
 // existing: loans already stored ({ arive_loan_id, ...IMPORT_FIELDS }).
 // Returns { error } or { loans, counts, unknownStages, missingIds }.
 export function buildPreview({ header, rows, existing, contacts, loName }) {
@@ -182,7 +186,7 @@ export function buildPreview({ header, rows, existing, contacts, loName }) {
     if (scen) counts.scenario++
     else if (!loan.contact_id) counts.unmatched++
     if (!prev) counts.new++
-    else if (IMPORT_FIELDS.every((f) => same(loan[f], prev[f]))) counts.unchanged++
+    else if (IMPORT_FIELDS.every((f) => same(loan[f], storedImportValue(prev, f)))) counts.unchanged++
     else counts.updated++
   }
   counts.total = loans.length
