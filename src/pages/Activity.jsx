@@ -191,7 +191,7 @@ export default function Activity({ biz }) {
                   >
                     {books.length > 1 && <BizBadge biz={r.business_id} fixed />}
                     <TypeTag type={r.type} />
-                    <div className="num w-14 flex-none text-caption text-muted">{timeOfDay(r.occurred_at)}</div>
+                    <div className="num flex-none text-caption text-muted sm:w-14">{timeOfDay(r.occurred_at)}</div>
                     <div className="min-w-0 flex-1 truncate text-body font-semibold sm:w-40 sm:flex-none">
                       <PersonLink id={r.contact_id} url={r.crm_profile_url}>{r.contact_name || '(unknown)'}</PersonLink>
                     </div>

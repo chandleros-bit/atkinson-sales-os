@@ -131,7 +131,7 @@ export default function TodayAgenda({ className = '', bare = false }) {
                 </div>
                 <span className="w-[3px] flex-none self-stretch rounded-full" style={{ background: color }} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-ui font-semibold">
+                  <div className="line-clamp-2 text-ui font-semibold sm:line-clamp-1">
                     {e.title || '(no title)'}
                     {e.os && <OsTag done={e.status === 'done'} />}
                   </div>

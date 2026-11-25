@@ -109,6 +109,13 @@ export function YourDay({ lists, lead, now = Date.now(), className = '' }) {
 
 const PACE_INK = { hit: 'var(--pos-ink)', pace: 'var(--pos-ink)', behind: 'var(--warn-ink)' }
 const DOT = { bay: 'var(--bay)', mpg: 'var(--mpg)' }
+// Orange only on the goal furthest behind (the one the footer names); the
+// other behind goals go quiet, so the warning still means something.
+const paceInk = (g, behind) => {
+  if (g.covered) return 'var(--muted)'
+  if (g.status === 'behind' && behind && g.id !== behind.id) return 'var(--dim)'
+  return PACE_INK[g.status]
+}
 
 export function MonthGoals({ model, now = Date.now(), className = '' }) {
   const { rows, behind, daysLeft } = model
@@ -128,7 +135,7 @@ export function MonthGoals({ model, now = Date.now(), className = '' }) {
               <span className="num text-muted">
                 {g.value.toLocaleString()} / {g.target.toLocaleString()}
               </span>
-              <span className="w-[72px] text-right text-caption font-bold" style={{ color: g.covered ? 'var(--muted)' : PACE_INK[g.status] }}>
+              <span className="w-[72px] text-right text-caption font-bold" style={{ color: paceInk(g, behind) }}>
                 {g.word}
               </span>
             </div>

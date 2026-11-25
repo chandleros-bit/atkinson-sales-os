@@ -15,7 +15,7 @@ import { fetchAllSettled } from '../lib/fetchAll'
 import { useBusiness } from '../context/BusinessContext'
 import { demoBayPipeline, demoMpgLeads } from '../lib/demoData'
 import WeeklyFocusCard from '../components/WeeklyFocusCard'
-import PageHeader, { SyncDot } from '../components/PageHeader'
+import PageHeader from '../components/PageHeader'
 import { YourDay, MonthGoals, ForecastBoth, kMoney } from '../components/OverviewTop'
 import { LoansInFlight, MerchantsInFlight, BookHealth, RateWatch, PullThrough, Trends } from '../components/OverviewBook'
 import { loansInFlight, merchantsInFlight, bookHealth } from '../lib/bookFlags'
@@ -363,8 +363,8 @@ export default function Overview() {
         title={`${greeting()}, Chandler`}
         subtitle={summary}
         actions={
+          // PageHeader already shows the sync status; don't repeat it here.
           <span className="flex items-center gap-3">
-            <SyncDot />
             <Link to="/workbench" className="inline-flex min-h-[40px] items-center rounded-lg bg-[color:var(--chrome)] px-4 text-body font-semibold text-white hover:opacity-90">
               Open Workbench →
             </Link>
@@ -398,10 +398,18 @@ export default function Overview() {
             />
           </div>
 
-          <div className={`mt-[18px] grid grid-cols-1 items-stretch gap-[18px] ${biz === 'all' ? 'xl:grid-cols-2' : ''}`}>
-            {biz !== 'mpg' && view.loans && <LoansInFlight model={view.loans} now={now} />}
-            {biz !== 'bay' && <MerchantsInFlight model={view.merchants} tiles={view.mpgTiles} />}
-          </div>
+          {(() => {
+            // Two columns only when both books have a card: one card alone
+            // takes the full width instead of leaving a hole beside it.
+            const loans = biz !== 'mpg' && view.loans
+            const merchants = biz !== 'bay'
+            return (
+              <div data-inflight className={`mt-[18px] grid grid-cols-1 items-stretch gap-[18px] ${loans && merchants ? 'xl:grid-cols-2' : ''}`}>
+                {loans && <LoansInFlight model={view.loans} now={now} />}
+                {merchants && <MerchantsInFlight model={view.merchants} tiles={view.mpgTiles} />}
+              </div>
+            )
+          })()}
 
           <div className={`mt-[18px] grid grid-cols-1 items-stretch gap-[18px] lg:grid-cols-2 ${biz === 'mpg' ? '' : 'xl:grid-cols-3'}`}>
             <BookHealth rows={view.health} biz={biz} />

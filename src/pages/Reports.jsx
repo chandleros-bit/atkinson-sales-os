@@ -378,7 +378,7 @@ export default function Reports() {
               role="tab"
               aria-selected={activeTab === t.key}
               onClick={() => setTab(t.key)}
-              className={`-mb-px border-b-2 px-3 py-2 text-body ${
+              className={`-mb-px whitespace-nowrap border-b-2 px-2.5 py-2 sm:px-3 text-body ${
                 activeTab === t.key ? 'border-[color:var(--text)] font-semibold text-[color:var(--text)]' : 'border-transparent text-muted hover:text-[color:var(--text)]'
               }`}
             >

@@ -560,7 +560,8 @@ export default function Workbench() {
           {assistant ? <span data-assistant-view> · Assistant view, sorted by deadline, then age</span> : day.saved?.set_at && <span data-order-set> · order set at {clock(day.saved.set_at)}</span>}
         </span>
         <SyncDot />
-        <div className="ml-auto flex gap-2">
+        {/* One line on narrow screens: the row scrolls sideways instead of wrapping its buttons. */}
+        <div data-bench-actions className="-mx-4 flex w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 sm:mx-0 sm:w-full sm:px-0 xl:ml-auto xl:w-auto xl:overflow-visible [&>*]:flex-none [&_a]:whitespace-nowrap [&_button]:whitespace-nowrap">
           {/* Priority Leads (FUB score tiers) left the nav; it opens from here. */}
           {!assistant && biz !== 'mpg' && (
             <Link to="/bayway/priority-leads" className="flex min-h-[38px] items-center rounded-lg border border-line2 px-3.5 text-body font-semibold text-ink2 hover:bg-hoverbg">

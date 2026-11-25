@@ -27,7 +27,7 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
           </button>
         )}
       </div>
-      <div className="grid grid-cols-5 gap-1 border-b border-line px-3 py-2.5">
+      <div className="flex gap-1 overflow-x-auto border-b border-line px-3 py-2.5 sm:grid sm:grid-cols-5">
         {week.map((w) => {
           const active = pickedDay != null ? w.day === pickedDay : w.isToday
           return (
@@ -38,10 +38,10 @@ export default function ThemeList({ list, pickedDay = null, onPickDay, onDial, a
               aria-current={w.isToday ? 'date' : undefined}
               aria-pressed={active}
               onClick={() => onPickDay(w.isToday ? null : w.day)}
-              className={`min-w-0 rounded-lg border px-1 py-1.5 text-center text-caption leading-tight ${active ? 'border-[color:var(--chrome)] bg-panel2 font-semibold' : 'border-line text-muted'}`}
+              className={`w-[100px] flex-none rounded-lg border px-1 py-1.5 sm:w-auto sm:min-w-0 text-center text-caption leading-tight ${active ? 'border-[color:var(--chrome)] bg-panel2 font-semibold' : 'border-line text-muted'}`}
             >
               <span className="block font-bold">{DAY_NAMES[w.day]}</span>
-              {/* Own lines, so a narrow phone cuts the theme name, never the count. */}
+              {/* Own lines; phones scroll the strip so the theme name fits, wider screens truncate it. */}
               <span className="block truncate">{w.label}</span>
               <span className="num block">{w.count} due</span>
             </button>

@@ -61,7 +61,7 @@ function MobileBar({ onMenu }) {
         {pageTitle(pathname)}
       </div>
       {role !== 'assistant' && scope !== 'none' && (
-        <div className={`flex-none ${scope === 'book' ? 'w-[132px]' : 'w-[164px]'}`}>
+        <div className={`flex-none ${scope === 'book' ? 'w-[132px] max-[379px]:w-[84px]' : 'w-[164px] max-[379px]:w-[124px]'}`}>
           <BusinessFilter compact books={scope === 'book'} />
         </div>
       )}
@@ -77,15 +77,29 @@ function MobileBar({ onMenu }) {
   )
 }
 
-// Desktop top bar: the business switch and + New. The page names itself in
-// its own header (PageHeader's h1), so the bar doesn't repeat it. The switch
-// shows only where it changes the page (lib/filterScope).
+// Sample data, not the live books: a small pill instead of a full-width banner.
+function DemoPill({ className = '' }) {
+  return (
+    <span
+      title="Every page shows sample data. Add your Supabase URL and anon key to .env and restart to sign in."
+      className={`inline-flex flex-none items-center rounded-full border border-warn-line bg-warn-bg px-2.5 py-0.5 text-caption font-semibold text-warn-ink ${className}`}
+    >
+      Demo data
+    </span>
+  )
+}
+
+// Desktop top bar: the business switch and + New, pinned while the page
+// scrolls. The page names itself in its own header (PageHeader's h1), so the
+// bar doesn't repeat it. The switch shows only where it changes the page
+// (lib/filterScope).
 function TopBar() {
   const { pathname } = useLocation()
-  const { role } = useAuth()
+  const { role, isDemoMode } = useAuth()
   const scope = filterScope(pathname)
   return (
-    <div className="mb-6 hidden h-[64px] items-center justify-end gap-3 border-b border-line sm:flex">
+    <div className="sticky top-0 z-30 -mx-10 mb-6 hidden h-[56px] items-center justify-end gap-3 border-b border-line bg-panel/95 px-10 backdrop-blur sm:flex">
+      {isDemoMode && <DemoPill className="mr-auto" />}
       {role !== 'assistant' && scope !== 'none' && (
         <div className={scope === 'book' ? 'w-[184px]' : 'w-[248px]'}>
           <BusinessFilter books={scope === 'book'} />
@@ -160,11 +174,7 @@ export default function Layout() {
       <main className="min-w-0 flex-1 px-4 pb-[calc(84px+env(safe-area-inset-bottom))] sm:px-10 sm:pb-12">
         <MobileBar onMenu={() => setMenuOpen(true)} />
         <TopBar />
-        {isDemoMode && (
-          <div className="mb-5 rounded-lg border border-line bg-panel px-4 py-2.5 text-xs text-muted">
-            Demo mode — every page shows sample data. Add your Supabase URL and anon key to .env and restart to sign in.
-          </div>
-        )}
+        {isDemoMode && <DemoPill className="mb-3 sm:hidden" />}
         <Outlet />
       </main>
       <BottomNav />

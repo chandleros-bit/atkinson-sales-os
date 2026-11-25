@@ -60,10 +60,10 @@ describe('Sidebar', () => {
     expect(host.textContent).toContain('Super Admin')
   })
 
-  it('lists fifteen links in four groups', async () => {
+  it('lists the links in five groups, Bayway-only pages under Bayway', async () => {
     await render(<Sidebar />)
     const links = [...host.querySelectorAll('nav[aria-label="Main"] a')].map((a) => a.textContent)
-    expect(links).toEqual(['Overview', 'Workbench', 'Calendar', 'Tasks', 'Power Dialer', 'Pipeline', 'Loans', 'Opportunities', 'Contacts', 'Partners', 'Drafts', 'Tune-up', 'Activity', 'Reports', 'Reference', 'Settings'])
+    expect(links).toEqual(['Overview', 'Workbench', 'Calendar', 'Tasks', 'Power Dialer', 'Pipeline', 'Contacts', 'Activity', 'Loans', 'Opportunities', 'Partners', 'Drafts', 'Tune-up', 'Reports', 'Reference', 'Settings'])
     expect(host.querySelector('nav[aria-label="Main"]').textContent).toContain('Books')
     expect(host.querySelector('a[href="/pipeline"]')).not.toBeNull()
     // Settings opens the Settings tab (forecast odds, Rate leads); Sync status is its sibling tab.

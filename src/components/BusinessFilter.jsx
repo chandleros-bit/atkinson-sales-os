@@ -11,7 +11,8 @@ const options = [
 // never reads as one book's control.
 // books: a page that shows one book at a time (Pipeline, Contacts) - the
 //   switch offers MPG | Bayway and picks the page's book.
-// compact: the phone top bar, where the dots don't fit.
+// compact: the phone top bar, where the dots don't fit beside the names; under
+//   380px the dots replace the names (still read out to screen readers).
 export default function BusinessFilter({ compact = false, books = false }) {
   const { biz, setBiz, book, setBook } = useBusiness()
   const shown = books ? options.filter((o) => o.key !== 'all') : options
@@ -37,7 +38,9 @@ export default function BusinessFilter({ compact = false, books = false }) {
             } ${active ? 'btn-primary font-semibold' : 'font-medium text-muted hover:text-[color:var(--text)]'}`}
           >
             {o.dot && !compact && <span aria-hidden="true" className="h-2 w-2 flex-none rounded-full" style={{ background: o.dot }} />}
-            {o.label}
+            {/* The smallest phones: a book's dot stands in for its name, so the page title still fits. */}
+            {o.dot && compact && <span aria-hidden="true" className="hidden h-2.5 w-2.5 flex-none rounded-full max-[379px]:block" style={{ background: o.dot }} />}
+            <span className={o.dot && compact ? 'max-[379px]:sr-only' : undefined}>{o.label}</span>
           </button>
         )
       })}

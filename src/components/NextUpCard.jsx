@@ -39,10 +39,18 @@ const OUTLINE = 'min-h-[44px] rounded-lg border border-[#4A5263] px-4 text-ui fo
 export default function NextUpCard({ pick, model, value, logging, onDone, onLogged, onLogClose, onSnooze, onNext, onUndo, canUndo }) {
   const touches = useLastTouches(model?.contactId)
   if (!pick || !model) {
+    // All clear is good news, not an alert: a calm green row, not the dark card.
     return (
-      <section aria-label="Next up" className="rounded-2xl bg-[#14171F] px-6 py-5 text-white">
-        <div className="text-ui font-semibold">Nothing left in today&apos;s lists.</div>
-        <div className="mt-1 text-body text-[#B9BFCC]">New work shows up here as it comes in.</div>
+      <section aria-label="Next up" data-next-up-empty className="flex items-center gap-3 rounded-2xl border border-pos-line bg-pos-bg px-5 py-4">
+        <span aria-hidden="true" className="grid h-8 w-8 flex-none place-items-center rounded-full bg-pos-ink">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 12.5l4 4 8-9" />
+          </svg>
+        </span>
+        <div className="min-w-0">
+          <div className="text-ui font-semibold text-pos-ink">Nothing left in today&apos;s lists.</div>
+          <div className="text-body text-muted">New work shows up here as it comes in.</div>
+        </div>
       </section>
     )
   }

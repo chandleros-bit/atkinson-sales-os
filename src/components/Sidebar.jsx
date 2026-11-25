@@ -13,8 +13,8 @@ import { usePriorityQueue } from '../lib/usePriorityQueue'
 import { urgentCount } from '../lib/priorityQueue'
 import { canVisit, roleLabel } from '../lib/roles'
 
-// Fifteen links. Pipeline, Contacts and Activity follow the business switch, so
-// one link covers both books; each also lights up on its old per-book pages
+// Fifteen links. Pipeline, Contacts and Activity (Books) follow the business
+// switch, so one link covers both books; the Bayway group is Bayway only; each also lights up on its old per-book pages
 // (/bayway/pipeline, /mpg/contacts…). Reports holds Analytics and Settings
 // holds Sync Status as tabs. Loans is Bayway only.
 const LINKS = [
@@ -25,15 +25,19 @@ const LINKS = [
     { to: '/tasks', icon: 'tasks', label: 'Tasks', on: /^\/tasks/ },
     { to: '/dialer', icon: 'phone', label: 'Power Dialer', on: /^\/dialer/ },
   ] },
+  // Books: these follow the business switch (one link covers both books).
   { group: 'Books', items: [
     { to: '/pipeline', icon: 'pipeline', label: 'Pipeline', on: /^\/((mpg|bayway)\/)?pipeline/ },
+    { to: '/contacts', icon: 'users', label: 'Contacts', on: /^\/((mpg|bayway)\/)?contacts/ },
+    { to: '/activity', icon: 'activity', label: 'Activity', on: /^\/((mpg|bayway)\/)?activity/ },
+  ] },
+  // Bayway-only pages: they ignore the switch, so the group says whose they are.
+  { group: 'Bayway', dot: 'var(--bay)', items: [
     { to: '/bayway/loans', icon: 'money', label: 'Loans', on: /^\/bayway\/loans/ },
     { to: '/bayway/opportunities', icon: 'star', label: 'Opportunities', on: /^\/bayway\/opportunities/ },
-    { to: '/contacts', icon: 'users', label: 'Contacts', on: /^\/((mpg|bayway)\/)?contacts/ },
     { to: '/bayway/partners', icon: 'user', label: 'Partners', on: /^\/bayway\/partners/ },
     { to: '/bayway/drafts', icon: 'doc', label: 'Drafts', on: /^\/bayway\/drafts/ },
     { to: '/bayway/tune-up', icon: 'pulse', label: 'Tune-up', on: /^\/bayway\/tune-up/ },
-    { to: '/activity', icon: 'activity', label: 'Activity', on: /^\/((mpg|bayway)\/)?activity/ },
   ] },
   { group: 'Insights', items: [
     { to: '/reports', icon: 'reports', label: 'Reports', on: /^\/(reports|analytics)/ },
@@ -73,8 +77,13 @@ function Item({ to, icon, on, children, badge, onNavigate, sync }) {
   )
 }
 
-function GroupLabel({ children }) {
-  return <div className="px-2.5 pb-1 text-micro font-semibold uppercase tracking-[.5px] text-dim">{children}</div>
+function GroupLabel({ children, dot }) {
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 pb-1 text-micro font-semibold uppercase tracking-[.5px] text-dim">
+      {dot && <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: dot }} />}
+      {children}
+    </div>
+  )
 }
 
 export default function Sidebar({ onNavigate }) {
@@ -115,10 +124,11 @@ export default function Sidebar({ onNavigate }) {
       {/* Phones: + New lives here (the desktop top bar has it otherwise). */}
       {onNavigate && <NewMenu onBeforePick={onNavigate} />}
 
-      <nav aria-label="Main" className="flex flex-col gap-3">
-        {groups.map(({ group, items }) => (
-          <div key={group || 'main'} className="flex flex-col gap-px">
-            {group && <GroupLabel>{group}</GroupLabel>}
+      <nav aria-label="Main" className="flex flex-1 flex-col gap-3">
+        {groups.map(({ group, dot, items }) => (
+          // System (Settings) sits at the foot of the menu, above the profile.
+          <div key={group || 'main'} className={`flex flex-col gap-px ${group === 'System' ? 'mt-auto' : ''}`}>
+            {group && group !== 'System' && <GroupLabel dot={dot}>{group}</GroupLabel>}
             {items.map((it) => (
               <Item
                 key={it.to}
@@ -136,7 +146,7 @@ export default function Sidebar({ onNavigate }) {
         ))}
       </nav>
 
-      <div className="mt-auto flex items-center gap-2 border-t border-line px-1 pt-2.5">
+      <div className="flex items-center gap-2 border-t border-line px-1 pt-2.5">
         <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-line text-caption font-semibold text-ink2">
           {initials}
         </div>

@@ -446,7 +446,7 @@ export default function Loans() {
           {/* The loan list first: it's what this page is for. Charts sum it up below. */}
           <section className="mt-4 overflow-x-auto rounded-card border border-line bg-panel">
             <table className="w-full min-w-[760px] text-left text-body">
-              <thead className="text-caption uppercase tracking-wide text-muted">
+              <thead className="bg-panel2 text-caption text-dim">
                 <tr>
                   {['Borrower', 'Stage', 'Amount', 'Lender', 'Role', 'Closing / funded', 'Est. comp', 'Scenario'].map((h) => (
                     <th key={h} className="px-3 py-2 font-semibold">{h}</th>

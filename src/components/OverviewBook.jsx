@@ -34,7 +34,7 @@ function Counts({ items }) {
       {items.map((c) => (
         <div key={c.label} data-count={c.key} className="min-w-0 border-r border-hoverbg px-3 py-3 text-center last:border-r-0 sm:px-4">
           <div className="num text-title font-bold">{c.value}</div>
-          <div className="truncate text-caption text-muted" title={c.label}>{c.label}</div>
+          <div className="text-caption leading-tight text-muted" title={c.label}>{c.label}</div>
         </div>
       ))}
     </div>
@@ -125,7 +125,7 @@ export function MerchantsInFlight({ model, tiles }) {
         {tiles.map((t) => (
           <div key={t.label} data-mpg-tile={t.key} className="min-w-0">
             <div className="num text-lead font-bold">{t.value}</div>
-            <div className="truncate text-caption text-muted">{t.label}</div>
+            <div className="text-caption leading-tight text-muted">{t.label}</div>
           </div>
         ))}
       </div>
@@ -268,7 +268,7 @@ export function Trends({ series, sprint, income, biz }) {
   const incomeRows = [biz !== 'mpg' && { key: 'bay', label: 'Bayway commission', value: income.commission }, biz !== 'bay' && { key: 'mpg', label: 'MPG residual', value: income.residual }].filter(Boolean)
   const incomeMax = Math.max(1, ...incomeRows.map((r) => r.value))
   return (
-    <section aria-label="Trends" className="cc-card grid min-w-0 grid-cols-1 divide-y divide-line overflow-hidden md:grid-cols-3 md:divide-x md:divide-y-0">
+    <section aria-label="Trends" className="cc-card grid min-w-0 grid-cols-1 divide-y divide-line overflow-hidden xl:grid-cols-3 xl:divide-x xl:divide-y-0">
       <div data-trend="touch" className="px-5 py-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-ui font-semibold">Touchpoints · 30 days</h2>
@@ -291,9 +291,9 @@ export function Trends({ series, sprint, income, biz }) {
             return (
               <div key={s.key} data-sprint={s.key}>
                 <div className="flex items-center gap-2 text-caption">
-                  <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                  <span className="min-w-0 flex-1 truncate" title={s.label}>{s.label}</span>
                   <span className="num text-muted">{s.value} / {s.target}</span>
-                  <span className="font-semibold" style={{ color: good ? 'var(--pos-ink)' : 'var(--warn-ink)' }}>
+                  <span className="font-semibold" style={{ color: good ? 'var(--pos-ink)' : 'var(--dim)' }}>
                     {sprint.ended ? (s.hit ? 'Hit' : 'Missed') : s.onPace ? 'On pace' : 'Behind'}
                   </span>
                 </div>

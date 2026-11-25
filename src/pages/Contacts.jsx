@@ -120,11 +120,12 @@ const COLUMNS = {
   },
   stage: {
     header: (config) => config.stageHeader,
-    thClass: 'w-32 text-left',
+    thClass: 'w-48 text-left',
     sortKey: 'stage',
+    // One line always: a long stage truncates (full name on hover) rather than wrapping.
     cell: (r, config) => (
-      <div className="w-32">
-        <span className="rounded-full px-2 py-0.5 text-micro font-semibold" style={config.stagePill(r.stage)}>
+      <div className="w-48 min-w-0">
+        <span title={r.stage || undefined} className="inline-block max-w-full truncate whitespace-nowrap rounded-full px-2 py-0.5 align-middle text-micro font-semibold" style={config.stagePill(r.stage)}>
           {r.stage || '—'}
         </span>
       </div>
@@ -249,7 +250,7 @@ export default function Contacts({ biz }) {
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Search name, company, email, or phone…"
-          className="min-h-[40px] w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-body outline-none sm:min-h-0 sm:w-64 placeholder:text-dim focus:border-line2"
+          className="min-h-[40px] w-full rounded-lg border border-line bg-panel2 px-3 py-1.5 text-body outline-none sm:min-h-0 sm:w-80 placeholder:text-dim focus:border-line2"
         />
         {config.filters.length > 0 && (
           <div className="flex gap-1">
@@ -278,7 +279,7 @@ export default function Contacts({ biz }) {
 
       {!loading && !error && (
         <div className="mt-4 overflow-hidden rounded-card border border-line bg-panel">
-          <div className="hidden items-center gap-3 border-b border-line px-4 py-2.5 text-micro font-semibold uppercase tracking-wide text-dim sm:flex">
+          <div className="hidden items-center gap-3 border-b border-line bg-panel2 px-4 py-2.5 text-caption font-semibold text-dim sm:flex">
             {config.columns.map((colKey) => {
               const col = COLUMNS[colKey]
               return col.sortKey ? (
